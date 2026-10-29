@@ -2,13 +2,15 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | Draft v0.2 — 배포·실기기 검증 NOT_RUN |
+| 상태 | v0.3 — 설치·Serve·desktop·gateway 구현, 실제 배포·기기 검증 NOT_RUN |
 | 개정일 | 2026-10-29 (KST) |
 | 상위 계획 | [development-plan.md](./development-plan.md) |
 | 실행 연동 | [Codex 세션 실행 계획](./codex-session-plan.md) |
 | 사용자 확정 방향 | Ubuntu 서버 상시 실행, Tailscale이 설치·연결된 허용 기기의 브라우저에서 공동 대화·검증·비교 |
 | 참여자 / 대화 | [OAuth·API·browser 연결](./participant-connections.md) / [능동 토론](./discussion-plan.md) |
 | 초기 포트 예시 | Tailnet HTTPS 8443 → 서버 loopback HTTP 3000 |
+
+현재 구현과 검사는 [WJ-002~015 구현 기록](./implementation/wj-002-015.md), 실제 명령과 복구 절차는 [운영 절차](./operations-runbook.md)를 따른다. 이 문서의 실계정·실세션 완료 조건은 아직 통과하지 않았다.
 
 ## 1. 운영 배치
 
@@ -64,7 +66,7 @@ tailscale serve status
 | --- | --- |
 | `/` | 주제·참여자 선택, 공동 대화·결과 비교의 반응형 Control Room |
 | `/api/` | 주제·발언·참여자·추가 조건·검토·실행 제어 |
-| `/events` | 발언·검증·비교·상태·실행 로그의 SSE |
+| `/api/events` | 발언·검증·비교·상태·실행 로그의 SSE |
 | `/browser/` | noVNC 원격 Chrome 화면과 WSS 연결 |
 
 경로는 구현 계약으로 확정한다. Core 또는 gateway에서 noVNC의 base path와 WebSocket 경로를 맞춘다. 단순 HTML 제공만으로 원격 화면이 연결됐다고 판정하지 않고 실제 WSS handshake·화면 갱신·입력을 확인한다.

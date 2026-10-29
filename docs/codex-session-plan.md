@@ -2,13 +2,15 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | Draft v0.2 — 설계 확정 방향, 실행 검증 NOT_RUN |
+| 상태 | v0.3 — 실행기·도구·환류 fixture 및 설치 schema PASS, 실세션 검증 NOT_RUN |
 | 개정일 | 2026-10-29 (KST) |
 | 상위 계획 | [development-plan.md](./development-plan.md) |
 | 운영 환경 | [Ubuntu 서버·웹 접속 운영 계획](./ubuntu-operations.md) |
 | 목표 | dot의 프롬프트를 기존 Codex 세션에 전달하고 결과·후속 지시 및 토론의 검증·비교로 환류 |
 | 대화 / 참여자 | [능동 토론](./discussion-plan.md) / [OAuth·API·browser 연결](./participant-connections.md) |
 | 첫 대상 | Ubuntu 서버의 등록된 프로젝트와 Codex 세션 1개 |
+
+현재 구현과 검사는 [WJ-002~015 구현 기록](./implementation/wj-002-015.md), 실제 명령과 복구 절차는 [운영 절차](./operations-runbook.md)를 따른다. 이 문서의 실계정·실세션 완료 조건은 아직 통과하지 않았다.
 
 ## 1. 사용자 흐름과 구현 경계
 
@@ -21,7 +23,7 @@
 7. dot이 `codex_result`로 결과와 검증 근거를 읽고 검토한다. 원래 Discussion이 있으면 모든 참여자에게 같은 증거를 공유해 각자 결론을 갱신하고 비교한다. 수정이 필요하면 같은 세션에 새 revision의 지시를 보낸다.
 8. 검토가 끝나면 Core의 작업을 완료한다. PR 게시·배포는 작업의 별도 범위와 권한에 따른다.
 
-`codex_send`, `codex_status`, `codex_result`는 웹쫀쿠에서 구현할 도구다. Codex나 dot에 이미 설치된 내장 도구로 표시하지 않는다. 첫 브라우저 대화 PoC에는 이 실행 권한을 포함하지 않는다.
+`codex_send`, `codex_status`, `codex_result`는 웹쫀쿠의 scoped MCP에 구현한 도구다. Codex나 dot에 이미 설치된 내장 도구로 표시하지 않는다. 소유자가 특정 Discussion·참여자·도구에 grant를 발급해야 사용할 수 있다. 설치한 Codex 0.165.0의 schema와 bubblewrap 격리 결정은 [ADR 0001](./adr/0001-workspace-runtime.md)을 따른다.
 
 이 모듈은 사용자의 Codex를 실행 자원으로 연결한다. 토론 참여자의 GPT OAuth·DeepSeek API 호출은 별도 adapter이며 Codex 실행 모듈과 구분한다. Codex 자체의 로그인·모델 접근과 웹쫀쿠 MCP 인증, Secure MCP Tunnel의 런타임 인증은 서로 다른 항목으로 관리한다.
 

@@ -1,0 +1,20 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright';
+import { BrowserBridge, observationScript } from '../../dist/server/connections/browser.js';
+import { storage } from '../workspace-helpers.mjs';
+const binding = { pageId: 7, url: 'https://chatgpt.com/c/fixture', accountLabel: 'fixture account', agentLabel: 'dot fixture', identitySelector: '#identity', identityText: 'fixture account · dot', inputSelector: '#input', sendSelector: '#send', userSelector: '.user', assistantSelector: '.assistant', busySelector: '#busy', readySelector: '#ready' };
+test('browser DOM adapter pins identity, preserves drafts, correlates receipts and never resends an observed request', { timeout: 30000 }, async t => {
+  const { store } = await storage(t); const browser = await chromium.launch({ headless: true, ...(process.env.WJ_TEST_CHROMIUM_EXECUTABLE ? { executablePath: process.env.WJ_TEST_CHROMIUM_EXECUTABLE } : {}) }); t.after(() => browser.close());
+  const page = await browser.newPage(); await page.route('**/*', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<div id="identity">fixture account · dot</div><div id="messages"><div class="assistant">기존 대화 원문</div></div><textarea id="input"></textarea><button id="send" disabled>Send</button><div id="ready">Ready</div><div id="busy" hidden>Busy</div>' })); await page.goto(binding.url);
+  await page.evaluate(() => { window.sends = 0; const input = document.querySelector('#input'); const send = document.querySelector('#send'); input.addEventListener('input', () => queueMicrotask(() => { send.disabled = !input.value; })); send.onclick = () => { window.sends++; const user = document.createElement('div'); user.className = 'user'; user.textContent = input.value; document.querySelector('#messages').append(user); input.value = ''; document.querySelector('#busy').hidden = false;
+    setTimeout(() => { const answer = document.createElement('div'); answer.className = 'assistant'; answer.textContent = '실제 Chrome DOM fixture 응답'; document.querySelector('#messages').append(answer); document.querySelector('#busy').hidden = true; }, 50); }; });
+  store.transact(s => s.connections.push({ id: 'browser', kind: 'browser', label: 'browser fixture', status: 'connected', models: [], browser: binding }));
+  const bridge = new BrowserBridge(store, null); bridge.tool = async (name, args) => { assert.equal(name, 'evaluate_script'); assert.equal(args.pageId, 7); return { structuredContent: { result: await page.evaluate(`(${args.function})()`) } }; };
+  await bridge.probe(binding); const hooks = { dispatched: 0, receipts: [] }; const input = { requestId: 'fixture-turn', participant: { id: 'p', connectionId: 'browser', kind: 'browser', modelId: 'existing-agent', label: 'dot', role: '' }, prompt: '질문 문자열 "); window.injected=true; ("', history: [], signal: AbortSignal.timeout(8000), hooks: { dispatched: () => hooks.dispatched++, receipt: value => hooks.receipts.push(value), delta: () => {} } };
+  await page.locator('#input').fill('사용자가 쓰던 초안'); await assert.rejects(bridge.complete(input), /browser_requires_intervention/); assert.equal(await page.locator('#input').inputValue(), '사용자가 쓰던 초안'); assert.equal(hooks.dispatched, 0);
+  await page.locator('#input').fill(''); const completed = await bridge.complete(input); assert.equal(completed.text, '실제 Chrome DOM fixture 응답'); assert.equal(await page.evaluate(() => window.sends), 1); assert.equal(await page.evaluate(() => window.injected), undefined);
+  await bridge.complete({ ...input, signal: AbortSignal.timeout(4000) }); assert.equal(await page.evaluate(() => window.sends), 1); assert.equal(hooks.dispatched, 1);
+  assert.equal((await page.evaluate(`(${observationScript(binding, '[웹쫀쿠:unknown]')})()`)).answer, '');
+  await page.locator('#identity').evaluate(n => { n.textContent = 'another account'; }); await assert.rejects(bridge.complete({ ...input, requestId: 'new-turn' }), /browser_target_mismatch/);
+});

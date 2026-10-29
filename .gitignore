@@ -8,3 +8,9 @@ test-results/
 playwright-report/
 *.log
 .DS_Store
+*.sqlite
+*.sqlite-*
+runtime.lock
+access-token
+credentials/
+ops-output/

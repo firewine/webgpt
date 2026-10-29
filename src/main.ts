@@ -1,8 +1,8 @@
 import { ConfigError, loadConfig } from './config.js';
-import { DiagnosticCore } from './core/diagnostic.js';
-import { createApp } from './http/app.js';
 import { createLogger } from './logger.js';
-import { FakeAdapter } from './providers/fake.js';
+import { loadWorkspaceConfig } from './workspace/config.js';
+import { Workspace } from './workspace/runtime.js';
+import { createWorkspaceServer } from './http/workspace.js';
 
 async function main(): Promise<void> {
   if (Number(process.versions.node.split('.')[0]) !== 24) {
@@ -12,14 +12,16 @@ async function main(): Promise<void> {
   }
   const config = loadConfig();
   const log = createLogger(config.logLevel);
-  const server = await createApp(new DiagnosticCore(new FakeAdapter(config.fakeDelayMs)), log);
-  await new Promise<void>((resolve, reject) => {
+  const app = new Workspace(loadWorkspaceConfig(), config.fakeDelayMs);
+  const { server, closeStreams } = await createWorkspaceServer(app, log);
+  try { await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
     server.listen(config.port, config.host, () => {
       server.removeListener('error', reject);
       resolve();
     });
-  });
+  }); } catch (error) { await app.close(); throw error; }
+  app.start();
   log({ event: 'server.started', host: config.host, port: config.port });
   let stopping = false;
   const stop = (signal: string) => {
@@ -28,10 +30,8 @@ async function main(): Promise<void> {
     log({ event: 'server.stopping', signal });
     const deadline = setTimeout(() => server.closeAllConnections(), 6000);
     deadline.unref();
-    server.close(() => {
-      clearTimeout(deadline);
-      log({ event: 'server.stopped' });
-    });
+    closeStreams();
+    server.close(() => { void app.close().then(() => { clearTimeout(deadline); log({ event: 'server.stopped' }); }); });
   };
   process.on('SIGINT', () => stop('SIGINT'));
   process.on('SIGTERM', () => stop('SIGTERM'));

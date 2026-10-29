@@ -2,6 +2,9 @@ import { once } from 'node:events';
 import { createServer } from 'node:net';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { DiagnosticCore } from '../dist/server/core/diagnostic.js';
 import { createApp } from '../dist/server/http/app.js';
 import { FakeAdapter } from '../dist/server/providers/fake.js';
@@ -34,9 +37,12 @@ export async function unusedPort() {
 
 export async function startProcess(t, extraEnv = {}) {
   const port = await unusedPort();
+  const stateDir = await mkdtemp(join(tmpdir(), 'wj-process-'));
   const child = spawn(process.execPath, ['dist/server/main.js'], {
     cwd: fileURLToPath(new URL('../', import.meta.url)),
-    env: { ...process.env, WJ_HOST: '127.0.0.1', WJ_PORT: String(port), WJ_LOG_LEVEL: 'info', WJ_FAKE_DELAY_MS: '30', ...extraEnv },
+    env: { ...process.env, WJ_HOST: '127.0.0.1', WJ_PORT: String(port), WJ_LOG_LEVEL: 'info', WJ_FAKE_DELAY_MS: '30', WJ_STATE_DIR: stateDir,
+      WJ_CHROME_PROFILE_DIR: join(stateDir, 'chrome'), WJ_PUBLIC_ORIGIN: `http://127.0.0.1:${port}`, WJ_SOURCE_FETCH: 'false',
+      WJ_ACCESS_TOKEN: 'test-owner-key-never-used-outside-fixtures', ...extraEnv },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let stdout = '';
@@ -49,6 +55,7 @@ export async function startProcess(t, extraEnv = {}) {
       child.kill('SIGTERM');
       await exit;
     }
+    await rm(stateDir, { recursive: true, force: true });
   });
   await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error(`Server did not start: ${stdout} ${stderr}`)), 10_000);

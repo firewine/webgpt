@@ -2,11 +2,13 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | Draft v0.1 — 공식 문서 확인, 계정·호스트 실행 검증 NOT_RUN |
+| 상태 | v0.2 — OAuth/API/browser adapter 구현·fixture PASS, 실계정 검증 NOT_RUN |
 | 개정일 | 2026-10-29 (KST) |
 | 상위 계획 / 대화 흐름 | [개발 계획](./development-plan.md) / [능동 토론](./discussion-plan.md) |
 | 운영 / 실행 도구 | [Ubuntu 운영](./ubuntu-operations.md) / [Codex 세션](./codex-session-plan.md) |
 | 확정 방향 | 여러 GPT 계정은 OAuth, dot·Muse는 개별 참여자, DeepSeek 등은 API로 같은 토론에 참여 |
+
+현재 구현과 검사는 [WJ-002~015 구현 기록](./implementation/wj-002-015.md), 실제 명령과 복구 절차는 [운영 절차](./operations-runbook.md)를 따른다. 이 문서의 실계정·실세션 완료 조건은 아직 통과하지 않았다.
 
 ## 1. 참여자는 연결 방식과 별개다
 

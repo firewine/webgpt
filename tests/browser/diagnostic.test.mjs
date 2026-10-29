@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
-import { startProcess } from '../helpers.mjs';
+import { fixture } from '../helpers.mjs';
 
 test('desktop and narrow browser: select, send, complete, recover and reset', { timeout: 60_000 }, async (t) => {
-  const { url } = await startProcess(t, { WJ_FAKE_DELAY_MS: '100' });
+  const { url } = await fixture(t);
   const browser = await chromium.launch({
     headless: true,
     ...(process.env.WJ_TEST_CHROMIUM_EXECUTABLE ? { executablePath: process.env.WJ_TEST_CHROMIUM_EXECUTABLE } : {}),
