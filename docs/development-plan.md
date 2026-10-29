@@ -2,7 +2,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | Draft v0.4.1 — 여러 AI의 능동 토론·검증·비교와 OAuth/API 혼합 참여 |
+| 상태 | Draft v0.4.2 — 작업 인계·참여자 상태·검증 큐 반영, WJ-001 완료 |
 | 최초 작성일 | 2026-08-15 |
 | 개정일 | 2026-10-29 (KST) |
 | 저장소 | [firewine/webgpt](https://github.com/firewine/webgpt) |
@@ -49,19 +49,19 @@ v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위�
 
 ## 2. 확인된 현재 상태
 
-2026-10-29 GitHub 조회에서 확인한 v0.4 개정 직전 기준:
+2026-10-29 (KST) GitHub 조회 기준:
 
-- 기본 브랜치 `main`: `3246914b025a7608d5dd699799abc5c8fd3dacac`.
-- 기존 계획 PR: [#1](https://github.com/firewine/webgpt/pull/1), `chatgpt/update-webjjoku-plan-20261029`.
-- 이 개정의 부모 커밋: `f56a4785c1f63a640505af8b2b17ea4d56228f99`, docs Markdown 6개.
-- 저장소에 구현 코드·설치 산출물·실계정 연동 증거는 없다. 이전 호스트 경로·버전 기록을 현재 검증 결과로 재사용하지 않는다.
-- Nhahan/WebGPT 고정 revision `1d35588e79de288bd8a6d2992fc76e571f7bb75e`와 Chrome·dot·Muse·Codex·Tailscale 문서를 검토했다.
-- 이번 개정에서 공식 Sign in with ChatGPT의 계정 등록·Responses·복수 계정·self-hosted VM·제약과 DeepSeek 대화·모델 API를 확인했다. 실제 계정의 이용 자격·권한·모델·key는 미검증이다.
-- 제시한 화면 시안은 예시 데이터이며 실제 토론·연결·검사·PR 성공 증거가 아니다.
+- 이 개정의 기준 `main`: `8c1743ef37e3a4f398480aaf84debf6b5f22b30b`.
+- 계획 [PR #1](https://github.com/firewine/webgpt/pull/1), 구현 순서 [PR #2](https://github.com/firewine/webgpt/pull/2), WJ-001 구현 [PR #3](https://github.com/firewine/webgpt/pull/3)가 모두 병합됐다.
+- WJ-001은 Node.js 24·strict TypeScript, loopback HTTP 서버·health·fake 참여자 2개·진단 UI·설정/로그 경계를 구현했다. 새 checkout 검사와 브라우저 검증은 [구현 기록](./implementation/wj-001.md), 후속 기본 Playwright 설치·전체 검사 성공은 [GitHub Actions](https://github.com/firewine/webgpt/actions/runs/40855909620)에 남았다.
+- 다음 작업은 WJ-002의 실제 Ubuntu·Tailscale HTTPS·원격 Chrome 기반이다. 개발 컨테이너/CI의 Ubuntu 성공은 사용자 운영 서버 배포 성공을 뜻하지 않는다.
+- 이전 개정에서 Nhahan/WebGPT 고정 revision과 Chrome·dot·Muse·Codex·Tailscale, 공식 OAuth·DeepSeek API 문서를 검토했다. 실제 계정의 이용 자격·권한·모델·key는 여전히 미검증이다.
+- 이번에는 사용자 제공 FlowDesk 사례를 설계 참고로 읽었다. 참고 구현의 코드·성능·계정 격리를 검증한 것은 아니다. 과거 화면 시안과 현재 fake 진단 UI 모두 실제 AI 토론 성공 증거가 아니다.
 
 | 항목 | 현재 판정 | 다음 증거 |
 | --- | --- | --- |
 | 저장소·설계·공식 문서 검토 | 확인 | 이 개정과 참고 자료 |
+| WJ-001 최소 프로젝트 | 구현·검사 PASS / PR #3 병합 | fake 진단까지 완료; 실계정 연결과 영속 토론은 후속 작업 |
 | Ubuntu / Tailscale / 웹 클라이언트 | NOT_RUN | 서버·포트·인증서·기기별 접속·재연결 기록 |
 | GPT OAuth 다중 계정 | 문서상 경로 확인 / NOT_RUN | 실제 등록 2개·권한·모델·완료 응답·격리·refresh |
 | DeepSeek API | 문서상 경로 확인 / NOT_RUN | 허가된 key·실제 stream 완료·맥락·usage |
@@ -71,7 +71,7 @@ v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위�
 | Codex 세션·검증 결과 환류 | 문서상 경로 확인 / 호스트 검증 NOT_RUN | 정확한 세션·변경·검사·후속 검토 |
 | Git Writer / sandbox / live PR | NOT_RUN | 별도 모듈 release evidence |
 
-PR #1은 이후 main의 `7c6be0671208e3cff297eed2b78c6a2792b9b9aa`에 병합됐다. 위 수치는 v0.4 개정 직전의 기록이며, 후속 구현의 시작점과 작업 순서는 [개발 실행 순서](./implementation-sequence.md)를 따른다. 문서 병합은 구현·실환경 검증 완료를 의미하지 않는다.
+후속 구현의 시작점과 작업 순서는 [개발 실행 순서](./implementation-sequence.md)를 따른다. WJ-001 코드 병합과 새 설계 반영을 아직 수행하지 않은 실제 연결·토론·배포의 완료로 확대하지 않는다.
 
 ## 3. 설계 방향
 
@@ -83,9 +83,10 @@ PR #1은 이후 main의 `7c6be0671208e3cff297eed2b78c6a2792b9b9aa`에 병합됐�
 6. Core는 진행 규칙을 관리한다. 특정 dot이나 모델을 영구 진행자·정답 심판으로 두지 않는다. 요약 작성자와 검토 역할은 참여자에 배정할 수 있다.
 7. 요청·시간·API 사용량 한도와 종료 이유를 기록한다. 로그인·권한·미확정 전송 외에는 매 발언마다 사용자 개입을 요구하지 않는다.
 8. 대화와 credential을 참여자별로 분리한다. 기존 provider 대화는 보존하고 OAuth/API 이력은 웹쫀쿠가 관리한다.
-9. 첫 코드는 Phase 4A의 기존 Codex 세션에서 실행한다. 일반 토론은 Codex·Git Writer 없이도 완결한다.
+9. 토론에서 위임하는 코드 검사·변경은 Phase 4A의 기존 Codex 세션을 우선 사용한다. 일반 토론은 Codex·Git Writer 없이도 완결한다.
 10. Ubuntu의 실행·저장을 접속 기기의 브라우저 수명에서 분리한다. 어느 허용 기기에서 다시 접속해도 같은 기록을 복구한다.
 11. Tailscale은 사용자 웹 접속, OAuth/API는 서버의 외부 모델 요청, Secure MCP Tunnel은 dot의 서버 도구 호출 통로다. 세 경로를 혼동하지 않는다.
+12. 토론 상태는 특정 대화의 수명과 분리한다. 근거·이견·예산·미확정 실행을 보존한 checkpoint로 인계하고, 연결·응답·도구·업무 상태를 각각 관측한다.
 
 ## 4. 릴리스 범위
 
@@ -106,7 +107,9 @@ PR #1은 이후 main의 `7c6be0671208e3cff297eed2b78c6a2792b9b9aa`에 병합됐�
 - GPT OAuth 다중 계정·DeepSeek API·dot/Muse browser 참여자 등록과 토론별 선택.
 - 주제 한 번 입력부터 N인의 독립 초안·상호 검토·검증·수정·최종 비교까지 자동 진행.
 - 영속 Discussion·Turn·Claim·Evidence·Task·Event·송수신 기록과 재시작 복구.
+- 원문을 참조하는 인계 checkpoint·대화 세대, 검증 과제 큐·의존성·배정·진행 한도.
 - 공동 대화 타임라인, 참여자별 비교·근거·미해결 쟁점, 후속 질문·조건 추가.
+- 참여자 상태 카드, 관측 시각·차단 이유, 실제 확보한 도구 활동·주장/증거 연결.
 - Pause/Resume/Cancel, 진행 한도·API 사용량·비용, 연결별 인증·개입 상태.
 - Tailscale private HTTPS, 반응형 UI, SSE snapshot/cursor 복구, noVNC 보조 화면.
 - 서버 상시 실행과 재부팅 복구, 데스크톱·모바일 크기 및 실제 기기 접속 검증.
@@ -287,6 +290,7 @@ dot의 프롬프트는 셸 코드로 평가하지 않는다. Codex의 기존 권
 | 연결 | CONNECTED / DISCONNECTED / AUTH_REQUIRED / TARGET_CHANGED | 브라우저·계정·대화 상태 |
 | 전송 | PREPARED / SENT_CONFIRMED / SEND_UNCONFIRMED | 사용자 메시지 전송 증거 |
 | 응답 | WAITING / GENERATING / RESPONSE_COMPLETE | 현재 대화 응답 상태 |
+| 도구·원격 job | QUEUED / RUNNING / BLOCKED_APPROVAL / RECONCILING / COMPLETED | 실제 관측한 실행기 상태; 미관측·해당 없음과 구분 |
 | 업무 | ready / running / blocked / review / done / failed / cancelled | 실제 작업과 검토 상태 |
 
 “잠시 기다려 달라”는 응답이 끝나도 업무는 running이다. 도구 제출은 provider의 보고이며, 코드·검사·PR 성공은 실행 증거로 검토한다. `result_submit`은 기본적으로 review로 넘기며 검토 후 done 처리한다.
@@ -294,6 +298,8 @@ dot의 프롬프트는 셸 코드로 평가하지 않는다. Codex의 기존 권
 Pause는 새 전송을 막는다. Cancel은 웹쫀쿠의 후속 실행을 중단하고, 원격 중단 기능이 검증됐을 때만 해당 중단을 요청한다. 원격 중단이 확인되지 않으면 이를 명시한다. 일정 시간 화면이 변하지 않았다는 이유로 완료·실패로 단정하지 않는다.
 
 사용자가 같은 대화에 입력하거나 대상이 바뀌면 자동 전송을 멈추고 상태를 대조한다. 사용자의 입력을 덮어쓰지 않는다.
+
+각 축의 마지막 관측·실제 진행 시각과 출처를 보관한다. Chrome heartbeat 만료와 도구/원격 job 실패는 같은 사건이 아니다. 화면이 멈춘 동안 원격 작업이 진행 중이면 이를 표시하고 재실행하지 않는다. 실제 확보하지 못한 내부 도구 활동은 추측해 채우지 않는다.
 
 ### 8.3 보존 정책
 
@@ -312,7 +318,17 @@ Codex job은 accepted/queued/running/blocked_approval/reconciling/completed/fail
 
 Discussion의 단계는 framing / independent / cross_review / verification / revision / synthesis로, 실행 상태는 ready / running / paused / blocked / completed / partial / cancelled / failed로 구분한다. 합의와 사실 검증은 별개다. 요청·시간·API 비용 예산, 초기안 공개 조건, claim/evidence, 종료 이유와 사용자 조건 revision을 영속 저장한다. 상세 계약은 [능동 토론 계획](./discussion-plan.md)을 따른다.
 
-## 9. Nhahan/WebGPT 적용 범위
+### 8.6 체크포인트·대화 세대·검증 큐
+
+DiscussionCheckpoint는 기준 event cursor·주제 revision, 결론/근거/반론/미해결 질문, 완료·대기 과제, 잔여 예산과 미확정 receipt/job을 원문 참조와 함께 저장한다. 참여자별 공개 범위를 지켜 독립 초안·다른 계정의 비공개 이력이 인계 과정에서 섞이지 않게 한다. 재개는 이후 event와 현재 상태를 대조하며 같은 checkpoint 적용을 중복 모델 호출로 바꾸지 않는다.
+
+`contextGeneration`은 같은 참여자의 context 바인딩·압축된 입력 기반 교체 이력이고 사용자 조건의 `topicRevision`과 다르다. 기존 dot·Muse 대화를 기본 보존하고 OAuth/API는 앱 소유 이력에서 인계 입력을 구성한다. 이전 세대의 늦은 응답은 원래 turn에 남기며 현재 단계·후속 호출에 자동 적용하지 않는다. 인계로 미확정 실행·예산·idempotency를 초기화하지 않는다.
+
+검증 과제는 claim·완료 기준·의존성·capability·권한·예산을 가진 큐로 관리한다. 초기에는 같은 단일 활성 turn scheduler를 사용한다. 전송 불확실은 재조정 대상으로 두고 자동 pending 복귀·재배정을 금지한다. 상세 필드·전환·UI·검증 시나리오는 [능동 토론 계획 6장](./discussion-plan.md#6-저장스케줄링복구)을 기준으로 한다.
+
+## 9. 참고 구현 적용 범위
+
+### 9.1 Nhahan/WebGPT
 
 검토 revision: `1d35588e79de288bd8a6d2992fc76e571f7bb75e`.
 
@@ -327,6 +343,23 @@ Discussion의 단계는 framing / independent / cross_review / verification / re
 원본 `browser.mjs`는 호출자의 CUA tab API를 사용하는 helper다. 독립 Chrome 연결 엔진이 포함됐다고 가정하지 않는다. 일반 ChatGPT의 `/c/...`, 화면 구성과 reasoning controls에 맞춰져 있고 Work를 거부한다. dot·Muse에 그대로 적용하지 않는다.
 
 전체 OS 사용자 권한 terminal Worker, 대화 자동 영구 삭제, quick-tunnel의 비밀 URL 기반 연결을 제품 기본 정책으로 가져오지 않는다. Git Writer 격리와 지속 대화 보존을 유지한다. 코드 도입 시 고정 revision과 해당 라이선스·고지 보존을 확인한다.
+
+### 9.2 FlowDesk 사례에서 반영할 아이디어
+
+사용자 제공 [ChatGPT 웹챗 6개 병렬로 실제 프로젝트 개발하는 환경 만들어봄](https://gall.dcinside.com/mgallery/board/view/?id=ai_utilize&no=77494)을 2026-10-29 읽었다. 글은 FlowDesk·MyPC MCP·SQLite로 여러 웹 대화의 작업 상태·인계·활동·큐를 관리한 개인 개발 사례다. 작성자는 통합 플레이 테스트를 뒤로 미뤘다고 설명한다. 게시글은 아이디어의 출처이며 구현 코드·성능·운영 신뢰성의 검증 자료로 사용하지 않는다.
+
+아래는 그 관찰을 웹쫀쿠 요구에 맞춘 **자체 설계와 완료 기준**이다. 참고 프로젝트의 동작 보장을 옮겨 적은 것이 아니다.
+
+| 반영 항목 | 웹쫀쿠 적용 | 구현 작업 |
+| --- | --- | --- |
+| 작업 인계 | 원문·근거·이견·남은 과제·예산·미확정 실행을 가진 checkpoint와 재개 대조 | WJ-007, 011 |
+| 대화 교체 이력 | contextGeneration·checkpoint 적용 기록, 늦은 이전 응답 제외, 기존 대화 보존 | WJ-007, 011 |
+| 참여자 상태 카드 | 계정 별칭·model·쟁점·현재 행동·마지막 활동·차단 이유 | WJ-010 |
+| 상태별 관측 | 연결·응답·도구·업무의 독립 상태·시각·근거, 관측 중단과 실행 실패 구분 | WJ-006, 011, 014 |
+| 검증 과제 큐 | 쟁점별 의존성·capability·권한·예산·배정·완료 증거 | WJ-008, 009 |
+| 실행 활동과 증거 | 실제 tool/job event를 참여자·claim·evidence에 연결해 UI 제공 | WJ-009, 010, 014 |
+
+여섯 웹챗 동시 실행을 MVP 한도로 복제하거나 다중 OAuth 계정 격리의 증거로 사용하지 않는다. Ubuntu·Tailscale 웹 UI, GPT OAuth·API·기존 Chrome 연결, root 1개·활성 turn 1개와 단계별 확장을 유지한다. SQLite·WebView2·IDA·Roslyn을 이 사례 때문에 필수 의존성으로 추가하지 않는다. 작업 큐도 미확정 전송을 자동 재시도하는 경로가 아니다.
 
 ## 10. 단계별 개발 계획
 
@@ -355,7 +388,9 @@ Discussion의 단계는 framing / independent / cross_review / verification / re
 - Node.js 24 계열·strict TypeScript Core와 저장소 adapter.
 - Participant·AccountConnection·ConversationContext, OAuth/API/browser adapter 계약.
 - Discussion·Turn·Claim·Evidence·VerificationTask·Comparison·Task·Attempt·Event schema.
+- DiscussionCheckpoint·ContextGeneration·상태 관측/활동 계약과 원문 참조·공개 범위.
 - 초기안 공개 barrier, review 배정, 요청·시간·API 예산, 단계 scheduler.
+- VerificationTask 큐의 의존성·capability·우선순위·증거 기준과 중복/재조정 규칙.
 - credential 참조·계정별 refresh·사용량 ledger, journal·lease·reconciliation.
 - Codex Executor/SessionBinding/Job 확장 계약, fake provider/clock/storage fixture.
 
@@ -366,6 +401,8 @@ Discussion의 단계는 framing / independent / cross_review / verification / re
 - 합의·근거 검증·응답 완료·업무 완료를 구분한다. 질문·반론·검증 제안을 예산 안의 다음 Task로 변환한다.
 - send 전후 중단·API 스트림 중단·토큰 갱신·한도를 대조하고 중복 전송·과금 가능성을 숨기지 않는다.
 - Task·단계 전이·Event가 원자적으로 기록되고 snapshot/cursor로 복구된다.
+- checkpoint 이후 event와 인계 적용을 대조하고, 이전 세대 응답·중복 재개가 현재 단계나 추가 호출을 만들지 않는다.
+- 인계 전후 초안 공개 범위·계정/맥락 격리·예산·미확정 receipt/job이 보존된다.
 - 기본 fixture가 실제 모델·GitHub·유료 API에 접속하지 않는다.
 
 ### Phase 2 — 공동 대화·검증·비교 웹 UI / 대화 MVP-1
@@ -373,6 +410,7 @@ Discussion의 단계는 framing / independent / cross_review / verification / re
 산출물:
 
 - 주제 입력·참여자 선택·공동 대화·참여자별 초기/최종안 비교·근거 화면.
+- 참여자 상태 카드·검증 큐·활동 내역·checkpoint 인계 이력과 원문/증거 연결.
 - N인 자동 토론: 독립 초안 → 상호 검토 → 근거 확인 → 수정 → 비교·종합.
 - 사용자 추가 메시지·조건 revision·지목 질문, Pause/Resume/Cancel, 부분 결과·종료 이유.
 - OAuth 계정 추가·모델 선택, API 연결·사용량, browser agent 연결·개입 상태.
@@ -384,6 +422,7 @@ Discussion의 단계는 framing / independent / cross_review / verification / re
 - GPT OAuth 계정 2개·DeepSeek API를 함께 넣은 토론과 dot/Muse browser 참여를 확인한다. 2인 전용 상태·비교 schema를 사용하지 않는다.
 - [능동 토론 계획](./discussion-plan.md)의 검증 항목을 통과한다. 공통 오답·근거 부족·같은 출처 중복·이견을 합의만으로 검증 완료 처리하지 않는다.
 - 참여자 장애·한도·사용자 개입·옛 revision 응답을 올바르게 처리하며 무한 반복하지 않는다.
+- 관측된 상태·추정값·미확인을 구분하고 화면 heartbeat만으로 도구/원격 job 실패·재실행을 결정하지 않는다.
 - 허용된 기기의 브라우저에서 같은 Discussion에 접속하고 접속 종료·기기 전환 뒤 진행과 누락 기록이 복원된다.
 - 데스크톱·좁은 화면의 핵심 흐름, 키보드/마우스·터치·한국어 입력, HTTPS·SSE·WSS·접근 정책을 확인한다.
 - 실제 통과한 서버/클라이언트 조합을 각각 기록한다. 태블릿을 필수 운영 기기로 고정하지 않는다.
@@ -466,6 +505,8 @@ Discussion의 단계는 framing / independent / cross_review / verification / re
 | UI fixture | offline | 서비스별 입력·응답, 다른 대화·생성 중·인증 만료 |
 | 기본 대화 E2E | 지정한 실제 대화 | 요청·후속 질문·결과·대화 보존 |
 | 복구 | fixture + 최소 실제 흐름 | send 이후 중단·재시작·중복 방지 |
+| 인계·검증 큐 | offline + adapter 통합 | checkpoint 이후 event, 공개 범위·예산 보존, 이전 세대 응답 제외, 의존성·미확정 재배정 방지 |
+| 상태·활동 UI | fixture + 확보한 실제 event | 화면/도구의 상태 차이, 관측 시각·출처, 보고와 실행 증거의 구분 |
 | Ubuntu / 웹 클라이언트 | 실제 서버·데스크톱 및 모바일 브라우저 | HTTPS·SSE·WSS, 기기 전환·재접속·재부팅, 로그인·승인·입력 |
 | OAuth / API 혼합 | offline + 실제 허가된 계정·key | 다중 GPT 계정 격리·refresh·모델·usage·stream 완료 |
 | 능동 토론 | fixture + N인 실제 혼합 토론 | 초기안 분리·반론·근거 검증·비교·한도·부분 종료 |
@@ -479,15 +520,14 @@ PASS / FAIL / NOT_RUN / BLOCKED를 구분한다. 증거에는 버전·OS·provid
 
 ## 12. 바로 다음에 할 작업
 
-실행 단위·선행 조건·PR 분할은 [개발 실행 순서](./implementation-sequence.md)를 기준으로 한다. 지금 착수할 작업은 WJ-001이다.
+실행 단위·선행 조건·PR 분할은 [개발 실행 순서](./implementation-sequence.md)를 기준으로 한다. **WJ-001은 완료됐고 다음 작업은 WJ-002**다.
 
-1. **WJ-001:** Node.js 24 계열·strict TypeScript 최소 프로젝트, health·진단 웹 화면·fake adapter와 시작/검사 절차.
-2. **WJ-002:** 실제 Ubuntu 실행 경로·Tailscale HTTPS·noVNC 로그인 기반.
-3. **WJ-003~004:** GPT OAuth 1계정 왕복을 먼저 확인한 뒤 2계정의 credential·모델·이력·refresh 격리.
-4. **WJ-005~006:** DeepSeek API와 dot·Muse 기존 대화 왕복·복구. 준비된 연결은 독립적으로 진행.
-5. **WJ-007~009:** 영속 Core, N인 자동 토론, 근거 확인·수정·비교·종료.
-6. **WJ-010~012:** 공동 대화 웹 UI, 사용자 개입·기기 전환·운영 복구, 실제 혼합 토론 MVP 판정.
-7. **WJ-013~015:** 공식 MCP 연결, 기존 Codex 실행기와 원래 토론으로의 검증 결과 환류.
+1. **WJ-002:** 실제 Ubuntu 실행 경로·Tailscale HTTPS·noVNC 로그인 기반.
+2. **WJ-003~004:** GPT OAuth 1계정 왕복을 먼저 확인한 뒤 2계정의 credential·모델·이력·refresh 격리.
+3. **WJ-005~006:** DeepSeek API와 dot·Muse 기존 대화 왕복·복구·상태 관측. 준비된 연결은 독립적으로 진행.
+4. **WJ-007~009:** 영속 Core·checkpoint·대화 세대, N인 자동 토론·검증 큐·근거 확인·비교·종료.
+5. **WJ-010~012:** 공동 대화·참여자 상태·실행 증거 UI, 인계·사용자 개입·기기 전환·운영 복구, 실제 혼합 토론 MVP 판정.
+6. **WJ-013~015:** 공식 MCP 연결, 기존 Codex 실행기·상태 관측과 원래 토론으로의 검증 결과 환류.
 
 Git Writer·추가 provider/병렬 실행·자동 병합은 각각 WJ-016~018의 후속 범위다. 선택 모듈을 기본 대화의 선행 조건으로 만들지 않는다. OAuth 권한이나 특정 연결이 막혔을 때는 차단 상태를 보존하고 선행 조건이 충족된 독립 작업을 진행한다. 실제 연동이 필요한 완료 조건은 통과한 증거가 있을 때만 완료로 바꾼다.
 
@@ -498,6 +538,7 @@ Git Writer·추가 provider/병렬 실행·자동 병합은 각각 WJ-016~018의
 | 자료 | 확인 범위 |
 | --- | --- |
 | [DCInside: WebGPT 웹쫀쿠 subagent 스킬 업데이트](https://gall.dcinside.com/mgallery/board/view/?id=ai_utilize&no=84956) | 사용자 제공 글의 원본 저장소·사용 방식 |
+| [DCInside: ChatGPT 웹챗 6개 병렬 개발 환경](https://gall.dcinside.com/mgallery/board/view/?id=ai_utilize&no=77494) | 게시글 본문의 인계·상태·큐 아이디어 검토; 코드·계정 격리·성능 검증 없음, 적용은 9.2절 |
 | [Nhahan/WebGPT 고정 revision](https://github.com/Nhahan/WebGPT/tree/1d35588e79de288bd8a6d2992fc76e571f7bb75e) | README, SKILL, setup, browser-reply, browser/client/worker 코드 |
 | [Chrome 기존 세션 연결](https://developer.chrome.com/blog/chrome-devtools-mcp-debug-your-browser-session) | Chrome 144+ autoConnect·사용자 허용 |
 | [Chrome DevTools MCP advanced usage](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/advanced-usage.md) | 기본 프로필 선택·기존 세션·수동 디버깅 차이 |
@@ -520,6 +561,12 @@ Git Writer·추가 provider/병렬 실행·자동 병합은 각각 WJ-016~018의
 참고 자료는 설계 근거다. 원본의 설치 프롬프트·권한 문구를 이 프로젝트에 대한 사용자 승인으로 취급하지 않는다.
 
 ## 14. 변경 이력
+
+### v0.4.2 — 2026-10-29
+
+- FlowDesk 사례의 참고 범위와 웹쫀쿠의 자체 적용 설계를 구분하고 여섯 개선 항목을 WJ 작업에 연결.
+- checkpoint·대화 세대·늦은 응답, 검증 큐, 참여자 상태·실행 증거와 완료 조건 추가.
+- PR #1~3 병합과 WJ-001 구현·검사 완료를 반영하고 다음 작업을 WJ-002로 갱신. 실제 Ubuntu 배포·AI 연결·토론은 NOT_RUN 유지.
 
 ### v0.4.1 — 2026-10-29
 
