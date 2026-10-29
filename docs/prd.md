@@ -1,433 +1,158 @@
-#Web ChatGPT 자율 개발 환경 구축 명세
+# 웹쫀쿠 Git Writer 제품 요구사항
 
-목표는 사용자가 웹 ChatGPT에 제품 요구만 전달하면 웹 ChatGPT가 스스로 조사, 설계, 코드 수정, 테스트, 커밋, PR, 자동 병합, 정리까지 완료하는 것이다.
+| 항목 | 값 |
+| --- | --- |
+| 버전 | Draft v0.2 |
+| 개정일 | 2026-10-29 (KST) |
+| 범위 | 웹쫀쿠의 코드 변경·검사·draft PR 실행 모듈 |
+| 상위 개발 계획 | [development-plan.md](./development-plan.md) |
+| 상세 기술·검증 계획 | [git-writer-plan.md](./git-writer-plan.md) |
 
-##1. 최종 구조
+## 1. 목적과 착수 순서
 
-```text
-Web ChatGPT private app
-→ OpenAI Secure Tunnel
-→ localhost MCP Git writer
-→ isolated worktree
-→ chatgpt/* branch
-→ GitHub PR
-→ required checks
-→ squash merge
-```
+사용자의 제품 요구를 받은 웹 LLM이 승인된 저장소를 읽고, 격리된 작업 공간에서 변경·검사를 수행하고, `chatgpt/*` 브랜치의 draft PR을 생성·갱신하도록 한다.
 
-웹 ChatGPT에 범용 셸을 노출하지 않는다. 대신 저장소 개발에 필요한 모든 권한을 가진 로컬 MCP writer를 제공한다. 여기서 “모든 권한”은 읽기, 검색, 전체 코드 편집, 테스트, 빌드, 커밋, push, PR 생성·수정, squash merge를 뜻한다.`main`직접 push, force-push, 브랜치 삭제, secret 노출, 저장소 보안·workflow 변경은 허용하지 않는다.
+웹쫀쿠 전체는 [Living Design](./webjjoku_living_design.md)의 관제·오케스트레이션 제품이다. Git Writer는 그 하위 실행 모듈이며, 기존 로그인 Chrome의 dot·Muse 왕복 대화와 대화 MVP 이후에 구현한다. 브라우저 연결 PoC에 GitHub token이나 terminal 권한을 요구하지 않는다.
 
-##2. 준비물
+최종 목표의 조건부 squash auto-merge와 상시 운영은 유지하되 Git Writer MVP에서 제외한다. 이 문서는 이전 PRD의 Windows·HTTP daemon·writer의 토큰 직접 보유·required checks 부재 시 즉시 병합 예제를 대체한다. 과거 설치 명령과 YAML을 현재 runbook으로 사용하지 않는다.
 
--Windows 10/11, macOS 또는 Linux
--Git, Node.js, GitHub CLI`gh`
--OpenAI`tunnel-client`
--대상 저장소의 push·PR·merge 권한이 있는 GitHub token
--Secure Tunnel과 private app을 사용할 수 있는 OpenAI/ChatGPT workspace
--절대 경로로 확인한 저장소 root
--저장소별 실제 검사 명령
+## 2. 지원 범위
 
-조직 저장소라면 GitHub token의 SSO 승인을 끝낸다. GitHub branch protection과 required checks를 사용하는 것을 권장한다.
+| 항목 | Git Writer MVP |
+| --- | --- |
+| OS | 고정된 macOS arm64 / Linux x86_64 profile 각각 1개 |
+| 실행 | foreground, Node.js 24 계열·ESM·strict TypeScript |
+| transport | 검증된 Secure MCP Tunnel이 실행하는 stdio MCP writer |
+| 대상 | 사전 승인된 disposable 저장소 1개, 전역 변경 작업 1개 |
+| 변경 | 허용된 제품 소스·직접 관련 테스트의 text patch와 복원 |
+| 검사 | 서버가 결정하는 필수 allowlist suite + 허용된 추가 suite |
+| 게시 | `chatgpt/*` commit/push와 동일 draft PR 생성·갱신 |
+| 복구 | 원자적 상태, task lease, 감사 기록, 중복 호출·중단 복구 |
+| 릴리스 | 양 OS 적합성, offline regression, OS별 live E2E |
 
-##3. 저장소 규칙
+MVP 제외: Windows, Intel Mac/ARM Linux, HTTP listener·별도 daemon, 복수 저장소·동시 작업, merge credential·merge 동작, 임의 shell·package install·unrestricted network, binary/generated/submodule 변경.
 
-루트`AGENTS.md`가 없다면 만들고, 있다면 기존 규칙을 보존하면서 아래 계약을 추가한다.
+보호 경로는 `.github/**`, `AGENTS.md`, Git metadata, credential, writer/runtime/policy, dependency manifest·lockfile, package manager 및 build/test 설정·검사 스크립트다. 실제 저장소에 맞춰 목록을 고정한다. 보호 범위 안의 요청은 `UNSUPPORTED_SCOPE`와 이유를 반환한다. 허용된 소스·직접 테스트에는 임의 파일 수 제한을 두지 않는다.
 
-```md
-When the Web ChatGPT Git writer app is selected, Web ChatGPT is the primary autonomous coding agent.
-It must translate the user's natural-language request into a complete implementation without waiting
-for another orchestrator. It must read this file, investigate and reproduce material findings, change
-every required source and directly related test, critically inspect the complete diff, run all applicable
-checks, fix failures, commit and push only chatgpt/*, create or update a pull request, and squash-merge it
-after required checks pass. It must not impose arbitrary file-count or scope limits.
-It must never push directly to main, force-push, delete branches, expose secrets, weaken tests,
-or modify protected repository, workflow, credential, or writer files.
-```
+## 3. 신뢰 경계
 
-##4. 생성할 로컬 파일과 경로
+| 구성요소 | 허용 권한 | 전달하지 않을 권한 |
+| --- | --- | --- |
+| Chrome 연결기 | 승인된 계정·대화의 UI 입출력 | GitHub credential, target 실행 권한 |
+| tunnel-client | tunnel runtime key, writer stdio 시작 | GitHub token의 writer 상속 |
+| MCP writer | 정책·상태·read/edit orchestration | tunnel/GitHub secret, target 직접 실행 |
+| sandbox runner | worktree와 read-only toolchain | 브라우저 프로필, home/keyring, secret, egress |
+| remote broker | 제한된 GitHub credential, 고정 remote/ref/PR | target 실행, merge, force/default/tag/delete push |
 
-먼저 OS별 사용자 데이터 디렉터리를`<WEBGPT_HOME>`으로 정한다.
+권한 우선순위는 `불변 서버 정책 > 인증된 사용자 작업 > 대상 저장소 지침`이다. 저장소의 AGENTS.md, 소스 주석, diff, 검사 출력은 정책·필수 검사·권한을 바꿀 수 없다.
 
-```text
-Windows: %LOCALAPPDATA%\WebGPTGitWriter
-macOS: ~/Library/Application Support/WebGPTGitWriter
-Linux: ${XDG_DATA_HOME:-~/.local/share}/webgpt-git-writer
-```
+source/install/config/state/runtime/credential/target 경로의 중첩·alias를 거부한다. Chrome 프로필과 연결기 데이터도 target·sandbox 경계 밖에 둔다. 실행 중인 writer는 자신의 소스나 설치 경로를 target으로 받지 않는다.
 
-그 아래에 다음 파일을 만든다.
+## 4. MCP 도구
 
-```text
-<WEBGPT_HOME>/
-server.mjs
-writer.config.json
-start-writer.ps1 or start-writer.sh
-start-tunnel.ps1 or start-tunnel.sh
-```
+| 도구 | 동작 |
+| --- | --- |
+| read_repository_file | 고정 snapshot의 paginated text read |
+| search_repository | bounded search |
+| start_change | task ownership·전역 lease 획득, pinned base worktree 생성 |
+| apply_patch | 검증된 상대 경로의 text patch 적용 |
+| restore_paths | 허용 path를 pinned base로 복원 |
+| inspect_diff | 전체 changedPaths/stat, digest에 묶인 diff pagination |
+| run_checks | 서버 필수 suite와 허용된 추가 suite 실행 |
+| publish_pull_request | 정확한 검증 변경을 commit/push하고 draft PR 생성·갱신 |
+| discard_change | 미게시 task 정리 |
 
-Secure Tunnel profile은`tunnel-client`가 해당 OS에서 지정한 사용자 config 디렉터리에 별도로 둔다.
+- versioned schema와 `additionalProperties:false`를 사용한다.
+- 호출자가 필수 suite를 빼거나 보호 경로를 승인할 수 없다.
+- tool annotation은 선택·승인 UX의 hint이며 권한 통제가 아니다.
+- 읽기 ref, task ID, 경로, payload·결과 크기, timeout은 schema·정책으로 제한한다.
+- shell 문자열 대신 명시적 executable/argument array와 비동기 `spawn`, `shell:false`를 사용한다.
+- 오류는 stable code, 설명, 재시도 가능 여부를 반환한다.
+- 기본 모듈에 merge tool이나 숨은 merge side effect를 넣지 않는다.
 
-서비스 등록 파일은 OS의 표준 위치에 별도로 둔다.
+## 5. 변경과 상태 계약
 
-```text
-Windows: Task Scheduler tasks
-macOS: ~/Library/LaunchAgents/*.plist
-Linux: ~/.config/systemd/user/*.service
-```
+일반 전이는 NEW → ACTIVE → CHANGED → INSPECTED → CHECKED → PUBLISHING → PUBLISHED_DRAFT다. 중단·불일치는 RECOVERY_REQUIRED로 보내 local state·branch·remote head·PR을 대조한다.
 
-writer 코드와 설정을 저장소 안에 두지 않는다. 그래야 writer가 자신이나 자신의 검증 명령을 수정할 수 없다.
+상태는 worktree 밖에서 atomic write + fsync + rename으로 저장한다. 작업 정리 후에도 terminal tombstone과 감사 기록을 유지한다. Core의 task ID와 writer change ID를 매핑한다.
 
-##5. MCP writer 계약
+다음 변경 중 하나라도 있으면 이전 inspection/check 증거를 폐기한다.
 
-`server.mjs`라는 파일명은 임의의 프로젝트 소스 파일을 뜻하지 않는다. 이 문서의 계약에 따라 새로 생성하는 범용 MCP writer 실행 파일이다. 기존 프로젝트의 writer를 재사용하거나 특정 언어, 빌드 도구, 저장소 경로, GitHub 계정 또는 검사 명령을 코드에 하드코딩하면 안 된다. 저장소별 값은 환경 변수와`writer.config.json`으로만 주입한다. 이 조건을 어긴 기존`server.mjs`는 다른 프로젝트에 복사할 수 없다.
+- patch·restore·base SHA 이동.
+- candidate tree/diff, config/policy/sandbox profile 변경.
+- 필수 suite set 또는 remote/PR head 변경.
 
-Node 표준 라이브러리만 사용하면 같은`server.mjs`를 Windows, macOS, Linux에서 실행할 수 있다. OS 차이는 경로 생성, 임시 디렉터리, secret 조회, 상시 실행 서비스에 한정한다. 명령 실행은`spawnSync(command, args, {shell:false})`를 사용하고 경로 결합은`node:path`, 임시 root는`node:os.tmpdir()`를 사용한다. POSIX 전용 셸 문법,`/tmp`, 드라이브 문자, 경로 구분자를 코드에 하드코딩하지 않는다.
+증거는 base SHA, candidate digest, config/policy/sandbox digest, 필수 suite, 실제 pushed commit과 PR head에 묶는다. 잘린 diff나 생략된 파일을 전체 검토로 간주하지 않는다.
 
-writer는`127.0.0.1:${WRITER_PORT}`에 bind한다.`/health`는`{"ok":true}`,`/mcp`는 JSON-RPC MCP endpoint를 제공한다.
+동일 변경의 publish 재호출은 commit·PR을 중복 생성하지 않는다. 발행 후 사용자가 명시적으로 후속 변경을 요청하면 새 revision으로 취급해 inspection·checks를 다시 수행하고 새 commit을 동일 브랜치·draft PR에 반영한다. 이전 head가 예상과 다르면 먼저 재조정한다. force-push로 해결하지 않는다.
 
-필수 환경 변수:
+## 6. 검사와 격리
 
-```text
-WRITER_REPO_ROOT absolute repository path
-WRITER_WORK_ROOT absolute path under os.tmpdir()
-WRITER_PORT unused localhost port
-GH_TOKEN GitHub token loaded from the OS credential store
-GIT_AUTHOR_NAME required commit author
-GIT_AUTHOR_EMAIL required commit email
-GITHUB_REPOSITORY owner/repository
-DEFAULT_BRANCH normally main
-WRITER_CONFIG absolute path to writer.config.json
-```
+공통 SandboxBackend 계약 아래 Linux Bubblewrap 후보와 macOS VM/container 후보를 실제 호스트에서 검증하고 ADR로 고정한다. 무격리 host 실행이나 `sandbox-exec`로 자동 fallback하지 않는다.
 
-`writer.config.json`에는 저장소별 보호 경로, internal/generated 경로, 검사 suite의 executable·argument array·working directory·timeout을 둔다. writer는 시작할 때 schema를 엄격히 검증하고, 실행 중 이 파일을 수정하지 않는다. 따라서 범용`server.mjs`는 다른 프로젝트에도 그대로 사용할 수 있고 설정만 프로젝트에 맞게 생성한다.
+필수 검증:
 
-###MCP initialize instructions
+- worktree만 writable, toolchain read-only, 빈 HOME·private temp.
+- browser profile, keyring, SSH agent, Docker/runtime socket 미노출.
+- network egress 차단과 CPU·memory·PID·disk·wall-time 제한.
+- timeout·cancel·restart 이후 descendant cleanup.
+- hostile Git config/hook/filter, symlink·hardlink·경로 alias 우회 차단.
+- sandbox 불완전 시 `SANDBOX_UNAVAILABLE`로 중단.
 
-`initialize`결과의 top-level`instructions`에 다음 의미를 영문으로 넣는다.
+필수 suite는 서버가 변경 경로와 위험도에 따라 결정한다. 실제 저장소의 format/diff, 직접 테스트, typecheck/compile, production build를 적용 가능한 범위에서 등록한다. 생성 산출물 복원도 mutation으로 취급하고 최종 candidate가 검사 대상과 일치하는지 검증한다.
 
-```text
-Act as the primary autonomous coding agent, not an advisor. Read origin/<default-branch>/AGENTS.md
-before material work. Infer the complete implementation scope from the user's request; never invent
-file-count limits. Investigate, reproduce, implement, add direct tests, inspect the full diff critically,
-run every applicable check, fix failures, publish or update the PR, and squash-merge after checks pass.
-Use repository tools instead of web search for repository state. Do not ask another orchestrator to lead.
-```
+기본 테스트는 offline으로 실행한다. 실제 GitHub·OpenAI·유료 API로 나가는 테스트는 별도 live E2E로 분리한다.
 
-###MCP tools
+## 7. draft PR 발행
 
-다음 도구와 JSON schema를 구현한다.
+1. 마지막 mutation 이후의 전체 inspection과 필수 checks 성공을 확인한다.
+2. 보호 경로·산출물·최종 candidate digest를 재확인한다.
+3. 고정된 author와 정확한 staging set으로 commit을 생성한다.
+4. 제한된 remote broker가 `HEAD:refs/heads/chatgpt/<taskId>`만 push한다.
+5. 예상 remote head와 bot-owned PR을 확인해 동일 draft PR을 생성·갱신한다.
+6. 실제 commit/PR head와 검사 증거를 대조하고 URL·상태를 Core에 반환한다.
+7. 중단 시 상태를 보존하고 한 revision/한 PR로 재조정한다.
 
-```text
-read_repository_file
-{ ref?: string, path: string }
+broker는 target-controlled Git 설정·hook·filter·diff driver·fsmonitor·submodule·custom protocol을 실행하지 않는다. credential은 해당 broker에만 짧게 주입한다. 각 Git child에 token을 무차별 상속시키지 않는다.
 
-search_repository
-{ ref?: string, query: string, path?: string }
+기본 브랜치 직접 push, force/tag/delete push, admin bypass는 구현하지 않는다. draft PR 발행을 merge나 배포 완료로 표시하지 않는다.
 
-start_change
-{ taskId: string, baseRef?: string }
+## 8. 설치·운영
 
-apply_patch
-{ taskId: string, patch: string }
+- 소스와 설치 artifact, config, task/audit state, runtime, credential을 분리한다.
+- macOS Keychain / Linux Secret Service를 사용하고 secret을 문서·config·prompt·service 파일에 기록하지 않는다.
+- committed source에서 양 OS artifact를 재현 가능하게 빌드하고 hash manifest, read-only atomic activation, rollback을 검증한다.
+- Secure MCP Tunnel은 검증한 공식 init/doctor/run 절차와 버전으로 runbook을 작성한다.
+- tunnel health/readiness와 ChatGPT workspace·Platform 권한을 각각 확인한다.
+- writer stdout은 MCP 전용, log는 redacted stderr로 보낸다.
+- MVP는 foreground다. systemd/LaunchAgent 및 인증된 HTTP transport는 후속 ADR·release gate를 따른다.
 
-restore_paths
-{ taskId: string, paths: string[] }
+## 9. 완료 조건
 
-inspect_diff
-{ taskId: string }
+- 양 OS의 동일 적합성·공격 fixture 통과.
+- offline 상태·Git·검사·중단/replay 검증 통과.
+- 각 지원 OS에서 실제 요청 하나가 검증된 변경과 draft PR 하나로 이어짐.
+- mutation 이후 stale checks 재사용, secret 노출, sandbox escape, 잘못된 ref push 없음.
+- 재시작·재호출로 중복 commit/PR이 만들어지지 않음.
+- 감사 기록으로 task·정책 판단·checks·commit·PR 관계 재구성 가능.
+- 검증하지 않은 결과는 NOT_RUN/BLOCKED로 표시하고 release-ready로 선언하지 않음.
 
-run_checks
-{ taskId: string, suites: string[] }
+## 10. 후속 자동 병합
 
-publish_pull_request
-{ taskId: string, commitMessage: string, prTitle: string, prBody: string }
+별도 범위 승인과 다음 조건을 갖춘 뒤에만 구현한다.
 
-discard_change
-{ taskId: string }
-```
+- 기본 브랜치 보호/ruleset을 실제 조회·검증.
+- 비어 있지 않은 mandatory remote checks.
+- 정확한 현재 PR head의 checks 성공.
+- bot의 admin/bypass 권한 부재.
+- target CI의 secret/write token 노출과 unsafe pull_request_target 경로 검토.
+- base 이동·stale/pending/fail/cancel check·ruleset drift 거부 검증.
 
-`read_repository_file`,`search_repository`,`inspect_diff`는`readOnlyHint=true`다.`start_change`,`restore_paths`,`run_checks`,`publish_pull_request`는 멱등 호출이어야 한다.`discard_change`만`destructiveHint=true`다. PR publish/merge는`openWorldHint=true`다.
+조건을 충족할 때 squash auto-merge를 활성화한다. required checks가 없거나 auto-merge 설정이 꺼졌다는 이유로 즉시 병합하지 않는다.
 
-###참조와 경로 제한
+## 11. 변경 이력
 
--읽기 ref는`origin/<default-branch>`또는`origin/chatgpt/*`만 허용한다.
-- `taskId`는`^[a-z0-9][a-z0-9-]{2,48}$`만 허용한다.
--상대 경로만 허용하고`..`, 절대 경로, 역슬래시를 거부한다.
-- `.github/`,`AGENTS.md`, writer 파일, credential, package manager lock/config, test/build 설정과 검사 스크립트는 protected path로 둔다.
--보호 경로 목록은 대상 저장소 stack에 맞게 확장하되 제품 소스·직접 테스트를 임의로 제한하지 않는다.
+### v0.2 — 2026-10-29
 
-###작업 상태
+웹쫀쿠 전체 계획과 Git Writer 요구사항을 분리했다. draft-only·stdio·credential 분리·양 OS sandbox 조건으로 정합화하고, 과거 Windows/HTTP/동기 실행/즉시 merge 예제를 제거했다. Chrome 프로필 경계와 대화 결과·실행 증거의 구분을 추가했다.
 
-각 task는`path.join(WRITER_WORK_ROOT, taskId)`worktree와 다른 사용자에게 공개되지 않는`.writer-meta.json`을 가진다. POSIX에서는 mode`0600`을 적용하고 Windows에서는 현재 사용자만 접근 가능한`<WRITER_WORK_ROOT>`ACL을 사용한다.
-
-```json
-{
-"taskId": "feature-name",
-"branch": "chatgpt/feature-name",
-"baseRef": "origin/main",
-"baseSha": "...",
-"checks": null,
-"publishedUrl": null,
-"createdAt": "..."
-}
-```
-
-`start_change`절차:
-
-1. `git fetch --prune origin`으로 default branch와`chatgpt/*`만 갱신한다.
-2.동일 task가 있으면 metadata를 검증하고 그대로 반환한다.
-3.없으면 detached worktree를`baseRef`에서 만든다.
-4.필요한 기존 dependency directory는 설정된 경우에만 OS에 맞는 symlink 또는 Windows directory junction으로 연결하고 status와 commit에서 항상 제외한다.
-
-`apply_patch`는`git apply --check --whitespace=error-all`성공 후에만 적용한다. 패치 후 검증 기록을 무효화한다. 발행된 task에도 후속 patch를 허용해 같은 PR을 수정할 수 있어야 한다.
-
-`restore_paths`는 파일 내용을 ChatGPT에 전송하지 않고`git restore --source=<baseSha>`로 지정 파일을 기준 상태로 복원한다. 대형 생성 파일 정정에 사용한다.
-
-`inspect_diff`는 최소한 다음을 별도 필드로 반환한다.
-
-```text
-status
-changedPaths
-stat
-diff
-diffTruncated
-last successful checks
-published PR URL
-```
-
-대형 단일행 파일 때문에 diff가 잘려도`changedPaths`와`stat`는 절대 잘리지 않아야 한다.
-
-###검사
-
-임의 셸 문자열을 실행하지 않는다. 구축 AI가 저장소 stack을 탐색해 이름 있는 allowlist suite를 만든다.
-
-```text
-format-or-diff-check
-targeted-unit-tests
-typecheck-or-compile
-production-build
-```
-
-각 suite는 설정에 기록된 executable과 argument array를`spawnSync`로 실행하고 shell을 사용하지 않는다. 사용자가 요청한 변경에 적용 가능한 suite는 모두 통과해야 한다. 마지막 patch나 restore 이후 실행한 검사만 publish 자격으로 인정한다.
-
-production build가 tracked generated output을 덮어쓴다면 검사 직후`git restore --source=HEAD`로 해당 산출물을 복원한다. 검사 명령·설정 파일은 writer가 수정하지 못하게 보호한다.
-
-###Git 인증
-
-모든`git`child process에 다음 환경을 주어 OS credential helper prompt 반복을 막는다.
-
-```text
-GIT_TERMINAL_PROMPT=0
-GIT_CONFIG_COUNT=2
-GIT_CONFIG_KEY_0=credential.helper
-GIT_CONFIG_VALUE_0=
-GIT_CONFIG_KEY_1=http.https://github.com/.extraheader
-GIT_CONFIG_VALUE_1=AUTHORIZATION: basic <base64("x-access-token:" + GH_TOKEN)>
-```
-
-토큰과 Authorization header를 log, MCP 응답, 오류 메시지에 출력하지 않는다.
-
-###publish와 자동 병합
-
-1.마지막 변경 뒤 필요한 suite가 모두 성공했는지 검사한다.
-2.protected/internal/generated path가 없는지 다시 검사한다.
-3. `git diff --check`를 통과시킨다.
-4.지정 author로 conventional English commit을 만든다.
-5. `HEAD:refs/heads/chatgpt/<taskId>`에만 push한다.
-6.동일 head PR이 있으면 재사용하고 없으면 default branch 대상 PR을 만든다.
-7. `gh pr merge <branch> --auto --squash`를 실행한다.
-8.GitHub auto-merge가 비활성이고 required remote check가 없다면`gh pr merge <branch> --squash`로 즉시 병합한다.
-9.required remote check가 있다면 우회하지 말고 성공을 기다린 뒤 병합한다.
-10.merge 확인 후 worktree를 제거한다. 실패하면 PR과 worktree를 보존하고 명확한 오류를 반환한다.
-
-`main`직접 push, force-push,`--admin`으로 branch protection 우회, branch 삭제는 구현하지 않는다.
-
-##6. OS credential store
-
-고유`<PREFIX>`를 정하고 GitHub token과 tunnel runtime key를 평문 파일이 아닌 OS credential store에 저장한다.
-
-###Windows
-
-Windows Credential Manager를 사용한다. PowerShell의 SecretManagement 모듈을 설치하고 기본 vault 또는 Credential Manager extension을 등록한다.
-
-```powershell
-Install-Module Microsoft.PowerShell.SecretManagement -Scope CurrentUser
-Register-SecretVault -Name WebGPT -ModuleName Microsoft.PowerShell.SecretStore -DefaultVault
-Set-Secret -Name '<PREFIX>-github-token' -Secret (gh auth token)
-Set-Secret -Name '<PREFIX>-tunnel-runtime' -Secret '<OPENAI_SECURE_TUNNEL_RUNTIME_KEY>'
-```
-
-조직 정책상 SecretStore를 사용할 수 없으면 Windows Credential Manager용 검증된 PowerShell module을 사용한다. DPAPI 암호문을 직접 설계하지 않는다.
-
-Task Scheduler에서 UI 없이 조회할 수 있는 current-user vault를 선택하고, 로그인 후 예약 작업에서 secret 조회가 prompt 없이 성공하는지 검증한다. 기본 SecretStore의 잠금 정책이 이를 막는다면 Credential Manager extension처럼 비대화형 조회를 지원하는 vault로 교체한다.
-
-###macOS
-
-```sh
-securityadd-generic-password -U -a "$USER" -s '<PREFIX>-github-token' \
--w "$(ghauth token)"
-
-securityadd-generic-password -U -a "$USER" -s '<PREFIX>-tunnel-runtime' \
--w '<OPENAI_SECURE_TUNNEL_RUNTIME_KEY>'
-```
-
-###Linux
-
-Secret Service API를 제공하는 GNOME Keyring, KWallet 또는 호환 vault와`secret-tool`을 사용한다.
-
-```sh
-printf'%s' "$(ghauth token)" |secret-toolstore --label='WebGPT GitHub token' service '<PREFIX>-github-token'
-printf'%s' '<OPENAI_SECURE_TUNNEL_RUNTIME_KEY>' |secret-toolstore --label='WebGPT tunnel runtime' service '<PREFIX>-tunnel-runtime'
-```
-
-토큰은 저장소, 문서, service definition, YAML, prompt, log에 넣지 않는다.
-
-##7. writer 실행과 상시 서비스
-
-모든 OS에서 시작 프로세스는 credential store에서 secret을 읽어 환경 변수로만 전달하고 writer를 foreground로 실행한다.
-
-###Windows PowerShell
-
-`start-writer.ps1`:
-
-```powershell
-$ErrorActionPreference = 'Stop'
-$env:GH_TOKEN = Get-Secret -Name '<PREFIX>-github-token' -AsPlainText
-$env:WRITER_REPO_ROOT = '<ABSOLUTE_REPOSITORY_PATH>'
-$env:WRITER_WORK_ROOT = Join-Path ([System.IO.Path]::GetTempPath()) '<PREFIX>-writer\worktrees'
-$env:WRITER_PORT = '<LOCAL_WRITER_PORT>'
-$env:GIT_AUTHOR_NAME = '<AUTHOR_NAME>'
-$env:GIT_AUTHOR_EMAIL = '<AUTHOR_EMAIL>'
-$env:GITHUB_REPOSITORY = '<OWNER/REPOSITORY>'
-$env:DEFAULT_BRANCH = 'main'
-$env:WRITER_CONFIG = '<WEBGPT_HOME>\writer.config.json'
-& node '<WEBGPT_HOME>\server.mjs'
-exit $LASTEXITCODE
-```
-
-Task Scheduler에 로그인 시 실행, 실패 시 재시작, 중복 실행 금지로 writer task를 등록한다. GUI 또는`Register-ScheduledTask`를 사용하고 secret을 task argument에 넣지 않는다.
-
-###macOS/Linux shell
-
-`start-writer.sh`의 공통 골격:
-
-```sh
-#!/bin/sh
-set -eu
-export WRITER_REPO_ROOT='<ABSOLUTE_REPOSITORY_PATH>'
-export WRITER_WORK_ROOT='<OS_TEMP_DIRECTORY>/<PREFIX>-writer/worktrees'
-export WRITER_PORT='<LOCAL_WRITER_PORT>'
-export GIT_AUTHOR_NAME='<AUTHOR_NAME>'
-export GIT_AUTHOR_EMAIL='<AUTHOR_EMAIL>'
-export GITHUB_REPOSITORY='<OWNER/REPOSITORY>'
-export DEFAULT_BRANCH='main'
-export WRITER_CONFIG='<WEBGPT_HOME>/writer.config.json'
-
-# macOS:
-export GH_TOKEN="$(security find-generic-password -a "$USER" -s '<PREFIX>-github-token' -w)"
-# Linux에서는 위 줄 대신:
-# export GH_TOKEN="$(secret-tool lookup service '<PREFIX>-github-token')"
-
-exec node '<WEBGPT_HOME>/server.mjs'
-```
-
-macOS는 LaunchAgent의`RunAtLoad=true`,`KeepAlive=true`로 실행한다. Linux는 systemd user service의`ExecStart`,`Restart=on-failure`,`WantedBy=default.target`을 사용한다. 서비스 환경의`PATH`에 Node, Git,`gh`,`tunnel-client`절대 경로가 포함됐는지 검증한다.
-
-```sh
-curl-fsS "http://127.0.0.1:<LOCAL_WRITER_PORT>/health"
-```
-
-##8. Secure Tunnel
-
-OpenAI Platform에서 Secure Tunnel을 생성하고 사용할 ChatGPT workspace에 연결한다. tunnel ID와 runtime key를 발급받는다.`tunnel-client`는 OpenAI 화면이 안내하는 공식 binary를 설치한다.
-
-OpenAI 화면 또는 설치된`tunnel-client`가 안내하는 사용자 config 디렉터리에`webgpt-writer`라는 profile로 다음 설정을 저장한다. config 디렉터리 위치는 client와 OS 버전에 따라 다르므로`<WEBGPT_HOME>`경로를 임의의 CLI 옵션으로 전달하지 않는다.
-
-```yaml
-config_version: 1
-control_plane:
-base_url: "https://api.openai.com"
-tunnel_id: "<TUNNEL_ID>"
-api_key: "env:CONTROL_PLANE_API_KEY"
-health:
-listen_addr: "127.0.0.1:<LOCAL_TUNNEL_HEALTH_PORT>"
-admin_ui:
-open_browser: false
-log:
-level: info
-format: json
-mcp:
-server_urls:
-- channel: main
-url: "http://127.0.0.1:<LOCAL_WRITER_PORT>/mcp"
-```
-
-터널 시작 스크립트도 OS credential store에서 runtime key를 읽어`CONTROL_PLANE_API_KEY`로 전달한 뒤 foreground로 실행한다.
-
-Windows PowerShell:
-
-```powershell
-$ErrorActionPreference = 'Stop'
-$env:CONTROL_PLANE_API_KEY = Get-Secret -Name '<PREFIX>-tunnel-runtime' -AsPlainText
-& tunnel-client run --profile webgpt-writer
-exit $LASTEXITCODE
-```
-
-macOS/Linux shell:
-
-```sh
-#!/bin/sh
-set -eu
-# macOS:
-export CONTROL_PLANE_API_KEY="$(security find-generic-password -a "$USER" -s '<PREFIX>-tunnel-runtime' -w)"
-# Linux에서는 위 줄 대신 secret-tool lookup을 사용한다.
-exec tunnel-client run --profile webgpt-writer
-```
-
-writer와 동일하게 Windows Task Scheduler, macOS LaunchAgent 또는 Linux systemd user service로 상시 실행한다.
-
-```sh
-curl-fsS "http://127.0.0.1:<LOCAL_TUNNEL_HEALTH_PORT>/readyz"
-```
-
-##9. ChatGPT private app
-
-ChatGPT 앱/플러그인 관리 화면에서 private app을 만들고 Secure Tunnel connection을 선택한다. 공개 URL, GitHub token, OS credential-store secret을 ChatGPT에 입력하지 않는다.
-
-새 대화에서 앱을 선택하고 첫 쓰기 동작 승인창에서`항상 허용`을 선택한다. ChatGPT가 승인을 대화 단위로 관리하면 새 대화마다 최초 한 번은 다시 나타날 수 있다. 로컬 writer가 플랫폼 승인창을 허위 annotation으로 우회해서는 안 된다.
-
-앱 연결 후 사용자는 제품 요구만 말한다.
-
-```text
-로그인 세션 만료 버그를 재현하고 양 배포판에서 고쳐. 직접 테스트하고 PR로 반영해.
-```
-
-별도 파일 수 제한, 단계별 지시, orchestrator prompt를 추가하지 않는다.
-
-##10. 합격 검증
-
-구축 AI는 예제 기능 하나를 실제로 개발시켜 end-to-end로 증명한다.
-
-```sh
-curl-fsS "http://127.0.0.1:<LOCAL_WRITER_PORT>/health"
-curl-fsS "http://127.0.0.1:<LOCAL_TUNNEL_HEALTH_PORT>/readyz"
-ghpr view chatgpt/<task-id> --repo <OWNER/REPOSITORY> \
---json url,state,files,commits,autoMergeRequest,mergeStateStatus
-```
-
-반드시 확인할 것:
-
--웹 ChatGPT가`AGENTS.md`를 스스로 읽음
--인위적 파일 수 제한 없이 완전한 구현 범위를 선택함
--제품 소스와 직접 테스트를 실제 수정함
--관련 검사 실패를 스스로 수정함
--커밋 author가 지정값과 정확히 일치함
-- `chatgpt/*`외 push가 없음
--PR에 secret, writer 파일, 생성 산출물이 없음
--required checks 성공 후 squash merge됨
--병합 전`main`직접 수정이 없음
--merge 후 worktree와 유휴 세션이 제거됨
--연속 fetch/push에서 OS credential prompt가 반복되지 않음
-
-##11. 현실적인 한계
-
-이 구성은 웹 ChatGPT에 개발 workflow 전체를 맡긴다. 모델의 판단 품질 자체를 다른 모델과 수학적으로 동일하게 만들 수는 없으므로`AGENTS.md`, 직접 테스트, allowlist 검사, diff 검토, branch protection이 품질 게이트다. 플랫폼의 최초`항상 허용`확인도 로컬 코드만으로 영구 제거할 수 없다.

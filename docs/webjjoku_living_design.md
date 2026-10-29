@@ -1,10 +1,15 @@
 # 웹쫀쿠 Living Design Document
 
 - 문서 상태: Living Design Document
-- 버전: v0.2
-- 기준일: 2026-08-14
+- 버전: v0.3
+- 최초 기준일: 2026-08-14
+- 개정일: 2026-10-29 (KST)
 - 문서 형식: Markdown
 - 원칙: 이후의 아이디어, 설계 결정, 구현 메모는 이 문서에 누적 업데이트한다.
+- 현재 릴리스 순서·완료 조건: [개발 계획서](./development-plan.md)
+- 코드 실행 모듈: [Git Writer PRD](./prd.md) / [상세 계획](./git-writer-plan.md)
+
+> 현재 첫 PoC는 기존 로그인 Chrome의 GPT dot·Muse 왕복 대화다. 이 문서의 조직·팀·Wiki는 장기 제품 설계이며 첫 릴리스 필수 범위와 구분한다. 구현 코드와 실제 계정 검증 증거는 아직 없다.
 
 ---
 
@@ -25,7 +30,7 @@
 ### 1.2 핵심 원칙
 
 1. 모델 API 호출을 기본 실행 방식으로 사용하지 않는다.
-2. 실제 작업은 ChatGPT, Claude, Gemini 등 웹 LLM 세션에서 수행한다.
+2. 실제 작업은 일반 ChatGPT, GPT dot, Muse, Claude, Gemini 등 웹 대화·에이전트에서 수행한다.
 3. 가능한 경우 각 서비스가 공식적으로 지원하는 OAuth / MCP / Connected App 기능을 우선 사용한다.
 4. 공식 연결 수단만으로 부족한 구간은 Provider별 Web Session Adapter로 추상화한다.
 5. 각 팀은 사용할 LLM Provider/계정을 별도로 지정할 수 있다.
@@ -37,55 +42,31 @@
 
 ---
 
-## 2. 현재 가용 LLM 자원
+## 2. 계정 자원과 연결 대상
 
-초기 웹쫀쿠는 아래 계정 자원을 기준으로 설계한다.
+기존 GPT 3·Claude 1·Gemini 1 구성은 2026-08-14의 기획 입력이다. 아래 계정 이름은 논리적 식별자이며 현재 로그인·구독·가용성이 검증됐다는 의미가 아니다.
 
-| Account ID | Provider | 수량 | 사용 형태 | 비고 |
-|---|---|---:|---|---|
-| gpt-01 | ChatGPT | 1 | Web LLM | 계정/요금제별 공식 MCP 기능 확인 필요 |
-| gpt-02 | ChatGPT | 1 | Web LLM | 독립 브라우저 프로필 사용 |
-| gpt-03 | ChatGPT | 1 | Web LLM | 독립 브라우저 프로필 사용 |
-| claude-01 | Claude | 1 | Web LLM | Remote MCP 연결 우선 검토 |
-| gemini-01 | Gemini | 1 | Web LLM only | API 사용 불가, 웹 세션 전용으로 취급 |
+| 대상 | 구분 | 현재 계획 |
+| --- | --- | --- |
+| gpt-01 / gpt-02 / gpt-03 | 기존 ChatGPT 계정 후보 3개 | 실제 프로필·계정 확인 후 등록 |
+| claude-01 | 기존 Claude 계정 후보 | 후속 Provider 확장 |
+| gemini-01 | 기존 Gemini 웹 계정 후보 | 후속 Provider 확장 |
+| GPT dot | ChatGPT 계정에 연결된 agent/surface | 첫 Chrome 대화 PoC; 계정을 추가로 계산하지 않음 |
+| muse-01 | Muse 연결 후보 | 첫 Chrome 대화 PoC; 실제 계정 식별 필요 |
 
-### 2.1 초기 동시 실행 한도
+### 2.1 동시 실행 한도
 
-초기 구현에서는 보수적으로 **계정 1개 = Active Seat 1개**로 본다.
+연결 PoC와 대화 MVP-1은 **전역 활성 작업 1개**로 시작한다. 다중 Seat 확장은 상위 개발 계획 Phase 5에서 수행하며 계정당 활성 작업 1개를 기본으로 한다.
 
-따라서 실제로 동시에 작업을 수행하는 최대 작업자 수는 우선 5명이다.
+일반 ChatGPT와 dot이 같은 계정을 사용하면 동시 실행 한도도 공유한다. “기존 5개 + dot + Muse = 7개 Seat”로 자동 산정하지 않는다. 실제 연결된 독립 계정·provider의 검증 결과로 실행 용량을 정한다.
 
-가상 Role은 5개보다 많이 만들 수 있지만, 실제 작업이 필요할 때 비어 있는 Seat를 할당받아야 한다.
-
-```text
-Virtual Roles
-  PM
-  Architect
-  Researcher
-  Backend
-  Frontend
-  Reviewer
-  QA
-  DevOps
-  Archivist
-      |
-      v
-Seat Scheduler
-      |
-      +-- GPT Seat 01
-      +-- GPT Seat 02
-      +-- GPT Seat 03
-      +-- Claude Seat 01
-      +-- Gemini Seat 01
-```
-
-향후 Provider가 동일 계정에서 안정적인 병렬 세션을 허용하고 웹 자동화 충돌이 없다는 것이 검증되면 Account별 `max_concurrency`를 조정할 수 있다.
+Role은 계정보다 많을 수 있지만 실제 작업 시 검증된 Seat를 배정받는다. 동일 계정의 병렬도를 늘리는 것은 별도 검증 이후의 결정이다.
 
 ---
 
 ## 3. 가장 중요한 추상화: Role != Account != Session
 
-웹쫀쿠에서는 다음 네 개를 별도 객체로 관리한다.
+웹쫀쿠에서는 다음 네 개를 별도 객체로 관리한다. dot·Muse 확장에는 AgentIdentity와 ConversationBinding을 추가해 계정·agent·대화·Chrome 연결을 구분한다.
 
 ### 3.1 Role
 
@@ -152,7 +133,9 @@ Research Agent
   -> Claude conversation C
 ```
 
-이렇게 해야 서로 다른 역할의 컨텍스트가 섞이지 않는다.
+이렇게 해야 서로 다른 역할의 컨텍스트가 섞이지 않는다. 다만 dot의 지속 대화는 task마다 새로 만들지 않고 task ID로 업무를 구분한다. 다른 역할에 해당 대화를 재사용할지는 명시적인 역할·맥락 정책으로 결정한다.
+
+BrowserConnection에는 연결기·프로필 바인딩을, ConversationBinding에는 account·agent·surface·대화 URL/관측 ID·현재 tab ID를 저장한다. 탭 ID만으로 재시작 후 대화를 확정하지 않는다.
 
 ---
 
@@ -187,7 +170,7 @@ teams:
 
 ### 4.1 초기 추천 배치
 
-현재 계정 구성을 기준으로 한 초기 추천안이다. 확정안은 아니다.
+아래 표는 8월의 계정 구성을 이용한 후속 조직 확장 예시다. 현재 PoC의 배정이나 확정된 모델 성능 비교가 아니다.
 
 | Team | Primary | Secondary | 이유 |
 |---|---|---|---|
@@ -277,47 +260,21 @@ Relevant Wiki / Code / Decision
 
 ## 7. 웹 LLM 연결 구조
 
-웹쫀쿠는 Provider 차이를 Adapter 계층으로 숨긴다.
+| 계층 | 책임 |
+| --- | --- |
+| Core / Task / Events | 실행 주체·lease, 결과·상태, 사용자 개입 |
+| BrowserConnection | 기존 로그인 Chrome에 연결; 프로필·탭 바인딩 |
+| ProviderAdapter | 일반 ChatGPT / dot / Muse / Claude / Gemini별 입력·관측 |
+| 공식 MCP 연결 | 계정에서 검증한 도구·결과·이벤트 교환 |
+| Git Writer | 이후 단계의 격리된 코드 변경·검사·draft PR |
 
-```text
-                   Webjjoku Core
-                        |
-            +-----------+-----------+
-            |                       |
-       Task / Events             MCP Server
-            |                       |
-       Provider Router              |
-            |                       |
-   +--------+--------+              |
-   |        |        |              |
-ChatGPT   Claude   Gemini           |
-Adapter   Adapter   Adapter         |
-   |        |        |              |
-   +--------+--------+--------------+
-            |
-      Logged-in Web LLMs
-```
+Core를 서버에 두더라도 Chrome 연결기는 해당 브라우저가 실행되는 컴퓨터에 둔다. 우선 Chrome DevTools MCP autoConnect를 검증하고, 프로필 구분이나 탭 권한 요구가 맞지 않으면 확장 프로그램 + Native Messaging을 검토한다.
 
-### 7.1 Provider Adapter 공통 인터페이스
+### 7.1 Adapter 계약
 
-```text
-open_session(account, role)
-send_prompt(session, message)
-wait_for_response(session)
-read_response(session)
-attach_context(session, context)
-get_status(session)
-close_session(session)
-```
+공통 기능은 attach/probe, sendMessage, observeConversation, followUp, collectResult, requestStop, detach다. 세부 상태·입출력은 [개발 계획서](./development-plan.md)의 계약을 따른다.
 
-공식 MCP를 사용할 수 있는 Provider라면 추가로:
-
-```text
-connect_mcp(session, webjjoku_mcp)
-wait_for_tool_result(task_id)
-```
-
-을 지원한다.
+mode 선택·첨부·새 대화·원격 중단·MCP·이벤트는 capability다. 일반 ChatGPT의 reasoning level 컨트롤을 dot·Muse에도 존재한다고 가정하지 않는다. 사용자 대화를 자동 삭제하지 않는다.
 
 ---
 
@@ -325,7 +282,9 @@ wait_for_tool_result(task_id)
 
 MCP가 가능한 Provider에서는 단순 화면 scraping보다 **웹쫀쿠 자체를 Remote MCP Server로 제공하는 방식**을 우선한다.
 
-웹 LLM이 웹쫀쿠 MCP에 접속하면 다음 Tool을 사용할 수 있다.
+아래는 장기 도구 후보이다. 상위 Phase 3의 최소 범위는 task_get, context_get, result_submit이며 필요한 경우 task_claim을 추가한다. 일반 MCP 도구 연결만으로 외부에서 웹 대화를 시작할 수 있다고 가정하지 않는다. dot의 이벤트 구독은 별도 capability로 검증한다.
+
+웹 LLM이 인증된 웹쫀쿠 MCP에 접속하고 해당 권한을 가진 경우 다음 Tool을 사용할 수 있도록 설계한다.
 
 ### 8.1 Webjjoku MCP Tools 초안
 
@@ -380,186 +339,80 @@ result_submit()
 }
 ```
 
-이를 통해 최종 응답을 화면에서 다시 파싱하는 의존도를 줄일 수 있다.
+이를 통해 최종 응답을 화면에서 다시 파싱하는 의존도를 줄일 수 있다. 위 completed는 provider가 제출한 결과 상태이며 Core의 업무 done을 자동 확정하지 않는다. 결과는 review로 보내고 코드·검사·PR은 실제 증거와 대조한다.
 
 ---
 
-## 9. OAuth / 인증 설계 원칙
+## 9. 로그인과 인증 경계
 
-### 9.1 LLM 웹사이트 로그인
+### 9.1 기존 Chrome 연결
 
-웹쫀쿠가 Provider 계정의 비밀번호를 직접 저장하는 구조를 기본으로 하지 않는다.
+첫 경로는 사용자가 이미 로그인한 Chrome에 연결하는 것이다. 쿠키·local storage·인증 토큰을 복사해 다른 프로필로 옮기지 않는다.
 
-초기 권장 구조:
+1. Chrome 버전과 연결 기능을 확인한다.
+2. autoConnect의 실제 프로필 선택과 Chrome 허용 절차를 검증한다.
+3. 사용자가 지정한 계정·agent·대화를 바인딩한다.
+4. 만료·대상 변경 시 전송을 멈추고 Re-authentication Required 또는 Target Changed를 표시한다.
+5. 재로그인은 사용자가 수행하고 연결기는 같은 바인딩을 다시 확인한다.
 
-1. Account별 독립 Persistent Browser Profile 생성
-2. 사용자가 직접 Provider에 로그인
-3. 로그인된 브라우저 프로필/세션을 웹쫀쿠가 재사용
-4. 세션 만료 시 UI에서 `Re-authentication Required` 표시
-5. 재로그인은 사용자가 수행
+새 계정이나 전용 실행 환경이 필요할 때만 독립 persistent profile을 만들고 사용자가 로그인한다. 계정 프로필 간 쿠키를 공유하지 않는다. 기존 프로필을 별도 브라우저 프로세스가 동시에 열도록 하지 않는다.
 
-```text
-profiles/
-  gpt-01/
-  gpt-02/
-  gpt-03/
-  claude-01/
-  gemini-01/
-```
+### 9.2 MCP 인증
 
-각 Profile의 Cookie / Local Storage는 서로 절대 공유하지 않는다.
+Provider 웹사이트 로그인과 웹쫀쿠 MCP의 인증은 별개다. 공식 연결이 해당 계정에서 가능한지 확인한 뒤 OAuth 등 검증된 방식을 사용한다.
 
-### 9.2 MCP OAuth
+연결 주체에는 account, agent, project/task 범위와 read/write scope를 매핑한다. task:read, task:claim, result:submit 등의 최소 권한부터 시작한다. 브라우저 로그인 세션과 GitHub credential을 Git Writer sandbox에 전달하지 않는다.
 
-웹 LLM이 Webjjoku Remote MCP Server에 연결할 때는 MCP 표준 OAuth 흐름을 지원하도록 한다.
-
-```text
-Web LLM
-   |
-   | OAuth
-   v
-Webjjoku MCP Auth Server
-   |
-   +-- account_id
-   +-- allowed_team
-   +-- allowed_agent
-   +-- scopes
-```
-
-예상 Scope:
-
-```text
-task:read
-task:claim
-task:write
-wiki:read
-wiki:write
-issue:create
-result:submit
-code:read
-code:write
-```
-
-Role에 따라 최소 권한만 부여한다.
+MCP 도구·이벤트 지원은 검증 전까지 UNKNOWN이다. 연결의 이름만 확인하고 도구 접근·권한까지 성공했다고 표시하지 않는다.
 
 ---
 
 ## 10. Provider별 초기 전략
 
-> 아래 내용은 2026-08-14 기준 공식 문서 확인 결과를 반영한 구현 가설이며, 실제 계정 요금제/지역/기능 Rollout 여부에 따라 바뀔 수 있다.
+2026-10-29 개정. 외부 문서의 지원과 사용자 계정의 실제 검증을 구분한다.
 
-### 10.1 Claude
+### 10.1 GPT dot
 
-우선순위: **Remote MCP Bridge 우선**
+기존 Chrome의 지속 대화에 요청과 후속 질문을 전송한다. 일반 ChatGPT와 별도 어댑터로 만들되 같은 계정의 자원 한도를 공유한다. 대화 응답 완료와 비동기 업무 완료를 구분한다.
 
-Claude 웹은 Remote MCP 기반 Custom Connector를 공식 지원하므로 Webjjoku MCP를 직접 연결하는 방식을 우선 실험한다.
+공식 문서상 dot에서 MCP Events를 사용할 수 있다. 사용자가 감시할 이벤트와 동작을 지정해 구독한 후 이벤트를 보내는 경로를 Phase 3에서 검증한다. HTTP 접수 성공을 업무 완료로 취급하지 않는다.
 
-예상 흐름:
+### 10.2 Muse
 
-```text
-claude.ai
-   |
-   +-- Webjjoku Custom Connector
-          |
-          +-- task_claim
-          +-- context_get
-          +-- result_submit
-```
+기존 로그인된 Muse 대화의 UI 입출력부터 검증한다. 공식 Connector는 Muse가 외부 API/MCP 도구를 사용하는 경로로 별도 검토한다. 임의 Muse 대화를 외부에서 시작하는 API가 확인됐다고 표시하지 않는다.
 
-Claude Seat는 웹쫀쿠에서 가장 먼저 MCP-native Agent로 구현할 후보이다.
+### 10.3 일반 ChatGPT
 
-### 10.2 ChatGPT
+일반 Chat 화면의 대화·모델 컨트롤을 별도 어댑터로 구현한다. Nhahan/WebGPT의 전송·응답 관측 방식은 참고하되 해당 CUA helper를 독립 Chrome 엔진으로 간주하지 않는다.
 
-우선순위: **계정별 기능 확인 후 MCP 또는 Web Adapter 선택**
+### 10.4 Claude / Gemini
 
-ChatGPT 웹에는 MCP 기반 Custom App/Connector 기능이 존재하지만, 플랜과 기능 종류에 따라 쓰기/수정 Tool 지원 범위가 달라질 수 있다.
-
-따라서 각 GPT 계정에 대해 다음 Capability Probe를 실행한다.
-
-```text
-supports_custom_mcp
-supports_mcp_read
-supports_mcp_write
-supports_oauth
-supports_background_or_long_task
-```
-
-`result_submit` 같은 write Tool이 정상 호출된다면 MCP-native 모드를 사용한다.
-
-그렇지 않다면 Web Session Adapter를 사용해 Prompt 전송 + 응답 회수 방식으로 동작시킨다.
-
-### 10.3 Gemini
-
-현재 계정은 **Gemini Web LLM only**로 취급한다.
-
-Gemini 웹의 Custom MCP는 Gemini Spark 등 특정 자격 조건에 의존할 수 있으므로 초기 MVP에서 필수 기능으로 가정하지 않는다.
-
-초기 전략:
-
-```text
-gemini-01
-   -> Persistent Web Session
-   -> Prompt Injection
-   -> Response Capture
-```
-
-향후 해당 계정에서 공식 Custom MCP/Connected App 사용 가능 여부가 확인되면 MCP-native 모드로 승격한다.
-
-Gemini는 초기에는 다음 역할에 적합하다.
-
-- 독립적인 Second Opinion
-- Web Research
-- 요구사항 검토
-- 긴 문서/자료 분석
-- 다른 에이전트 결과의 교차 검증
+후속 Provider 확장으로 유지한다. 실제 계정의 공식 연결·write tool·결과 제출 기능을 확인한 뒤 Web/MCP 경로를 선택한다. 이전 문서의 요금제·지역·기능 가정을 현재 capability로 승계하지 않는다.
 
 ---
 
 ## 11. Web Session Adapter
 
-공식 MCP만으로 모든 Provider를 제어할 수 없을 가능성에 대비한다.
+### 11.1 실행 흐름
 
-### 11.1 역할
+Task와 대화 바인딩을 저장하고, 화면을 관측해 입력 준비 상태를 확인한 뒤 한 번 전송한다. 실제 사용자 메시지 생성 여부를 확인하고 해당 요청의 응답을 회수한다. 같은 대화의 후속 요청은 별도 attempt로 기록한다.
 
-Web Session Adapter는 로그인된 웹 LLM 화면에 작업 지시를 전달하고 응답을 회수한다.
+### 11.2 상태·복구 책임
 
-```text
-Task
-  |
-Prompt Builder
-  |
-Web Session Adapter
-  |
-Browser Profile
-  |
-Provider Web LLM
-  |
-Response Collector
-  |
-Result Parser
-```
+- 요청 전에 task/attempt/계정/대화와 요청 digest를 영속 저장.
+- 전송 확인 receipt 또는 SEND_UNCONFIRMED 저장.
+- timeout·연결 중단 뒤 기존 메시지를 대조하기 전에는 재전송 금지.
+- 응답 생성과 업무 running/review/done을 분리.
+- 브라우저·Core 재시작 뒤 대화 바인딩과 task를 복원.
+- 사용자의 입력·다른 대화 이동 감지 시 자동 전송 중지.
+- Pause는 새 전송을 막으며 원격 업무 중단 여부는 별도 확인.
+- 프로필·대화별 작업을 구분하고 이벤트를 필요한 범위에서 기록.
 
-### 11.2 Adapter에서 해야 할 일
+### 11.3 보존·권한 책임
 
-- 정확한 계정 프로필 선택
-- 새 대화 생성 또는 기존 Agent 대화 열기
-- Prompt 입력
-- 전송
-- 생성 상태 감지
-- 완료 응답 수집
-- 오류/제한/로그인 만료 감지
-- 필요 시 재시도
-- Event Log 기록
+비밀번호·쿠키를 복제하지 않고 인증 우회를 하지 않는다. Captcha·로그인·Chrome 연결 승인은 사용자 조작으로 처리한다. 대화 자동 영구 삭제를 기본 동작으로 두지 않는다.
 
-### 11.3 Adapter에서 하지 말아야 할 일
-
-- 패스워드 평문 저장
-- Captcha 우회
-- 비정상적인 인증 우회
-- Provider 보안 장치 무력화
-- 무제한 병렬 실행 가정
-
-Provider 정책/기능 변경에 대응하기 위해 Adapter는 Core와 철저히 분리한다.
+공식 result_submit이 검증된 provider는 구조화된 결과를 사용한다. 브라우저 경로와 이벤트 경로가 동시에 같은 업무를 시작하지 않도록 Core가 실행 경로를 고정한다.
 
 ---
 
@@ -634,6 +487,8 @@ Task
 - created_by
 - claimed_by
 - provider_session_id
+- conversation_binding_id
+- dispatch_attempt_id
 - result
 - review_result
 - created_at
@@ -650,7 +505,7 @@ Task
 6. Seat를 Task에 Lock한다.
 7. 작업 종료 후 Seat를 해제한다.
 
-동일 Task를 두 Agent가 동시에 가져가지 못하게 DB Lock을 사용한다.
+동일 Task를 두 Agent가 동시에 가져가지 못하게 DB Lock/lease를 사용한다. 대화 MVP-1에서는 전역 활성 작업 1개를 강제한다. 이미 전송된 Task는 timeout만으로 다른 Seat에 재배정하지 않고 원래 실행 상태를 확인한다.
 
 ---
 
@@ -704,6 +559,11 @@ provider.response_started
 provider.response_received
 provider.login_required
 provider.rate_limited
+provider.disconnected
+provider.reconnected
+provider.target_changed
+provider.send_unconfirmed
+provider.response_completed
 
 mcp.tool_called
 mcp.tool_completed
@@ -753,7 +613,7 @@ Company Rules
 
 ## 17. 코드 작업 격리
 
-Coder가 실제 Repository를 수정할 때는 독립 Workspace를 사용한다.
+상위 Phase 4에서 Git Writer를 연결한다. Coder가 실제 Repository를 수정할 때는 독립 Workspace를 사용한다. 첫 Chrome 대화 PoC에는 코드 수정·terminal 실행 권한을 포함하지 않는다.
 
 ```text
 repo/
@@ -771,11 +631,14 @@ worktrees/
 - main 직접 수정 금지
 - 테스트 필수
 - Review 후 Merge
-- 위험한 Merge/Deploy는 Human 승인 가능
+- Git Writer MVP는 draft PR까지; 자동 merge/deploy 제외
+- 자동 병합은 후속 release gate와 범위 승인 이후에만 구현
 
 ---
 
 ## 18. UI - Control Room
+
+아래는 다중 Seat 확장 이후의 화면 구상이다. 대화 MVP-1은 연결 선택·Task·대화·결과·Pause/Cancel의 최소 화면만 구현한다.
 
 메인 화면 초안:
 
@@ -877,75 +740,49 @@ Process Improvement Proposal
 
 ---
 
-## 21. v0.1 MVP 범위
+## 21. 릴리스별 범위
 
-### 반드시 구현
+정확한 단계와 완료 조건은 [개발 계획서](./development-plan.md)를 따른다.
 
-- [ ] Markdown Living Design Document
-- [ ] Project 생성
-- [ ] LLM Account 등록
-- [ ] Account별 Persistent Browser Profile
-- [ ] 5개 Seat 상태 관리
-- [ ] Team 생성
-- [ ] Team별 Preferred/Fallback LLM 지정
-- [ ] Role / Policy 설정
-- [ ] Task Queue
-- [ ] Seat Scheduler
-- [ ] Provider Adapter 인터페이스
-- [ ] ChatGPT Web Adapter 최소 1개
-- [ ] Claude Web Adapter 최소 1개
-- [ ] Gemini Web Adapter 최소 1개
-- [ ] Webjjoku Remote MCP Server
-- [ ] Claude MCP 연동 PoC
-- [ ] ChatGPT MCP Capability Probe
-- [ ] Gemini MCP Capability Probe
-- [ ] `result_submit` Tool
-- [ ] Event Log
-- [ ] Control Room
-- [ ] Human Pause / Reassign
+### 대화 PoC / MVP-1
 
-### v0.1 이후
+- [x] 개정 개발 계획과 Living Design
+- [ ] 기존 로그인 Chrome 연결·프로필·계정 바인딩
+- [ ] GPT dot·Muse 각각의 요청·후속 질문·응답 회수
+- [ ] Task·Attempt·Event 영속화와 전송 중복 방지
+- [ ] 기존 대화 보존·재시작 복구·인증 필요 표시
+- [ ] 전역 활성 작업 1개와 최소 Control Room
+- [ ] Pause / Resume / Cancel / 사용자 개입
+- [ ] macOS arm64 / Linux x86_64 적합성
 
-- [ ] Git worktree 자동 생성
-- [ ] 자동 Code Review
-- [ ] Wiki 자동 관리
-- [ ] Agent 조직 개선 제안
-- [ ] Morning Brief
-- [ ] Provider 사용량/제한 추적
-- [ ] 자동 로그인 만료 감지
-- [ ] Browser crash recovery
-- [ ] Multi-project
-- [ ] Mobile Control Room
+### 후속 단계
+
+- [ ] MCP 구조화된 작업·결과 교환과 dot 이벤트 PoC
+- [ ] Muse Connector capability 확인
+- [ ] Git Writer와 sandbox·checks·draft PR
+- [ ] 일반 ChatGPT·Claude·Gemini 확장
+- [ ] 팀별 Preferred/Fallback 및 검증된 다중 Seat
+- [ ] Wiki·자동 Review·조직 개선 제안·Morning Brief
+- [ ] 조건부 자동 병합·상시 운영·다중 프로젝트
+
+이전의 “세 Provider와 5 Seat를 첫 릴리스에 모두 구현” 범위는 위 순서로 대체한다.
 
 ---
 
 ## 22. 첫 번째 기술 PoC
 
-전체 UI를 만들기 전에 아래 한 사이클을 먼저 성공시키는 것을 목표로 한다.
+기존 로그인 Chrome의 dot과 Muse에서 다음 흐름을 **각각 순차 수행**한다.
 
-```text
-Webjjoku
-   |
-   | TASK-001 생성
-   v
-Claude Web Seat
-   |
-   | MCP: task_get()
-   v
-Claude가 작업 수행
-   |
-   | MCP: result_submit()
-   v
-Webjjoku
-   |
-   | Event 저장
-   v
-Control Room에 완료 표시
-```
+1. 사용자가 지정한 계정·agent·대화를 확인한다.
+2. 요청 1개를 전송하고 실제 사용자 메시지 생성과 응답을 확인한다.
+3. 같은 대화에 후속 질문 2개를 보내 맥락 유지와 결과 회수를 확인한다.
+4. 연결기를 재시작하고 기존 대화를 재식별한다.
+5. 기존 요청을 중복 전송하지 않고 이어서 대화한다.
+6. 초기 응답과 비동기 업무 완료를 구분할 관측 근거를 기록한다.
 
-이 흐름이 성공하면 웹쫀쿠의 핵심 가설이 검증된다.
+첫 PoC에는 전체 UI·조직도·Git Writer가 필요하지 않다. 실제 전송 증거가 없으면 PASS로 표시하지 않는다. dot과 Muse의 대화는 기본 보존한다.
 
-그 다음 GPT Seat와 Gemini Seat를 같은 Adapter Interface에 붙인다.
+이전 Claude MCP 우선 PoC는 후속 Provider/공식 연결 실험으로 이동한다.
 
 ---
 
@@ -995,8 +832,15 @@ Provider와 요금제마다 Remote MCP / Write Tool / OAuth 지원 범위가 다
 대응:
 
 - Role별 별도 conversation
-- Task별 conversation 옵션
-- Seat Scheduler가 Active Task 수 제한
+- 일반 대화는 Task별 conversation 옵션; dot은 지속 대화와 Task 연결을 보존
+- Seat Scheduler가 계정 공유 한도와 Active Task 수 제한
+
+### R6. 전송 불확실과 비동기 완료 오판
+
+- send 전후 journal과 receipt를 영속 저장
+- 불확실한 전송을 자동 재시도하지 않고 기존 메시지 대조
+- response completed / task review / task done을 구분
+- Browser/Event 이중 실행과 timeout만으로 다른 Seat에 재배정하는 동작 차단
 
 ---
 
@@ -1014,6 +858,11 @@ LLMAccount
 ProviderCapability
 Seat
 ProviderSession
+AgentIdentity
+BrowserConnection
+ConversationBinding
+DispatchAttempt
+MessageReceipt
 OAuthConnection
 MCPConnection
 
@@ -1043,58 +892,53 @@ ProcessImprovementProposal
 
 ## 25. 다음 설계 항목
 
-다음 순서로 상세화한다.
-
-1. Team / Role 목록 확정
-2. 각 Role의 Prompt/Policy 작성
-3. Account / Seat / Session 데이터 모델 확정
-4. Webjjoku MCP Tool Schema 확정
-5. Claude MCP PoC 설계
-6. ChatGPT Web/MCP Capability Probe 설계
-7. Gemini Web Adapter 설계
-8. Seat Scheduler 규칙 확정
-9. Control Room Wireframe
-10. 실제 기술 스택 선정
+1. 첫 PoC Chrome 호스트와 실제 dot·Muse 대화 식별.
+2. autoConnect 프로필 선택·연결 허용과 대안 spike.
+3. BrowserConnection / ConversationBinding / ProviderAdapter 계약.
+4. 메시지 receipt·불확실 전송·응답/업무 상태 schema.
+5. 두 서비스의 요청·후속 질문·재연결 E2E.
+6. 검증 결과에 맞춘 Core 저장소와 최소 Control Room.
+7. 구조화된 결과와 공식 이벤트·Connector capability.
+8. Git Writer 통합 이후 Team/Role·다중 Seat 확장.
 
 ---
 
 ## 26. 외부 플랫폼 기능 검증 메모
 
-2026-08-14 기준 공식 문서에서 확인한 내용이다. 구현 전에 다시 검증한다.
+2026-10-29 문서·코드를 읽은 결과다. 사용자 계정의 실제 연동은 모두 NOT_RUN이며 구현 시 버전·권한·화면을 검증한다.
 
-### ChatGPT
-
-- ChatGPT에는 Apps/Custom MCP 방식이 존재한다.
-- OAuth 기반 연결을 지원하는 App/Connector 흐름이 존재한다.
-- Custom MCP 및 write/modify 기능의 사용 가능 범위는 플랜/워크스페이스/롤아웃 상태에 따라 달라질 수 있다.
-
-참고:
-- https://help.openai.com/en/articles/11487775-apps-in-chatgpt
-- https://help.openai.com/en/articles/12584461-developer-mode-and-full-mcp-connectors-in-chatgpt-beta
-
-### Claude
-
-- Claude 웹은 Remote MCP 기반 Custom Connector를 공식 지원한다.
-- Free/Pro/Max/Team/Enterprise에서 Remote MCP Custom Connector를 사용할 수 있으며 일부 기능은 Beta 상태이다.
-- OAuth Client 정보를 이용한 MCP 인증 설정을 지원한다.
+| 대상 | 문서상 확인 / 구현 판단 |
+| --- | --- |
+| Chrome | 144+ autoConnect로 기존 세션 연결, 사용자 허용 및 기본 프로필 제약 |
+| dot | 웹 대화와 지속 업무, MCP Events의 dots 지원 |
+| Muse | 외부 API/MCP 서비스에 연결하는 Connector 경로; 외부 대화 시작 API는 미확인 |
+| Nhahan/WebGPT | 일반 ChatGPT용 CUA helper와 Worker; dot·Muse는 별도 adapter 필요 |
+| Claude / Gemini | 이전 8월 기능 메모를 현재 계정 capability로 재사용하지 않음 |
 
 참고:
-- https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp
-- https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities
 
-### Gemini
+- [사용자 제공 글](https://gall.dcinside.com/mgallery/board/view/?id=ai_utilize&no=84956)
+- [Nhahan/WebGPT 고정 revision](https://github.com/Nhahan/WebGPT/tree/1d35588e79de288bd8a6d2992fc76e571f7bb75e)
+- [Chrome 기존 세션 연결](https://developer.chrome.com/blog/chrome-devtools-mcp-debug-your-browser-session)
+- [Chrome DevTools MCP advanced usage](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/advanced-usage.md)
+- [Meet dots](https://learn.chatgpt.com/docs/dots)
+- [OpenAI MCP Events](https://developers.openai.com/plugins/build/mcp-events)
+- [Muse Connector guidelines](https://platform.muse.ai/docs)
 
-- Gemini 웹은 일반 Web App 및 Gems 기능을 제공한다.
-- Custom MCP 연결은 Gemini Spark의 Custom Connected Apps 기능 등 제한된 자격 조건에서 제공될 수 있다.
-- 따라서 현재 gemini-01은 Web LLM only Seat로 우선 설계한다.
-
-참고:
-- https://support.google.com/gemini/answer/17209137
-- https://support.google.com/gemini/answer/13695044
+확인 범위와 검증 계획의 상세 내용은 상위 개발 계획에 기록한다.
 
 ---
 
 ## 27. 변경 이력
+
+### v0.3 - 2026-10-29
+
+- 첫 검증을 기존 Chrome의 dot·Muse 왕복 대화로 변경.
+- 계정·dot·Seat 구분과 초기 전역 동시 작업 1개 명시.
+- 대화 보존, 영속 전송 기록, 응답/업무 상태와 재연결 조건 추가.
+- MCP Events·Muse Connector의 문서상 지원과 계정 미검증 구분.
+- Nhahan/WebGPT를 참고하되 Chat 전용 CUA helper·전체 terminal·자동 삭제 정책을 분리.
+- Git Writer를 하위 실행 모듈로 연결하고 첫 릴리스·후속 조직 확장 범위 정합화.
 
 ### v0.2 - 2026-08-14
 
@@ -1124,3 +968,4 @@ ProcessImprovementProposal
 ## 28. 현재 확정된 핵심 문장
 
 > 웹쫀쿠는 API로 LLM을 호출하는 멀티에이전트 프로그램이 아니다. 사용자가 로그인한 여러 웹 LLM 계정을 AI 소프트웨어 회사의 실행 자원으로 사용하고, 팀과 역할에 따라 업무를 배정하며, 가능한 경우 OAuth와 공식 MCP를 통해 작업과 결과를 구조적으로 교환하고, 부족한 부분은 Provider별 Web Session Adapter로 연결하는 AI 회사 관제/오케스트레이션 시스템이다.
+
