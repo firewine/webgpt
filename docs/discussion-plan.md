@@ -2,7 +2,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | Draft v0.2 — 작업 인계·상태 관측·검증 큐 구체화, 토론 구현·실계정 검증 NOT_RUN |
+| 상태 | v0.3 — 토론·검증·인계·UI 구현과 fixture PASS, 실계정 검증 NOT_RUN |
 | 개정일 | 2026-10-29 (KST) |
 | 상위 계획 | [development-plan.md](./development-plan.md) |
 | 전체 설계 / 운영 | [Living Design](./webjjoku_living_design.md) / [Ubuntu 운영](./ubuntu-operations.md) |
@@ -10,6 +10,8 @@
 | 접속 기준 | Tailscale이 설치·연결되고 접근이 허용된 기기의 웹 브라우저; 태블릿은 예시 |
 | 참여자 | 여러 GPT OAuth 계정, dot(may), Muse, DeepSeek 등 API 모델 중 사용자가 선택 |
 | 연결 계약 | [참여자·OAuth·API 연결 계획](./participant-connections.md) |
+
+현재 구현과 검사는 [WJ-002~015 구현 기록](./implementation/wj-002-015.md), 실제 명령과 복구 절차는 [운영 절차](./operations-runbook.md)를 따른다. 이 문서의 실계정·실세션 완료 조건은 아직 통과하지 않았다.
 
 ## 1. 제품 목표
 

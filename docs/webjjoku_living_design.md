@@ -1,7 +1,7 @@
 # 웹쫀쿠 Living Design Document
 
 - 문서 상태: Living Design Document
-- 버전: v0.6
+- 버전: v0.7
 - 최초 기준일: 2026-08-14
 - 개정일: 2026-10-29 (KST)
 - 문서 형식: Markdown
@@ -13,7 +13,7 @@
 - 서버·웹 클라이언트: [Ubuntu 운영 계획](./ubuntu-operations.md)
 - 선택 코드 실행 모듈: [Git Writer PRD](./prd.md) / [상세 계획](./git-writer-plan.md)
 
-> 현재 핵심은 주제를 주면 여러 AI가 자동으로 토의·검증·비교하는 공동 대화다. 여러 GPT OAuth 계정·dot·Muse·DeepSeek API를 참여자로 연결한다. Ubuntu가 실행하고 Tailscale이 허용된 기기의 웹 브라우저로 접속한다. 태블릿은 예시다. WJ-001의 fake 진단 구현·검사는 완료됐다. 실제 토론·계정 연결·운영 서버 검증은 NOT_RUN이며 조직·팀·Wiki는 후속 설계다.
+> 현재 핵심은 주제를 주면 여러 AI가 자동으로 토의·검증·비교하는 공동 대화다. 여러 GPT OAuth 계정·dot·Muse·DeepSeek API를 참여자로 연결한다. Ubuntu가 실행하고 Tailscale이 허용된 기기의 웹 브라우저로 접속한다. 태블릿은 예시다. 연결 adapter·영속 Core·능동 토론 UI·scoped MCP·Codex 환류를 통합 구현했고 자동 검사를 통과했다. [구현 기록](./implementation/wj-002-015.md)과 [운영 절차](./operations-runbook.md)를 기준으로 실제 계정·운영 서버를 검증한다. 실계정 MVP는 NOT_RUN이며 MCP Events/Connector·조직·팀·Wiki는 후속 범위다.
 
 ---
 

@@ -1,10 +1,13 @@
 {
   "name": "webjjoku",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Webjjoku participant connection diagnostics (WJ-001)",
-  "engines": { "node": ">=24.0.0 <25", "npm": ">=11 <12" },
+  "description": "Private multi-participant discussion, evidence and Codex workspace",
+  "engines": {
+    "node": ">=24.0.0 <25",
+    "npm": ">=11 <12"
+  },
   "packageManager": "npm@11.9.0",
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -12,11 +15,20 @@
     "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "test": "npm run build && node --test tests/*.test.mjs",
     "check": "npm run typecheck && npm test",
-    "test:browser": "npm run build && node --test tests/browser/*.test.mjs"
+    "test:browser": "npm run build && node --test tests/browser/*.test.mjs",
+    "access-token": "node --env-file-if-exists=.env scripts/ops.mjs token",
+    "doctor": "node --env-file-if-exists=.env scripts/ops.mjs doctor",
+    "install:service": "node --env-file-if-exists=.env scripts/ops.mjs install",
+    "serve:tailnet": "node --env-file-if-exists=.env scripts/ops.mjs serve",
+    "backup": "node --env-file-if-exists=.env scripts/ops.mjs backup",
+    "test:codex-contract": "node scripts/codex-contract.mjs"
   },
   "devDependencies": {
     "@types/node": "24.19.2",
     "playwright": "1.62.1",
     "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "jose": "6.1.3"
   }
 }

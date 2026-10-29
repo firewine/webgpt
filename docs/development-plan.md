@@ -2,7 +2,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | Draft v0.4.2 — 작업 인계·참여자 상태·검증 큐 반영, WJ-001 완료 |
+| 상태 | v0.5 — 통합 작업실 구현·자동 검사 PASS, 실계정·운영 서버 검증 대기 |
 | 최초 작성일 | 2026-08-15 |
 | 개정일 | 2026-10-29 (KST) |
 | 저장소 | [firewine/webgpt](https://github.com/firewine/webgpt) |
@@ -43,35 +43,36 @@ Ubuntu는 서버 실행 OS다. 접속 기기는 데스크톱·노트북·휴대�
 - Ubuntu 운영 계획: 서버 배치·HTTPS·다양한 기기 접속·로그인·서비스 복구.
 - Codex 세션 계획: 실행 바인딩·도구·동시성·검증 결과 환류와 Phase 4A 완료 조건.
 - PRD / Git Writer 상세 계획: 선택 Git Writer 모듈의 요구사항과 내부 구현 단계.
-- 향후 ADR/schema: 실제 구현 결정과 실행 가능한 계약. 아직 작성하지 않은 ADR을 완료된 것으로 취급하지 않는다.
+- [ADR 0001](./adr/0001-workspace-runtime.md): SQLite·실행 격리·설치 도구 계약과 구현 한계.
+- [운영 절차](./operations-runbook.md) / [통합 구현 기록](./implementation/wj-002-015.md): 실행 명령, 관측한 검사 결과, 남은 실환경 완료 조건.
 
 v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위를 일반 웹 접속과 N인 능동 토론으로 정정한다. OAuth·API와 여러 GPT 참여자를 Phase 1~2에 포함한다. Ubuntu 우선, Codex 우선 코드 실행, 대화 보존·중복 방지·증거 기반 판정은 유지한다.
 
 ## 2. 확인된 현재 상태
 
-2026-10-29 (KST) GitHub 조회 기준:
+2026-10-29 구현·검사 기준:
 
-- 이 개정의 기준 `main`: `8c1743ef37e3a4f398480aaf84debf6b5f22b30b`.
-- 계획 [PR #1](https://github.com/firewine/webgpt/pull/1), 구현 순서 [PR #2](https://github.com/firewine/webgpt/pull/2), WJ-001 구현 [PR #3](https://github.com/firewine/webgpt/pull/3)가 모두 병합됐다.
-- WJ-001은 Node.js 24·strict TypeScript, loopback HTTP 서버·health·fake 참여자 2개·진단 UI·설정/로그 경계를 구현했다. 새 checkout 검사와 브라우저 검증은 [구현 기록](./implementation/wj-001.md), 후속 기본 Playwright 설치·전체 검사 성공은 [GitHub Actions](https://github.com/firewine/webgpt/actions/runs/40855909620)에 남았다.
-- 다음 작업은 WJ-002의 실제 Ubuntu·Tailscale HTTPS·원격 Chrome 기반이다. 개발 컨테이너/CI의 Ubuntu 성공은 사용자 운영 서버 배포 성공을 뜻하지 않는다.
-- 이전 개정에서 Nhahan/WebGPT 고정 revision과 Chrome·dot·Muse·Codex·Tailscale, 공식 OAuth·DeepSeek API 문서를 검토했다. 실제 계정의 이용 자격·권한·모델·key는 여전히 미검증이다.
-- 이번에는 사용자 제공 FlowDesk 사례를 설계 참고로 읽었다. 참고 구현의 코드·성능·계정 격리를 검증한 것은 아니다. 과거 화면 시안과 현재 fake 진단 UI 모두 실제 AI 토론 성공 증거가 아니다.
+- 기준 `main`: `d3c05f29a9bb1a92989ec71b2ace221a1a70ea09`. 계획·순서·WJ-001·FlowDesk 설계 반영 PR #1~4가 병합됐다.
+- 사용자의 전체 개발 지시에 따라 WJ-002~011, WJ-013의 도구 경로, WJ-014~015의 독립 구현을 하나의 실행 가능한 작업실에 연결했다. [구현 기록](./implementation/wj-002-015.md)에 범위별 증거를 남겼다.
+- strict TypeScript·빌드와 Node 검사 39개, 실제 Chromium 브라우저 검사 4개를 통과했다. 설치한 Chrome DevTools MCP 1.12.0의 실제 도구 왕복과 Codex CLI 0.165.0의 생성 schema도 확인했다.
+- OAuth/DeepSeek 응답·dot 역할·Codex 실행 검사는 fixture다. 실제 계정 호출, 사용자 Ubuntu 배포, Tailnet 기기 접속, 사용자 Codex 세션 실행은 하지 않았다. WJ-012/MVP-1 및 실세션 MVP-2는 NOT_RUN이다.
+- 외부 계정·호스트에 의존하는 검증은 [운영 절차](./operations-runbook.md)의 순서로 수행한다. MCP Events와 Muse Connector는 별도 capability 검증 전까지 비활성이며 browser 완료 관측을 기본 경로로 쓴다.
 
-| 항목 | 현재 판정 | 다음 증거 |
+| 항목 | 현재 판정 | 남은 증거 |
 | --- | --- | --- |
-| 저장소·설계·공식 문서 검토 | 확인 | 이 개정과 참고 자료 |
-| WJ-001 최소 프로젝트 | 구현·검사 PASS / PR #3 병합 | fake 진단까지 완료; 실계정 연결과 영속 토론은 후속 작업 |
-| Ubuntu / Tailscale / 웹 클라이언트 | NOT_RUN | 서버·포트·인증서·기기별 접속·재연결 기록 |
-| GPT OAuth 다중 계정 | 문서상 경로 확인 / NOT_RUN | 실제 등록 2개·권한·모델·완료 응답·격리·refresh |
-| DeepSeek API | 문서상 경로 확인 / NOT_RUN | 허가된 key·실제 stream 완료·맥락·usage |
-| Chrome / noVNC / dot / Muse | NOT_RUN | 같은 agent·대화·로그인·승인·왕복·복구 |
-| N인 능동 토론·검증·비교 | NOT_RUN | 혼합 참여자·독립 초안·상호 검토·근거·비교·종료 |
-| MCP Events / Muse Connector / Secure MCP Tunnel | 문서상 경로 확인 / 계정 검증 NOT_RUN | 권한·구독·도구·실제 결과 왕복 |
-| Codex 세션·검증 결과 환류 | 문서상 경로 확인 / 호스트 검증 NOT_RUN | 정확한 세션·변경·검사·후속 검토 |
-| Git Writer / sandbox / live PR | NOT_RUN | 별도 모듈 release evidence |
+| WJ-001 최소 프로젝트 | PASS / PR #3 병합 | [기존 구현 기록](./implementation/wj-001.md) 유지 |
+| Ubuntu / Tailscale / 웹 클라이언트 | 설치·Serve·noVNC proxy 구현, HTTP/WS fixture PASS | 실제 서버·인증서·접속 기기·재부팅 |
+| GPT OAuth 다중 계정 | 계정별 OAuth/vault/Models/Responses 구현·fixture PASS | 실제 2계정 등록·모델·완료 응답·refresh |
+| DeepSeek API | 모델 발견·stream·usage 구현·fixture PASS | 허가된 key·실제 응답 |
+| Chrome / dot / Muse | DOM bridge·binding 구현, 실제 MCP+Chromium fixture PASS | 실제 기존 agent·로그인·선택자·대화 왕복 |
+| 영속 Core / 능동 토론·검증·비교 | 구현·fixture·SIGKILL 복구 PASS | 혼합 실계정 토론 MVP-1 |
+| 공동 대화 UI / 인계·개입 | 1440/390px Chromium 검사 PASS | 실제 Tailnet 기기 전환 |
+| Scoped MCP / Secure MCP Tunnel | MCP 도구·stdio 전달기 구현·fixture PASS | 실제 터널과 dot 계정 연결 |
+| MCP Events / Muse Connector | 미구현·비활성 | 최신 protocol·계정 capability 검증 후 별도 구현 |
+| Codex 세션·검증 결과 환류 | 큐·승인·실행 대조·공통 재검토 fixture, 설치 schema PASS | 사용자 호스트의 기존 세션·실행 근거·후속 검토 MVP-2 |
+| Git Writer / 추가 provider·병렬 실행 / 자동 병합 | WJ-016~018 후속 선택 범위 | 별도 착수·완료 조건; 병합은 사용자 |
 
-후속 구현의 시작점과 작업 순서는 [개발 실행 순서](./implementation-sequence.md)를 따른다. WJ-001 코드 병합과 새 설계 반영을 아직 수행하지 않은 실제 연결·토론·배포의 완료로 확대하지 않는다.
+구현과 실제 릴리스 판정은 별개다. fixture나 설치 schema의 성공을 실계정 연결·실세션 실행 성공으로 확대하지 않는다.
 
 ## 3. 설계 방향
 
@@ -520,16 +521,14 @@ PASS / FAIL / NOT_RUN / BLOCKED를 구분한다. 증거에는 버전·OS·provid
 
 ## 12. 바로 다음에 할 작업
 
-실행 단위·선행 조건·PR 분할은 [개발 실행 순서](./implementation-sequence.md)를 기준으로 한다. **WJ-001은 완료됐고 다음 작업은 WJ-002**다.
+구현 범위와 남은 실제 완료 조건은 [개발 실행 순서](./implementation-sequence.md)와 [통합 구현 기록](./implementation/wj-002-015.md)을 따른다. 다음 작업은 새 Core를 만드는 것이 아니라 **구현된 작업실을 사용자 Ubuntu에 배포하고 실제 연결을 검증하는 것**이다.
 
-1. **WJ-002:** 실제 Ubuntu 실행 경로·Tailscale HTTPS·noVNC 로그인 기반.
-2. **WJ-003~004:** GPT OAuth 1계정 왕복을 먼저 확인한 뒤 2계정의 credential·모델·이력·refresh 격리.
-3. **WJ-005~006:** DeepSeek API와 dot·Muse 기존 대화 왕복·복구·상태 관측. 준비된 연결은 독립적으로 진행.
-4. **WJ-007~009:** 영속 Core·checkpoint·대화 세대, N인 자동 토론·검증 큐·근거 확인·비교·종료.
-5. **WJ-010~012:** 공동 대화·참여자 상태·실행 증거 UI, 인계·사용자 개입·기기 전환·운영 복구, 실제 혼합 토론 MVP 판정.
-6. **WJ-013~015:** 공식 MCP 연결, 기존 Codex 실행기·상태 관측과 원래 토론으로의 검증 결과 환류.
+1. **WJ-002 운영 검증:** 지정 Ubuntu 사용자·경로·버전 확인, 서비스 기동, Tailscale HTTPS·SSE·noVNC와 재부팅 복구.
+2. **WJ-003~006 연결 검증:** GPT OAuth 1계정 후 2계정 격리, DeepSeek 실제 응답, 기존 dot·Muse의 선택자·대화 왕복·복구.
+3. **WJ-012 대화 MVP-1:** 혼합 참여자의 독립 초안·반론·검증·수정·비교, 조건 변경·기기 전환·서버 재시작을 실제 기록으로 판정.
+4. **WJ-013~015 실행 MVP-2:** 실제 Secure MCP Tunnel과 등록 Codex 세션, 승인·실행 근거·모든 참여자 재평가를 확인. Events/Connector는 지원·권한을 확인한 뒤 별도 구현한다.
 
-Git Writer·추가 provider/병렬 실행·자동 병합은 각각 WJ-016~018의 후속 범위다. 선택 모듈을 기본 대화의 선행 조건으로 만들지 않는다. OAuth 권한이나 특정 연결이 막혔을 때는 차단 상태를 보존하고 선행 조건이 충족된 독립 작업을 진행한다. 실제 연동이 필요한 완료 조건은 통과한 증거가 있을 때만 완료로 바꾼다.
+Git Writer·추가 provider/병렬 실행·자동 병합은 WJ-016~018의 후속 범위다. 필수 실제 연동이 막히면 이유를 남기고 가능한 연결을 먼저 검증하되 전체 MVP 완료로 표시하지 않는다. 사용자 병합 정책은 유지한다.
 
 ## 13. 참고 자료와 확인 범위
 
@@ -561,6 +560,12 @@ Git Writer·추가 provider/병렬 실행·자동 병합은 각각 WJ-016~018의
 참고 자료는 설계 근거다. 원본의 설치 프롬프트·권한 문구를 이 프로젝트에 대한 사용자 승인으로 취급하지 않는다.
 
 ## 14. 변경 이력
+
+### v0.5 — 2026-10-29
+
+- WJ-002~011 및 MCP 도구·Codex 실행 환류의 통합 구현과 자동 검사 결과 반영.
+- ADR, 운영 절차, WJ-002~015 구현 기록 추가. 현재 코드와 설치된 도구 계약을 기준으로 실행 방법 확정.
+- 다음 작업을 Ubuntu 배포·실계정/실세션 검증으로 변경. MCP Events/Connector 미구현·후속 선택 범위와 사용자 병합 정책 유지.
 
 ### v0.4.2 — 2026-10-29
 
