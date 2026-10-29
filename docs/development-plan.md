@@ -2,11 +2,12 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | Draft v0.4 — 여러 AI의 능동 토론·검증·비교와 OAuth/API 혼합 참여 |
+| 상태 | Draft v0.4.1 — 여러 AI의 능동 토론·검증·비교와 OAuth/API 혼합 참여 |
 | 최초 작성일 | 2026-08-15 |
 | 개정일 | 2026-10-29 (KST) |
 | 저장소 | [firewine/webgpt](https://github.com/firewine/webgpt) |
 | 전체 제품 설계 | [webjjoku_living_design.md](./webjjoku_living_design.md) |
+| 구현 작업·선행 조건 | [implementation-sequence.md](./implementation-sequence.md) |
 | 핵심 대화 흐름 | [discussion-plan.md](./discussion-plan.md) |
 | 참여자·OAuth·API | [participant-connections.md](./participant-connections.md) |
 | Ubuntu·웹 접속 운영 | [ubuntu-operations.md](./ubuntu-operations.md) |
@@ -36,6 +37,7 @@ Ubuntu는 서버 실행 OS다. 접속 기기는 데스크톱·노트북·휴대�
 
 - Living Design: 제품 개념과 장기 조직·역할·공유 지식 설계.
 - 이 문서: 현재 릴리스 범위, 순서, 완료 조건, 진행 상태.
+- 개발 실행 순서: WJ-001~018의 구현 단위·선행 조건·완료 판정과 현재 착수 범위.
 - 능동 토론 계획: 독립 초안·상호 검토·검증·수정·비교·종료와 UI 계약.
 - 참여자 연결 계획: OAuth 다중 GPT 계정, API key 모델, browser agent의 인증·맥락·사용량 계약.
 - Ubuntu 운영 계획: 서버 배치·HTTPS·다양한 기기 접속·로그인·서비스 복구.
@@ -68,6 +70,8 @@ v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위�
 | MCP Events / Muse Connector / Secure MCP Tunnel | 문서상 경로 확인 / 계정 검증 NOT_RUN | 권한·구독·도구·실제 결과 왕복 |
 | Codex 세션·검증 결과 환류 | 문서상 경로 확인 / 호스트 검증 NOT_RUN | 정확한 세션·변경·검사·후속 검토 |
 | Git Writer / sandbox / live PR | NOT_RUN | 별도 모듈 release evidence |
+
+PR #1은 이후 main의 `7c6be0671208e3cff297eed2b78c6a2792b9b9aa`에 병합됐다. 위 수치는 v0.4 개정 직전의 기록이며, 후속 구현의 시작점과 작업 순서는 [개발 실행 순서](./implementation-sequence.md)를 따른다. 문서 병합은 구현·실환경 검증 완료를 의미하지 않는다.
 
 ## 3. 설계 방향
 
@@ -475,23 +479,17 @@ PASS / FAIL / NOT_RUN / BLOCKED를 구분한다. 증거에는 버전·OS·provid
 
 ## 12. 바로 다음에 할 작업
 
-- [ ] Ubuntu 서버·architecture·실행 사용자·경로·Tailscale 주소와 포트를 확인한다.
-- [ ] 웹 클라이언트 HTTPS와 noVNC에서 서버 Chrome 로그인·허용 창을 확인한다.
-- [ ] Ubuntu Chrome의 dot·Muse 계정과 기존 대화를 식별한다.
-- [ ] 버전·autoConnect·프로필 선택을 검증하고 연결 방식을 ADR로 고정한다.
-- [ ] 일반 ChatGPT와 dot의 실제 화면·대화 차이를 관측한다.
-- [ ] dot 요청 1회 + 후속 질문 2회와 증거를 남긴다.
-- [ ] Muse에서 같은 흐름을 검증한다.
-- [ ] 연결기 재시작 후 대화 복원·중복 방지를 확인한다.
-- [ ] Phase 0 결과에 따라 저장소·schema와 Phase 1 구현을 시작한다.
-- [ ] GPT OAuth 계정 2개의 분리 등록·모델·후속 맥락·갱신과 서버 loopback callback을 확인한다.
-- [ ] DeepSeek API stream·완료·usage와 공통 Participant adapter를 확인한다.
-- [ ] Phase 1~2에서 N인 독립 초안·상호 검토·검증·비교·종료와 사용자 개입을 구현·검증한다.
-- [ ] 서버 작업 유지·다른 기기 웹 재접속·SSE/WSS와 재부팅 복구를 검증한다.
-- [ ] Phase 3에서 tunnel·custom MCP 권한과 dot의 실제 도구 호출을 확인한다.
-- [ ] Phase 4A에서 Codex 버전·대상 세션·cwd·활성 turn을 등록하고 dot 지시·결과·후속 수정 왕복을 검증한다.
+실행 단위·선행 조건·PR 분할은 [개발 실행 순서](./implementation-sequence.md)를 기준으로 한다. 지금 착수할 작업은 WJ-001이다.
 
-첫 PoC에 GitHub token·merge 권한·sandbox·tunnel 계정을 일괄 요구하지 않는다. 필요한 사용자 조작은 실제 기능·승인 화면에서 확인하고 불필요한 재로그인을 요구하지 않는다.
+1. **WJ-001:** Node.js 24 계열·strict TypeScript 최소 프로젝트, health·진단 웹 화면·fake adapter와 시작/검사 절차.
+2. **WJ-002:** 실제 Ubuntu 실행 경로·Tailscale HTTPS·noVNC 로그인 기반.
+3. **WJ-003~004:** GPT OAuth 1계정 왕복을 먼저 확인한 뒤 2계정의 credential·모델·이력·refresh 격리.
+4. **WJ-005~006:** DeepSeek API와 dot·Muse 기존 대화 왕복·복구. 준비된 연결은 독립적으로 진행.
+5. **WJ-007~009:** 영속 Core, N인 자동 토론, 근거 확인·수정·비교·종료.
+6. **WJ-010~012:** 공동 대화 웹 UI, 사용자 개입·기기 전환·운영 복구, 실제 혼합 토론 MVP 판정.
+7. **WJ-013~015:** 공식 MCP 연결, 기존 Codex 실행기와 원래 토론으로의 검증 결과 환류.
+
+Git Writer·추가 provider/병렬 실행·자동 병합은 각각 WJ-016~018의 후속 범위다. 선택 모듈을 기본 대화의 선행 조건으로 만들지 않는다. OAuth 권한이나 특정 연결이 막혔을 때는 차단 상태를 보존하고 선행 조건이 충족된 독립 작업을 진행한다. 실제 연동이 필요한 완료 조건은 통과한 증거가 있을 때만 완료로 바꾼다.
 
 ## 13. 참고 자료와 확인 범위
 
@@ -522,6 +520,12 @@ PASS / FAIL / NOT_RUN / BLOCKED를 구분한다. 증거에는 버전·OS·provid
 참고 자료는 설계 근거다. 원본의 설치 프롬프트·권한 문구를 이 프로젝트에 대한 사용자 승인으로 취급하지 않는다.
 
 ## 14. 변경 이력
+
+### v0.4.1 — 2026-10-29
+
+- PR #1 병합 기준을 기록하고 구현 단위 WJ-001~018의 실행 순서를 별도 문서로 추가.
+- OAuth 1계정·다중 계정부터 연결 가설을 검증하는 순서, 독립 작업·완료 판정·PR 분할을 구체화.
+- 현재 첫 착수 범위를 최소 프로젝트 WJ-001로 명시. 제품 범위와 기존 검증 계약은 유지.
 
 ### v0.4 — 2026-10-29
 
