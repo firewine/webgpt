@@ -2,17 +2,17 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | Draft v0.1 — 작업 순서 작성, 구현·실환경 검증 미착수 |
+| 상태 | Draft v0.2 — WJ-001 완료, 인계·상태·검증 큐 완료 기준 반영 |
 | 작성일 | 2026-10-29 (KST) |
-| 기준 | [개발 계획서](./development-plan.md)의 v0.4 제품 범위와 PR #1 병합 결과 |
-| 기준 main | `7c6be0671208e3cff297eed2b78c6a2792b9b9aa` |
+| 기준 | [개발 계획서](./development-plan.md)의 v0.4.2 범위와 PR #1~3 병합 결과 |
+| 기준 main | `8c1743ef37e3a4f398480aaf84debf6b5f22b30b` |
 | 제품 범위 | Tailscale 웹 접속, 여러 GPT OAuth 계정·dot·Muse·API 모델의 능동 토론·검증·비교 |
-| 현재 첫 작업 | WJ-001 — 실행 가능한 최소 프로젝트 |
+| 다음 작업 | WJ-002 — 실제 Ubuntu·Tailscale·원격 Chrome 기반 |
 | PR 처리 | 작업별 브랜치와 검토 가능한 PR로 분리; 병합은 사용자가 수행 |
 
 ## 1. 기준과 실행 원칙
 
-PR #1은 main에 병합됐다. 기준 tree에는 계획 문서 8개가 있으며 구현 코드·실행 증거는 없다. 이 문서는 기존 Phase 0~6을 구현 작업으로 나눈 실행 순서다. 제품 범위를 다시 정의하지 않으며 인증·대화·운영·Codex의 상세 계약은 각 원문을 따른다.
+PR #1~3이 main에 병합됐다. WJ-001의 최소 서버·fake 진단 UI·검사가 구현됐으며 실제 운영 서버 배포와 provider 연결은 아직 수행하지 않았다. 이 문서는 기존 Phase 0~6을 구현 작업으로 나눈 실행 순서다. 인증·대화·운영·Codex의 상세 계약은 각 원문을 따른다.
 
 **먼저 실제 연결을 확인하고, 기록이 남는 Core 위에 자동 토론과 웹 화면을 올린다.** 첫 번째 사용할 수 있는 중간 결과는 GPT OAuth와 DeepSeek에 최소 웹 화면에서 질문하고 응답을 받는 것이다. 그다음 N인 토론·근거 검증·결과 비교와 dot·Muse 참여를 완성한다.
 
@@ -25,24 +25,24 @@ PR #1은 main에 병합됐다. 기준 tree에는 계획 문서 8개가 있으며
 
 ## 2. 구현 작업과 선행 조건
 
-현재 WJ-001~018의 구현 상태는 모두 TODO이고, 실행 검증 상태는 NOT_RUN이다.
+WJ-001은 구현·검사 완료 및 PR #3 병합 상태다. WJ-002~018은 TODO이며 해당 실제 실행 검증은 NOT_RUN이다. 이번 checkpoint·상태·큐 설계 반영은 후속 기능의 구현 완료를 뜻하지 않는다.
 
 | 순서 | 작업 | 상위 단계 | 선행 조건 | 산출물·완료 기준 |
 | --- | --- | --- | --- | --- |
-| WJ-001 | 실행 가능한 최소 프로젝트 | Phase 0 준비 | 병합된 계획 | Node.js 24 계열·strict TypeScript, 설정·로그 경계, health 응답, 최소 진단 웹 화면, fake adapter. 새 checkout에서 시작·빌드·기본 검사 가능 |
+| WJ-001 | 실행 가능한 최소 프로젝트 — DONE | Phase 0 준비 | 병합된 계획 | Node.js 24·strict TypeScript, 설정·로그·health·fake adapter·진단 UI. [PR #3](https://github.com/firewine/webgpt/pull/3) 병합, [구현 기록](./implementation/wj-001.md) 및 [CI PASS](https://github.com/firewine/webgpt/actions/runs/40855909620) |
 | WJ-002 | Ubuntu·Tailscale·원격 Chrome 기반 | Phase 0 | 001 | 실제 버전·실행 사용자·경로 기록, 선택 HTTPS 포트의 진단 화면, noVNC의 같은 서버 Chrome 조작. 접속 기기와 서버 수명 분리 |
 | WJ-003 | GPT OAuth 계정 1개 왕복 | Phase 0 | 001, 002의 로그인 경로 | 등록·동의·모델 선택·응답 완료·후속 맥락. 로그인 성공과 실제 모델 실행 권한을 분리해 기록 |
 | WJ-004 | GPT OAuth 여러 계정 격리 | Phase 0 | 003 | 계정 2개의 등록·토큰·모델·이력 분리. 전환·refresh·재시작·로그아웃이 다른 계정을 변경하지 않음 |
 | WJ-005 | DeepSeek API 왕복 | Phase 0 | 001, 허가된 key·시험 예산 | 모델 선택·stream·후속 맥락·usage, 오류·중단 판정. 최소 웹 화면에서 OAuth GPT와 구분해 질문·응답 확인 |
-| WJ-006 | dot·Muse 기존 대화 왕복 | Phase 0 | 001, 002 | 두 서비스 각각 실제 agent·대화 식별, 요청 1회·후속 질문 2회·bridge 재연결. 기존 대화 보존·불확실 재전송 방지 |
-| WJ-007 | 영속 Core·참여자 계약 | Phase 1 | 001과 연결 PoC에서 확보한 계약 | Participant·AccountConnection·Context·Discussion·Turn·Task·Event, 저장소·migration·journal·lease·outbox. 재시작 복구와 참여자별 맥락 분리 |
-| WJ-008 | 자동 발언·상호 검토 엔진 | Phase 1 | 007 | 독립 초안 수집 후 공개, N인 review 배정, 지목 질문·반론의 다음 Task, root 1개·활성 turn 1개, 요청·시간 예산 |
-| WJ-009 | 근거 확인·수정·비교·종료 | Phase 1~2 | 008 | Claim·Evidence·VerificationTask·Comparison, 실제 자료/도구 근거, 참여자별 수정안과 종합 검토. 합의·미검증·부분 결과를 구분 |
-| WJ-010 | 공동 대화·결과 비교 웹 UI | Phase 2 | 007~009 | 주제 입력·참여자 선택·공동 타임라인·비교·출처. 넓은 화면과 좁은 화면에서 같은 핵심 흐름 제공 |
-| WJ-011 | 사용자 개입·SSE·운영 복구 | Phase 2 | 002, 007~010 | 추가 조건 revision·Pause/Resume/Cancel, snapshot/cursor, 중복 제어, 서버 서비스·재부팅 복구. 새 탭·다른 기기 접속이 새 실행을 만들지 않음 |
+| WJ-006 | dot·Muse 기존 대화 왕복 | Phase 0 | 001, 002 | 두 서비스 각각 요청 1회·후속 질문 2회·bridge 재연결. 기존 대화 보존·미확정 재전송 방지, 연결/응답/업무 관측과 시각·출처 |
+| WJ-007 | 영속 Core·참여자 계약 | Phase 1 | 001과 연결 PoC에서 확보한 계약 | Participant·Context·Discussion·Turn·Task·Event, checkpoint·contextGeneration·활동 계약, migration·journal·lease·outbox. 맥락·공개 범위·예산·미확정 실행 보존 |
+| WJ-008 | 자동 발언·상호 검토 엔진 | Phase 1 | 007 | 독립 초안 공개 조건·N인 review·다음 Task, 검증 큐의 배정·의존성·capability·예산, root 1개·활성 turn 1개 |
+| WJ-009 | 근거 확인·수정·비교·종료 | Phase 1~2 | 008 | Claim·Evidence·VerificationTask·Comparison, 큐의 실제 결과·도구 활동·증거 연결, 수정안·종합 검토. 합의·미검증·부분 결과 구분 |
+| WJ-010 | 공동 대화·결과 비교 웹 UI | Phase 2 | 007~009 | 주제·공동 타임라인·비교·출처, 참여자 상태 카드·검증 큐·활동/인계 내역. 관측·추정·미확인 구분, 넓고 좁은 화면 지원 |
+| WJ-011 | 사용자 개입·SSE·운영 복구 | Phase 2 | 002, 007~010 | 조건 revision·Pause/Resume/Cancel, snapshot/cursor·재부팅 복구·checkpoint 인계·세대 전환. 재접속·늦은 응답·관측 중단이 중복 실행을 만들지 않음 |
 | WJ-012 | 혼합 토론 실계정 MVP 검증 | Phase 2 | 002~011의 필수 항목 | GPT OAuth 2계정+DeepSeek 토론, dot·Muse를 각각 추가한 혼합 토론, 근거 검증·비교·기기 전환의 실제 증거. 대화 MVP-1 판정 |
 | WJ-013 | 공식 MCP·dot 이벤트 연결 | Phase 3 | 012 | task/context/result 최소 도구, Secure MCP Tunnel 권한·왕복, 중복 이벤트 방지. Muse Connector는 별도 capability 판정 |
-| WJ-014 | 기존 Codex 세션 실행기 | Phase 4A | 007, 012, 대상 세션·workspace | 세션·cwd·권한 등록, App Server/검증된 CLI 경로, job·queue·steer·승인·단일 작성자와 복구 |
+| WJ-014 | 기존 Codex 세션 실행기 | Phase 4A | 007, 012, 대상 세션·workspace | 세션·cwd·권한 등록, App Server/검증된 CLI, job·queue·steer·승인·단일 작성자와 복구. 화면 상태와 별개인 실제 job 활동·증거 연결 |
 | WJ-015 | 토론 → Codex → 재검토 왕복 | Phase 4A | 013의 dot 도구 호출, 014 | dot 프롬프트·실행·증거 회수·같은 세션 후속 수정, 모든 참여자의 재평가와 비교 갱신. 실행 MVP-2 판정 |
 | WJ-016 | 선택 Git Writer | Phase 4B | 015, 별도 Writer 착수 | 격리 workspace·sandbox·checks·draft PR. 기존 Codex와 별도의 완료 조건을 충족 |
 | WJ-017 | 추가 provider·동시 실행 확대 | Phase 5 | 012, 자원·한도 실측 | Claude·Gemini·추가 API, 계정별 제한과 여러 workflow/turn. 선택 Writer를 완료할 필요 없음 |
@@ -56,7 +56,9 @@ WJ-016~018은 후속 범위다. 번호가 뒤라는 이유로 선택 Git Writer�
 
 ### WJ-001 — 최소 프로젝트
 
-첫 코드 PR은 다음 범위로 한정한다.
+완료 기록: 구현 commit `0c14dec0cdcb27319ca5f4b41a5778be6bc9bdd6`, [PR #3](https://github.com/firewine/webgpt/pull/3), main merge `8c1743ef37e3a4f398480aaf84debf6b5f22b30b`. 새 checkout 검사와 11개 Node 검사, 데스크톱/모바일 크기 브라우저 검증을 통과했다. [CI](https://github.com/firewine/webgpt/actions/runs/40855909620)에서 기본 Playwright Chromium 설치·검사도 성공했다. 실제 AI 호출·운영 서버 배포·영속 토론은 이 완료 범위에 없다.
+
+첫 코드 PR의 범위와 완료 기준은 다음과 같다.
 
 1. 선택한 package manager와 lockfile, Node.js 24 계열·strict TypeScript 실행 설정을 기록한다. 새 서비스·다중 package 구조는 실제 필요할 때 추가한다.
 2. Core, provider adapter, HTTP/web의 모듈 경계와 최소 Participant/Turn 타입을 둔다. 전체 조직·팀·Wiki 모델은 만들지 않는다.
@@ -84,6 +86,8 @@ OAuth가 막히면 원인·계정·지원 조건을 BLOCKED로 남긴다. 사용
 
 DeepSeek는 provider별 요청·stream 완료·usage·오류를 같은 Turn 결과로 변환한다. dot·Muse는 실제 기존 agent·대화에 연결하고 전송 receipt와 비동기 업무 완료를 확인한다. 일반 GPT OAuth 응답을 dot의 답변으로 표시하지 않는다.
 
+WJ-006은 연결·전송·응답·업무별로 관측 시각·출처와 미확인 항목을 남긴다. 도구 내부 상태가 실제 노출되지 않으면 추측해 채우지 않는다. 화면 heartbeat와 원격 작업 진행의 분리는 fixture부터 확인하고 Codex 실제 job 관측은 WJ-014에서 확장한다.
+
 이 단계의 최소 진단 화면은 연결별 질문·답·상태만 있으면 된다. 자동 토론·공동 비교는 다음 구현 묶음에서 제공한다. 실제 모델 호출 시험에 쓴 입력·버전·완료 근거를 비밀 없이 남기고 재현용 오류 fixture를 만든다.
 
 ## 4. 두 번째 구현 묶음: 주제 하나로 대화를 진행한다
@@ -94,11 +98,15 @@ DeepSeek는 provider별 요청·stream 완료·usage·오류를 같은 Turn 결�
 
 fake provider/clock/storage로 send 직전·직후 중단, 불확실한 응답, 중복 접수, 부모의 검증 대기와 자식 실행을 확인한다. 재시작해도 같은 turn을 새 호출로 만들지 않는 것이 다음 엔진 작업의 선행 조건이다.
 
+DiscussionCheckpoint·ContextGeneration·상태 관측/ToolActivity의 최소 계약도 여기서 고정한다. checkpoint는 원문·근거·이견·남은 과제·예산·미확정 receipt/job과 기준 event cursor를 보존한다. generation과 사용자 topicRevision은 구분하고, 세대가 바뀌어도 turn idempotency는 유지한다. 독립 초안의 비공개 범위·계정 이력 격리를 인계 자료에도 적용한다. 재개·세대 전환 상태는 fixture로 확인하고 실제 adapter/UI 복구는 WJ-011에서 연결한다.
+
 ### WJ-008~009 — 토론과 검증을 연결한다
 
 초기 구현은 참여자를 순차 호출한다. 모든 독립 초안을 확보한 뒤 같은 snapshot을 공개하고, 각 참여자에게 다른 주장에 대한 질문·반론·검증 제안을 배정한다. 지목된 후속 발언은 Core가 주제와 예산 안에서 자동 이어간다.
 
 그다음 claim별 자료·출처·실험 결과를 연결한다. 검색·자료 조회·실행이 실제 가능한 capability일 때만 검증 작업을 수행하고, 그렇지 않으면 미실행과 이유를 기록한다. 단순 동의·같은 출처 반복·자연어 “검증 완료”는 입증 근거가 아니다.
+
+WJ-008은 검증 과제의 의존성·우선순위·capability·권한·예산과 완료 증거 기준을 확인해 배정하는 큐를 구현한다. 같은 단일 활성 turn scheduler와 종합용 예약 예산을 적용한다. WJ-009는 실제 자료/도구 결과를 task·claim·evidence에 연결하고 선행 실패·도구 미지원·근거 부족을 구분한다. 전송 불확실을 자동 재배정하지 않으며 사용자 revision이 바뀐 대기 과제는 대조 후 갱신한다.
 
 같은 근거를 받은 참여자가 각자 수정안을 내고, 기준별 결과 비교·합의점·이견·남은 질문을 생성한다. 진행 한도 소진·한 참여자 실패·정보 부족에도 부분 결과와 종료 이유를 남긴다. 예산·종료·revision의 상세 계약은 [능동 토론 계획](./discussion-plan.md)을 따른다.
 
@@ -106,14 +114,19 @@ fake provider/clock/storage로 send 직전·직후 중단, 불확실한 응답, 
 
 최소 진단 화면을 공동 대화 UI로 확장한다. 주제·참여자 선택, 실제 발언·검증 진행, 참여자별 초기/최종 결과와 근거를 보여준다. 사용자가 조건·자료를 추가하면 새 revision으로 반영하고 이미 실행 중인 옛 응답을 새 조건의 검증 결과로 섞지 않는다.
 
+WJ-010은 참여자별 계정 별칭·model·담당 쟁점·현재 행동·세대·마지막 활동·차단 이유와 연결/응답/도구/업무 상태를 표시한다. 검증 큐, 실제 활동·주장/근거 연결, checkpoint 인계 내역을 같은 화면 흐름에서 확인한다. context 사용량의 측정·추정·미확인을 구분하고 실제 확보하지 못한 도구 실행을 연출하지 않는다.
+
+WJ-011은 checkpoint 이후 event와 인계 적용 기록을 대조해 복구한다. OAuth/API 이력 압축과 dot·Muse 기존 대화 보존을 adapter별로 처리한다. 늦은 이전 세대 응답은 현재 단계·후속 발언에 자동 반영하지 않고 미확정 원격 실행은 원래 ID로 계속 추적한다. 화면 heartbeat 중단과 원격 job 진행을 별도 표시하며 새 기기 접속·같은 재개 요청·인계 중 재시작이 추가 호출을 만들지 않아야 한다.
+
 SSE snapshot/cursor, 새 탭·다른 기기·절전 후 복구, 중복 제어, Pause/Resume/Cancel을 연결한다. noVNC는 로그인·승인·수동 개입 화면이다. 평소 토론은 공동 대화 UI에서 진행한다. 서버 서비스와 인증·연결 복구는 [Ubuntu 운영 계획](./ubuntu-operations.md)의 조건을 충족한다.
 
 ## 5. 릴리스 완료 조건
 
 | 판정 지점 | 반드시 확인할 것 | 현재 |
 | --- | --- | --- |
+| 최소 프로젝트 — WJ-001 | 새 checkout 시작·빌드·기본 검사, fake 진단·반응형 브라우저 확인 | PASS / PR #3 병합 |
 | 연결 PoC — Phase 0 | Ubuntu/Tailscale 접속, GPT OAuth 2계정, DeepSeek, dot·Muse 각각의 실제 왕복·맥락·복구 | NOT_RUN |
-| Core — Phase 1 | 계정·맥락 격리, 영속 turn·단계·event, 초안 공개 조건, 예산, 미확정 전송·재시작 fixture | NOT_RUN |
+| Core — Phase 1 | 계정·맥락 격리, 영속 turn/event·checkpoint·세대, 초안 공개·예산·검증 큐, 미확정 전송·재시작 fixture | NOT_RUN |
 | 대화 MVP-1 — WJ-012 | 한 주제로 N인의 초안·반론·근거 확인·수정·비교·종합까지 사용자 중계 없이 진행 | NOT_RUN |
 | 실행 MVP-2 — WJ-015 | 토론 검증 과제가 기존 Codex 세션으로 전달되고 실행 증거·후속 수정·참여자 재평가로 돌아옴 | NOT_RUN |
 
@@ -123,6 +136,8 @@ WJ-012의 실제 검증은 다음 묶음으로 수행한다.
 - 근거가 충분한 주제, 제공한 반례로 공통 전제를 수정해야 하는 주제, 근거 부족·의견 차이가 남는 주제를 확인한다. 특정 문구와 정확히 일치하는 답을 성공 기준으로 삼지 않는다.
 - 로그인/한도·stream 중단·전송 불확실·참여자 실패·예산 종료는 fixture로 폭넓게 확인하고 필요한 실제 흐름으로 보완한다.
 - 사용자 조건 추가, Pause/Resume, 브라우저 종료·다른 기기 접속·서버 재시작 후 중복 호출 없이 이어지는지 확인한다.
+- 인계 중 장애·중복 재개·늦은 이전 세대 응답, checkpoint의 초안/비공개 이력 격리·이견·예산 보존을 fixture와 해당 adapter 통합으로 확인한다. 실제 context 교체가 지원되지 않는 연결은 기존 대화 보존·차단 경로를 확인하고 지원 완료로 표시하지 않는다.
+- 검증 큐의 의존 순환·선행 실패·미확정 전송·한도 소진, 화면 상태와 도구 진행이 다른 상황을 확인한다. 활동 표시가 실제 task/claim/evidence와 연결되고 미관측을 성공으로 표시하지 않아야 한다.
 - 데스크톱과 모바일 브라우저의 실제 조합을 기록한다. 태블릿 전용 제품으로 제한하지 않는다.
 
 문서·단위 검사·실계정 E2E 결과를 구분한다. 필수 실제 연동이 막혀 있으면 해당 milestone은 BLOCKED 또는 NOT_RUN이며, 일부 provider만으로 성공한 결과를 전체 MVP 완료로 바꾸지 않는다. 구현 PR의 병합과 실환경 릴리스 판정도 별개다.
@@ -133,6 +148,8 @@ WJ-013에서는 공식 MCP와 dot Events를 기존 Task 계약에 붙인다. Tai
 
 WJ-014~015에서는 [Codex 세션 실행 계획](./codex-session-plan.md)에 따라 host·사용자·cwd·thread/turn을 등록하고 queue·steer·승인·단일 작성자를 구현한다. dot이 프롬프트를 만들고 결과를 읽는 왕복을 먼저 검증한 뒤, 원래 Discussion의 모든 참여자가 같은 증거로 재평가하도록 연결한다. 토론만 요청한 작업에 코드 수정 권한을 자동 부여하지 않는다.
 
+Codex의 실제 job event·도구/검사 결과는 WJ-007/009/010의 활동·증거 계약으로 전달한다. 브라우저 관측 중단이나 대화 세대 변경으로 실행 중 job을 다시 만들지 않는다. 기존 세대의 결과도 원래 task/job·topicRevision을 대조한 뒤 evidence에 연결하고 인계/재검토 이력을 남긴다.
+
 WJ-016은 [Git Writer 계획](./git-writer-plan.md)의 별도 sandbox·remote broker·checks·draft PR 조건을 따르는 선택 작업이다. WJ-017의 provider 확대는 이 모듈과 독립적으로 착수할 수 있다. WJ-018의 자동 병합은 현재 사용자 병합 흐름을 바꾸지 않으며 별도 요청·완료 조건이 갖춰진 뒤 다룬다.
 
 ## 7. 작업 기록과 다음 착수
@@ -141,4 +158,6 @@ WJ-016은 [Git Writer 계획](./git-writer-plan.md)의 별도 sandbox·remote br
 
 실행 증거에는 작업 ID, commit, 환경·버전, 사용한 참여자/계정의 비밀이 아닌 참조, 실제 입력·관측 결과·종료 상태, PASS/FAIL/NOT_RUN/BLOCKED와 이유를 남긴다. credential·로그인 화면·개인 대화 전체를 공개 저장소에 넣지 않는다. 공개 문서에는 필요한 요약과 보호된 증거 참조만 기록한다.
 
-지금 착수할 범위는 **WJ-001**이다. 그 다음 WJ-002에서 실제 Ubuntu 실행 경로를 확인하고 WJ-003 OAuth 1계정 왕복을 수행한다. 날짜·기간은 이 실환경 검증 결과를 받은 뒤 산정한다. 아직 수행하지 않은 작업을 일정표에서 완료로 표시하지 않는다.
+다음 착수 범위는 **WJ-002**다. 실제 Ubuntu 실행 경로·HTTPS·같은 서버 Chrome 기반을 확인한 뒤 WJ-003 OAuth 1계정 왕복을 수행한다. WJ-001의 loopback HTTP 진단만으로 외부 HTTPS Origin·프록시 처리가 완료됐다고 보지 않으며 WJ-002에서 검증한다. 날짜·기간은 실환경 결과를 받은 뒤 산정한다.
+
+이번 [FlowDesk 사례 적용](./development-plan.md#92-flowdesk-사례에서-반영할-아이디어)은 기존 번호·선행 조건·초기 순차 실행을 유지하면서 WJ-007 이후의 인계·검증·UI 완료 기준을 보강한다. WJ-006은 확보 가능한 관측을, WJ-014는 실제 실행기 증거를 담당한다. 이 설계 변경을 이유로 WJ-002보다 다중 병렬 실행이나 전체 관리 화면을 먼저 만들지 않는다.

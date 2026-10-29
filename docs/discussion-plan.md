@@ -2,7 +2,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | Draft v0.1 — 제품 요구 반영, 구현·실계정 검증 NOT_RUN |
+| 상태 | Draft v0.2 — 작업 인계·상태 관측·검증 큐 구체화, 토론 구현·실계정 검증 NOT_RUN |
 | 개정일 | 2026-10-29 (KST) |
 | 상위 계획 | [development-plan.md](./development-plan.md) |
 | 전체 설계 / 운영 | [Living Design](./webjjoku_living_design.md) / [Ubuntu 운영](./ubuntu-operations.md) |
@@ -99,18 +99,76 @@ Discussion은 root workflow이고 각 참여자 발언과 검증 과제는 그 �
 | --- | --- |
 | Discussion | 주제·revision·입력 snapshot, 참여자, 비교 기준·review 배정, 요청·시간·API 비용 예산과 사용량, phase/status, 종료 이유 |
 | Participant | accountConnection·OAuth/API/browser adapter·model·context 바인딩, capability, 역할·이전 노출 정보 |
-| DiscussionTurn | 단계·round·발언자·대상 claim, prompt digest, 참조한 입력·evidence snapshot, Task·attempt·receipt, 원문·구조화 결과 |
+| DiscussionTurn | 단계·round·발언자·대상 claim, topicRevision·contextGeneration, prompt digest, 참조한 입력·evidence snapshot, Task·attempt·receipt, 원문·구조화 결과 |
 | Claim / Evidence | 작성자·revision·출처 계보, 관련 claim, 검증 방법·결과·미확인 이유 |
-| VerificationTask | 확인할 주장·기준, 배정 대상·방법·실행 권한, 실제 결과·evidence 참조 |
+| VerificationTask | 확인할 주장·revision·완료 기준, 의존 task·우선순위·배정 대상·capability·실행 권한·예산, 대기 이유·attempt, 실제 결과·evidence 참조 |
 | Comparison / Conclusion | 비교 기준별 참여자 결과, 합의·이견, 요약 작성자·상대 검토, 적용 조건·미해결 사항 |
+| DiscussionCheckpoint | 확정 event cursor·주제 revision·공개 범위, 확정/미확정 상태·근거 참조·이견·남은 과제·예산·진행 중 receipt/job, 생성 버전 |
+| ContextGeneration | discussion·participant별 세대, 실제 context/binding 참조, 이전 세대·교체 이유·handoff checkpoint·적용 기록 |
+| ParticipantStatus / ToolActivity | 연결·응답·도구·업무별 관측 상태와 시각·출처, 관련 task/attempt/job/claim·실행 결과 참조 |
 
 초기에는 **활성 root workflow 1개, provider에 전송한 활성 발언 1개**로 순차 실행한다. 순차 전송이어도 모든 초기안을 수집하기 전에 다른 참여자의 답을 공개하지 않으면 이번 실행의 초기안 분리를 유지할 수 있다. 계정·credential 자원 그룹별 한도와 참여자별 대화 binding을 지킨다. 부모 Discussion이 자식 Task의 실행 슬롯을 잡아 대기시키는 구조를 만들지 않는다. 다중 계정의 동시 발언은 Phase 5에서 별도 검증한다.
 
-전송 전 `(discussionId, topicRevision, phase, round, participantId, turnId)`와 요청 digest를 기록한다. scheduler는 동일 turn을 한 번만 배정하고 실제 전송 receipt를 대조한다. SSE 재연결·새 웹 탭·다른 기기에서의 접속은 서버 Discussion이나 발언을 새로 만들지 않는다. 동일 사용자의 중복 제어는 요청 ID·기대 revision으로 조정한다.
+전송 전 `(discussionId, topicRevision, phase, round, participantId, turnId)`와 contextGeneration·요청 digest를 기록한다. scheduler는 동일 turn을 한 번만 배정하고 실제 전송 receipt를 대조한다. 세대 변경으로 같은 turn의 idempotency key를 새로 발급하지 않는다. SSE 재연결·새 웹 탭·다른 기기에서의 접속은 서버 Discussion이나 발언을 새로 만들지 않는다. 동일 사용자의 중복 제어는 요청 ID·기대 revision으로 조정한다.
 
 단계 전이·새 Task·Event를 원자적으로 기록한다. 서버 재시작 시 마지막 확정 발언과 provider 생성 상태를 대조하고 확인되지 않은 전송은 자동 반복하지 않는다. 같은 evidence snapshot을 모든 참여자에 배포했는지 추적한다. 검증 자식 작업을 기다리는 동안 부모는 작업 슬롯을 반환한다.
 
 기존 dot·Muse 대화는 보존하고 OAuth GPT·API 대화 이력은 웹쫀쿠에서 참여자별로 저장한다. 해당 주제와 공유 범위에 맞는 메시지만 이번 Discussion의 맥락에 포함한다. 긴 대화는 참조 가능한 요약과 관련 원문으로 줄이되 핵심 반론·출처를 유지한다. 한도 초과 때문에 근거가 누락되면 이를 표시하고 제한된 결과로 끝낸다.
+
+### 6.1 작업 인계용 체크포인트
+
+토론의 기준 기록은 Core의 영속 상태·원문·증거 참조다. 대화 요약은 이 기록을 읽기 쉽게 압축한 파생물이며 원문을 대체하거나 검증 상태를 높이지 않는다. 특정 SQLite 구현이나 참고 사례의 도구 이름을 필수로 정하지 않고 저장소 선택은 WJ-007 ADR에서 결정한다.
+
+확정 단계 경계와 안전한 context 인계 시점에 다음 내용을 불변 checkpoint로 저장한다. checkpoint는 `checkpointId`, schema 버전, 생성 시각, `basisEventSeq`, `topicRevision`, 대상 참여자·공개 범위를 가진다.
+
+| 인계 내용 | 보존 규칙 |
+| --- | --- |
+| 주제·판단 기준·제약 | 적용 revision과 입력 snapshot을 연결 |
+| 현재 결론·근거 | claim/evidence 원문 ID와 실제 확인 범위, 미확인·충돌 상태를 보존 |
+| 반론·미해결 질문 | 소수 의견·실패한 검증·남은 가정을 함께 전달 |
+| 진행·다음 작업 | phase, 완료/대기/차단 task, 의존성·배정·다음 행동 후보 |
+| 실행 연속성 | 사용·잔여 예산, 활성 lease·attempt·receipt·job ID, 전송 미확정 항목 |
+
+재개는 `checkpointId + 이후 event cursor`로 현재 상태를 대조해 수행한다. checkpoint 이후 도착한 응답·사용자 조건·예산 소비를 먼저 적용하며 checkpoint만 읽고 이전 작업을 재실행하지 않는다. 오래된 요약은 기준 event와 현재 revision의 차이를 표시한다. 같은 인계 요청을 반복해도 이미 적용한 checkpoint를 다시 전송하거나 모델 호출을 추가하지 않는다.
+
+참여자별 공개 규칙을 checkpoint 생성·조회에 적용한다. 독립 초안 수집 중에는 다른 참여자의 초안·요약을 포함하지 않고, 다른 계정의 비공개 이력이나 credential을 넣지 않는다. 모델이 요약을 작성하는 호출도 토론 예산에 포함한다. 원문에 없는 지시·권한을 요약에서 만들지 않으며, 요약 누락으로 근거를 복원할 수 없으면 불충분 또는 차단으로 표시한다.
+
+### 6.2 대화 세대와 안전한 인계
+
+`topicRevision`은 사용자 주제·조건의 변경이고 `contextGeneration`은 같은 Discussion·Participant에서 사용하는 대화 입력 기반의 교체 이력이다. 새 context 바인딩 또는 OAuth/API 이력 압축을 적용할 때 세대를 올린다. 웹 페이지 새로고침·SSE 재접속·token refresh만으로는 세대를 올리지 않는다. 세대 변경은 계정·model·권한·예산을 바꾸는 수단이 아니다.
+
+- OAuth/API는 앱 소유 원문을 보존하고 checkpoint와 필요한 원문을 다음 입력 snapshot으로 구성한다. 실제 adapter가 새 context를 적용했는지 기록한다.
+- dot·Muse는 기존 agent·대화를 기본 유지한다. 외부 대화 교체는 adapter에서 검증한 기능과 사용자가 허용한 범위에서만 수행한다. 인계 자료가 제공돼도 기존 agent의 기억·정체성이 새 대화로 이전됐다고 표시하지 않는다. 불가능하면 현재 대화를 보존한 채 한도·개입 필요를 알린다.
+- 전환 전 신규 dispatch를 멈추고 진행 중 요청·도구·job을 대조한다. 미확정 전송이나 중단 미확인 원격 작업은 원래 ID·lease와 함께 추적하며 인계 이유로 재발행하거나 실행 슬롯을 해제하지 않는다. 새 context 준비·binding·checkpoint 적용과 event 기록이 확정된 뒤 안전한 다음 발언을 시작한다.
+- 늦게 도착한 이전 세대 응답은 원래 turn/attempt 아래 보관하고 현재 세대의 발언 완료·단계 전이·후속 호출에 자동 적용하지 않는다. topicRevision이 같아도 이 규칙을 지킨다. 기존 job의 결과는 등록된 task/job·revision과 대조한 뒤 출처가 있는 evidence로 명시적으로 연결할 수 있으며, 연결 이력을 남긴다.
+- 장애가 인계 중 발생하면 마지막 확정 binding·checkpoint 적용 여부를 대조한다. 준비 단계와 적용 완료를 구분하고, 불확실한 prompt 전송에는 기존 `SEND_UNCONFIRMED` 규칙을 적용한다.
+
+세대 전환은 예상 세대·binding을 대조하는 원자적 갱신으로 기록한다. 응답·job event의 귀속은 수신 본문의 자기 신고가 아니라 저장된 turn/attempt/job 바인딩으로 판단한다. 이전 실행의 종료 증거가 확인되면 해당 attempt의 lease는 재조정으로 정리할 수 있지만, 늦은 event가 현재 세대의 lease를 해제하지 못하게 한다.
+
+### 6.3 검증 작업 큐
+
+상호 검토에서 나온 쟁점을 자료 대조·출처 확인·반례 조사·계산/테스트 같은 VerificationTask로 나눈다. 모델은 과제를 제안하고 Core가 현재 주제, claim·revision, 실제 capability·권한, 의존성, 우선순위와 완료에 필요한 증거를 확인해 큐에 넣는다. 일반 토론에서 코드 수정 권한을 자동 만들지 않는다.
+
+의존 과제가 완료되고 자원·권한·예산이 확보된 과제만 배정한다. 중복 쟁점은 claim·방법·입력 snapshot을 비교해 기존 task/evidence와 연결하되 서로 다른 출처 확인을 중복으로 지우지 않는다. 의존 순환이나 실패한 선행 과제는 차단 이유로 드러내고 무한 대기시키지 않는다. 큐 조회·화면 재접속은 새 과제를 만들지 않는다.
+
+초기 큐도 root workflow 1개·활성 provider turn 1개와 같은 scheduler·lease를 사용한다. 도구·Codex job에도 별도 자원 한도와 기존 workspace 단일 작성자 계약을 적용하며, 검증 큐를 동시 실행 한도 우회 통로로 만들지 않는다. 모델을 다시 부르는 검증·재시도는 요청 예산에 포함하고 종합용 N회 예약을 침범하지 않는다. 도구 실행도 정한 시간·비용 한도 안에서 수행한다.
+
+전송 전에 실패했음이 확인된 시도만 정책·남은 예산 안에서 다시 대기시킨다. 전송 receipt가 불확실하면 재조정 상태로 두고 자동 재배정하지 않는다. 실행 실패·근거 부족·도구 미지원은 실제 사유와 함께 기록하며, topicRevision이 바뀐 과제는 재사용 가능 여부를 확인한 뒤 대체·취소·유지 이력을 남긴다.
+
+### 6.4 연결·응답·도구·업무 관측
+
+참여자의 상태를 하나의 성공/실패 표시로 합치지 않는다. 각 축에 `observedAt`, 마지막 실제 진행 시각, 관측 출처와 차단 이유를 보관한다.
+
+| 상태 축 | 관측 예시 |
+| --- | --- |
+| 연결 | 인증 상태, Chrome/bridge 연결, 대상 대화 일치 여부 |
+| 전송·응답 | 준비·전송 미확정·receipt 확인, 대기·생성·응답 종료 |
+| 도구·원격 job | 접수·대기·실행·승인 대기·재조정·종료, 실제 job ID |
+| 업무·검증 | 검토 필요·완료·실패·부분 결과, claim별 근거 판정 |
+
+브라우저 heartbeat는 화면 관측의 생존 신호이고 tool/job 진행 신호는 별도다. 화면이 멈춰도 원격 실행이 진행 중일 수 있다. 관측이 오래되면 마지막 확인 시각과 미확인 상태를 표시하고, heartbeat 만료만으로 완료·실패·재실행을 확정하지 않는다. API 참여자에 browser heartbeat를 요구하지 않으며 관측 불가와 해당 없음도 구분한다.
+
+도구 활동은 실제 확보한 adapter/실행기 event만 표시한다. `activityId`, discussion·revision·세대, participant·task·attempt·job·관련 claim, 도구 이름·입력 요약·시작/종료·결과 상태·실패 이유·증거 참조를 연결한다. provider의 자연어 보고만 있으면 보고된 내용으로 표시하고 실제 실행 기록으로 승격하지 않는다. 도구 종료와 claim 검증 성공도 별도 판정한다. credential은 제외하고 개인 자료·명령 출력은 접근 제한된 원문 참조로 제공한다.
 
 ## 7. 사용자 화면
 
@@ -120,12 +178,17 @@ Discussion은 root workflow이고 각 참여자 발언과 검증 과제는 그 �
 | --- | --- |
 | 주제 입력 | 주제만으로 시작; 자료·제약·참여자·진행 한도는 선택 입력 |
 | 진행 표시 | 현재 단계, 발언/검증 대기 대상, 남은 요청·시간, API 사용량·예상 비용, 차단 이유 |
+| 참여자 상태 | 계정 별칭·model·담당 쟁점·현재 행동·대화 세대·마지막 활동, 연결/응답/도구/업무별 상태와 차단 이유 |
+| 검증 큐 | 대기·진행·차단 과제, 우선순위·선행 과제·배정·필요 증거·남은 예산 |
+| 활동·인계 기록 | 실제 도구 실행과 관련 주장·근거, checkpoint 기준 시각·인계 사유·세대 전환·제외된 늦은 응답 |
 | 공동 대화 | 참여자별 발언·답글 연결, 출처·검증 상태, 사용자 추가 메시지 |
 | 결과 비교 | 참여자별 초기/최종 결과, 공통점·차이점, 근거·미해결 쟁점 |
 | 개입 | 전체에 조건 추가, 특정 참여자에 질문, 반론/근거 추가 요청, Pause/Resume/Cancel |
 | 실행 연결 | 코드·계산·실험이 필요하고 권한이 있는 경우 등록 Codex 세션의 Task로 연결 |
 
 특정 참여자에게 준 메시지도 소유자의 공동 대화 기록에 남긴다. 비교 기준에 영향을 주는 새 사실·조건은 공통 입력의 새 revision으로 배포하고 특정 참여자만 다른 조건으로 평가하지 않는다.
+
+참여자 상태 카드는 동시에 실행 중인 작업자 수를 뜻하지 않는다. 초기에는 여러 참여자의 순차 진행과 대기 이유를 보여준다. context 사용량은 adapter가 제공한 측정값·추정값·알 수 없음을 구분하고 추정 퍼센트를 정확한 잔여량처럼 표시하지 않는다. SSE 복구 시 같은 activity/event ID로 중복 제거하며 비밀 값은 카드·로그에 노출하지 않는다.
 
 데스크톱·노트북의 넓은 화면에는 대화와 비교를 나란히, 휴대전화·태블릿의 좁은 화면에는 대화/비교 탭을 제공한다. 핵심 기능은 화면 크기와 무관하게 같고 키보드·마우스·터치를 지원한다. noVNC는 서버 Chrome 로그인·연결 승인·수동 개입용 보조 화면이다. 기본 공동 대화창을 원격 데스크톱 영상으로 대신하지 않는다.
 
@@ -158,7 +221,23 @@ Phase 4A에서 실제 코드 검사·계산·실험이 필요하면 Verification
 | 정보 부족·이견 | 근거 없음·같은 출처 중복·미해결 이견을 보존하고 조건부 결론 표시 |
 | 중단·복구 | 브라우저 종료·다른 기기 접속·서버/bridge 재시작 후 발언·순서·예산 보존, 중복 전송 방지 |
 | 사용자 개입 | 새 조건의 revision을 모든 참여자에 반영하고 옛 응답을 새 결론의 증거로 혼합하지 않음 |
+| 체크포인트 인계 | 다른 초안·비공개 이력 노출 없이 근거·이견·잔여 예산·대기 과제·미확정 전송을 보존하고 원문으로 추적 |
+| 인계 중 재시작 | checkpoint 이후 event와 적용 기록을 대조하고 같은 재개 요청·새 기기 접속이 추가 호출을 만들지 않음 |
+| 늦은 이전 세대 응답 | 원래 turn에 보관되고 현재 단계·lease·후속 호출을 변경하지 않음; evidence 재사용은 별도 대조·이력 필요 |
+| 검증 큐 | 의존성·capability·예산·단일 활성 turn을 지키며 차단·실패·부분 결과와 미확정 전송을 구분 |
+| 상태 관측 | 화면 heartbeat가 멈추고 job은 실행 중인 fixture에서 중복 실행하지 않고 각 상태·시각·관측 출처 표시 |
+| 실행 활동 | 관측 event가 주장·증거까지 연결되고 provider 보고·실제 실행·검증 성공을 구분 |
 | 무응답·제한·한도 | 차단 또는 부분 결과와 이유 표시; 반복·예산 소진 후 자동 무한 재개 없음 |
 | Codex 환류 | Phase 4A에서 실행 기록을 모든 참여자에 제공하고 개별 재평가·결과 비교까지 연결 |
 
-계약·fixture 검사와 실제 계정 E2E를 구분한다. 계획서에 자동 토론을 추가한 것으로 선택한 참여자들이 이미 서로 대화하거나 실제 검증에 성공했다고 표시하지 않는다. 현재 구현·실계정·기기별 시험은 모두 NOT_RUN이다.
+계약·fixture 검사와 실제 계정 E2E를 구분한다. WJ-001의 fake 진단 구현은 완료됐지만, 이 문서의 자동 토론·인계·실계정·기기별 검증은 NOT_RUN이다. 계획을 추가한 것으로 실제 기능이 구현되거나 검증됐다고 표시하지 않는다.
+
+## 10. 설계 참고와 변경 이력
+
+[사용자 제공 FlowDesk 사례의 적용 범위](./development-plan.md#92-flowdesk-사례에서-반영할-아이디어)에 따라 작업 인계·세대·상태 표시를 웹쫀쿠의 토론 요구에 맞춰 구체화했다. 위 schema와 완료 조건은 웹쫀쿠의 설계이며 참고 구현에서 검증된 보장으로 간주하지 않는다.
+
+### v0.2 — 2026-10-29
+
+- checkpoint·contextGeneration과 재개/늦은 응답 처리, 공개 범위·기존 대화 보존·예산 연속성 정의.
+- 검증 과제 큐의 의존성·capability·재시도 조건과 기존 순차 실행 계약 연결.
+- 참여자 상태·관측 시각·도구 활동·실행 증거 UI와 완료 시나리오 추가.

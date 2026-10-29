@@ -1,7 +1,7 @@
 # 웹쫀쿠 Living Design Document
 
 - 문서 상태: Living Design Document
-- 버전: v0.5
+- 버전: v0.6
 - 최초 기준일: 2026-08-14
 - 개정일: 2026-10-29 (KST)
 - 문서 형식: Markdown
@@ -13,7 +13,7 @@
 - 서버·웹 클라이언트: [Ubuntu 운영 계획](./ubuntu-operations.md)
 - 선택 코드 실행 모듈: [Git Writer PRD](./prd.md) / [상세 계획](./git-writer-plan.md)
 
-> 현재 핵심은 주제를 주면 여러 AI가 자동으로 토의·검증·비교하는 공동 대화다. 여러 GPT OAuth 계정·dot·Muse·DeepSeek API를 참여자로 연결한다. Ubuntu가 실행하고 Tailscale이 허용된 기기의 웹 브라우저로 접속한다. 태블릿은 예시다. 조직·팀·Wiki는 후속 설계이며 실제 구현·계정 검증은 NOT_RUN이다.
+> 현재 핵심은 주제를 주면 여러 AI가 자동으로 토의·검증·비교하는 공동 대화다. 여러 GPT OAuth 계정·dot·Muse·DeepSeek API를 참여자로 연결한다. Ubuntu가 실행하고 Tailscale이 허용된 기기의 웹 브라우저로 접속한다. 태블릿은 예시다. WJ-001의 fake 진단 구현·검사는 완료됐다. 실제 토론·계정 연결·운영 서버 검증은 NOT_RUN이며 조직·팀·Wiki는 후속 설계다.
 
 ---
 
@@ -456,6 +456,8 @@ Task와 대화 바인딩을 저장하고, 화면을 관측해 입력 준비 상�
 - 사용자의 입력·다른 대화 이동 감지 시 자동 전송 중지.
 - Pause는 새 전송을 막으며 원격 업무 중단 여부는 별도 확인.
 - 프로필·대화별 작업을 구분하고 이벤트를 필요한 범위에서 기록.
+- 연결·응답·도구·업무 각각의 관측 시각과 출처를 기록. 화면 heartbeat가 멈춰도 원격 job을 재실행하지 않음.
+- 기존 대화는 기본 보존하고 context 교체는 checkpoint·세대·receipt 대조를 거침. 이전 세대 응답을 현재 단계 전이에 자동 적용하지 않음.
 
 ### 11.3 보존·권한 책임
 
@@ -573,6 +575,18 @@ Discussion은 MVP-1의 핵심 root workflow다. 사용자가 주제를 한 번 �
 합의가 사실 검증을 뜻하지 않으며 이견이 있어도 절차를 완료할 수 있다. 요청·시간·API 비용 예산, 로그인·한도·부분 실패, 사용자 조건 revision을 영속 관리한다. 무제한 자유 토론이나 매 발언 사용자 중계를 기본 동작으로 두지 않는다. 초기 순차 실행과 다중 참여는 양립한다.
 
 실제 구현·UI·완료 조건은 [능동 토론 계획](./discussion-plan.md)을 따른다. 일반 주제는 Conclusion/Decision/미해결 질문으로 끝날 수 있고 코드 변경이 필수가 아니다. 필요한 실험만 VerificationTask로 연결해 Phase 4A Codex 결과를 원래 토론에 환류한다.
+
+### 14.1 대화 수명과 작업 인계
+
+토론의 영속 상태·원문·증거를 기준으로 DiscussionCheckpoint를 만든다. 주제·판단 기준, 확인된 근거와 이견·남은 질문, 다음 과제·의존성, 예산·진행 중 receipt/job을 기준 event cursor와 함께 보존한다. 요약은 원문 참조를 가진 파생물이며 사실 검증·실행 권한을 새로 만들지 않는다. 참여자별 공개 규칙은 인계 자료에도 적용한다.
+
+사용자 조건 변경인 topicRevision과 대화 입력 기반 교체인 contextGeneration을 구분한다. 새 context·이력 압축을 적용할 때 인계 checkpoint와 이전 세대를 연결하고, 재개 시 이후 event·미확정 실행을 대조한다. 새 기기·같은 재개 요청·이전 세대의 늦은 응답은 추가 실행을 만들지 않는다. OAuth/API는 앱 소유 이력에서 입력을 구성하고 기존 dot·Muse의 대화·기억이 자동 이전됐다고 가정하지 않는다.
+
+### 14.2 검증 큐와 활동 증거
+
+상호 검토의 쟁점을 claim·revision·완료 증거·의존성·capability·권한·예산을 가진 VerificationTask로 만든다. 초기 단일 활성 turn scheduler에서 준비된 과제를 배정하며 미확정 전송은 재조정 전에 자동 재배정하지 않는다. 실행 결과는 task/attempt/job과 실제 관측 출처를 가진 ToolActivity·Evidence로 연결한다. 모델의 실행 주장, 도구 종료, claim의 검증 성공은 서로 다른 상태다.
+
+인계·큐·상태의 상세 전환과 완료 기준은 [능동 토론 계획 6장](./discussion-plan.md#6-저장스케줄링복구), WJ별 담당 범위는 [개발 실행 순서](./implementation-sequence.md)를 따른다. 이 설계는 [FlowDesk 사례 적용 검토](./development-plan.md#92-flowdesk-사례에서-반영할-아이디어)를 반영하되 기존 OAuth/API/Chrome 연결과 단계별 동시 실행 확대를 유지한다.
 
 ---
 
@@ -712,13 +726,17 @@ worktrees/
 | --- | --- |
 | 공동 대화 | 주제·참여자 선택, 자동 발언·상호 검토·검증 진행, 추가 조건·지목 질문·제어 |
 | 결과 비교 | 참여자별 초기안·최종안, 근거 검증 상태, 합의점·이견·미해결 사항 |
-| 작업 | 발언·검증·선택 Codex 실행의 대기·진행·검토·완료와 근거 |
+| 참여자 상태 | 계정 별칭·model·쟁점·현재 행동·세대·마지막 활동·차단 이유, 연결/응답/도구/업무별 상태 |
+| 작업 | 발언·검증 큐·선택 Codex 실행의 의존성·배정·대기·진행·검토·완료와 근거 |
+| 활동·인계 | 실제 도구/실행 event와 claim/evidence 연결, checkpoint·세대 전환·늦은 응답 처리 이력 |
 | 연결 | GPT OAuth 계정·모델·사용 권한, API key 연결 상태·usage, dot/Muse 실제 대화·Chrome 개입 |
 | 설정 | 진행 예산·참여자 역할·보존·권한, 후속 팀 설정 |
 
 Tailscale이 허용된 데스크톱·노트북·휴대전화·태블릿에서 같은 기능을 사용한다. 넓은 화면은 대화와 비교를 나란히, 좁은 화면은 탭으로 제공한다. 키보드·마우스·터치·한국어 입력, 기기 전환·절전·탭 재접속을 확인한다. 서버 OS 지원과 클라이언트 브라우저 호환성은 별도로 관리한다.
 
 noVNC는 로그인·OAuth 등록·연결 승인·수동 개입용이다. 일반 대화를 원격 화면 영상으로 대신하지 않는다. OAuth 로그인·모델 발견·실제 응답 완료를 각각 표시하고 미검증 profile이나 기기를 지원 완료로 표시하지 않는다.
+
+관측 시각·출처를 함께 표시하고 상태가 오래됐거나 관측할 수 없으면 미확인으로 남긴다. context 사용량은 측정·추정·알 수 없음을 구분한다. 참여자 카드 수가 동시 실행 수를 의미하지 않으며 초기에는 순차 배정과 대기 이유를 보여준다.
 
 ### 18.1 Account / Seat 화면
 
@@ -952,6 +970,8 @@ Agent
 Participant
 AccountConnection
 ConversationContext
+ContextGeneration
+ParticipantStatus
 ResourceGroup
 UsageLedger
 LLMProvider
@@ -980,6 +1000,8 @@ TaskDependency
 
 Discussion
 DiscussionTurn
+DiscussionCheckpoint
+ToolActivity
 Claim
 Evidence
 VerificationTask
@@ -1010,7 +1032,7 @@ ProcessImprovementProposal
 4. 메시지 receipt·불확실 전송·응답/업무 상태 schema.
 5. dot·Muse browser 대화의 요청·후속 질문·재연결 E2E.
 6. GPT OAuth 다중 계정·DeepSeek API·공통 Participant와 참여자별 맥락 검증.
-7. Discussion 단계·budget·claim/evidence 계약과 공동 대화·비교 UI.
+7. Discussion 단계·budget·claim/evidence, checkpoint·세대·검증 큐 계약과 공동 대화·상태·비교 UI.
 8. 구조화된 결과와 공식 이벤트·Connector capability.
 9. 기존 Codex 세션 바인딩·실행·승인과 원래 토론으로의 검증 결과 환류.
 10. 선택 Git Writer와 Team/Role·동시 실행 확대.
@@ -1054,6 +1076,12 @@ OAuth·API 공식 출처와 구현 경계는 [참여자 연결 계획](./partici
 ---
 
 ## 27. 변경 이력
+
+### v0.6 - 2026-10-29
+
+- checkpoint 인계·contextGeneration·검증 큐와 공개 범위·예산·미확정 실행 연속성 반영.
+- 참여자 상태·실제 도구 활동·원문/증거 추적 UI와 관측 중단·원격 작업의 구분 추가.
+- WJ-001 fake 진단 완료와 실제 토론/계정/운영 서버 NOT_RUN을 구분. 구현 순서는 WJ-002부터 유지.
 
 ### v0.5 - 2026-10-29
 
