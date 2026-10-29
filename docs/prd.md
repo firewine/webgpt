@@ -2,7 +2,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 버전 | Draft v0.3 |
+| 버전 | Draft v0.4 |
 | 개정일 | 2026-10-29 (KST) |
 | 범위 | 웹쫀쿠의 선택 Git Writer 모듈; 우선 코드 실행은 기존 Codex 세션 |
 | 상위 개발 계획 | [development-plan.md](./development-plan.md) |
@@ -12,7 +12,7 @@
 
 사용자의 제품 요구를 받은 웹 LLM이 승인된 저장소를 읽고, 격리된 작업 공간에서 변경·검사를 수행하고, `chatgpt/*` 브랜치의 draft PR을 생성·갱신하도록 한다.
 
-웹쫀쿠 전체는 [Living Design](./webjjoku_living_design.md)의 관제·오케스트레이션 제품이다. 우선 코드 실행은 [Codex 세션 실행](./codex-session-plan.md)의 Phase 4A다. Git Writer는 Phase 4B의 별도 선택 모듈이며, 그 구현을 dot → Codex 왕복의 선행 조건으로 두지 않는다. 브라우저 연결 PoC에 GitHub token이나 terminal 권한을 요구하지 않는다.
+웹쫀쿠 전체는 여러 GPT OAuth 계정·dot·Muse·API 모델이 토의·검증·비교하는 [공동 대화 제품](./discussion-plan.md)이다. Git Writer는 토론에서 요청한 코드 변경을 수행하는 선택 실행 모듈이다. 우선 코드 실행은 [Codex 세션 실행](./codex-session-plan.md)의 Phase 4A다. Git Writer는 Phase 4B의 별도 선택 모듈이며, 그 구현을 dot → Codex 왕복의 선행 조건으로 두지 않는다. 브라우저 연결 PoC에 GitHub token이나 terminal 권한을 요구하지 않는다.
 
 최종 목표의 조건부 squash auto-merge는 Git Writer MVP에서 제외한다. Ubuntu Core·Chrome·Codex의 상시 운영은 상위 Phase 2에 포함하며 [Ubuntu 운영 계획](./ubuntu-operations.md)을 따른다. 이 모듈의 foreground/stdio 조건을 전체 제품의 HTTPS 서버·상시 실행 금지로 해석하지 않는다. 과거 Windows·HTTP daemon·토큰 직접 보유·즉시 병합 예제를 현재 runbook으로 사용하지 않는다.
 
@@ -151,6 +151,11 @@ broker는 target-controlled Git 설정·hook·filter·diff driver·fsmonitor·su
 조건을 충족할 때 squash auto-merge를 활성화한다. required checks가 없거나 auto-merge 설정이 꺼졌다는 이유로 즉시 병합하지 않는다.
 
 ## 11. 변경 이력
+
+### v0.4 — 2026-10-29
+
+- 상위 제품을 OAuth/API/browser 혼합 참여자의 능동 토론·검증·비교와 일반 웹 접속에 맞춰 정합화.
+- Git Writer는 선택 실행 모듈로 유지하며 기존 격리·검사·게시 gate는 보존.
 
 ### v0.3 — 2026-10-29
 

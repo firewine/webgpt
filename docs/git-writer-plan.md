@@ -2,7 +2,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | Draft v0.3 — Ubuntu 우선의 선택 Git Writer 모듈 |
+| 상태 | Draft v0.4 — Ubuntu 우선의 선택 Git Writer 모듈 |
 | 최초 작성일 | 2026-08-15 |
 | 개정일 | 2026-10-29 (KST) |
 | 상위 계획 | [development-plan.md](./development-plan.md) |
@@ -14,9 +14,11 @@
 
 사용자가 Web ChatGPT에 제품 요구만 전달하면 Git writer가 대상 저장소를 읽고, 격리된 작업 공간에서 변경과 검사를 수행하고, `chatgpt/*` 브랜치의 draft PR까지 생성하는 선택 모듈을 만든다. 상위 계획의 첫 코드 실행 경로는 [기존 Codex 세션](./codex-session-plan.md)의 Phase 4A다. 이 모듈은 Phase 4B이며 Codex 왕복 실행의 선행 조건이 아니다.
 
-PRD의 최종 목표인 required checks 이후 squash auto-merge는 후속 범위로 유지한다. 첫 지원 환경은 고정 Ubuntu x64 Linux(`linux-x64`) profile이며 실제 호스트에서 확인한다. Apple Silicon macOS(`darwin-arm64`)는 후속 확장으로 이동하고 Ubuntu MVP의 차단 조건으로 두지 않는다. 전체 제품의 서버 상시 실행·태블릿 HTTPS는 [Ubuntu 운영 계획](./ubuntu-operations.md)에 따라 상위 Phase 2에서 구현한다.
+PRD의 최종 목표인 required checks 이후 squash auto-merge는 후속 범위로 유지한다. 첫 지원 환경은 고정 Ubuntu x64 Linux(`linux-x64`) profile이며 실제 호스트에서 확인한다. Apple Silicon macOS(`darwin-arm64`)는 후속 확장으로 이동하고 Ubuntu MVP의 차단 조건으로 두지 않는다. 전체 제품의 서버 상시 실행·웹 클라이언트 HTTPS는 [Ubuntu 운영 계획](./ubuntu-operations.md)에 따라 상위 Phase 2에서 구현한다.
 
 이 문서는 Git Writer 내부 구현 순서와 릴리스 조건을 정의한다. 모듈 요구사항은 PRD, 제품 전체 순서는 상위 개발 계획, 세부 기술 결정은 ADR, 실행 가능한 인터페이스는 schema와 테스트가 담당한다. 문서 간 충돌이 생기면 해당 계약을 먼저 정정한다.
+
+상위 제품은 여러 GPT OAuth 계정·dot·Muse·API 모델이 참여하는 [능동 토론](./discussion-plan.md)이다. 이 Writer 모듈의 인증·실행 제약을 전체 제품의 OAuth/API 참여 제한이나 일반 웹 접속 제한으로 확대 해석하지 않는다.
 
 ## 2. 현재 기준선
 
@@ -508,6 +510,11 @@ secret 값은 문서, 저장소, PR, prompt에 기록하지 않는다.
 - 원본 Nhahan/WebGPT의 범용 terminal Worker를 이 모듈의 구현으로 그대로 채택하지 않는다. 본 문서의 제한된 Git 도구, sandbox, broker 경계를 유지한다.
 
 ## 17. 변경 이력
+
+### v0.4 — 2026-10-29
+
+- 상위 제품을 OAuth/API/browser 혼합 참여자의 능동 토론·검증·비교와 일반 웹 접속에 맞춰 정합화.
+- Git Writer는 선택 실행 모듈로 유지하며 기존 격리·검사·게시 gate는 보존.
 
 ### v0.3 — 2026-10-29
 

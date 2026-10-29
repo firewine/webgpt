@@ -2,27 +2,30 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | Draft v0.1 — 설계 확정 방향, 실행 검증 NOT_RUN |
+| 상태 | Draft v0.2 — 설계 확정 방향, 실행 검증 NOT_RUN |
 | 개정일 | 2026-10-29 (KST) |
 | 상위 계획 | [development-plan.md](./development-plan.md) |
-| 운영 환경 | [Ubuntu 서버·태블릿 운영 계획](./ubuntu-operations.md) |
-| 목표 | dot이 작성한 프롬프트를 사용자의 기존 Codex 세션에 전달하고 결과·후속 지시를 왕복 |
+| 운영 환경 | [Ubuntu 서버·웹 접속 운영 계획](./ubuntu-operations.md) |
+| 목표 | dot의 프롬프트를 기존 Codex 세션에 전달하고 결과·후속 지시 및 토론의 검증·비교로 환류 |
+| 대화 / 참여자 | [능동 토론](./discussion-plan.md) / [OAuth·API·browser 연결](./participant-connections.md) |
 | 첫 대상 | Ubuntu 서버의 등록된 프로젝트와 Codex 세션 1개 |
 
 ## 1. 사용자 흐름과 구현 경계
 
-1. 사용자가 웹쫀쿠에서 작업 목표와 사용할 Codex 세션을 선택한다.
+1. 사용자가 작업 목표와 Codex 세션을 선택하거나, 기존 허용 범위 안에서 Discussion의 검증·개발 과제를 Codex Task로 배정한다.
 2. dot(may)이 수정 범위, 제약, 완료 조건, 필요한 검증을 포함한 프롬프트를 작성한다.
 3. dot이 인증된 웹쫀쿠 MCP의 `codex_send` 도구를 호출한다.
 4. 웹쫀쿠는 등록된 세션·작업 범위와 실행 상태를 확인하고 요청을 영속 대기열에 넣는다.
 5. Ubuntu의 Codex 실행 어댑터가 해당 세션에 프롬프트를 전달한다.
-6. Codex의 진행·승인 요청·완료·실패와 결과를 Core에 기록하고 태블릿에 전달한다.
-7. dot이 `codex_result`로 결과와 검증 근거를 읽고 검토한다. 수정이 필요하면 같은 세션에 새 revision의 지시를 보낸다.
+6. Codex의 진행·승인 요청·완료·실패와 결과를 Core에 기록하고 웹 클라이언트에 전달한다.
+7. dot이 `codex_result`로 결과와 검증 근거를 읽고 검토한다. 원래 Discussion이 있으면 모든 참여자에게 같은 증거를 공유해 각자 결론을 갱신하고 비교한다. 수정이 필요하면 같은 세션에 새 revision의 지시를 보낸다.
 8. 검토가 끝나면 Core의 작업을 완료한다. PR 게시·배포는 작업의 별도 범위와 권한에 따른다.
 
 `codex_send`, `codex_status`, `codex_result`는 웹쫀쿠에서 구현할 도구다. Codex나 dot에 이미 설치된 내장 도구로 표시하지 않는다. 첫 브라우저 대화 PoC에는 이 실행 권한을 포함하지 않는다.
 
-이 모듈은 사용자의 Codex를 실행 자원으로 연결한다. 별도 모델 API 호출을 기본 경로로 만들지 않는다. Codex 자체의 로그인·모델 접근과 웹쫀쿠 MCP 인증, Secure MCP Tunnel의 런타임 인증은 서로 다른 항목으로 관리한다.
+이 모듈은 사용자의 Codex를 실행 자원으로 연결한다. 토론 참여자의 GPT OAuth·DeepSeek API 호출은 별도 adapter이며 Codex 실행 모듈과 구분한다. Codex 자체의 로그인·모델 접근과 웹쫀쿠 MCP 인증, Secure MCP Tunnel의 런타임 인증은 서로 다른 항목으로 관리한다.
+
+일반 주제 토론에 Codex나 dot을 필수 참여자로 강제하지 않는다. Phase 4A의 첫 실행 통로는 기존 dot → Codex 계약을 유지하되, 다른 참여자의 검증 제안도 Core가 같은 허용 범위의 Task로 배정할 수 있다. 다른 참여자에게 직접 실행 도구를 제공하는 것은 별도 capability 검증 후 확장한다.
 
 ## 2. 세션 등록 계약
 
@@ -98,7 +101,7 @@ CLI queue의 접수는 Codex 실행 완료가 아니다. App Server 연결 장�
 
 각 도구는 인증된 사용자·agent·project·task 범위를 확인한다. 읽기와 실행 권한을 구분하고, dot의 프롬프트로 sandbox·승인 설정을 확대하지 않는다. 기존 Codex 승인 요청은 해당 request ID와 작업에 연결해 그대로 처리한다. 일반 메시지의 “승인” 문자열을 권한 변경이나 승인 응답으로 사용하지 않는다.
 
-장기 Codex 실행을 한 MCP 호출 안에서 기다리지 않는다. 요청 접수 뒤 상태·결과 조회로 이어가며, 완료 알림은 계정에서 검증한 dot MCP Events를 사용할 수 있다. 이벤트가 미검증이면 dot이 상태를 조회하거나 사용자가 결과 검토를 요청하는 흐름을 제공한다. HTTP 성공·이벤트 접수는 업무 완료로 취급하지 않는다.
+장기 Codex 실행을 한 MCP 호출 안에서 기다리지 않는다. 요청 접수 뒤 상태·결과 조회로 이어가며, 완료 알림은 계정에서 검증한 dot MCP Events를 사용할 수 있다. 이벤트가 미검증이면 Core가 job 완료를 관측한 뒤 검증된 browser 경로로 dot에 결과 확인을 지시하고 도구 조회·다음 검토를 이어간다. 같은 turn을 이벤트와 browser로 중복 시작하지 않는다. 연결·권한이 막혔을 때만 사용자 개입 상태로 남긴다. HTTP 성공·이벤트 접수는 업무 완료로 취급하지 않는다.
 
 ## 5. 작업 상태·동시성·복구
 
@@ -115,20 +118,20 @@ CLI queue의 접수는 Codex 실행 완료가 아니다. App Server 연결 장�
 - dispatch 전에 task·revision·prompt digest·세션·예상 turn·상태를 영속 저장한다.
 - 전달 후 thread/turn receipt를 저장한다. 수신 확인 전 끊기면 대조 전까지 다시 실행하지 않는다.
 - 세션별 활성 turn 제약과 프로젝트/worktree별 단일 작성자 lease를 함께 적용한다. Git Writer와 Codex가 같은 작업 공간을 동시에 수정하지 않는다.
-- 초기 전역 한도는 한 root workflow다. dot 지시 → Codex 실행 → dot 검토를 순차 단계로 관리한다. Codex에 위임한 부모 Task가 별도 실행 슬롯을 붙잡아 자식 실행을 막는 구조를 만들지 않는다.
+- 초기 전역 한도는 한 root workflow와 활성 provider turn 1개다. Discussion의 참여자 발언 → dot 지시 → Codex 실행 → 참여자 검토를 순차 단계로 관리한다. Codex에 위임한 부모 Task가 별도 실행 슬롯을 붙잡아 자식 실행을 막는 구조를 만들지 않는다.
 - 반복 수정은 Task에 기록한 최대 횟수·시간·종료 조건을 따른다. 실패가 반복되면 근거와 함께 blocked/review로 넘긴다.
-- tablet disconnect, SSE 재접속, dot 응답 timeout은 실행 취소나 재시작 조건이 아니다.
+- client disconnect, SSE 재접속, dot 응답 timeout은 실행 취소나 재시작 조건이 아니다.
 - 사용자 CLI의 새 입력, 브랜치·cwd 변경을 관측하면 Core 계획과 대조한다. 기존 사용자 변경을 자동 reset/stash/delete하지 않는다.
 
 ## 6. 작업 공간과 결과 검토
 
 기존 세션의 실제 workspace를 등록해서 사용한다. 세션 재개만으로 새 sandbox/worktree가 생겼다고 간주하지 않는다. 초기 코드 변경은 등록한 feature branch 또는 사용자가 지정한 작업 공간에서 수행한다. 기본 브랜치·다른 작업과 충돌하면 상태를 알려 작업 공간을 명시적으로 다시 선택하도록 한다.
 
-Codex의 기존 권한·승인 설정을 유지한다. 웹쫀쿠는 `--yolo`나 sandbox 해제를 자동 추가하지 않는다. 브라우저 프로필과 tunnel credential은 Codex 작업 입력·환경에 전달하지 않는다. Codex의 모델 로그인은 해당 실행 환경에서 관리하고 dot이나 태블릿에 노출하지 않는다.
+Codex의 기존 권한·승인 설정을 유지한다. 웹쫀쿠는 `--yolo`나 sandbox 해제를 자동 추가하지 않는다. 브라우저 프로필과 tunnel credential은 Codex 작업 입력·환경에 전달하지 않는다. Codex의 모델 로그인은 해당 실행 환경에서 관리하고 dot이나 웹 클라이언트에 노출하지 않는다.
 
 결과에는 다음을 남긴다.
 
-- task/job/revision, 세션·thread·turn, 프롬프트 digest와 보호된 원문 참조.
+- task/job/revision, 원래 discussion/topicRevision/claim 참조, 세션·thread·turn, 프롬프트 digest와 보호된 원문 참조.
 - 실제 cwd·저장소·브랜치, 시작/종료 시점과 실행 상태.
 - 변경 파일·diff 참조, 관측된 검사 명령·exit status·로그와 미실행 검사.
 - 확인 가능한 commit·PR·산출물 참조. 존재하지 않는 SHA나 PR을 생성됐다고 기록하지 않음.
@@ -140,7 +143,7 @@ Codex의 기존 권한·승인 설정을 유지한다. 웹쫀쿠는 `--yolo`나 
 
 ## 7. Ubuntu와 dot 사이의 연결
 
-- 태블릿 관제는 Tailscale Serve의 private HTTPS 경로를 사용한다.
+- 웹 클라이언트 관제는 Tailscale Serve의 private HTTPS 경로를 사용한다.
 - dot의 MCP 도구 호출은 Ubuntu의 private MCP endpoint와 OpenAI Secure MCP Tunnel로 연결한다.
 - `tunnel-client`는 서버에서 outbound HTTPS를 만들고 로컬 MCP에 요청을 전달한다. Tailscale 주소만 등록해서 OpenAI가 접근할 수 있다고 가정하지 않는다.
 - Platform tunnel 권한·runtime key·ChatGPT workspace 연결과 custom MCP 사용 가능 여부를 확인한다. 터널 인증을 모델 추론용 API 연동과 혼동하지 않는다.
@@ -154,7 +157,7 @@ Codex의 기존 권한·승인 설정을 유지한다. 웹쫀쿠는 `--yolo`나 
 1. 실행 호스트·저장소·세션 바인딩, capability probe, 버전 고정 기록.
 2. App Server adapter와 제한된 CLI resume/queue 경로.
 3. `codex_send/status/result` schema, 영속 job journal, 실행·검토 상태.
-4. 승인 요청 전달, 태블릿 로그, dot 결과 검토와 후속 지시.
+4. 승인 요청 전달, 웹 클라이언트 로그, dot 검토·후속 지시와 모든 토론 참여자의 재평가.
 5. 재연결·중복 요청·활성 세션 충돌·작업 공간 변경의 복구 기록.
 
 ### 완료 조건
@@ -162,10 +165,11 @@ Codex의 기존 권한·승인 설정을 유지한다. 웹쫀쿠는 `--yolo`나 
 - 등록한 세션에서 이전 맥락을 확인하고 추가 지시를 수행한다.
 - dot이 만든 지시가 실제 대상 세션에 도달하고 결과가 dot과 관제실에 회수된다.
 - 동일 세션에 후속 수정 1회 이상을 수행하고 새 revision의 검증 결과를 남긴다.
+- Discussion에 연결한 검증은 같은 evidence snapshot을 GPT OAuth·API·browser 참여자에 제공하고 결과 비교까지 갱신한다.
 - 실행 중 추가 지시는 기본 대기하며, steer는 검증된 현재 turn만 대상으로 한다.
 - 중복 제출과 실행 중 연결기 재시작이 중복 turn·중복 코드 변경을 만들지 않도록 대조된다. 확정할 수 없는 사례는 reconciling/blocked로 남긴다.
 - 승인 요청이 있는 실제 흐름과 실패·중단 상태를 성공으로 표시하지 않는다.
-- 태블릿을 닫아도 실행이 계속되고 재접속 시 기록이 복구된다.
+- 웹 클라이언트를 닫아도 실행이 계속되고 재접속 시 기록이 복구된다.
 - 기존 사용자 변경·세션을 보존하고 기본 브랜치 push·자동 merge·deploy를 수행하지 않는다.
 
 현재 위 항목은 모두 NOT_RUN이다. 문서 작성·UI 시안·offline fixture를 실제 Codex 또는 dot 실행 성공으로 대신하지 않는다.
