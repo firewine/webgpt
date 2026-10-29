@@ -1,10 +1,19 @@
 # 웹쫀쿠 Living Design Document
 
 - 문서 상태: Living Design Document
-- 버전: v0.2
-- 기준일: 2026-08-14
+- 버전: v0.5
+- 최초 기준일: 2026-08-14
+- 개정일: 2026-10-29 (KST)
 - 문서 형식: Markdown
 - 원칙: 이후의 아이디어, 설계 결정, 구현 메모는 이 문서에 누적 업데이트한다.
+- 현재 릴리스 순서·완료 조건: [개발 계획서](./development-plan.md)
+- 핵심 대화: [능동 토론 계획](./discussion-plan.md)
+- 참여자·OAuth·API: [연결 계획](./participant-connections.md)
+- 우선 코드 실행: [Codex 세션 실행 계획](./codex-session-plan.md)
+- 서버·웹 클라이언트: [Ubuntu 운영 계획](./ubuntu-operations.md)
+- 선택 코드 실행 모듈: [Git Writer PRD](./prd.md) / [상세 계획](./git-writer-plan.md)
+
+> 현재 핵심은 주제를 주면 여러 AI가 자동으로 토의·검증·비교하는 공동 대화다. 여러 GPT OAuth 계정·dot·Muse·DeepSeek API를 참여자로 연결한다. Ubuntu가 실행하고 Tailscale이 허용된 기기의 웹 브라우저로 접속한다. 태블릿은 예시다. 조직·팀·Wiki는 후속 설계이며 실제 구현·계정 검증은 NOT_RUN이다.
 
 ---
 
@@ -12,80 +21,62 @@
 
 ### 1.1 웹쫀쿠란?
 
-웹쫀쿠는 일반적인 LLM API 기반 멀티에이전트 프레임워크가 아니다.
-
-**사용자가 이미 보유하고 로그인한 웹 기반 LLM 계정을 실제 작업자처럼 사용하고, 웹쫀쿠가 각 작업자에게 일을 시킨 뒤 결과를 다시 회수해 다음 작업으로 연결하는 멀티에이전트 관제/오케스트레이션 시스템**이다.
+웹쫀쿠는 **여러 AI 참여자가 하나의 주제에 대해 토의하고, 근거를 검증하고, 각자의 결과를 비교하는 웹 대화 시스템**이다. 사용자가 주제를 한 번 주면 Core가 후속 질문·반론·확인·수정을 이어간다. dot과 Muse는 각각 한 참여자이며 일반 GPT 여러 계정과 API 모델도 동등하게 참여한다.
 
 핵심 목표는 다음과 같다.
 
-> API 토큰을 소비하는 AI Agent 시스템이 아니라, 사용자가 구독 중인 웹 LLM들을 여러 명의 소프트웨어 회사 직원처럼 조직하고 자동으로 협업시키는 시스템.
+> 주제 입력 → 참여자별 독립 초안 → 상호 질문·반론 → 근거 확인 → 수정·결과 비교 → 합의점과 미해결 쟁점. 일반 GPT는 OAuth, DeepSeek 등은 API, 기존 dot·Muse는 실제 agent 대화에 연결한다. 필요한 코드·계산·실험은 후속 Codex 실행으로 검증할 수 있다.
 
-웹쫀쿠는 그 전체 과정을 한 화면에서 관찰하고 개입할 수 있는 **AI Software Company Control Room** 역할을 한다.
+사용자는 Tailscale에 연결된 허용 기기에서 동일한 공동 대화를 보고 개입한다. 개발·조사·기술 검토·설계안 비교를 모두 지원하며 **AI Software Company Control Room**은 이 대화 시스템 위에 확장할 장기 운영 형태다.
 
 ### 1.2 핵심 원칙
 
-1. 모델 API 호출을 기본 실행 방식으로 사용하지 않는다.
-2. 실제 작업은 ChatGPT, Claude, Gemini 등 웹 LLM 세션에서 수행한다.
+1. OAuth·API·기존 웹 agent를 참여자 계약으로 통합한다. 연결 방법이 역할·발언권을 결정하지 않는다.
+2. 일반 주제 토론은 Codex 없이 완결한다. 실제 코드·계산·실험이 필요하면 등록 Codex 세션을 별도 Task로 연결한다.
 3. 가능한 경우 각 서비스가 공식적으로 지원하는 OAuth / MCP / Connected App 기능을 우선 사용한다.
 4. 공식 연결 수단만으로 부족한 구간은 Provider별 Web Session Adapter로 추상화한다.
 5. 각 팀은 사용할 LLM Provider/계정을 별도로 지정할 수 있다.
-6. 역할(Role)과 LLM 계정(Account)은 분리한다.
+6. 참여자(Participant), 역할(Role), 계정 연결(AccountConnection), 대화 맥락(Context), 실행 슬롯(Seat)을 분리한다.
 7. 모든 실제 업무는 Task Queue를 통해 추적한다.
-8. 에이전트의 대화보다 결과물(Task, Code, Review, Wiki, Decision)을 중심으로 시스템을 설계한다.
+8. 발언·반론·주장·근거·비교 결과를 연결하고 합의와 검증을 별도로 표시한다.
 9. 중요한 작업과 위험한 권한은 Human 승인 경계를 둔다.
 10. 모든 행동은 Event Log로 남겨 재현 가능하게 한다.
+11. 웹 클라이언트 연결과 서버 실행의 수명을 분리하고 재접속 시 상태·기록을 복구한다.
+12. Tailscale 사용자 접속, 서버 OAuth/API 요청, dot의 Secure MCP Tunnel 도구 호출을 구분한다.
+13. 모든 초기안을 수집하기 전에는 참여자 간 답을 공유하지 않고, 비교 기준과 검증 자료를 동일하게 제공한다.
+14. 진행 횟수·시간·API 사용량 예산을 두고 부분 결과·미해결 이견을 보존한다.
 
 ---
 
-## 2. 현재 가용 LLM 자원
+## 2. 계정 자원과 연결 대상
 
-초기 웹쫀쿠는 아래 계정 자원을 기준으로 설계한다.
+기존 GPT 3·Claude 1·Gemini 1 구성은 2026-08-14의 기획 입력이다. 아래 계정 이름은 논리적 식별자이며 현재 로그인·구독·가용성이 검증됐다는 의미가 아니다.
 
-| Account ID | Provider | 수량 | 사용 형태 | 비고 |
-|---|---|---:|---|---|
-| gpt-01 | ChatGPT | 1 | Web LLM | 계정/요금제별 공식 MCP 기능 확인 필요 |
-| gpt-02 | ChatGPT | 1 | Web LLM | 독립 브라우저 프로필 사용 |
-| gpt-03 | ChatGPT | 1 | Web LLM | 독립 브라우저 프로필 사용 |
-| claude-01 | Claude | 1 | Web LLM | Remote MCP 연결 우선 검토 |
-| gemini-01 | Gemini | 1 | Web LLM only | API 사용 불가, 웹 세션 전용으로 취급 |
+| 대상 | 구분 | 현재 계획 |
+| --- | --- | --- |
+| gpt-01 / gpt-02 / gpt-03 | OAuth로 등록할 ChatGPT 계정 예시 | Phase 0~2에서 계정별 동의·모델·이력 격리와 다중 참여 |
+| deepseek-01 | API 모델 참여자 | Phase 0~2에서 key·model·stream·usage와 혼합 토론 |
+| claude-01 | 기존 Claude 계정 후보 | 후속 Provider 확장 |
+| gemini-01 | 기존 Gemini 웹 계정 후보 | 후속 Provider 확장 |
+| GPT dot | ChatGPT 계정에 연결된 agent/surface | 첫 Chrome 대화 PoC; 계정을 추가로 계산하지 않음 |
+| muse-01 | Muse 연결 후보 | 첫 Chrome 대화 PoC; 실제 계정 식별 필요 |
+| Codex executor | 사용자 Ubuntu의 기존 Codex 실행 환경 | 세션·thread·cwd 등록 후 Phase 4A 실행 연동 |
 
-### 2.1 초기 동시 실행 한도
+### 2.1 동시 실행 한도
 
-초기 구현에서는 보수적으로 **계정 1개 = Active Seat 1개**로 본다.
+대화 MVP-1은 **root workflow 1개와 활성 provider turn 1개**로 시작하되 여러 GPT 계정·dot·Muse·API 참여자의 순차 토론을 포함한다. 다중 참여와 동시 실행을 구분한다. Phase 5는 동시 발언·여러 workflow의 검증된 확대이며 계정·credential별 한도를 지킨다.
 
-따라서 실제로 동시에 작업을 수행하는 최대 작업자 수는 우선 5명이다.
+일반 ChatGPT와 dot이 같은 계정을 사용하면 동시 실행 한도도 공유한다. “기존 5개 + dot + Muse = 7개 Seat”로 자동 산정하지 않는다. 실제 연결된 독립 계정·provider의 검증 결과로 실행 용량을 정한다.
 
-가상 Role은 5개보다 많이 만들 수 있지만, 실제 작업이 필요할 때 비어 있는 Seat를 할당받아야 한다.
+Role은 계정보다 많을 수 있지만 실제 작업 시 검증된 Seat를 배정받는다. 동일 계정의 병렬도를 늘리는 것은 별도 검증 이후의 결정이다.
 
-```text
-Virtual Roles
-  PM
-  Architect
-  Researcher
-  Backend
-  Frontend
-  Reviewer
-  QA
-  DevOps
-  Archivist
-      |
-      v
-Seat Scheduler
-      |
-      +-- GPT Seat 01
-      +-- GPT Seat 02
-      +-- GPT Seat 03
-      +-- Claude Seat 01
-      +-- Gemini Seat 01
-```
-
-향후 Provider가 동일 계정에서 안정적인 병렬 세션을 허용하고 웹 자동화 충돌이 없다는 것이 검증되면 Account별 `max_concurrency`를 조정할 수 있다.
+Discussion 아래 각 발언·검증·Codex job을 자식 Task로 순차 관리하며 부모의 대기 상태가 자식 실행 슬롯을 막지 않게 한다. Codex thread와 workspace별 단일 작성자 제약을 함께 적용한다.
 
 ---
 
-## 3. 가장 중요한 추상화: Role != Account != Session
+## 3. 가장 중요한 추상화: Participant·Role·Account·Context
 
-웹쫀쿠에서는 다음 네 개를 별도 객체로 관리한다.
+Participant는 토론에 참여하는 주체이며 Role·AccountConnection·모델·ConversationContext를 참조한다. AgentIdentity와 ConversationBinding은 기존 dot·Muse의 실제 agent·대화를 식별한다. OAuth/API 참여자의 이력은 웹쫀쿠가 소유한다. 상세 계약은 [참여자 연결 계획](./participant-connections.md)을 따른다.
 
 ### 3.1 Role
 
@@ -107,7 +98,7 @@ Role은 행동 규칙과 책임을 가진다.
 
 ### 3.2 LLM Account
 
-실제로 로그인 가능한 외부 웹 LLM 계정이다.
+웹/OAuth 계정 또는 API credential의 소유 자원이다. AccountConnection은 인증 방식·발급 client ID·검증 identity·workspace·credential 참조를 분리해 보관한다.
 
 예:
 
@@ -137,7 +128,7 @@ Role은 Seat를 빌려 작업한다.
 
 ### 3.4 Provider Session
 
-Provider 웹사이트에 존재하는 실제 대화 Thread/Tab/Conversation이다.
+Browser participant에서는 실제 provider Thread/Tab/Conversation이다. OAuth/API participant에서는 웹쫀쿠의 참여자별 이력과 입력 snapshot을 사용하며 기존 ChatGPT 웹 대화 ID와 혼용하지 않는다. 아래 웹 대화 분리 예시는 browser 경로에 해당한다.
 
 가능하면 Role별 또는 Task별로 분리한다.
 
@@ -152,7 +143,15 @@ Research Agent
   -> Claude conversation C
 ```
 
-이렇게 해야 서로 다른 역할의 컨텍스트가 섞이지 않는다.
+이렇게 해야 서로 다른 역할의 컨텍스트가 섞이지 않는다. 다만 dot의 지속 대화는 task마다 새로 만들지 않고 task ID로 업무를 구분한다. 다른 역할에 해당 대화를 재사용할지는 명시적인 역할·맥락 정책으로 결정한다.
+
+BrowserConnection에는 연결기·프로필 바인딩을, ConversationBinding에는 account·agent·surface·대화 URL/관측 ID·현재 tab ID를 저장한다. 탭 ID만으로 재시작 후 대화를 확정하지 않는다.
+
+### 3.5 Codex 실행 바인딩
+
+실행 호스트·OS 사용자·프로젝트 cwd·저장소·브랜치·CLI 세션 ID·App Server thread ID·활성 turn을 함께 등록한다. `thread.sessionId`는 세션 트리 루트이므로 대상 `thread.id`와 혼용하지 않는다. 세션 ID만으로 접근 권한이나 실제 작업 공간이 확보됐다고 판단하지 않는다.
+
+기존 사용자 세션의 cwd와 변경을 보존한다. 동일 세션을 별도 프로세스가 이중 재개하거나 `--last`로 다른 대화를 선택하지 않는다. 등록·상태·권한·복구 계약은 [Codex 세션 실행 계획](./codex-session-plan.md)을 따른다.
 
 ---
 
@@ -187,7 +186,7 @@ teams:
 
 ### 4.1 초기 추천 배치
 
-현재 계정 구성을 기준으로 한 초기 추천안이다. 확정안은 아니다.
+아래 표는 8월의 계정 구성을 이용한 후속 조직 확장 예시다. 현재 PoC의 배정이나 확정된 모델 성능 비교가 아니다.
 
 | Team | Primary | Secondary | 이유 |
 |---|---|---|---|
@@ -275,49 +274,26 @@ Relevant Wiki / Code / Decision
 
 ---
 
-## 7. 웹 LLM 연결 구조
+## 7. 참여자 연결 구조
 
-웹쫀쿠는 Provider 차이를 Adapter 계층으로 숨긴다.
+| 계층 | 책임 |
+| --- | --- |
+| Core / Discussion / Task / Events | 발언 순서·초안 분리·검증·비교, lease·예산·사용자 개입 |
+| BrowserConnection | 기존 로그인 Chrome에 연결; 프로필·탭 바인딩 |
+| ProviderAdapter | GPT OAuth Responses / DeepSeek 등 API / dot·Muse browser별 입출력 |
+| AccountConnection / Context | 계정 등록·credential 참조·모델·사용량과 참여자별 대화 이력 |
+| 공식 MCP 연결 | 계정에서 검증한 도구·결과·이벤트 교환 |
+| Ubuntu / Web Client | Tailscale HTTPS·SSE·noVNC, 서버 서비스·기록 복구 |
+| Codex 실행 어댑터 | 기존 세션에 프롬프트 전달, 실행·승인·결과·후속 지시 |
+| Git Writer | 선택 모듈의 격리된 코드 변경·검사·draft PR |
 
-```text
-                   Webjjoku Core
-                        |
-            +-----------+-----------+
-            |                       |
-       Task / Events             MCP Server
-            |                       |
-       Provider Router              |
-            |                       |
-   +--------+--------+              |
-   |        |        |              |
-ChatGPT   Claude   Gemini           |
-Adapter   Adapter   Adapter         |
-   |        |        |              |
-   +--------+--------+--------------+
-            |
-      Logged-in Web LLMs
-```
+Core·OAuth/API runtime·Chrome·연결기·Codex를 Ubuntu 서버에 둔다. dot·Muse browser 경로는 Chrome DevTools MCP autoConnect를 검증하고, 프로필 구분이나 탭 권한 요구가 맞지 않으면 확장 프로그램 + Native Messaging을 검토한다. 웹 클라이언트는 서버의 상태를 보는 HTTPS 클라이언트이며 실행을 유지하는 주체가 아니다.
 
-### 7.1 Provider Adapter 공통 인터페이스
+### 7.1 Adapter 계약
 
-```text
-open_session(account, role)
-send_prompt(session, message)
-wait_for_response(session)
-read_response(session)
-attach_context(session, context)
-get_status(session)
-close_session(session)
-```
+공통 ProviderAdapter는 probe / prepareTurn / dispatch / observe / reconcile / requestStop을 제공한다. browser 경로의 attach·sendMessage·observeConversation·detach와 OAuth/API의 인증·stream·usage 구현을 구분한다. 공통 발언 상태·완료·복구는 [참여자 연결 계획](./participant-connections.md)을 따른다.
 
-공식 MCP를 사용할 수 있는 Provider라면 추가로:
-
-```text
-connect_mcp(session, webjjoku_mcp)
-wait_for_tool_result(task_id)
-```
-
-을 지원한다.
+mode 선택·첨부·새 대화·원격 중단·MCP·이벤트는 capability다. 일반 ChatGPT의 reasoning level 컨트롤을 dot·Muse에도 존재한다고 가정하지 않는다. 사용자 대화를 자동 삭제하지 않는다.
 
 ---
 
@@ -325,7 +301,9 @@ wait_for_tool_result(task_id)
 
 MCP가 가능한 Provider에서는 단순 화면 scraping보다 **웹쫀쿠 자체를 Remote MCP Server로 제공하는 방식**을 우선한다.
 
-웹 LLM이 웹쫀쿠 MCP에 접속하면 다음 Tool을 사용할 수 있다.
+아래는 장기 도구 후보이다. 상위 Phase 3의 최소 범위는 task_get, context_get, result_submit이며 필요한 경우 task_claim을 추가한다. 일반 MCP 도구 연결만으로 외부에서 웹 대화를 시작할 수 있다고 가정하지 않는다. dot의 이벤트 구독은 별도 capability로 검증한다.
+
+웹 LLM이 인증된 웹쫀쿠 MCP에 접속하고 해당 권한을 가진 경우 다음 Tool을 사용할 수 있도록 설계한다.
 
 ### 8.1 Webjjoku MCP Tools 초안
 
@@ -351,7 +329,13 @@ agent_request_help(...)
 
 result_submit(task_id, result)
 review_submit(task_id, verdict, comments)
+
+codex_send(task_id, session_binding_id, prompt_revision, idempotency_key, prompt, mode)
+codex_status(job_id)
+codex_result(job_id)
 ```
+
+Codex 도구는 Phase 4A에서 추가할 웹쫀쿠 전용 계약이다. 실행 요청은 job ID를 즉시 반환하고 장기 실행을 별도로 추적한다. `steer`에는 실제 대상 turn ID를 추가로 요구한다. 승인 요청·취소는 구현 capability와 기존 Codex 권한에 따른다.
 
 가장 중요한 Tool은 다음이다.
 
@@ -380,186 +364,104 @@ result_submit()
 }
 ```
 
-이를 통해 최종 응답을 화면에서 다시 파싱하는 의존도를 줄일 수 있다.
+이를 통해 최종 응답을 화면에서 다시 파싱하는 의존도를 줄일 수 있다. 위 completed는 provider가 제출한 결과 상태이며 Core의 업무 done을 자동 확정하지 않는다. 결과는 review로 보내고 코드·검사·PR은 실제 증거와 대조한다.
 
 ---
 
-## 9. OAuth / 인증 설계 원칙
+## 9. 로그인과 인증 경계
 
-### 9.1 LLM 웹사이트 로그인
+### 9.1 기존 Chrome 연결
 
-웹쫀쿠가 Provider 계정의 비밀번호를 직접 저장하는 구조를 기본으로 하지 않는다.
+dot·Muse와 명시적으로 고른 기존 웹 대화의 경로는 Ubuntu 서버의 로그인된 Chrome이다. 새 서버이면 사용자가 noVNC 원격 화면에서 로그인하고 그 profile을 유지한다. 쿠키·local storage·인증 토큰을 복사해 다른 기기나 프로필로 옮기지 않는다.
 
-초기 권장 구조:
+1. Chrome 버전과 연결 기능을 확인한다.
+2. autoConnect의 실제 프로필 선택과 Chrome 허용 절차를 검증한다.
+3. 사용자가 지정한 계정·agent·대화를 바인딩한다.
+4. 만료·대상 변경 시 전송을 멈추고 Re-authentication Required 또는 Target Changed를 표시한다.
+5. 재로그인은 사용자가 수행하고 연결기는 같은 바인딩을 다시 확인한다.
 
-1. Account별 독립 Persistent Browser Profile 생성
-2. 사용자가 직접 Provider에 로그인
-3. 로그인된 브라우저 프로필/세션을 웹쫀쿠가 재사용
-4. 세션 만료 시 UI에서 `Re-authentication Required` 표시
-5. 재로그인은 사용자가 수행
+새 계정이나 전용 실행 환경이 필요할 때만 독립 persistent profile을 만들고 사용자가 로그인한다. 계정 프로필 간 쿠키를 공유하지 않는다. 기존 프로필을 별도 브라우저 프로세스가 동시에 열도록 하지 않는다.
 
-```text
-profiles/
-  gpt-01/
-  gpt-02/
-  gpt-03/
-  claude-01/
-  gemini-01/
-```
+### 9.2 MCP 인증
 
-각 Profile의 Cookie / Local Storage는 서로 절대 공유하지 않는다.
+Provider 웹사이트 로그인과 웹쫀쿠 MCP의 인증은 별개다. 공식 연결이 해당 계정에서 가능한지 확인한 뒤 OAuth 등 검증된 방식을 사용한다.
 
-### 9.2 MCP OAuth
+연결 주체에는 account, agent, project/task 범위와 read/write scope를 매핑한다. task:read, task:claim, result:submit 등의 최소 권한부터 시작한다. 브라우저 로그인 세션과 GitHub credential을 Git Writer sandbox에 전달하지 않는다.
 
-웹 LLM이 Webjjoku Remote MCP Server에 연결할 때는 MCP 표준 OAuth 흐름을 지원하도록 한다.
+MCP 도구·이벤트 지원은 검증 전까지 UNKNOWN이다. 연결의 이름만 확인하고 도구 접근·권한까지 성공했다고 표시하지 않는다.
 
-```text
-Web LLM
-   |
-   | OAuth
-   v
-Webjjoku MCP Auth Server
-   |
-   +-- account_id
-   +-- allowed_team
-   +-- allowed_agent
-   +-- scopes
-```
+### 9.3 Tailscale과 Secure MCP Tunnel
 
-예상 Scope:
+웹 클라이언트는 Tailscale Serve의 private HTTPS 주소로 관제실에 접속한다. 기본 예시는 HTTPS 8443 → 서버 loopback 3000이며 실제 포트·접근 정책을 배포 때 확인한다. MagicDNS·HTTPS 인증서와 전체 `*.ts.net` 이름을 사용한다.
 
-```text
-task:read
-task:claim
-task:write
-wiki:read
-wiki:write
-issue:create
-result:submit
-code:read
-code:write
-```
+dot이 웹쫀쿠 MCP를 호출하는 경로는 별도의 Secure MCP Tunnel이다. 서버에서 outbound HTTPS를 만들고 Platform tunnel·ChatGPT workspace 권한을 검증한다. Tailscale 주소가 OpenAI 서비스에 그대로 접근 가능하다고 가정하지 않는다. 이 터널을 Muse에도 자동 적용하지 않는다.
 
-Role에 따라 최소 권한만 부여한다.
+### 9.4 원격 Chrome 수동 개입
+
+서버 가상 데스크톱의 동일 Chrome을 noVNC/WSS로 보여준다. 최초 로그인·재로그인·Chrome 연결 승인·대화 선택을 웹 클라이언트에서 처리한다. 수동 개입 중 자동 입력을 잠그고, 재개 시 계정·대화·전송 상태를 다시 확인한다. 화면 닫기만으로 작업 전송을 재개하지 않는다.
+
+---
+
+### 9.5 GPT OAuth와 API key
+
+일반 GPT의 OAuth 이용 권한과 DeepSeek의 API key는 서버의 AccountConnection으로 분리한다. OAuth의 identity 로그인만으로 모델 실행 권한을 확정하지 않는다. Ubuntu loopback callback·noVNC 등록과 공식 self-hosted 대안, 토큰 갱신·해지·맥락 관리 조건은 [참여자 연결 계획](./participant-connections.md)을 따른다. 클라이언트나 모델 입력에 credential을 전달하지 않는다.
 
 ---
 
 ## 10. Provider별 초기 전략
 
-> 아래 내용은 2026-08-14 기준 공식 문서 확인 결과를 반영한 구현 가설이며, 실제 계정 요금제/지역/기능 Rollout 여부에 따라 바뀔 수 있다.
+2026-10-29 개정. 외부 문서의 지원과 사용자 계정의 실제 검증을 구분한다.
 
-### 10.1 Claude
+### 10.1 GPT dot
 
-우선순위: **Remote MCP Bridge 우선**
+기존 Chrome의 지속 대화에 요청과 후속 질문을 전송한다. 일반 ChatGPT와 별도 어댑터로 만들되 같은 계정의 자원 한도를 공유한다. 대화 응답 완료와 비동기 업무 완료를 구분한다.
 
-Claude 웹은 Remote MCP 기반 Custom Connector를 공식 지원하므로 Webjjoku MCP를 직접 연결하는 방식을 우선 실험한다.
+공식 문서상 dot에서 MCP Events를 사용할 수 있다. 사용자가 감시할 이벤트와 동작을 지정해 구독한 후 이벤트를 보내는 경로를 Phase 3에서 검증한다. HTTP 접수 성공을 업무 완료로 취급하지 않는다.
 
-예상 흐름:
+Phase 4A에서는 dot이 실행 프롬프트를 작성해 `codex_send`를 호출하고 `codex_result`로 결과를 읽어 검토한다. 후속 수정은 동일 Codex 세션의 새 prompt revision으로 보낸다. 자동 반복에는 횟수·시간·종료 조건을 둔다.
 
-```text
-claude.ai
-   |
-   +-- Webjjoku Custom Connector
-          |
-          +-- task_claim
-          +-- context_get
-          +-- result_submit
-```
+### 10.2 Muse
 
-Claude Seat는 웹쫀쿠에서 가장 먼저 MCP-native Agent로 구현할 후보이다.
+기존 로그인된 Muse 대화의 UI 입출력부터 검증한다. 공식 Connector는 Muse가 외부 API/MCP 도구를 사용하는 경로로 별도 검토한다. 임의 Muse 대화를 외부에서 시작하는 API가 확인됐다고 표시하지 않는다.
 
-### 10.2 ChatGPT
+### 10.3 일반 ChatGPT
 
-우선순위: **계정별 기능 확인 후 MCP 또는 Web Adapter 선택**
+일반 GPT는 Sign in with ChatGPT OAuth + ChatGPT plan usage를 우선 구현한다. 계정마다 등록·토큰·모델·이력을 분리하고 공식 Responses stream 완료를 확인한다. 기존 ChatGPT 대화·메모리 접근 권한과 혼동하지 않는다. 사용자 지정 기존 웹 대화에만 별도 browser adapter를 사용할 수 있으며 OAuth 실패를 자동 DOM fallback으로 덮지 않는다.
 
-ChatGPT 웹에는 MCP 기반 Custom App/Connector 기능이 존재하지만, 플랜과 기능 종류에 따라 쓰기/수정 Tool 지원 범위가 달라질 수 있다.
+### 10.4 Claude / Gemini
 
-따라서 각 GPT 계정에 대해 다음 Capability Probe를 실행한다.
+후속 Provider 확장으로 유지한다. 실제 계정의 공식 연결·write tool·결과 제출 기능을 확인한 뒤 Web/MCP 경로를 선택한다. 이전 문서의 요금제·지역·기능 가정을 현재 capability로 승계하지 않는다.
 
-```text
-supports_custom_mcp
-supports_mcp_read
-supports_mcp_write
-supports_oauth
-supports_background_or_long_task
-```
+---
 
-`result_submit` 같은 write Tool이 정상 호출된다면 MCP-native 모드를 사용한다.
+### 10.5 DeepSeek 등 API 모델
 
-그렇지 않다면 Web Session Adapter를 사용해 Prompt 전송 + 응답 회수 방식으로 동작시킨다.
-
-### 10.3 Gemini
-
-현재 계정은 **Gemini Web LLM only**로 취급한다.
-
-Gemini 웹의 Custom MCP는 Gemini Spark 등 특정 자격 조건에 의존할 수 있으므로 초기 MVP에서 필수 기능으로 가정하지 않는다.
-
-초기 전략:
-
-```text
-gemini-01
-   -> Persistent Web Session
-   -> Prompt Injection
-   -> Response Capture
-```
-
-향후 해당 계정에서 공식 Custom MCP/Connected App 사용 가능 여부가 확인되면 MCP-native 모드로 승격한다.
-
-Gemini는 초기에는 다음 역할에 적합하다.
-
-- 독립적인 Second Opinion
-- Web Research
-- 요구사항 검토
-- 긴 문서/자료 분석
-- 다른 에이전트 결과의 교차 검증
+첫 API adapter는 DeepSeek다. provider별 key·model·이력·stream·완료·usage 계약을 적용하고 API 모델도 Phase 1~2의 N인 토론에 참여한다. OAuth Responses와 DeepSeek Chat Completions의 인증·필드·종료 이벤트를 구분한다. 모델별 검색·실행 도구는 실제 capability 범위에서만 제공한다.
 
 ---
 
 ## 11. Web Session Adapter
 
-공식 MCP만으로 모든 Provider를 제어할 수 없을 가능성에 대비한다.
+### 11.1 실행 흐름
 
-### 11.1 역할
+Task와 대화 바인딩을 저장하고, 화면을 관측해 입력 준비 상태를 확인한 뒤 한 번 전송한다. 실제 사용자 메시지 생성 여부를 확인하고 해당 요청의 응답을 회수한다. 같은 대화의 후속 요청은 별도 attempt로 기록한다.
 
-Web Session Adapter는 로그인된 웹 LLM 화면에 작업 지시를 전달하고 응답을 회수한다.
+### 11.2 상태·복구 책임
 
-```text
-Task
-  |
-Prompt Builder
-  |
-Web Session Adapter
-  |
-Browser Profile
-  |
-Provider Web LLM
-  |
-Response Collector
-  |
-Result Parser
-```
+- 요청 전에 task/attempt/계정/대화와 요청 digest를 영속 저장.
+- 전송 확인 receipt 또는 SEND_UNCONFIRMED 저장.
+- timeout·연결 중단 뒤 기존 메시지를 대조하기 전에는 재전송 금지.
+- 응답 생성과 업무 running/review/done을 분리.
+- 브라우저·Core 재시작 뒤 대화 바인딩과 task를 복원.
+- 사용자의 입력·다른 대화 이동 감지 시 자동 전송 중지.
+- Pause는 새 전송을 막으며 원격 업무 중단 여부는 별도 확인.
+- 프로필·대화별 작업을 구분하고 이벤트를 필요한 범위에서 기록.
 
-### 11.2 Adapter에서 해야 할 일
+### 11.3 보존·권한 책임
 
-- 정확한 계정 프로필 선택
-- 새 대화 생성 또는 기존 Agent 대화 열기
-- Prompt 입력
-- 전송
-- 생성 상태 감지
-- 완료 응답 수집
-- 오류/제한/로그인 만료 감지
-- 필요 시 재시도
-- Event Log 기록
+비밀번호·쿠키를 복제하지 않고 인증 우회를 하지 않는다. Captcha·로그인·Chrome 연결 승인은 사용자 조작으로 처리한다. 대화 자동 영구 삭제를 기본 동작으로 두지 않는다.
 
-### 11.3 Adapter에서 하지 말아야 할 일
-
-- 패스워드 평문 저장
-- Captcha 우회
-- 비정상적인 인증 우회
-- Provider 보안 장치 무력화
-- 무제한 병렬 실행 가정
-
-Provider 정책/기능 변경에 대응하기 위해 Adapter는 Core와 철저히 분리한다.
+공식 result_submit이 검증된 provider는 구조화된 결과를 사용한다. 브라우저 경로와 이벤트 경로가 동시에 같은 업무를 시작하지 않도록 Core가 실행 경로를 고정한다.
 
 ---
 
@@ -634,6 +536,8 @@ Task
 - created_by
 - claimed_by
 - provider_session_id
+- conversation_binding_id
+- dispatch_attempt_id
 - result
 - review_result
 - created_at
@@ -650,33 +554,25 @@ Task
 6. Seat를 Task에 Lock한다.
 7. 작업 종료 후 Seat를 해제한다.
 
-동일 Task를 두 Agent가 동시에 가져가지 못하게 DB Lock을 사용한다.
+동일 Task를 두 Agent가 동시에 가져가지 못하게 DB Lock/lease를 사용한다. 대화 MVP-1에서는 root workflow 1개·활성 provider turn 1개를 강제하며 여러 참여자의 발언·검증 자식을 순차 진행한다. 이미 전송된 Task는 timeout만으로 다른 Seat에 재배정하지 않고 원래 실행 상태를 확인한다.
 
 ---
 
-## 14. Discussion과 실제 작업 분리
+## 14. 능동 토론·검증·비교
 
-에이전트들의 자유 토론이 무한히 이어지는 것을 막는다.
+Discussion은 MVP-1의 핵심 root workflow다. 사용자가 주제를 한 번 입력하면 선택한 N명의 참여자가 독립 초안·상호 검토·근거 확인·수정·비교·종합을 진행한다. 특정 dot·Muse가 필수 진행자나 심판이 아니며 여러 GPT OAuth 계정과 API 모델도 같은 계약으로 참여한다.
 
-Discussion에는 종료 조건을 둔다.
+| 단계 | 계약 |
+| --- | --- |
+| 독립 초안 | 같은 주제·자료·기준을 전달하고 수집 완료 전 타 참여자의 초안을 숨김 |
+| 상호 검토 | 상대 claim을 지목한 질문·반론·지지·검증 제안, 검토 배정의 누락 방지 |
+| 근거 확인 | 자료·출처·실제 계산/실험에 연결, 미확인·미실행·공통 출처 구분 |
+| 수정·비교 | 같은 evidence snapshot에서 각자 결론 갱신, 초기/최종안 비교 |
+| 종합·종료 | 합의점·이견·조건부 권고·남은 질문과 종료 이유를 저장 |
 
-예:
+합의가 사실 검증을 뜻하지 않으며 이견이 있어도 절차를 완료할 수 있다. 요청·시간·API 비용 예산, 로그인·한도·부분 실패, 사용자 조건 revision을 영속 관리한다. 무제한 자유 토론이나 매 발언 사용자 중계를 기본 동작으로 두지 않는다. 초기 순차 실행과 다중 참여는 양립한다.
 
-- 최대 N Turn
-- 최대 시간
-- 최대 LLM 요청 수
-
-종료 시 반드시 아래 중 하나로 변환한다.
-
-```text
-Task 생성
-Decision 생성
-RFC 생성
-Issue 생성
-No Action
-```
-
-> 대화는 상태가 아니라 이벤트이다. 실제 상태는 Task / Decision / Wiki에 저장한다.
+실제 구현·UI·완료 조건은 [능동 토론 계획](./discussion-plan.md)을 따른다. 일반 주제는 Conclusion/Decision/미해결 질문으로 끝날 수 있고 코드 변경이 필수가 아니다. 필요한 실험만 VerificationTask로 연결해 Phase 4A Codex 결과를 원래 토론에 환류한다.
 
 ---
 
@@ -685,6 +581,19 @@ No Action
 모든 Agent 활동은 구조화된 Event로 저장한다.
 
 ```text
+discussion.created
+discussion.phase_changed
+discussion.topic_revised
+discussion.completed
+discussion.partial
+participant.turn_queued
+participant.turn_completed
+claim.created
+evidence.recorded
+verification.completed
+comparison.updated
+budget.exhausted
+
 agent.assigned
 agent.started
 agent.message
@@ -704,10 +613,25 @@ provider.response_started
 provider.response_received
 provider.login_required
 provider.rate_limited
+provider.disconnected
+provider.reconnected
+provider.target_changed
+provider.send_unconfirmed
+provider.response_completed
 
 mcp.tool_called
 mcp.tool_completed
 mcp.auth_required
+
+codex.job_accepted
+codex.job_queued
+codex.turn_started
+codex.approval_required
+codex.output_received
+codex.reconciling
+codex.turn_completed
+codex.turn_failed
+codex.turn_interrupted
 
 review.started
 review.approved
@@ -718,7 +642,7 @@ decision.created
 issue.created
 ```
 
-Control Room의 채팅 화면은 이 Event를 사람이 읽기 좋은 메시지로 렌더링한다.
+Control Room은 Event를 사람이 읽기 좋은 메시지로 렌더링하고 SSE로 전달한다. 영속 cursor·snapshot·중복 제거로 웹 클라이언트 절전·네트워크 전환 이후 누락 로그를 복원한다. 응답 관측과 Codex 실행 이벤트를 구분하고 재연결을 작업 재실행으로 연결하지 않는다.
 
 ---
 
@@ -753,7 +677,11 @@ Company Rules
 
 ## 17. 코드 작업 격리
 
-Coder가 실제 Repository를 수정할 때는 독립 Workspace를 사용한다.
+상위 Phase 4A에서 기존 Codex 세션을 우선 연결한다. 실제 세션의 cwd·feature branch·worktree와 기존 사용자 변경을 확인해 등록한다. 세션 재개만으로 새 격리 작업 공간이 생겼다고 간주하지 않는다. 기본 브랜치나 다른 작업과 충돌하면 작업 공간을 명시적으로 다시 선택한다.
+
+Codex의 기존 sandbox·승인 설정을 유지하고 프롬프트를 셸로 평가하거나 실행 권한을 자동 확대하지 않는다. 세션·작업 공간별 단일 작성자를 보장하고 결과·검사 근거를 dot 검토로 연결한다.
+
+Phase 4B의 선택 Git Writer는 자체의 독립 workspace·sandbox·remote broker 조건을 검증한다. 아래 worktree 구조와 Git Writer 격리 보장은 이 별도 모듈에 해당한다. 첫 Chrome 대화 PoC에는 코드 수정·terminal 실행 권한을 포함하지 않는다.
 
 ```text
 repo/
@@ -771,35 +699,26 @@ worktrees/
 - main 직접 수정 금지
 - 테스트 필수
 - Review 후 Merge
-- 위험한 Merge/Deploy는 Human 승인 가능
+- Git Writer MVP는 draft PR까지; 자동 merge/deploy 제외
+- 자동 병합은 후속 release gate와 범위 승인 이후에만 구현
 
 ---
 
 ## 18. UI - Control Room
 
-메인 화면 초안:
+대화 MVP-1의 첫 화면은 주제 입력과 공동 대화창이다. 선택한 GPT OAuth 계정·dot·Muse·API 참여자의 발언, 질문·반론, 실제 근거, 결론 수정을 연결해서 보여준다. 제시한 시안은 예시이며 실제 연동 성공 증거가 아니다. 전체 조직·동시 실행 확대는 후속 범위다.
 
-```text
-+------------------------------------------------------------------+
-| WEBJJOKU CONTROL ROOM                                             |
-| Seats 4/5 | Queue 11 | Review 2 | Blocked 1 | [Pause All]        |
-+----------------+--------------------------------+----------------+
-| COMPANY        | LIVE OFFICE                    | WORK           |
-|                |                                |                |
-| Product        | PM: 요구사항 분해 중           | READY 7        |
-|  GPT-01        |                                | RUNNING 4      |
-|                | Claude: TASK-184 조사 완료     | REVIEW 2       |
-| Architecture   |                                | BLOCKED 1      |
-|  Claude-01     | GPT-02: Backend 수정 중        |                |
-|                |                                |                |
-| Engineering    | Gemini: 교차검증 시작          |                |
-|  GPT-02        |                                |                |
-|  GPT-03        | SYSTEM: TASK-183 DONE          |                |
-|                |                                |                |
-| Research       |                                |                |
-|  Gemini-01     |                                |                |
-+----------------+--------------------------------+----------------+
-```
+| 화면 | 역할 |
+| --- | --- |
+| 공동 대화 | 주제·참여자 선택, 자동 발언·상호 검토·검증 진행, 추가 조건·지목 질문·제어 |
+| 결과 비교 | 참여자별 초기안·최종안, 근거 검증 상태, 합의점·이견·미해결 사항 |
+| 작업 | 발언·검증·선택 Codex 실행의 대기·진행·검토·완료와 근거 |
+| 연결 | GPT OAuth 계정·모델·사용 권한, API key 연결 상태·usage, dot/Muse 실제 대화·Chrome 개입 |
+| 설정 | 진행 예산·참여자 역할·보존·권한, 후속 팀 설정 |
+
+Tailscale이 허용된 데스크톱·노트북·휴대전화·태블릿에서 같은 기능을 사용한다. 넓은 화면은 대화와 비교를 나란히, 좁은 화면은 탭으로 제공한다. 키보드·마우스·터치·한국어 입력, 기기 전환·절전·탭 재접속을 확인한다. 서버 OS 지원과 클라이언트 브라우저 호환성은 별도로 관리한다.
+
+noVNC는 로그인·OAuth 등록·연결 승인·수동 개입용이다. 일반 대화를 원격 화면 영상으로 대신하지 않는다. OAuth 로그인·모델 발견·실제 응답 완료를 각각 표시하고 미검증 profile이나 기기를 지원 완료로 표시하지 않는다.
 
 ### 18.1 Account / Seat 화면
 
@@ -846,7 +765,9 @@ MCP Permissions
 - Task Cancel
 - Priority 변경
 - Task 재배정
-- 특정 Agent에게 직접 메시지
+- 특정 참여자에게 직접 메시지
+- 주제·자료·평가 기준 변경과 revision 관리
+- 근거 확인·반론·결과 비교 요청
 - Browser Session 직접 열기
 - 재로그인
 - Review 강제 요청
@@ -877,75 +798,55 @@ Process Improvement Proposal
 
 ---
 
-## 21. v0.1 MVP 범위
+## 21. 릴리스별 범위
 
-### 반드시 구현
+정확한 단계와 완료 조건은 [개발 계획서](./development-plan.md)를 따른다.
 
-- [ ] Markdown Living Design Document
-- [ ] Project 생성
-- [ ] LLM Account 등록
-- [ ] Account별 Persistent Browser Profile
-- [ ] 5개 Seat 상태 관리
-- [ ] Team 생성
-- [ ] Team별 Preferred/Fallback LLM 지정
-- [ ] Role / Policy 설정
-- [ ] Task Queue
-- [ ] Seat Scheduler
-- [ ] Provider Adapter 인터페이스
-- [ ] ChatGPT Web Adapter 최소 1개
-- [ ] Claude Web Adapter 최소 1개
-- [ ] Gemini Web Adapter 최소 1개
-- [ ] Webjjoku Remote MCP Server
-- [ ] Claude MCP 연동 PoC
-- [ ] ChatGPT MCP Capability Probe
-- [ ] Gemini MCP Capability Probe
-- [ ] `result_submit` Tool
-- [ ] Event Log
-- [ ] Control Room
-- [ ] Human Pause / Reassign
+### 대화 PoC / MVP-1
 
-### v0.1 이후
+- [x] 개정 개발 계획·Living Design·참여자 연결·능동 토론 계약
+- [ ] 여러 GPT 계정의 OAuth 등록·권한·모델·맥락·refresh 분리
+- [ ] DeepSeek API의 실제 대화·stream 완료·usage와 오류 처리
+- [ ] 기존 Chrome의 dot·Muse 계정·agent·대화 연결과 복구
+- [ ] Participant·Discussion·Turn·Claim·Evidence·Task 영속화
+- [ ] 독립 초안·상호 검토·검증·수정·비교·종합의 N인 자동 진행
+- [ ] root workflow 1개·활성 provider turn 1개와 진행/비용 예산
+- [ ] 공동 대화·참여자별 결과 비교·사용자 개입·부분 결과
+- [ ] Ubuntu profile과 일반 웹 클라이언트 호환성
+- [ ] Tailscale HTTPS·SSE 재연결·noVNC 보조 화면·서버 복구
 
-- [ ] Git worktree 자동 생성
-- [ ] 자동 Code Review
-- [ ] Wiki 자동 관리
-- [ ] Agent 조직 개선 제안
-- [ ] Morning Brief
-- [ ] Provider 사용량/제한 추적
-- [ ] 자동 로그인 만료 감지
-- [ ] Browser crash recovery
-- [ ] Multi-project
-- [ ] Mobile Control Room
+### 후속 단계
+
+- [ ] MCP 구조화된 작업·결과 교환과 dot 이벤트 PoC
+- [ ] Muse Connector capability 확인
+- [ ] Secure MCP Tunnel과 dot의 실제 도구 호출
+- [ ] 기존 Codex 세션 등록·프롬프트 실행·검토·동일 세션 후속 지시
+- [ ] 선택 Git Writer와 sandbox·checks·draft PR
+- [ ] Claude·Gemini와 추가 API provider 확장
+- [ ] 팀별 Preferred/Fallback 및 검증된 다중 Seat
+- [ ] Wiki·코드 자동 Review·조직 개선 제안·Morning Brief
+- [ ] 조건부 자동 병합·운영 고도화·macOS 등 추가 OS·다중 프로젝트
+
+여러 GPT OAuth 계정·DeepSeek·dot/Muse의 순차 참여는 MVP 범위다. 전체 조직과 동시 실행 용량 확대를 분리한다.
 
 ---
 
 ## 22. 첫 번째 기술 PoC
 
-전체 UI를 만들기 전에 아래 한 사이클을 먼저 성공시키는 것을 목표로 한다.
+Ubuntu의 버전·실행 사용자·profile과 Tailscale HTTPS·noVNC 접속을 먼저 확인한다. 서버 Chrome에서 로그인·연결 승인을 처리한 뒤 dot과 Muse에서 다음 흐름을 **각각 순차 수행**한다.
 
-```text
-Webjjoku
-   |
-   | TASK-001 생성
-   v
-Claude Web Seat
-   |
-   | MCP: task_get()
-   v
-Claude가 작업 수행
-   |
-   | MCP: result_submit()
-   v
-Webjjoku
-   |
-   | Event 저장
-   v
-Control Room에 완료 표시
-```
+1. 사용자가 지정한 계정·agent·대화를 확인한다.
+2. 요청 1개를 전송하고 실제 사용자 메시지 생성과 응답을 확인한다.
+3. 같은 대화에 후속 질문 2개를 보내 맥락 유지와 결과 회수를 확인한다.
+4. 연결기를 재시작하고 기존 대화를 재식별한다.
+5. 기존 요청을 중복 전송하지 않고 이어서 대화한다.
+6. 초기 응답과 비동기 업무 완료를 구분할 관측 근거를 기록한다.
 
-이 흐름이 성공하면 웹쫀쿠의 핵심 가설이 검증된다.
+같은 Phase 0에서 OAuth GPT 계정 2개와 DeepSeek API도 개별 검증한다. 세 연결 유형의 세부 gate는 [참여자 연결 계획](./participant-connections.md)을 따른다.
 
-그 다음 GPT Seat와 Gemini Seat를 같은 Adapter Interface에 붙인다.
+첫 PoC에는 전체 UI·조직도·Git Writer가 필요하지 않다. 실제 전송 증거가 없으면 PASS로 표시하지 않는다. dot과 Muse의 대화는 기본 보존한다.
+
+이전 Claude MCP 우선 PoC는 후속 Provider/공식 연결 실험으로 이동한다.
 
 ---
 
@@ -970,7 +871,7 @@ Control Room에 완료 표시
 
 - rate-limit/usage-limit 화면 감지
 - Seat 자동 휴식 상태
-- Fallback Seat 전환
+- 제한된 참여자의 대기·부분 결과 표시; 대체 참여자는 명시적으로 선택하고 새 revision 기록
 
 ### R3. 로그인 / 인증 만료
 
@@ -995,8 +896,47 @@ Provider와 요금제마다 Remote MCP / Write Tool / OAuth 지원 범위가 다
 대응:
 
 - Role별 별도 conversation
-- Task별 conversation 옵션
-- Seat Scheduler가 Active Task 수 제한
+- 일반 대화는 Task별 conversation 옵션; dot은 지속 대화와 Task 연결을 보존
+- Seat Scheduler가 계정 공유 한도와 Active Task 수 제한
+
+### R6. 전송 불확실과 비동기 완료 오판
+
+- send 전후 journal과 receipt를 영속 저장
+- 불확실한 전송을 자동 재시도하지 않고 기존 메시지 대조
+- response completed / task review / task done을 구분
+- Browser/Event 이중 실행과 timeout만으로 다른 Seat에 재배정하는 동작 차단
+
+### R7. Codex 세션·작업 공간 충돌
+
+- host·cwd·세션/thread/turn을 함께 등록하고 활성 세션을 이중 재개하지 않음.
+- 기본 후속 지시는 queue, 명시적 방향 수정만 실제 turn에 steer.
+- 기존 사용자 변경·권한을 보존하고 검사 결과를 해당 변경 revision에 연결.
+
+### R8. 웹 클라이언트 연결과 서버 실행 수명 혼동
+
+- 서버 서비스와 영속 기록을 웹 클라이언트 세션에서 분리.
+- SSE snapshot/cursor 재생과 중복 제거, noVNC 수동 개입 잠금.
+- 절전·네트워크 전환·서버 재부팅을 실제 기기로 검증.
+
+### R9. Tailscale과 dot MCP 연결 혼동
+
+- 사용자 관제는 private Tailscale HTTPS.
+- dot 도구 호출은 검증된 Secure MCP Tunnel과 계정 권한.
+- 각 통로의 장애·권한·상태를 독립적으로 표시.
+
+---
+
+### R10. OAuth·API·browser 맥락과 인증 혼선
+
+- Participant·AccountConnection·credential 참조·대화 이력을 분리.
+- OAuth scope·모델·실제 완료 응답과 browser agent 식별을 따로 확인.
+- 한 계정의 refresh·logout·한도가 다른 계정 토큰·참여자 맥락을 바꾸지 않게 함.
+
+### R11. 자동 동조·반복·근거 없는 결론
+
+- 초기안 분리, 공통 출처 중복 식별, claim별 상호 검토와 실제 증거 연결.
+- 합의와 검증 상태 분리, 소수 의견·미해결 쟁점 보존.
+- 요청·시간·API 비용 예산과 부분 종료, 사용자 조건 revision 관리.
 
 ---
 
@@ -1009,13 +949,28 @@ Role
 Policy
 Agent
 
+Participant
+AccountConnection
+ConversationContext
+ResourceGroup
+UsageLedger
 LLMProvider
 LLMAccount
 ProviderCapability
 Seat
 ProviderSession
+AgentIdentity
+BrowserConnection
+ConversationBinding
+DispatchAttempt
+MessageReceipt
 OAuthConnection
 MCPConnection
+Executor
+CodexSessionBinding
+CodexJob
+ApprovalRequest
+EventCursor
 
 Project
 Goal
@@ -1024,6 +979,12 @@ Task
 TaskDependency
 
 Discussion
+DiscussionTurn
+Claim
+Evidence
+VerificationTask
+Comparison
+Conclusion
 Message
 Decision
 Issue
@@ -1043,58 +1004,82 @@ ProcessImprovementProposal
 
 ## 25. 다음 설계 항목
 
-다음 순서로 상세화한다.
-
-1. Team / Role 목록 확정
-2. 각 Role의 Prompt/Policy 작성
-3. Account / Seat / Session 데이터 모델 확정
-4. Webjjoku MCP Tool Schema 확정
-5. Claude MCP PoC 설계
-6. ChatGPT Web/MCP Capability Probe 설계
-7. Gemini Web Adapter 설계
-8. Seat Scheduler 규칙 확정
-9. Control Room Wireframe
-10. 실제 기술 스택 선정
+1. Ubuntu 호스트·Tailscale HTTPS 포트·웹 클라이언트·원격 Chrome 접속 확인.
+2. autoConnect 프로필 선택·연결 허용과 대안 spike.
+3. BrowserConnection / ConversationBinding / ProviderAdapter 계약.
+4. 메시지 receipt·불확실 전송·응답/업무 상태 schema.
+5. dot·Muse browser 대화의 요청·후속 질문·재연결 E2E.
+6. GPT OAuth 다중 계정·DeepSeek API·공통 Participant와 참여자별 맥락 검증.
+7. Discussion 단계·budget·claim/evidence 계약과 공동 대화·비교 UI.
+8. 구조화된 결과와 공식 이벤트·Connector capability.
+9. 기존 Codex 세션 바인딩·실행·승인과 원래 토론으로의 검증 결과 환류.
+10. 선택 Git Writer와 Team/Role·동시 실행 확대.
 
 ---
 
 ## 26. 외부 플랫폼 기능 검증 메모
 
-2026-08-14 기준 공식 문서에서 확인한 내용이다. 구현 전에 다시 검증한다.
+2026-10-29 문서·코드를 읽은 결과다. 사용자 계정의 실제 연동은 모두 NOT_RUN이며 구현 시 버전·권한·화면을 검증한다.
 
-### ChatGPT
-
-- ChatGPT에는 Apps/Custom MCP 방식이 존재한다.
-- OAuth 기반 연결을 지원하는 App/Connector 흐름이 존재한다.
-- Custom MCP 및 write/modify 기능의 사용 가능 범위는 플랜/워크스페이스/롤아웃 상태에 따라 달라질 수 있다.
-
-참고:
-- https://help.openai.com/en/articles/11487775-apps-in-chatgpt
-- https://help.openai.com/en/articles/12584461-developer-mode-and-full-mcp-connectors-in-chatgpt-beta
-
-### Claude
-
-- Claude 웹은 Remote MCP 기반 Custom Connector를 공식 지원한다.
-- Free/Pro/Max/Team/Enterprise에서 Remote MCP Custom Connector를 사용할 수 있으며 일부 기능은 Beta 상태이다.
-- OAuth Client 정보를 이용한 MCP 인증 설정을 지원한다.
+| 대상 | 문서상 확인 / 구현 판단 |
+| --- | --- |
+| GPT OAuth | Sign in with ChatGPT·계정별 plan usage·Responses·여러 등록; 실제 계정 검증 NOT_RUN |
+| DeepSeek | API key·대화 stream·모델 목록 경로; 실제 key·호출 검증 NOT_RUN |
+| Chrome | 144+ autoConnect로 기존 세션 연결, 사용자 허용 및 기본 프로필 제약 |
+| dot | 웹 대화와 지속 업무, MCP Events의 dots 지원 |
+| Muse | 외부 API/MCP 서비스에 연결하는 Connector 경로; 외부 대화 시작 API는 미확인 |
+| Nhahan/WebGPT | 일반 ChatGPT용 CUA helper와 Worker; dot·Muse는 별도 adapter 필요 |
+| Claude / Gemini | 이전 8월 기능 메모를 현재 계정 capability로 재사용하지 않음 |
+| Codex | exec resume·queue, App Server thread/turn/steer; 실제 설치 버전·세션 확인 필요 |
+| Tailscale / noVNC | private HTTPS·웹 원격 화면; Ubuntu·웹 클라이언트 E2E 미실행 |
+| Secure MCP Tunnel | private MCP의 outbound 연결; 계정·workspace 권한 미검증 |
 
 참고:
-- https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp
-- https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities
 
-### Gemini
+- [사용자 제공 글](https://gall.dcinside.com/mgallery/board/view/?id=ai_utilize&no=84956)
+- [Nhahan/WebGPT 고정 revision](https://github.com/Nhahan/WebGPT/tree/1d35588e79de288bd8a6d2992fc76e571f7bb75e)
+- [Chrome 기존 세션 연결](https://developer.chrome.com/blog/chrome-devtools-mcp-debug-your-browser-session)
+- [Chrome DevTools MCP advanced usage](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/advanced-usage.md)
+- [Meet dots](https://learn.chatgpt.com/docs/dots)
+- [OpenAI MCP Events](https://developers.openai.com/plugins/build/mcp-events)
+- [Muse Connector guidelines](https://platform.muse.ai/docs)
+- [Codex CLI](https://learn.chatgpt.com/docs/cli/reference)
+- [Codex App Server](https://learn.chatgpt.com/docs/app-server)
+- [Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)
+- [Tailscale Serve](https://tailscale.com/docs/reference/tailscale-cli/serve)
+- [noVNC](https://novnc.com/info.html)
 
-- Gemini 웹은 일반 Web App 및 Gems 기능을 제공한다.
-- Custom MCP 연결은 Gemini Spark의 Custom Connected Apps 기능 등 제한된 자격 조건에서 제공될 수 있다.
-- 따라서 현재 gemini-01은 Web LLM only Seat로 우선 설계한다.
-
-참고:
-- https://support.google.com/gemini/answer/17209137
-- https://support.google.com/gemini/answer/13695044
+OAuth·API 공식 출처와 구현 경계는 [참여자 연결 계획](./participant-connections.md)에, 전체 검증 범위는 상위 개발 계획에 기록한다.
 
 ---
 
 ## 27. 변경 이력
+
+### v0.5 - 2026-10-29
+
+- 태블릿 전용 관제에서 Tailscale 일반 웹 접속으로 정정.
+- 여러 GPT OAuth 계정·dot·Muse·DeepSeek API를 동등한 참여자로 모델링.
+- 주제 기반 N인 토론·상호 검증·결과 비교를 MVP의 핵심 흐름으로 확정.
+- 모델 API 비사용 원칙을 OAuth/API/browser 혼합 구조로 대체.
+- 계정·맥락·발언·근거·예산·종료·사용자 개입과 Codex 검증 환류 반영.
+
+### v0.4 - 2026-10-29
+
+- Ubuntu 서버·Tailscale HTTPS·태블릿 실시간 관제를 기본 운영 환경으로 반영.
+- noVNC의 서버 Chrome 로그인·연결 승인·수동 개입, SSE 기록 복구 명시.
+- dot의 프롬프트 작성·기존 Codex 세션 실행·결과 검토·후속 지시 추가.
+- 세션 바인딩·job·turn·승인·단일 작성자와 두 네트워크 통로 구분.
+- Git Writer를 선택 모듈로 유지하고 macOS 동시 릴리스 요구를 후속 확장으로 변경.
+- 시안과 실제 기능 검증을 구분하고 운영·Codex 상세 계획 연결.
+
+### v0.3 - 2026-10-29
+
+- 첫 검증을 기존 Chrome의 dot·Muse 왕복 대화로 변경.
+- 계정·dot·Seat 구분과 초기 전역 동시 작업 1개 명시.
+- 대화 보존, 영속 전송 기록, 응답/업무 상태와 재연결 조건 추가.
+- MCP Events·Muse Connector의 문서상 지원과 계정 미검증 구분.
+- Nhahan/WebGPT를 참고하되 Chat 전용 CUA helper·전체 terminal·자동 삭제 정책을 분리.
+- Git Writer를 하위 실행 모듈로 연결하고 첫 릴리스·후속 조직 확장 범위 정합화.
 
 ### v0.2 - 2026-08-14
 
@@ -1123,4 +1108,5 @@ ProcessImprovementProposal
 
 ## 28. 현재 확정된 핵심 문장
 
-> 웹쫀쿠는 API로 LLM을 호출하는 멀티에이전트 프로그램이 아니다. 사용자가 로그인한 여러 웹 LLM 계정을 AI 소프트웨어 회사의 실행 자원으로 사용하고, 팀과 역할에 따라 업무를 배정하며, 가능한 경우 OAuth와 공식 MCP를 통해 작업과 결과를 구조적으로 교환하고, 부족한 부분은 Provider별 Web Session Adapter로 연결하는 AI 회사 관제/오케스트레이션 시스템이다.
+> 웹쫀쿠는 주제 하나로 여러 GPT OAuth 계정·dot·Muse·API 모델이 능동적으로 토의·검증·비교하는 웹 대화 시스템이다. Ubuntu가 실행을 유지하고 사용자는 Tailscale이 허용된 어느 기기에서든 웹 브라우저로 참여한다. 합의와 근거 검증을 구분하며 필요할 때 기존 Codex 세션으로 실험·개발을 수행하고 그 결과를 다시 공동 대화로 돌려보낸다.
+
