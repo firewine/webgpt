@@ -18,7 +18,7 @@
 
 소유자 키는 로컬 0600 파일, 브라우저 세션은 HttpOnly/SameSite=Strict 쿠키다. 운영 HTTPS에서는 Secure를 붙인다. Host와 Origin을 검증하고 인증 헤더를 noVNC upstream으로 전달하지 않는다. noVNC 입력은 수동 제어 lease가 있을 때만 허용한다.
 
-OAuth/API credential은 DB와 별도의 AES-256-GCM vault에 저장한다. 키·암호문은 같은 OS 소유자가 관리하므로 OS 계정 탈취에 대한 분리 보장은 아니다. Codex 자식에는 provider 환경 변수를 전달하지 않으며 bubblewrap으로 앱 state/Chrome profile을 가린다. Codex의 읽기 sandbox 자체가 cwd 밖의 모든 읽기를 차단한다고 주장하지 않는다.
+OAuth/API credential은 DB와 별도의 AES-256-GCM vault에 저장한다. 키·암호문은 같은 OS 소유자가 관리하므로 OS 계정 탈취에 대한 분리 보장은 아니다. Codex 자식에는 provider 환경 변수를 전달하지 않으며 bubblewrap으로 앱 state/Chrome profile을 가린다. 별도 PID namespace와 `/proc`를 사용해 호스트 프로세스의 root/fd 경로로 가린 파일을 읽지 못하게 한다. namespace를 만들 수 없으면 실행을 거절하고 격리 없는 경로로 전환하지 않는다. Codex의 읽기 sandbox 자체가 cwd 밖의 모든 읽기를 차단한다고 주장하지 않는다.
 
 설치한 `codex-cli 0.165.0`의 생성 schema를 직접 확인했다. 이 버전의 `approvalPolicy`는 `untrusted`이고 sandbox에는 문서 일부 예시의 `access/readOnlyAccess` 필드가 없다. 존재하지 않는 옵션을 보내는 대신 실제 schema에 맞추고 비밀 경로는 OS 경계로 가린다. `approvalsReviewer=user`이며 승인 요청을 자동 허용하지 않는다. 설치 버전 변경 시 schema 검사를 재실행한다.
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -71,4 +71,17 @@ test('discussion -> participant MCP prompt -> Codex receipt -> observed evidence
   const d = await until(() => f.store.read().discussions.find(d => d.status === 'completed'), 8000); assert.equal(delegated, 1); assert.equal(d.used.toolJobs, 2); assert.equal(f.store.read().jobs.length, 2);
   assert.ok(f.store.read().jobs.some(j => j.prompt.startsWith('dot이 직접 만든'))); assert.ok(d.evidence.every(e => e.kind === 'execution' && e.status === 'observed'));
   for (const turn of d.turns.filter(t => t.phase === 'revision')) assert.match(turn.prompt, /RPC fixture 결과/); assert.equal((await f.trace()).filter(x => x.method === 'turn/start').length, 2);
+});
+
+test('unavailable isolation fails closed without launching the Codex adapter', async t => {
+  const f = await fixture(t); const bin = await mkdtemp(join(tmpdir(), 'wj-bwrap-reject-')); const priorPath = process.env.PATH;
+  // A rejecting wrapper simulates a host where user namespaces are disabled.
+  await writeFile(join(bin, 'bwrap'), '#!/bin/sh\nexit 1\n', { mode: 0o700 });
+  const isolated = new CodexExecutor(f.store, [process.execPath, script, 'normal'], [f.cwd], [bin]);
+  try {
+    process.env.PATH = `${bin}:${priorPath ?? ''}`;
+    await assert.rejects(isolated.register({ cwd: f.cwd, label: 'isolated', threadId: 'fixture-thread', allowWrite: true }), /rpc_disconnected/);
+    assert.equal(f.store.read().bindings.length, 0); assert.equal(f.store.read().jobs.length, 0);
+    await assert.rejects(readFile(join(f.cwd, 'rpc-trace.jsonl')), { code: 'ENOENT' });
+  } finally { process.env.PATH = priorPath; isolated.close(); await rm(bin, { recursive: true, force: true }); }
 });

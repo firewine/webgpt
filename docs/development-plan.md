@@ -54,7 +54,7 @@ v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위�
 
 - 기준 `main`: `d3c05f29a9bb1a92989ec71b2ace221a1a70ea09`. 계획·순서·WJ-001·FlowDesk 설계 반영 PR #1~4가 병합됐다.
 - 사용자의 전체 개발 지시에 따라 WJ-002~011, WJ-013의 도구 경로, WJ-014~015의 독립 구현을 하나의 실행 가능한 작업실에 연결했다. [구현 기록](./implementation/wj-002-015.md)에 범위별 증거를 남겼다.
-- strict TypeScript·빌드와 Node 검사 38개, 실제 Chromium 브라우저 검사 4개를 통과했다. 설치한 Chrome DevTools MCP 1.12.0의 실제 도구 왕복과 Codex CLI 0.165.0의 생성 schema도 확인했다.
+- strict TypeScript·빌드와 Node 검사 39개, 실제 Chromium 브라우저 검사 4개를 통과했다. 설치한 Chrome DevTools MCP 1.12.0의 실제 도구 왕복과 Codex CLI 0.165.0의 생성 schema도 확인했다.
 - OAuth/DeepSeek 응답·dot 역할·Codex 실행 검사는 fixture다. 실제 계정 호출, 사용자 Ubuntu 배포, Tailnet 기기 접속, 사용자 Codex 세션 실행은 하지 않았다. WJ-012/MVP-1 및 실세션 MVP-2는 NOT_RUN이다.
 - 외부 계정·호스트에 의존하는 검증은 [운영 절차](./operations-runbook.md)의 순서로 수행한다. MCP Events와 Muse Connector는 별도 capability 검증 전까지 비활성이며 browser 완료 관측을 기본 경로로 쓴다.
 

@@ -119,7 +119,9 @@ export class CodexExecutor {
     try { return await promise; } finally { this.connecting.delete(binding.id); }
   }
   private async connectOnce(binding: ExecutionBinding): Promise<RpcProcess> {
-    const command = this.protectedPaths.length ? ['bwrap', '--die-with-parent', '--new-session', '--bind', '/', '/', ...this.protectedPaths.flatMap(path => ['--tmpfs', path]), '--', ...this.command] : this.command;
+    // A private PID namespace and procfs prevent reaching masked host paths
+    // through another host process’s /proc/<pid>/root or open descriptors.
+    const command = this.protectedPaths.length ? ['bwrap', '--die-with-parent', '--new-session', '--unshare-pid', '--bind', '/', '/', '--proc', '/proc', ...this.protectedPaths.flatMap(path => ['--tmpfs', path]), '--', ...this.command] : this.command;
     const rpc = new RpcProcess(command, binding.cwd, false);
     rpc.onNotification = (method, params) => this.notification(binding.id, method, params);
     rpc.onRequest = (requestId, method, params) => this.approval(binding.id, rpc, requestId, method, params);

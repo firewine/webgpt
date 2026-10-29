@@ -4,7 +4,7 @@
 
 ## 1. 환경과 설치
 
-Node.js 24.x, npm 11.x, Git, Tailscale, Chrome과 필요한 계정 권한을 준비한다. 아래 Linux 패키지는 Chrome 화면과 Codex의 비밀 경로 격리에 사용한다.
+Node.js 24.x, npm 11.x, Git, Tailscale, Chrome과 필요한 계정 권한을 준비한다. 아래 Linux 패키지는 Chrome 화면과 Codex의 비밀 경로 격리에 사용한다. Codex 실행에는 mount/PID namespace와 전용 procfs를 만들 수 있는 bubblewrap 환경이 필요하다. 이 개발 컨테이너는 namespace 생성을 허용하지 않았으며, 운영 호스트에서 이를 확인해야 한다. 실패 시 격리를 끄고 실행하지 않는다.
 
 ```bash
 sudo apt-get install xvfb x11vnc novnc websockify bubblewrap fonts-noto-cjk

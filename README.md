@@ -76,7 +76,7 @@ npx playwright install --with-deps chromium
 npm run test:browser
 ```
 
-현재 Node 검사 38개와 실제 Chromium 검사 4개를 검증했습니다. 네 번째 browser 검사는 설치된 Chrome DevTools MCP가 필요하므로 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
+현재 Node 검사 39개와 실제 Chromium 검사 4개를 검증했습니다. 네 번째 browser 검사는 설치된 Chrome DevTools MCP가 필요하므로 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
 
 ```bash
 npm install --no-save --package-lock=false @openai/codex@0.165.0 chrome-devtools-mcp@1.12.0
