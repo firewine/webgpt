@@ -1,0 +1,22 @@
+{
+  "name": "webjjoku",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Webjjoku participant connection diagnostics (WJ-001)",
+  "engines": { "node": ">=24.0.0 <25", "npm": ">=11 <12" },
+  "packageManager": "npm@11.9.0",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node --env-file-if-exists=.env dist/server/main.js",
+    "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "check": "npm run typecheck && npm test",
+    "test:browser": "npm run build && node --test tests/browser/*.test.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "playwright": "1.62.1",
+    "typescript": "5.9.3"
+  }
+}
