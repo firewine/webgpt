@@ -2,9 +2,9 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 버전 | Draft v0.2 |
+| 버전 | Draft v0.3 |
 | 개정일 | 2026-10-29 (KST) |
-| 범위 | 웹쫀쿠의 코드 변경·검사·draft PR 실행 모듈 |
+| 범위 | 웹쫀쿠의 선택 Git Writer 모듈; 우선 코드 실행은 기존 Codex 세션 |
 | 상위 개발 계획 | [development-plan.md](./development-plan.md) |
 | 상세 기술·검증 계획 | [git-writer-plan.md](./git-writer-plan.md) |
 
@@ -12,25 +12,25 @@
 
 사용자의 제품 요구를 받은 웹 LLM이 승인된 저장소를 읽고, 격리된 작업 공간에서 변경·검사를 수행하고, `chatgpt/*` 브랜치의 draft PR을 생성·갱신하도록 한다.
 
-웹쫀쿠 전체는 [Living Design](./webjjoku_living_design.md)의 관제·오케스트레이션 제품이다. Git Writer는 그 하위 실행 모듈이며, 기존 로그인 Chrome의 dot·Muse 왕복 대화와 대화 MVP 이후에 구현한다. 브라우저 연결 PoC에 GitHub token이나 terminal 권한을 요구하지 않는다.
+웹쫀쿠 전체는 [Living Design](./webjjoku_living_design.md)의 관제·오케스트레이션 제품이다. 우선 코드 실행은 [Codex 세션 실행](./codex-session-plan.md)의 Phase 4A다. Git Writer는 Phase 4B의 별도 선택 모듈이며, 그 구현을 dot → Codex 왕복의 선행 조건으로 두지 않는다. 브라우저 연결 PoC에 GitHub token이나 terminal 권한을 요구하지 않는다.
 
-최종 목표의 조건부 squash auto-merge와 상시 운영은 유지하되 Git Writer MVP에서 제외한다. 이 문서는 이전 PRD의 Windows·HTTP daemon·writer의 토큰 직접 보유·required checks 부재 시 즉시 병합 예제를 대체한다. 과거 설치 명령과 YAML을 현재 runbook으로 사용하지 않는다.
+최종 목표의 조건부 squash auto-merge는 Git Writer MVP에서 제외한다. Ubuntu Core·Chrome·Codex의 상시 운영은 상위 Phase 2에 포함하며 [Ubuntu 운영 계획](./ubuntu-operations.md)을 따른다. 이 모듈의 foreground/stdio 조건을 전체 제품의 HTTPS 서버·상시 실행 금지로 해석하지 않는다. 과거 Windows·HTTP daemon·토큰 직접 보유·즉시 병합 예제를 현재 runbook으로 사용하지 않는다.
 
 ## 2. 지원 범위
 
 | 항목 | Git Writer MVP |
 | --- | --- |
-| OS | 고정된 macOS arm64 / Linux x86_64 profile 각각 1개 |
-| 실행 | foreground, Node.js 24 계열·ESM·strict TypeScript |
+| OS | 첫 릴리스는 고정 Ubuntu Linux x86_64 profile 1개; macOS는 후속 확장 |
+| 실행 | 감독되는 tunnel의 foreground 자식 프로세스, Node.js 24 계열·ESM·strict TypeScript |
 | transport | 검증된 Secure MCP Tunnel이 실행하는 stdio MCP writer |
 | 대상 | 사전 승인된 disposable 저장소 1개, 전역 변경 작업 1개 |
 | 변경 | 허용된 제품 소스·직접 관련 테스트의 text patch와 복원 |
 | 검사 | 서버가 결정하는 필수 allowlist suite + 허용된 추가 suite |
 | 게시 | `chatgpt/*` commit/push와 동일 draft PR 생성·갱신 |
 | 복구 | 원자적 상태, task lease, 감사 기록, 중복 호출·중단 복구 |
-| 릴리스 | 양 OS 적합성, offline regression, OS별 live E2E |
+| 릴리스 | Ubuntu 적합성, offline regression, 실제 Ubuntu live E2E |
 
-MVP 제외: Windows, Intel Mac/ARM Linux, HTTP listener·별도 daemon, 복수 저장소·동시 작업, merge credential·merge 동작, 임의 shell·package install·unrestricted network, binary/generated/submodule 변경.
+Git Writer MVP 제외: macOS/Windows, ARM Linux, writer 자체의 HTTP listener·별도 daemon, 복수 저장소·동시 작업, merge credential·merge 동작, 임의 shell·package install·unrestricted network, binary/generated/submodule 변경. Ubuntu의 실제 architecture가 다르면 해당 profile을 별도 검증하며 지원을 추정하지 않는다.
 
 보호 경로는 `.github/**`, `AGENTS.md`, Git metadata, credential, writer/runtime/policy, dependency manifest·lockfile, package manager 및 build/test 설정·검사 스크립트다. 실제 저장소에 맞춰 목록을 고정한다. 보호 범위 안의 요청은 `UNSUPPORTED_SCOPE`와 이유를 반환한다. 허용된 소스·직접 테스트에는 임의 파일 수 제한을 두지 않는다.
 
@@ -88,7 +88,7 @@ source/install/config/state/runtime/credential/target 경로의 중첩·alias를
 
 ## 6. 검사와 격리
 
-공통 SandboxBackend 계약 아래 Linux Bubblewrap 후보와 macOS VM/container 후보를 실제 호스트에서 검증하고 ADR로 고정한다. 무격리 host 실행이나 `sandbox-exec`로 자동 fallback하지 않는다.
+공통 SandboxBackend 계약 아래 초기 Ubuntu의 Linux Bubblewrap 후보를 실제 호스트에서 검증하고 ADR로 고정한다. macOS VM/container 후보는 후속 OS 추가 때 동일 계약을 검증한다. 무격리 host 실행이나 `sandbox-exec`로 자동 fallback하지 않는다.
 
 필수 검증:
 
@@ -120,16 +120,16 @@ broker는 target-controlled Git 설정·hook·filter·diff driver·fsmonitor·su
 ## 8. 설치·운영
 
 - 소스와 설치 artifact, config, task/audit state, runtime, credential을 분리한다.
-- macOS Keychain / Linux Secret Service를 사용하고 secret을 문서·config·prompt·service 파일에 기록하지 않는다.
-- committed source에서 양 OS artifact를 재현 가능하게 빌드하고 hash manifest, read-only atomic activation, rollback을 검증한다.
+- Ubuntu의 실제 무인 재시작 조건에 맞는 보호된 credential 저장·주입 방식을 검증한다. Linux Secret Service를 선택하면 로그인·잠금 해제 의존성도 확인한다. macOS Keychain은 후속 OS 범위다. secret을 문서·prompt·평문 service 파일에 기록하지 않는다.
+- committed source에서 Ubuntu artifact를 재현 가능하게 빌드하고 hash manifest, read-only atomic activation, rollback을 검증한다.
 - Secure MCP Tunnel은 검증한 공식 init/doctor/run 절차와 버전으로 runbook을 작성한다.
 - tunnel health/readiness와 ChatGPT workspace·Platform 권한을 각각 확인한다.
 - writer stdout은 MCP 전용, log는 redacted stderr로 보낸다.
-- MVP는 foreground다. systemd/LaunchAgent 및 인증된 HTTP transport는 후속 ADR·release gate를 따른다.
+- writer는 foreground 자식으로 유지하고 상위 tunnel/Core의 Ubuntu 서비스 관리·재시작을 통합 검증한다. writer 자체 HTTP transport와 macOS LaunchAgent는 후속 ADR·release gate를 따른다.
 
 ## 9. 완료 조건
 
-- 양 OS의 동일 적합성·공격 fixture 통과.
+- 초기 Ubuntu profile의 적합성·공격 fixture 통과. 추가 OS는 별도 릴리스 gate 적용.
 - offline 상태·Git·검사·중단/replay 검증 통과.
 - 각 지원 OS에서 실제 요청 하나가 검증된 변경과 draft PR 하나로 이어짐.
 - mutation 이후 stale checks 재사용, secret 노출, sandbox escape, 잘못된 ref push 없음.
@@ -151,6 +151,10 @@ broker는 target-controlled Git 설정·hook·filter·diff driver·fsmonitor·su
 조건을 충족할 때 squash auto-merge를 활성화한다. required checks가 없거나 auto-merge 설정이 꺼졌다는 이유로 즉시 병합하지 않는다.
 
 ## 11. 변경 이력
+
+### v0.3 — 2026-10-29
+
+Codex 세션 실행을 우선 경로로 두고 Git Writer를 Phase 4B 선택 모듈로 정리했다. 첫 릴리스는 Ubuntu로 한정하고 macOS는 후속 확장으로 이동했다. 모듈의 foreground/stdio와 전체 제품의 Tailscale HTTPS·상시 운영 범위를 구분하고 headless 서버의 credential 재시작 검증을 추가했다. sandbox·draft PR·증거 조건은 유지한다.
 
 ### v0.2 — 2026-10-29
 

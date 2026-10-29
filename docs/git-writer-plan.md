@@ -2,19 +2,19 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | Draft v0.2 — 웹쫀쿠 하위 모듈 계획 |
+| 상태 | Draft v0.3 — Ubuntu 우선의 선택 Git Writer 모듈 |
 | 최초 작성일 | 2026-08-15 |
 | 개정일 | 2026-10-29 (KST) |
 | 상위 계획 | [development-plan.md](./development-plan.md) |
 | 모듈 요구사항 | [prd.md](./prd.md) |
-| 대상 릴리스 | macOS arm64 / Linux x86_64 Git Writer MVP |
+| 대상 릴리스 | Ubuntu Linux x86_64 Git Writer MVP; macOS는 후속 확장 |
 | 계획 원칙 | 안전하게 검증 가능한 작은 릴리스부터 최종 자율 개발 흐름까지 단계적으로 확장 |
 
 ## 1. 목적
 
-사용자가 Web ChatGPT에 제품 요구만 전달하면 로컬 Git writer가 대상 저장소를 읽고, 격리된 작업 공간에서 변경과 검사를 수행하고, `chatgpt/*` 브랜치의 draft PR까지 생성하는 Git Writer 모듈을 만든다. 이 모듈의 구현은 상위 계획의 로그인된 Chrome 대화 PoC와 대화 MVP 이후에 진행한다.
+사용자가 Web ChatGPT에 제품 요구만 전달하면 Git writer가 대상 저장소를 읽고, 격리된 작업 공간에서 변경과 검사를 수행하고, `chatgpt/*` 브랜치의 draft PR까지 생성하는 선택 모듈을 만든다. 상위 계획의 첫 코드 실행 경로는 [기존 Codex 세션](./codex-session-plan.md)의 Phase 4A다. 이 모듈은 Phase 4B이며 Codex 왕복 실행의 선행 조건이 아니다.
 
-PRD의 최종 목표인 required checks 이후 squash auto-merge와 상시 서비스는 유지한다. 실제 지원 환경은 Apple Silicon macOS(`darwin-arm64`)와 x64 Linux(`linux-x64`)로 한정하며 두 조합 모두 MVP 릴리스 조건에 포함한다.
+PRD의 최종 목표인 required checks 이후 squash auto-merge는 후속 범위로 유지한다. 첫 지원 환경은 고정 Ubuntu x64 Linux(`linux-x64`) profile이며 실제 호스트에서 확인한다. Apple Silicon macOS(`darwin-arm64`)는 후속 확장으로 이동하고 Ubuntu MVP의 차단 조건으로 두지 않는다. 전체 제품의 서버 상시 실행·태블릿 HTTPS는 [Ubuntu 운영 계획](./ubuntu-operations.md)에 따라 상위 Phase 2에서 구현한다.
 
 이 문서는 Git Writer 내부 구현 순서와 릴리스 조건을 정의한다. 모듈 요구사항은 PRD, 제품 전체 순서는 상위 개발 계획, 세부 기술 결정은 ADR, 실행 가능한 인터페이스는 schema와 테스트가 담당한다. 문서 간 충돌이 생기면 해당 계약을 먼저 정정한다.
 
@@ -23,8 +23,8 @@ PRD의 최종 목표인 required checks 이후 squash auto-merge와 상시 서�
 2026-10-29 GitHub 조회 기준:
 
 - 저장소: `firewine/webgpt`, 기본 브랜치: `main`
-- 이 개정의 기준 커밋: `3246914b025a7608d5dd699799abc5c8fd3dacac`
-- 개정 전 추적 파일: `docs/development-plan.md`, `docs/prd.md`, `docs/webjjoku_living_design.md`
+- v0.3 개정의 부모 커밋: `8007d9703e454b0a19e014282fb32d77ca7688cc`
+- 개정 전 계획 브랜치의 추적 파일: 상위 개발 계획, 이 모듈 상세 계획, PRD, Living Design 4개.
 - 구현 코드, 테스트, 실행 증거는 아직 저장소에 없다.
 - `/home/firewine/webgpt`, Node.js `24.18.0`, npm `11.16.0`, Git `2.43.0`, GitHub CLI `2.92.0`, Bubblewrap `0.9.0`, Docker CLI `29.7.2`는 8월 계획서의 과거 관측값이다. 현재 실행 환경의 검증 결과로 재사용하지 않는다.
 - 과거 중첩 환경의 Bubblewrap uid-map probe 실패는 미해결 기록으로 남긴다. 실제 대상 호스트에서 probe를 다시 통과해야 한다.
@@ -54,8 +54,8 @@ PRD의 최종 목표인 required checks 이후 squash auto-merge와 상시 서�
 
 ### 4.1 포함
 
-- Apple Silicon macOS(`arm64`)와 x64 Linux(`x86_64`)에서 각각 고정된 초기 지원 profile 1개
-- foreground 실행
+- Ubuntu Linux(`x86_64`)의 고정 초기 지원 profile 1개
+- 서비스 관리 아래 실행되는 tunnel의 foreground 자식 프로세스
 - 하나의 사전 승인된 disposable 대상 저장소
 - 전역 동시 작업 1개
 - Secure Tunnel이 직접 실행하는 stdio MCP writer
@@ -69,9 +69,9 @@ PRD의 최종 목표인 required checks 이후 squash auto-merge와 상시 서�
 ### 4.2 제외
 
 - HTTP `/mcp` listener와 별도 writer daemon
-- systemd와 LaunchAgent 상시 서비스
+- 독립 writer daemon과 macOS LaunchAgent; 상위 Core/tunnel의 Ubuntu 서비스 관리는 포함
 - Windows
-- 초기 지원 profile 밖의 추가 macOS/Linux 버전
+- macOS와 초기 Ubuntu profile 밖의 추가 Linux 버전
 - Intel Mac과 ARM Linux 등 초기 지원 대상 밖의 architecture
 - 복수 대상 저장소 또는 동시 작업
 - merge/auto-merge 기능과 merge용 credential
@@ -86,7 +86,7 @@ PRD의 최종 목표인 required checks 이후 squash auto-merge와 상시 서�
 ## 5. 목표 구조
 
 ```mermaid
-flowchart LR
+flowchart TD
     U[Web ChatGPT] --> O[OpenAI-hosted tunnel endpoint]
     O --> T[tunnel-client]
     T -->|stdio, tunnel key 제외| W[MCP writer]
@@ -131,7 +131,7 @@ flowchart LR
 공통 `SandboxBackend` 계약 아래 OS별 backend를 둔다.
 
 - Linux x86_64: Bubblewrap를 우선 후보로 사용한다.
-- Apple Silicon macOS arm64: Phase 0 spike에서 고정된 VM/container backend를 선택한다. `sandbox-exec` 또는 무격리 host 실행을 fallback으로 사용하지 않는다.
+- Apple Silicon macOS arm64: 후속 OS 확장 spike에서 VM/container backend를 선택한다. Ubuntu MVP의 선행 조건이 아니며 `sandbox-exec` 또는 무격리 host 실행을 fallback으로 사용하지 않는다.
 
 각 backend는 구현 전 ADR에서 정확한 version과 command profile을 고정하고 다음 startup probe를 모두 통과해야 한다.
 
@@ -203,10 +203,10 @@ ${XDG_CONFIG_HOME}/webgpt-git-writer/                   non-secret config
 ${XDG_STATE_HOME}/webgpt-git-writer/tasks/              task records/tombstones
 ${XDG_STATE_HOME}/webgpt-git-writer/audit/              append-only redacted audit
 ${XDG_RUNTIME_DIR}/webgpt-git-writer/                    locks/worktrees/temp
-Secret Service                                           credentials
+Protected credential store                               credentials
 ```
 
-macOS:
+macOS (후속 OS 확장의 배치 초안):
 
 ```text
 ~/Library/Application Support/WebGPTGitWriter/releases/<version>/  immutable artifacts
@@ -289,8 +289,8 @@ PUBLISHED_DRAFT 뒤의 명시적인 후속 변경은 새 revision으로 취급�
 - threat model, MCP contract, config schema 초안, test plan
 - 구현 호스트의 Git author와 문서 기준 커밋 확인
 - disposable target repository 식별자와 branch policy
-- Apple Silicon macOS version과 x64 Linux distribution 고정
-- Linux Bubblewrap와 macOS sandbox backend capability spike
+- 실제 Ubuntu version·architecture·서비스 실행 사용자 고정
+- 초기 Ubuntu의 Linux Bubblewrap capability spike; macOS는 후속 확장
 
 완료 조건:
 
@@ -331,13 +331,13 @@ PUBLISHED_DRAFT 뒤의 명시적인 후속 변경은 새 revision으로 취급�
 - 어떤 동작도 default/force/tag/delete push를 만들 수 없다.
 - diff snapshot 전체를 pagination으로 재구성하고 digest를 검증할 수 있다.
 
-### Phase 3 — macOS/Linux 격리 검사 실행
+### Phase 3 — Ubuntu 격리 검사 실행
 
 산출물:
 
 - 공통 `SandboxBackend` interface와 conformance suite
 - pinned Linux x86_64 Bubblewrap launcher와 startup probe
-- pinned macOS arm64 VM/container launcher와 startup probe
+- macOS용 공통 interface 유지; launcher와 startup probe는 후속 OS 범위
 - 서버가 계산하는 path/risk → mandatory suite mapping
 - timeout, resource/output cap, cancellation, descendant cleanup
 - secret/network/filesystem hostile fixture
@@ -346,8 +346,8 @@ PUBLISHED_DRAFT 뒤의 명시적인 후속 변경은 새 revision으로 취급�
 
 - target code가 GitHub/tunnel secret, home, keyring, host path를 읽지 못한다.
 - DNS/TCP/HTTP/Unix socket egress가 기본 차단된다.
-- 두 OS 중 해당 host의 sandbox가 없거나 불완전하면 check가 fail closed한다.
-- 동일 hostile fixture가 macOS와 Linux backend에서 모두 통과한다.
+- 실제 Ubuntu host의 sandbox가 없거나 불완전하면 check가 fail closed한다.
+- Ubuntu backend의 hostile fixture가 통과한다. macOS 추가 시 같은 fixture를 별도 통과한다.
 - 마지막 mutation 이후의 정확한 candidate만 publish 자격을 얻는다.
 
 ### Phase 4 — 격리 remote broker와 draft PR
@@ -368,15 +368,15 @@ PUBLISHED_DRAFT 뒤의 명시적인 후속 변경은 새 revision으로 취급�
 - merge command, merge token scope, bypass path가 존재하지 않는다.
 - secret sentinel이 log, error, MCP result, commit, PR에 나타나지 않는다.
 
-### Phase 5 — macOS/Linux 설치와 Secure Tunnel E2E
+### Phase 5 — Ubuntu 설치와 Secure Tunnel E2E
 
 산출물:
 
-- committed source로부터 `darwin-arm64`와 `linux-x64` reproducible artifact 생성
+- committed source로부터 초기 Ubuntu `linux-x64` reproducible artifact 생성
 - version/hash manifest, read-only atomic activation, rollback
-- macOS Keychain과 Linux Secret Service credential adapter
+- Ubuntu credential adapter와 무인 재시작 시 가용성 검증; Linux Secret Service 선택 시 로그인·잠금 해제 의존성 확인
 - `tunnel-client init`, `doctor`, `run` operator runbook
-- ChatGPT private developer-mode app 연결
+- ChatGPT custom MCP plugin의 private tunnel 연결
 - disposable repository live E2E
 
 완료 조건:
@@ -385,7 +385,8 @@ PUBLISHED_DRAFT 뒤의 명시적인 후속 변경은 새 revision으로 취급�
 - 변조된 artifact 실행이 거부되고 rollback이 성공한다.
 - writer process에 tunnel runtime key가 전달되지 않는다.
 - `/healthz`, `/readyz`, 두 permission plane, stdio tool 호출이 성공한다.
-- Apple Silicon macOS와 x64 Linux 각각에서 Web ChatGPT 요청 하나가 정확히 한 draft PR을 만들고 merge하지 않는다.
+- 고정 Ubuntu profile에서 Web ChatGPT 요청 하나가 정확히 한 draft PR을 만들고 merge하지 않는다.
+- 상위 tunnel/Core 서비스 재시작 후 상태를 대조하고 인증 필요·중복 실행을 구분한다.
 
 ### Phase 6 — Git Writer MVP 릴리스
 
@@ -398,7 +399,7 @@ PUBLISHED_DRAFT 뒤의 명시적인 후속 변경은 새 revision으로 취급�
 완료 조건:
 
 - 모든 release gate 통과
-- 고정된 `darwin-arm64`와 `linux-x64` profile이 같은 conformance suite를 통과
+- 고정된 Ubuntu `linux-x64` profile이 conformance suite를 통과
 - P0/P1 보안 finding 0건
 - audit 기록만으로 task, policy decision, checks, commit, PR을 재구성할 수 있다.
 
@@ -419,7 +420,7 @@ PUBLISHED_DRAFT 뒤의 명시적인 후속 변경은 새 revision으로 취급�
 
 ### Phase 8 — 운영 및 범위 확장
 
-- Linux systemd user service
+- 기본 Ubuntu 서비스 관리의 운영 고도화; 기본 상시 실행은 상위 Phase 2 및 내부 Phase 5에 포함
 - macOS Keychain/LaunchAgent와 path/ACL 적합성
 - 추가 macOS/Linux version, distribution, architecture
 - 복수 저장소와 제한된 동시성
@@ -437,7 +438,7 @@ PUBLISHED_DRAFT 뒤의 명시적인 후속 변경은 새 revision으로 취급�
 | Security | 항상 offline | hostile Git config, hook/filter, escape, secret canary, egress, process tree |
 | Crash/replay | 항상 offline | 각 atomic transition 중단, stale lock, duplicate call, reconciliation |
 | Live E2E | 명시적 opt-in, 릴리스 전 필수 | GitHub disposable repo, Secure Tunnel, ChatGPT app, draft PR |
-| OS conformance | MVP 릴리스 전 `darwin-arm64`/`linux-x64` 모두 필수 | credential store, path case, ACL, sandbox, process lifecycle |
+| OS conformance | MVP는 Ubuntu `linux-x64` 필수; 추가 OS는 별도 gate | credential store, path case, ACL, sandbox, process lifecycle |
 
 기본 테스트는 실제 GitHub, OpenAI, broker, 배포 endpoint, 유료 API 또는 LLM에 접속하면 실패해야 한다. live test는 별도 환경 변수와 disposable resource를 요구한다.
 
@@ -473,12 +474,12 @@ PUBLISHED_DRAFT 뒤의 명시적인 후속 변경은 새 revision으로 취급�
 
 ## 14. 바로 실행할 작업 순서
 
-- [ ] 상위 계획의 대화 MVP 완료와 Git Writer 착수 조건을 확인한다.
+- [ ] 상위 계획의 대화 MVP·Codex 우선 실행과 선택 Git Writer 착수 범위를 확인한다.
 - [ ] 개정 PRD의 Git Writer MVP/후속 단계 경계를 schema와 테스트로 구체화한다.
 - [ ] ADR 5종과 threat model/test plan을 작성한다.
 - [ ] 구현 호스트의 Git author와 원격 저장소를 확인하고 이 개정 이후의 기준 commit을 고정한다.
 - [ ] disposable GitHub target repo와 branch policy를 확정한다.
-- [ ] Linux x86_64 Bubblewrap와 macOS arm64 sandbox capability spike를 각각 통과시킨다.
+- [ ] 실제 Ubuntu x86_64 Bubblewrap capability spike를 통과시킨다. macOS는 후속 OS 확장 때 검증한다.
 - [ ] Phase 1의 package/schema/test skeleton을 만든다.
 - [ ] Phase 1부터 각 단계 완료 조건을 통과한 뒤 다음 단계로 이동한다.
 
@@ -489,7 +490,7 @@ PUBLISHED_DRAFT 뒤의 명시적인 후속 변경은 새 revision으로 취급�
 - 구현 호스트에서 사용할 Git commit author name/email
 - `https://github.com/firewine/webgpt`에 대응하는 실제 checkout/remote 연결
 - disposable E2E target `owner/repository`
-- 검증에 사용할 Apple Silicon Mac과 x86_64 Linux host
+- 검증에 사용할 실제 Ubuntu host·architecture·실행 사용자; Mac은 후속 확장 때 필요
 - Platform tunnel과 연결할 ChatGPT workspace
 - tunnel ID/runtime key 발급 권한
 - target repository의 실제 검사 suite
@@ -502,5 +503,16 @@ secret 값은 문서, 저장소, PR, prompt에 기록하지 않는다.
 - Chrome 프로필, 로그인 세션, 브라우저 제어 권한은 writer와 sandbox에 전달하지 않는다. 브라우저 연결기는 GitHub credential을 보유하지 않는다.
 - Browser/MCP 경로가 동시에 같은 작업을 수행하지 않도록 Core가 실행 주체와 lease를 고정한다. 연결 복구만으로 작업을 재전송하지 않는다.
 - Writer는 transport와 무관하게 동일한 정책을 강제한다. 사용자/웹 LLM이 submit한 결과는 실제 check 및 PR head 증거와 구분한다.
-- Writer 내부 Phase 0~6이 통과해야 상위 Phase 4의 Git Writer MVP를 완료한다. 내부 Phase 7 자동 병합과 Phase 8 상시 운영은 상위 Phase 6의 후속 범위이다.
+- Writer 내부 Phase 0~6이 통과해야 상위 Phase 4B의 선택 Git Writer MVP를 완료한다. 내부 Phase 7 자동 병합과 Phase 8 운영 고도화는 상위 Phase 6의 후속 범위이다. 기본 Ubuntu 상시 실행은 상위 Phase 2에서 제공한다.
+- Codex 세션과 Writer가 같은 workspace를 동시에 수정하지 않도록 Core lease를 공유한다. Codex 실행 성공을 이 모듈의 sandbox·broker 검증 통과로 간주하지 않는다.
 - 원본 Nhahan/WebGPT의 범용 terminal Worker를 이 모듈의 구현으로 그대로 채택하지 않는다. 본 문서의 제한된 Git 도구, sandbox, broker 경계를 유지한다.
+
+## 17. 변경 이력
+
+### v0.3 — 2026-10-29
+
+- Ubuntu 우선과 Codex 세션 우선 실행에 맞춰 Phase 4B 선택 모듈로 정리.
+- macOS 동시 릴리스 조건을 후속 확장으로 이동.
+- foreground 자식 프로세스와 상위 Ubuntu 서비스 관리의 범위 구분.
+- Ubuntu credential 재시작·Codex와의 workspace lease 통합 조건 추가.
+- 기존 격리·검증·draft PR 보장은 유지하고 실환경 검증은 NOT_RUN으로 유지.
