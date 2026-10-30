@@ -1,0 +1,17 @@
+{
+  "id": "muse-v1",
+  "version": 1,
+  "label": "Muse 기존 사이드 대화",
+  "service": "muse",
+  "identity": ["[data-testid=\"account-name\"]", "[data-testid=\"profile-button\"]"],
+  "agent": ["[data-testid=\"agent-name\"]", "header h1"],
+  "input": ["textarea[data-testid=\"chat-input\"]", "form textarea"],
+  "send": ["button[data-testid=\"send-button\"]", "form button[aria-label=\"Send message\"]"],
+  "ready": ["textarea[data-testid=\"chat-input\"]:not([disabled])", "form textarea:not([disabled])"],
+  "user": "[data-message-role=\"user\"]",
+  "assistant": "[data-message-role=\"assistant\"]",
+  "busy": "button[aria-label=\"Stop generating\"],[data-is-streaming=\"true\"]",
+  "sendAppearsAfterInput": true,
+  "thread": { "selector": "[data-hatch-link-entry-point]", "attribute": "data-hatch-link-entry-point", "jsonKey": "thread_id" },
+  "verification": "UNVERIFIED"
+}

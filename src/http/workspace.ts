@@ -116,9 +116,12 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     const discussionPath = /^\/api\/discussions\/([\w-]+)(\/control)?$/.exec(path);
     if (get && discussionPath && !discussionPath[2]) { json(res, 200, app.discussion(discussionPath[1]!)); return; }
     if (get && path === '/api/browser/pages') { json(res, 200, { text: await app.browser.pages() }); return; }
+    if (get && path === '/api/browser/discovery/pages') { json(res, 200, { pages: await app.browserDiscovery.pages(), presets: app.browserDiscovery.presets() }); return; }
     if (get && path === '/api/browser/snapshot') { json(res, 200, { text: await app.browser.snapshot(integer(Number(url.searchParams.get('pageId')), 0, 0, 1_000_000)) }); return; }
     if (req.method !== 'POST') throw new AppError('not_found', 404);
     const input = object(await body(req));
+    if (path === '/api/browser/discovery') { json(res, 200, await app.discoverBrowser(input)); return; }
+    if (path === '/api/browser/discovery/confirm') { json(res, 201, { id: await app.confirmBrowser(input, command(req)) }); return; }
     const residentReconcile = /^\/api\/rooms\/([\w-]+)\/turns\/([\w-]+)\/reconcile$/.exec(path);
     if (residentReconcile) { json(res, 200, app.residentRunner.reconcile(residentReconcile[1]!, residentReconcile[2]!, input, command(req))); return; }
     if (roomPath && !roomPath[3]) {

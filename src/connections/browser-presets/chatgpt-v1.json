@@ -1,0 +1,17 @@
+{
+  "id": "chatgpt-v1",
+  "version": 1,
+  "label": "ChatGPT 기존 대화",
+  "service": "chatgpt",
+  "identity": ["[data-testid=\"accounts-profile-button\"]", "[data-testid=\"profile-button\"]"],
+  "agent": ["header [data-testid=\"gpt-name\"]", "header h1"],
+  "input": ["#prompt-textarea"],
+  "send": ["button[data-testid=\"send-button\"]", "button[aria-label=\"Send prompt\"]"],
+  "ready": ["#prompt-textarea[contenteditable=\"true\"]", "textarea#prompt-textarea:not([disabled])"],
+  "user": "[data-message-author-role=\"user\"]",
+  "assistant": "[data-message-author-role=\"assistant\"]",
+  "busy": "button[data-testid=\"stop-button\"],button[aria-label=\"Stop generating\"]",
+  "sendAppearsAfterInput": true,
+  "thread": null,
+  "verification": "UNVERIFIED"
+}

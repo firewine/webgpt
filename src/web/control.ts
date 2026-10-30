@@ -1,6 +1,7 @@
 import type { Connection, Member, Discussion, ExecutionBinding, CodexJob, DurableEvent, Phase, MaterialPackage } from '../workspace/model.js';
 import { RoomView } from './room-view.js';
 import type { RoomSnapshot } from './room-view.js';
+import type { DiscoveryPage, DiscoveryResult } from '../connections/browser-discovery-model.js';
 type Snapshot = { cursor: number; connections: Connection[]; participants: Member[]; discussions: Pick<Discussion, 'id' | 'topic' | 'status' | 'phase' | 'revision' | 'createdAt' | 'updatedAt'>[];
   bindings: ExecutionBinding[]; jobs: CodexJob[]; browserPaused: boolean; grants: { id: string; participantId: string; discussionId: string; revoked: boolean; tools: string[] }[];
   capabilities: { sourceFetch: boolean; browserConfigured: boolean; noVncConfigured: boolean; codexConfigured: boolean };
@@ -15,6 +16,8 @@ function effortLabel(value: string): string { return effortOptions.find(o => o.v
 let cursor = 0; let refreshing = false; let again = false; let timer = 0; let choiceSignature = ''; let noticeTimer = 0;
 let materialSignature = '';
 let pendingMaterialSelection: string | null = null;
+let browserPages: DiscoveryPage[] = []; let browserCandidate: DiscoveryResult | null = null; let browserDiscoveryConnection = ''; let browserChoices = '';
+let browserDiscoveryRevision = 0;
 const phases: Record<Phase, string> = { independent: '초기안', cross_review: '상호 검토', verification: '검증', revision: '수정안', synthesis: '종합', summary_review: '종합안 검토' };
 const states: Record<string, string> = { running: '진행 중', paused: '일시정지', blocked: '확인 필요', completed: '완료', partial: '부분 완료', cancelled: '취소',
   prepared: '전송 준비', pending: '대기', failed: '실패', unconfirmed: '결과 미확인', stale: '이전 조건의 응답', connected: '연결됨', auth_required: '로그인 필요', unverified: '미확인', error: '연결 오류',
@@ -23,6 +26,7 @@ const errors: Record<string, string> = { authentication_required: '접속 키를
   material_path_not_allowed: '서버의 WJ_MATERIAL_ROOTS에서 허용한 파일·폴더만 읽을 수 있습니다.', material_path_protected: '인증 정보와 보호 파일은 참고 자료로 읽을 수 없습니다.', material_changed: '파일이 수집 후 변경됐습니다. 새 자료로 다시 읽어 주세요.', material_path_unavailable_or_link: '파일이 없거나 읽을 수 없는 링크 경로입니다.', material_regular_unlinked_file_required: '일반 파일만 지원하며 하드링크는 허용하지 않습니다.', material_file_too_large: '파일 하나는 32 KiB 이하여야 합니다.', material_package_too_large: '한 토의의 로컬 자료는 최대 8개 파일, 합계 64 KiB입니다.', material_context_budget_exceeded: '참고 자료를 포함한 입력이 문맥 한도를 넘습니다. 파일 수나 내용을 줄여 주세요.', material_utf8_required: 'UTF-8 텍스트 파일만 첨부할 수 있습니다.', material_text_required: '바이너리 또는 제어 문자가 있는 파일은 첨부할 수 없습니다.', material_directory_too_large: '항목이 100개 이하인 폴더를 선택해 주세요.', material_directory_required: '탐색할 폴더의 경로를 입력해 주세요.',
   invalid_reasoning_effort: '지원하는 사고 깊이 값을 선택해 주세요.', reasoning_effort_not_supported: '선택한 모델이 이 사고 깊이를 지원하지 않습니다. 설정을 바꾼 뒤 이어가세요.', reasoning_requires_oauth: '사고 깊이 요청 설정은 OAuth GPT 토커에 적용됩니다. 기존 dot·Muse는 해당 서비스에서 설정하세요.', participant_settings_require_pause: '일시정지 후 현재 응답이 확정되면 사고 깊이를 바꿀 수 있습니다.', oauth_account_mismatch: '선택한 로그인 계정이 지정한 계정과 다릅니다. 웹 GPT용 계정으로 로그인해 주세요.', isolated_login_unavailable: '현재 Chrome 도구가 분리된 로그인 공간을 지원하지 않습니다. 도구 설정을 확인해 주세요.',
   connection_not_ready: '먼저 연결과 모델 목록을 확인해 주세요.', browser_not_configured: '서버의 Chrome 연결 명령을 설정해 주세요.', browser_manual_control: 'Chrome 수동 조작을 마친 뒤 자동 입력을 재개해 주세요.',
+  browser_discovery_unsupported_dom: '이 화면은 프리셋으로 확인할 수 없습니다. 고급 연결에서 실제 선택자를 확인해 주세요.', browser_discovery_ambiguous: '입력란·계정·대화 후보가 여러 개입니다. 서버 Chrome에서 연결할 대화 하나를 확인해 주세요.', browser_discovery_draft_present: '작성 중인 초안이 있습니다. 초안을 보존했습니다. 서버 Chrome에서 직접 확인한 뒤 다시 탐지하세요.', browser_discovery_changed: '탐지 후 화면·초안·응답 상태가 달라졌습니다. 다시 확인해 주세요.', browser_discovery_expired: '탐지 결과가 만료됐습니다. 읽기 전용 확인을 다시 진행해 주세요.', browser_discovery_page_missing: '선택한 페이지 또는 프로필이 바뀌었습니다. 페이지 목록을 다시 확인해 주세요.', browser_discovery_confirmation_required: '프로필·계정·대화 ID가 맞는지 직접 확인해 주세요.', browser_binding_changed: '다른 화면에서 연결이 갱신됐습니다. 새 연결 상태를 확인해 주세요.', browser_identity_change_not_allowed: '등록한 계정·에이전트·대화는 갱신으로 바꿀 수 없습니다. 다른 대화는 새 연결을 사용하세요.',
   browser_turn_active: '진행 중인 Chrome 응답이 끝난 뒤 수동 조작을 시작할 수 있습니다.', browser_target_mismatch: '대화 주소 또는 계정 식별 문구가 일치하지 않습니다.',
   browser_selectors_invalid: '실제 입력란과 전송 버튼 선택자를 확인해 주세요.', browser_not_ready: 'Chrome 대화가 응답 가능한 상태인지 확인해 주세요.',
   reconciliation_required: '미확인 응답이나 실행 결과를 먼저 대조해 주세요.', workspace_not_allowed: '서버에서 허용한 작업 경로 안의 디렉터리를 등록해 주세요.',
@@ -69,10 +73,15 @@ function scheduleRefresh(): void { if (timer) return; timer = window.setTimeout(
 async function refresh(): Promise<void> {
   if (refreshing) { again = true; return; } refreshing = true;
   try {
-    state = await api<Snapshot>('/api/state'); cursor = Math.max(cursor, state.cursor);
+    const selection = selected; const snapshot = await api<Snapshot>('/api/state');
+    if (selection !== selected) { again = true; return; }
+    const discussion = selection && snapshot.discussions.some(d => d.id === selection) ? (await api<{ discussion: Discussion }>(`/api/discussions/${selection}`)).discussion : null;
+    // A connection/SSE refresh may have captured state before a just-created or
+    // newly chosen topic. Discard that view rather than erase the user's choice.
+    if (selection !== selected) { again = true; return; }
+    state = snapshot; cursor = Math.max(cursor, state.cursor); current = discussion;
     if (!viewChosen) { const saved = localStorage.getItem('wj.room.view'); view = saved && ['room', 'discussion', 'connections', 'execution'].includes(saved) ? saved as View : state.resident.enabled ? 'room' : 'discussion'; }
-    if (selected && state.discussions.some(d => d.id === selected)) current = (await api<{ discussion: Discussion }>(`/api/discussions/${selected}`)).discussion;
-    else { selected = ''; current = null; }
+    if (!current) selected = '';
     $('#login').hidden = true; $('#workspace').hidden = false; render(); await roomView.refresh(state); if (!stream) connect();
   } finally { refreshing = false; if (again) { again = false; scheduleRefresh(); } }
 }
@@ -217,7 +226,9 @@ function renderConnections(): void {
     const row = node('div', '', 'toolbar'); row.append(button('모델 확인', async () => { await api(`/api/connections/${c.id}/models`, {}); await refresh(); }));
     if (c.kind === 'openai-oauth') row.append(button('다시 로그인', async () => { showOAuth(await api('/api/connections/oauth', { label: c.label, connectionId: c.id, expectedEmail: c.expectedEmail })); }), button('이 계정 로그아웃', async () => { const result = await api<{ revoked: boolean }>(`/api/connections/${c.id}/logout`, {}); announce(result.revoked ? '계정 연결을 해제했습니다.' : '로컬 인증 정보를 지웠습니다. 원격 폐기 여부는 확인하지 못했습니다.'); await refresh(); }));
     if (c.kind === 'deepseek') row.append(button('API 키 갱신', () => modal('DeepSeek API 키 갱신', [{ name: 'key', label: '새 API 키', secret: true }], async values => { await api(`/api/connections/${c.id}/credential`, values); await refresh(); })));
-    if (c.kind === 'browser' && c.browser) { const browserBinding = c.browser; row.append(button('페이지·선택자 갱신', () => { const form = $<HTMLFormElement>('#browser-form'); const owner = form.closest('details')!; owner.open = true;
+    if (c.kind === 'browser' && c.browser) { const browserBinding = c.browser; row.append(button('기존 대화 다시 찾기', async () => {
+      $<HTMLDetailsElement>('#browser-connection-panel').open = true; await loadBrowserPages(); $<HTMLSelectElement>('#browser-discovery-connection').value = c.id; invalidateDiscovery(); $('#browser-discovery-form').scrollIntoView();
+    }), button('페이지·선택자 갱신', () => { const form = $<HTMLFormElement>('#browser-form'); const owner = form.closest('details')!; owner.open = true; $<HTMLDetailsElement>('#browser-connection-panel').open = true;
       let hidden = form.elements.namedItem('connectionId') as HTMLInputElement | null; if (!hidden) { hidden = node('input'); hidden.type = 'hidden'; hidden.name = 'connectionId'; form.append(hidden); } hidden.value = c.id;
       for (const [key, value] of Object.entries({ label: c.label, ...browserBinding, threadSelector: browserBinding.thread?.selector ?? '', threadAttribute: browserBinding.thread?.attribute ?? '', threadValue: browserBinding.thread?.value ?? '', threadJsonKey: browserBinding.thread?.jsonKey ?? '', sendAppearsAfterInput: !!browserBinding.sendAppearsAfterInput })) {
         const input = form.elements.namedItem(key) as HTMLInputElement | null; if (input) { if (input.type === 'checkbox') input.checked = value === true; else input.value = String(value); }
@@ -237,6 +248,8 @@ function renderConnections(): void {
     })); participants.append(card);
   }
   $('#browser-state').textContent = `${state.capabilities.browserConfigured ? 'Chrome 명령 설정됨' : 'Chrome 명령 미설정'} · ${state.browserPaused ? '수동 조작 중 · 자동 입력 잠김' : '자동 입력 가능'} · ${state.capabilities.noVncConfigured ? '화면 연결 설정됨' : '화면 연결 미설정'}`;
+  const browserSignature = JSON.stringify(state.connections.filter(c => c.kind === 'browser').map(c => [c.id, c.label, c.browser]));
+  if (browserSignature !== browserChoices) { browserChoices = browserSignature; selectOptions($('#browser-discovery-connection'), state.connections.filter(c => c.kind === 'browser'), '새 연결'); }
   const grants = $('#grants-list'); grants.replaceChildren(); for (const grant of state.grants) { const row = node('div', '', 'toolbar'); row.append(node('span', `${grant.participantId} · ${grant.revoked ? '폐기됨' : grant.tools.join(', ')}`, 'small')); if (!grant.revoked) row.append(button('폐기', async () => { await api('/api/grants/revoke', { id: grant.id }); await refresh(); })); grants.append(row); }
 }
 function showOAuth(result: { authorizationUrl: string; connectionId: string }): void {
@@ -284,6 +297,33 @@ form('#browser-form', async (values, form) => {
     ...(hasThread ? { thread: { selector: threadSelector, attribute: threadAttribute, value: threadValue, ...(threadJsonKey ? { jsonKey: threadJsonKey } : {}) } } : {}) } });
   form.querySelector('[name=connectionId]')?.remove(); await refresh();
 });
+function invalidateDiscovery(): void { browserDiscoveryRevision++; browserCandidate = null; browserDiscoveryConnection = ''; $('#browser-discovery-result').hidden = true; $<HTMLFormElement>('#browser-discovery-confirm-form').reset(); }
+async function loadBrowserPages(): Promise<void> {
+  invalidateDiscovery();
+  const data = await api<{ pages: DiscoveryPage[] }>('/api/browser/discovery/pages'); browserPages = data.pages;
+  selectOptions($('#browser-discovery-page'), data.pages.map(p => ({ id: String(p.pageId), label: `페이지 ${p.pageId} · ${p.profile === 'default' ? '서버 기본 프로필' : p.profile} · ${p.title || p.url}` })), '연결할 기존 대화를 선택하세요');
+  $('#browser-discovery-state').textContent = data.pages.length ? `허용된 페이지 ${data.pages.length}개 · 페이지와 프로필을 직접 선택하세요.` : '허용된 기존 대화 페이지가 없습니다. 서버 Chrome에서 기존 대화를 열어 주세요.';
+}
+for (const id of ['#browser-discovery-page', '#browser-discovery-preset', '#browser-discovery-connection']) $(id).addEventListener('change', invalidateDiscovery);
+form('#browser-discovery-form', async values => {
+  invalidateDiscovery(); const revision = browserDiscoveryRevision;
+  const page = browserPages.find(p => String(p.pageId) === values.pageId); if (!page) throw new Error('browser_discovery_page_missing');
+  const candidate = await api<DiscoveryResult>('/api/browser/discovery', { pageId: page.pageId, profile: page.profile, presetId: values.presetId, ...(values.connectionId ? { connectionId: values.connectionId } : {}) });
+  if (revision !== browserDiscoveryRevision) return;
+  $('#browser-discovery-state').textContent = candidate.status === 'ready' ? '기존 대화를 확인했습니다.' : errors[candidate.reason ?? ''] ?? '이 화면을 자동으로 확인할 수 없습니다. 고급 연결을 사용하세요.';
+  const evidence = $('#browser-discovery-evidence'); evidence.replaceChildren();
+  for (const text of [`프로필 · ${candidate.page.profile === 'default' ? '서버 기본 프로필' : candidate.page.profile}`, `주소 · ${candidate.page.url}`, `계정 식별 문구 · ${candidate.identityText ?? '확인 불가'}`, `에이전트 표시 · ${candidate.agentLabel ?? '확인 불가'}`, `대화 ID · ${candidate.threadValue ?? '확인 불가'}`, `관측 · ${time(candidate.observedAt)}`]) evidence.append(node('p', text));
+  $('#browser-discovery-result').hidden = false; $('#browser-discovery-confirm-form').hidden = candidate.status !== 'ready';
+  if (candidate.status === 'ready') {
+    browserCandidate = candidate; browserDiscoveryConnection = values.connectionId ?? '';
+    const existing = state?.connections.find(c => c.id === values.connectionId); ($<HTMLFormElement>('#browser-discovery-confirm-form').elements.namedItem('label') as HTMLInputElement).value = existing?.label ?? candidate.agentLabel ?? '';
+  }
+});
+form('#browser-discovery-confirm-form', async values => {
+  if (!browserCandidate?.id) throw new Error('browser_discovery_expired');
+  await api('/api/browser/discovery/confirm', { discoveryId: browserCandidate.id, label: values.label, confirmed: values.confirmed === 'on', ...(browserDiscoveryConnection ? { connectionId: browserDiscoveryConnection } : {}) });
+  invalidateDiscovery(); announce('기존 대화를 연결했습니다. 참여자를 등록해 방에 초대할 수 있습니다.'); await refresh();
+});
 form('#binding-form', async values => { await api('/api/bindings', { ...values, allowWrite: values.allowWrite === 'on' }); await refresh(); });
 form('#job-form', async values => { await api('/api/jobs', values); await refresh(); });
 form('#grant-form', async values => { const tools = ['task_get', 'context_get', 'result_submit', 'capabilities_get', ...(values.codex === 'on' ? ['codex_send', 'codex_status', 'codex_result', 'codex_cancel'] : [])];
@@ -320,5 +360,6 @@ click('#logout', async () => { await api('/api/logout', {}); lock(); });
 click('#browser-manual', async () => { await api('/api/browser/control', { paused: true }); await refresh(); });
 click('#browser-automatic', async () => { await api('/api/browser/control', { paused: false }); await refresh(); });
 click('#browser-pages', async () => { $('#browser-output').textContent = (await api<{ text: string }>('/api/browser/pages')).text; });
+click('#browser-discovery-pages', loadBrowserPages);
 click('#browser-snapshot', async () => { const id = new FormData($<HTMLFormElement>('#browser-form')).get('pageId'); $('#browser-output').textContent = (await api<{ text: string }>(`/api/browser/snapshot?pageId=${encodeURIComponent(String(id))}`)).text; });
 void refresh().catch(error => { if (!(error instanceof Error) || error.message !== 'authentication_required') report(error); });

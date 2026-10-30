@@ -10,6 +10,8 @@
 
 로컬 참고 파일의 읽기 전용 첨부와 연결·권한 현황도 지원합니다. [구현·검증 기록](docs/implementation/local-materials-capabilities-20261030.md)과 [설정 절차](docs/operations-runbook.md)를 확인하세요. 로컬 파일 공유는 기본 비활성이며 별도 `WJ_MATERIAL_ROOTS`와 사용자의 첨부 선택이 필요합니다.
 
+기존 dot·Muse 연결은 페이지·프로필 선택과 읽기 전용 탐지를 지원합니다. 화면의 계정·대화 ID를 확인한 뒤 기존 probe로 저장하며, 이미 등록한 수동 선택자는 보존합니다. 탐지 불가 시 고급 수동 연결을 사용합니다. 실제 서비스 프리셋 적합성·실계정 왕복은 미검증입니다. [페이즈 4 실행 기록](docs/implementation/phase4-browser-discovery-20261030.md)을 확인하세요.
+
 Node.js 24.x / npm 11.x가 필요합니다. 초기 설치 이후 모의 참여자로 실행하는 데 실제 AI 계정은 필요하지 않습니다.
 
 ```bash
@@ -86,7 +88,7 @@ npx playwright install --with-deps chromium
 npm run test:browser
 ```
 
-페이즈 3 기준 Node 검사 118개와 실제 Chromium/MCP 검사 15개가 통과했습니다. Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. browser 검사 중 설치된 Chrome DevTools MCP 검사는 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
+페이즈 4 기준 Node 검사 132개와 실제 Chromium/MCP 검사 21개가 통과했습니다. Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. browser 검사 중 설치된 Chrome DevTools MCP 검사는 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
 
 ```bash
 npm install --no-save --package-lock=false @openai/codex@0.165.0 chrome-devtools-mcp@1.12.0
