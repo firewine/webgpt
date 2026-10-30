@@ -21,7 +21,10 @@ test('owner UI: responsive topic discussion, pause/revise/resume, persisted comp
     await page.screenshot({ path: `test-results/workspace-comparison-${viewport.width}.png`, fullPage: true });
     await page.getByRole('button', { name: '주장과 근거', exact: true }).click(); assert.match(await page.locator('#discussion-content').textContent(), /미실행/);
     await page.reload(); await page.waitForFunction(() => document.querySelector('#discussion-state .badge')?.textContent === '완료'); assert.equal(await page.locator('#discussion-title').textContent(), topic);
-    await page.locator('[data-view=connections]').click(); assert.equal(await page.locator('#oauth-form').isVisible(), true); await page.locator('[data-view=execution]').click(); assert.equal(await page.locator('#binding-form').isVisible(), true);
+    await page.locator('[data-view=connections]').click(); assert.equal(await page.locator('#oauth-form').isVisible(), true);
+    const viewer = new URL(await page.locator('#browser-link').getAttribute('href'), url);
+    assert.equal(new URL(viewer.searchParams.get('path'), viewer).pathname, '/browser/websockify');
+    await page.locator('[data-view=execution]').click(); assert.equal(await page.locator('#binding-form').isVisible(), true);
     assert.deepEqual(errors, []); assert.deepEqual(external, []); await page.close();
   }
 });

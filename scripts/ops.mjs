@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile, chmod, access } from 'node:fs/promises';
-import { join, resolve, isAbsolute } from 'node:path';
+import { dirname, join, resolve, isAbsolute } from 'node:path';
 import { homedir, platform, arch } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -28,7 +28,8 @@ try {
     if (platform() !== 'linux') throw new Error('The user service installer supports Linux only.');
     await access(join(root, 'dist/server/main.js'));
     const directory = join(homedir(), '.config', 'systemd', 'user'); await mkdir(directory, { recursive: true, mode: 0o700 });
-    const unit = (description, script) => `[Unit]\nDescription=${description}\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nWorkingDirectory=${quote(root)}\nExecStart=${quote(process.execPath)} ${quote(`--env-file-if-exists=${join(root, '.env')}`)} ${quote(join(root, script))}\nEnvironment=DISPLAY=:99\nRestart=on-failure\nRestartSec=3\nTimeoutStopSec=45\nUMask=0077\nNoNewPrivileges=true\n\n[Install]\nWantedBy=default.target\n`;
+    const servicePath = `${dirname(process.execPath)}:/usr/local/bin:/usr/bin:/bin`;
+    const unit = (description, script) => `[Unit]\nDescription=${description}\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nWorkingDirectory=${root.replaceAll('%', '%%')}\nExecStart=${quote(process.execPath)} ${quote(`--env-file-if-exists=${join(root, '.env')}`)} ${quote(join(root, script))}\nEnvironment=DISPLAY=:99\nEnvironment=${quote(`PATH=${servicePath}`)}\nRestart=on-failure\nRestartSec=3\nTimeoutStopSec=45\nUMask=0077\nNoNewPrivileges=true\n\n[Install]\nWantedBy=default.target\n`;
     for (const [name, script] of [['webjjoku', 'dist/server/main.js'], ['webjjoku-desktop', 'scripts/desktop.mjs']]) {
       await writeFile(join(directory, `${name}.service`), unit(name, script), { mode: 0o600 });
     }

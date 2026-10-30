@@ -2,20 +2,22 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | v0.4 — Ubuntu 로컬 로그인·모의 토론 PASS, 실계정 릴리스 검증 대기 |
+| 상태 | v0.5 — Ubuntu 서비스·HTTPS·noVNC PASS, 기기·실계정 릴리스 검증 대기 |
 | 작성일 | 2026-10-29 (KST) |
 | 개정일 | 2026-10-30 (KST) |
-| 기준 | [개발 계획서](./development-plan.md)의 v0.6 상태와 PR #1~5 병합 결과 |
-| 기준 main | `ad88ef680e114070b90b909890d5d6b3a11a308d` |
+| 기준 | [개발 계획서](./development-plan.md)의 v0.7 상태와 PR #1~6 병합 결과 |
+| 기준 main | `07aa852cb9fed29c3cb8be67ac492356d6a45cc9` |
 | 제품 범위 | Tailscale 웹 접속, 여러 GPT OAuth 계정·dot·Muse·API 모델의 능동 토론·검증·비교 |
-| 다음 작업 | 구현된 작업실의 Ubuntu 배포 → 실계정 혼합 토론 → 실세션 Codex 검증 |
+| 다음 작업 | 다른 Tailnet 기기 확인 → 실계정 연결·혼합 토론 → 실세션 Codex 검증 |
 | PR 처리 | 작업별 브랜치와 검토 가능한 PR로 분리; 병합은 사용자가 수행 |
 
 ## 1. 기준과 실행 원칙
 
-PR #1~5가 main에 병합됐다. 전체 개발 지시로 연결 adapter·영속 Core·토론 UI·MCP·Codex 실행을 통합 구현했다. 사용자 Ubuntu의 실제 4090 앱 로그인·모의 토론·호스트 격리까지 확인했으며 HTTPS·실계정·실세션 검증은 남아 있다. [통합 구현 기록](./implementation/wj-002-015.md)과 [Ubuntu 재개 기록](./implementation/ubuntu-readiness-20261030.md)을 함께 따른다. 이 문서는 기존 Phase 0~6을 구현 작업으로 나눈 실행 순서다. 인증·대화·운영·Codex의 상세 계약은 각 원문을 따른다.
+PR #1~6이 main에 병합됐다. 전체 개발 지시로 연결 adapter·영속 Core·토론 UI·MCP·Codex 실행을 통합 구현했다. 사용자 Ubuntu의 실제 4090 앱 로그인·모의 토론·호스트 격리, 이후 승인한 systemd·HTTPS·noVNC 적용을 확인했다. 다른 기기·실계정·실세션 검증은 남아 있다. [통합 구현 기록](./implementation/wj-002-015.md), [Ubuntu 재개 기록](./implementation/ubuntu-readiness-20261030.md), [운영 적용 기록](./implementation/ubuntu-services-20261030.md)을 함께 따른다. 이 문서는 기존 Phase 0~6을 구현 작업으로 나눈 실행 순서다. 인증·대화·운영·Codex의 상세 계약은 각 원문을 따른다.
 
 **실환경 검증은 연결 → 혼합 토론 → Codex 환류 순서다.** 실제 계정·Ubuntu 접근이 없는 동안 독립 구현과 fixture 검증을 진행했다. 이제 구현된 UI에서 각 연결의 실응답을 확인하고 N인 토론·근거·비교를 판정한다.
+
+2026-10-30 다음 단계 승인으로 [상시 운영·HTTPS·원격 Chrome](./implementation/ubuntu-services-20261030.md)을 적용했다. 서버에서의 HTTPS·noVNC 입력·서비스 재시작은 PASS이며, 다른 기기·실제 호스트 재부팅·계정·Codex turn은 이 결과로 완료 판정하지 않는다.
 
 - 작업 ID는 실행 순서와 의존성을 추적하는 식별자이며 실제 GitHub PR 번호가 아니다. 한 작업을 기본 PR 단위로 삼되 규모가 커지면 논리적으로 분리한다.
 - 기본 진행은 아래 표의 번호순이다. 앞 작업의 외부 인증·서버 준비가 막히면 선행 조건이 충족된 독립 작업이나 offline fixture를 진행한다.

@@ -2,7 +2,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | v0.6 — Ubuntu 로컬 로그인·모의 토론 PASS, HTTPS·실계정·실세션 검증 대기 |
+| 상태 | v0.7 — Ubuntu 서비스·HTTPS·noVNC·모의 토론 PASS, 기기·실계정·실세션 검증 대기 |
 | 최초 작성일 | 2026-08-15 |
 | 개정일 | 2026-10-30 (KST) |
 | 저장소 | [firewine/webgpt](https://github.com/firewine/webgpt) |
@@ -52,17 +52,18 @@ v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위�
 
 2026-10-30 Ubuntu 개발 재개 점검 기준:
 
-- 기준 `main`: `ad88ef680e114070b90b909890d5d6b3a11a308d`. PR #1~5가 병합됐고 이 merge commit의 GitHub `workspace` Check도 success로 확인했다.
+- 기준 `main`: `07aa852cb9fed29c3cb8be67ac492356d6a45cc9`. PR #1~6이 사용자 병합됐다. 이전 `ad88ef6` merge commit의 GitHub `workspace` Check success는 재개 기록에서 확인한 결과다.
 - 사용자의 전체 개발 지시에 따라 WJ-002~011, WJ-013의 도구 경로, WJ-014~015의 독립 구현을 하나의 실행 가능한 작업실에 연결했다. [구현 기록](./implementation/wj-002-015.md)에 범위별 증거를 남겼다.
 - strict TypeScript·빌드와 Node 검사 39개, 실제 Chromium 브라우저 검사 4개를 통과했다. 설치한 Chrome DevTools MCP 1.12.0의 실제 도구 왕복과 Codex CLI 0.165.0의 생성 schema도 확인했다.
 - 사용자 Ubuntu의 기존 앱은 `127.0.0.1:4090`에서 실행 중이다. 소유자 로그인·모의 2인 토론 12회 발언·비교·새로고침 복구, Node 검사 39개, 시스템 Chrome 156의 브라우저 검사 3개와 추가 MCP 단독 검사 1개, Codex schema·호스트 bubblewrap 격리를 확인했다. [실환경 재개 기록](./implementation/ubuntu-readiness-20261030.md)에 명령·판정·한계를 남겼다.
-- OAuth/DeepSeek 응답·dot 역할·Codex 실행 검사는 fixture다. 실제 계정 호출, Tailnet 기기 접속, 사용자 Codex 세션 실행은 하지 않았다. systemd·Serve·원격 Chrome은 아직 준비 전이며 WJ-012/MVP-1 및 실세션 MVP-2는 NOT_RUN이다.
+- 다음 단계 승인 후 systemd 앱·desktop·linger·HTTPS 8443을 적용했고 실제 HTTPS 로그인·SSE·noVNC 키 입력·서비스 재시작과 복구를 확인했다. nvm PATH·systemd 경로 파싱·Wayland 상속·noVNC 경로 오류를 고쳤으며 Node 검사 40개와 브라우저 검사 4개가 통과했다. [운영 적용 기록](./implementation/ubuntu-services-20261030.md)을 따른다.
+- OAuth/DeepSeek 응답·dot 역할·Codex 실행 검사는 fixture다. 실제 계정 호출, 다른 Tailnet 기기 접속, 호스트 재부팅, 사용자 Codex 세션 실행은 하지 않았다. WJ-012/MVP-1 및 실세션 MVP-2는 NOT_RUN이다.
 - 외부 계정·호스트에 의존하는 검증은 [운영 절차](./operations-runbook.md)의 순서로 수행한다. MCP Events와 Muse Connector는 별도 capability 검증 전까지 비활성이며 browser 완료 관측을 기본 경로로 쓴다.
 
 | 항목 | 현재 판정 | 남은 증거 |
 | --- | --- | --- |
 | WJ-001 최소 프로젝트 | PASS / PR #3 병합 | [기존 구현 기록](./implementation/wj-001.md) 유지 |
-| Ubuntu / Tailscale / 웹 클라이언트 | 실제 Ubuntu 4090 앱 로그인·모의 토론 PASS, Tailscale 연결 확인 | systemd·Serve·noVNC 배치, 인증서·다른 기기·재부팅 |
+| Ubuntu / Tailscale / 웹 클라이언트 | systemd·linger·실제 HTTPS·SSE·noVNC 입력·서비스 재시작 PASS | 다른 기기·실제 로그아웃·호스트 재부팅 |
 | GPT OAuth 다중 계정 | 계정별 OAuth/vault/Models/Responses 구현·fixture PASS | 실제 2계정 등록·모델·완료 응답·refresh |
 | DeepSeek API | 모델 발견·stream·usage 구현·fixture PASS | 허가된 key·실제 응답 |
 | Chrome / dot / Muse | DOM bridge·binding 구현, 실제 MCP+Chromium fixture PASS | 실제 기존 agent·로그인·선택자·대화 왕복 |
