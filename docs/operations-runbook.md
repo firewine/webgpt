@@ -83,6 +83,8 @@ Chrome/VNC/CDP를 Tailnet에 직접 열지 않는다. 예제 VNC는 인증된 ga
 
 계정·주소·입력란·완료 상태가 맞아야 연결된다. 사용자가 쓰던 초안은 덮어쓰지 않으며 각 요청의 marker/receipt와 그 뒤 응답을 대조한다. Chrome 재시작으로 page ID가 바뀌거나 DOM이 바뀌면 `페이지·선택자 갱신`을 사용한다. 기존 계정·agent·대화 주소 변경은 갱신으로 우회할 수 없다. 미확인 turn은 먼저 원래 대화에서 대조한다.
 
+Muse의 사이드 채팅처럼 같은 주소를 사용하는 화면은 `같은 주소를 쓰는 사이드 채팅 식별`에서 실제 대화 ID와 DOM 확인 선택자·속성·선택 JSON 키를 등록한다. ID가 사라지거나 바뀌면 입력 전과 클릭 직전에 거절한다. 갱신으로 등록한 대화 ID를 변경·제거할 수 없다. 입력 후 전송 버튼이 생성되는 화면은 해당 옵션을 명시하고 실제 DOM으로 검증한다. [실제 Muse 연결 기록](implementation/muse-thread-binding-20261030.md)은 연결·참여자 등록과 실응답 완료를 구분한다.
+
 ## 4. Codex 실행
 
 Codex 로그인은 서버의 실행 OS 사용자 환경에서 별도로 완료한다. `WJ_WORKSPACE_ROOTS` 안의 Git 작업 디렉터리와 기존 Codex thread ID를 UI에서 등록한다. `.git` branch, canonical cwd, host, OS user와 thread metadata를 확인한다. 코드 수정은 main/master가 아닌 작업 브랜치에서만 허용된다.

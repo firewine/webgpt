@@ -69,6 +69,8 @@ dot과 Muse는 각자의 실제 기존 agent·대화에 연결한다. 일반 GPT
 
 브라우저 계정·프로필·agent·대화 식별과 OAuth의 account registration은 서로 다른 binding이다. 같은 계정이라는 이유만으로 대화 맥락이나 credential을 섞지 않는다. dot·Muse가 토론에 포함되지 않아도 OAuth GPT와 API 모델만으로 새 토론을 시작할 수 있다.
 
+2026-10-30 사용자가 지정한 실제 Muse 사이드 채팅의 DOM thread ID를 고정해 연결·참여자를 등록했다. URL이 같아도 thread가 다르면 전송을 거절하며, 입력 후 생성되는 전송 버튼과 분할 응답을 처리한다. [실제 연결 기록](./implementation/muse-thread-binding-20261030.md)에 정적 probe·등록·fixture 결과를 남겼다. 실제 모델 응답·혼합 토론은 아직 NOT_RUN이다.
+
 ## 4. DeepSeek 및 API 참여자
 
 첫 API adapter는 DeepSeek로 한다. [공식 안내](https://api-docs.deepseek.com/)의 API key 인증과 OpenAI 호환 요청 형식을 사용하되 OpenAI OAuth adapter와 인증·파서를 공유하지 않는다. [대화 API](https://api-docs.deepseek.com/api/create-chat-completion/)의 `messages`·stream과 [모델 목록](https://api-docs.deepseek.com/api/list-models/)을 기준으로 지원 모델·기능을 확인한다. 특정 최신 모델명·가격을 코드 상수로 추정하지 않는다.
