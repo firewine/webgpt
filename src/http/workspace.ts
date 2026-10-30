@@ -77,6 +77,7 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
       res.on('close', () => upstream.destroy()); upstream.end(); return;
     }
     if (get && path === '/api/state') { json(res, 200, app.snapshot()); return; }
+    if (get && path === '/api/capabilities') { json(res, 200, await app.capabilities()); return; }
     if (get && path === '/api/events') {
       let cursor = Number(req.headers['last-event-id'] ?? url.searchParams.get('after') ?? '0');
       if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > app.store.cursor()) throw new AppError('invalid_cursor', 409);
@@ -104,6 +105,8 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     if (get && path === '/api/browser/snapshot') { json(res, 200, { text: await app.browser.snapshot(integer(Number(url.searchParams.get('pageId')), 0, 0, 1_000_000)) }); return; }
     if (req.method !== 'POST') throw new AppError('not_found', 404);
     const input = object(await body(req));
+    if (path === '/api/materials') { json(res, 201, { id: app.prepareMaterials(input, command(req)) }); return; }
+    if (path === '/api/materials/list') { json(res, 200, app.materials.list(input.path)); return; }
     if (path === '/api/logout') { res.setHeader('Set-Cookie', access.logout(req)); json(res, 200, { ok: true }); return; }
     if (path === '/api/discussions') { json(res, 201, { id: app.engine.create(input, command(req)) }); return; }
     if (discussionPath?.[2]) { app.engine.control(discussionPath[1]!, input, command(req)); json(res, 200, { ok: true }); return; }

@@ -5,6 +5,7 @@ import type { Checkpoint, Discussion, DiscussionTurn, Evidence, Phase, Task, Wor
 import { AppError, code, digest, id, integer, now, object, string, strings } from './util.js';
 import { parseReply, promptFor } from './prompts.js';
 import { reasoningEffort } from './settings.js';
+import type { LocalMaterials } from './materials.js';
 
 interface Executor { submit(input: { bindingId: string; prompt: string; requestId: string; discussionId: string; taskId: string; revision: number; maxDurationMs?: number }): string; kick?(): void }
 export class DiscussionEngine {
@@ -13,6 +14,7 @@ export class DiscussionEngine {
   private stopping = false;
   private abort: AbortController | null = null;
   executor: Executor | null = null;
+  materials: LocalMaterials | null = null;
   constructor(private readonly store: Store, private readonly providers: Pick<Providers, 'complete'>,
     private readonly options: { sourceFetch: boolean; turnTimeoutMs: number }, private readonly sourceReader = fetchSource) {}
 
@@ -47,6 +49,15 @@ export class DiscussionEngine {
         }
         return structuredClone(member);
       });
+      const packageIds = [...new Set(strings(body.materialPackageIds ?? [], 8))];
+      const packages = packageIds.map(pid => {
+        const pack = state.materialPackages?.find(p => p.id === pid);
+        if (!pack) throw new AppError('material_package_not_found', 404); return pack;
+      });
+      if (packages.length) {
+        if (!this.materials) throw new AppError('materials_not_configured', 409);
+        this.materials.verify(packages);
+      }
       const d: Discussion = { id: id('discussion'), topic: string(body.topic, 5000), materials: string(body.materials ?? '', 20_000, true),
         criteria: string(body.criteria ?? '결론, 근거, 실현 가능성, 불확실성', 2000), revision: 1, members, excludedIds: [],
         contexts: members.map(p => ({ participantId: p.id, generation: 1, checkpointId: null, history: [], observation: {
@@ -58,11 +69,19 @@ export class DiscussionEngine {
           maxTokens: integer(limits.maxTokens, 100_000, 1000, 1_000_000), maxToolJobs: integer(limits.maxToolJobs, 2, 0, 8) },
         used: { requests: 0, activeMs: 0, inputTokens: 0, outputTokens: 0, unknownUsage: 0, toolJobs: 0 },
         tasks: [], turns: [], claims: [], evidence: [], checkpoints: [], interventions: [],
-        executionBindingId: body.executionBindingId ? string(body.executionBindingId) : null };
+        executionBindingId: body.executionBindingId ? string(body.executionBindingId) : null, materialPackageIds: packageIds };
       if (d.executionBindingId && !state.bindings.some(b => b.id === d.executionBindingId && b.status === 'ready')) throw new AppError('execution_binding_not_ready', 409);
       if (d.materials) d.evidence.push({ id: id('evidence'), revision: 1, claimIds: [], participantId: null, taskId: null,
         kind: 'user_material', source: '사용자 제공 자료', text: d.materials, observedAt: now(), digest: digest(d.materials), status: 'reported', reason: null });
-      d.tasks = members.map(p => taskFor(d, p.id, 'independent', 1)); state.discussions.push(d);
+      for (const pack of packages) for (const file of pack.files) {
+        const { text, identity: _identity, ...metadata } = file;
+        d.evidence.push({ id: id('evidence'), revision: 1, claimIds: [], participantId: null, taskId: null,
+          kind: 'user_material', source: file.path, text, digest: file.digest, observedAt: file.observedAt,
+          status: 'observed', reason: 'local_snapshot_not_claim_verification', material: { ...metadata, packageId: pack.id } });
+      }
+      d.tasks = members.map(p => taskFor(d, p.id, 'independent', 1));
+      if (d.tasks.some(t => promptFor(d, t).length > 180_000)) throw new AppError('material_context_budget_exceeded', 413);
+      state.discussions.push(d);
       emit({ type: 'discussion.created', discussionId: d.id, data: { participantIds, revision: d.revision } }); return d.id;
     }, { id: requestId, input: { action: 'create', body } });
     this.kick(); return result;

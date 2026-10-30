@@ -5,7 +5,7 @@ export interface WorkspaceConfig {
   stateDir: string; origin: string; accessToken: string | undefined; turnTimeoutMs: number;
   chromeCommand: string[] | null; codexCommand: string[]; workspaceRoots: string[];
   noVncPort: number | null; sourceFetch: boolean; oauthPort: number;
-  chromeProfileDir: string;
+  chromeProfileDir: string; materialRoots: string[];
 }
 export function loadWorkspaceConfig(env: NodeJS.ProcessEnv = process.env): WorkspaceConfig {
   const errors: string[] = [];
@@ -37,11 +37,13 @@ export function loadWorkspaceConfig(env: NodeJS.ProcessEnv = process.env): Works
   if (!codexCommand.length) errors.push('WJ_CODEX_COMMAND');
   const workspaceRoots = array('WJ_WORKSPACE_ROOTS', []);
   if (workspaceRoots.some(x => !isAbsolute(x))) errors.push('WJ_WORKSPACE_ROOTS');
+  const materialRoots = array('WJ_MATERIAL_ROOTS', []);
+  if (materialRoots.some(x => !isAbsolute(x))) errors.push('WJ_MATERIAL_ROOTS');
   const turnTimeoutMs = num('WJ_TURN_TIMEOUT_MS', 300_000, 1000, 1_800_000);
   const oauthPort = num('WJ_OAUTH_PORT', 1455, 1024, 65535);
   const noVncPort = env.WJ_NOVNC_PORT ? num('WJ_NOVNC_PORT', 6080, 1024, 65535) : null;
   if (env.WJ_SOURCE_FETCH && !['true', 'false'].includes(env.WJ_SOURCE_FETCH)) errors.push('WJ_SOURCE_FETCH');
   if (errors.length) throw new ConfigError(errors);
   return { stateDir, origin, accessToken: env.WJ_ACCESS_TOKEN, turnTimeoutMs, chromeCommand: chrome.length ? chrome : null,
-    codexCommand, workspaceRoots, noVncPort, sourceFetch: env.WJ_SOURCE_FETCH === 'true', oauthPort, chromeProfileDir };
+    codexCommand, workspaceRoots, noVncPort, sourceFetch: env.WJ_SOURCE_FETCH === 'true', oauthPort, chromeProfileDir, materialRoots };
 }

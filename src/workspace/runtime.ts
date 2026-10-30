@@ -12,11 +12,14 @@ import { BrowserBridge, validateBinding } from '../connections/browser.js';
 import { DiscussionEngine, findDiscussion } from './engine.js';
 import { CodexExecutor } from '../execution/codex.js';
 import { reasoningEffort } from './settings.js';
+import { LocalMaterials, materialMetadata } from './materials.js';
+import { inspectCapabilities } from './capabilities.js';
 
 export class Workspace {
   readonly store: Store; readonly vault: Vault; readonly oauth: OAuthService; readonly browser: BrowserBridge;
   readonly providers: Providers; readonly engine: DiscussionEngine; readonly codex: CodexExecutor;
   readonly accessHash: string;
+  readonly materials: LocalMaterials;
   constructor(readonly config: WorkspaceConfig, fakeDelay = 80) {
     this.store = new Store(config.stateDir);
     this.vault = new Vault(join(config.stateDir, 'credentials'));
@@ -33,6 +36,8 @@ export class Workspace {
     this.browser = new BrowserBridge(this.store, config.chromeCommand);
     this.providers = new Providers(this.store, this.vault, this.oauth, this.browser, fetch, fakeDelay);
     this.engine = new DiscussionEngine(this.store, this.providers, config);
+    this.materials = new LocalMaterials(config.materialRoots, [config.stateDir, config.chromeProfileDir]);
+    this.engine.materials = this.materials;
     mkdirSync(config.chromeProfileDir, { recursive: true, mode: 0o700 });
     this.codex = new CodexExecutor(this.store, config.codexCommand, config.workspaceRoots, [config.stateDir, config.chromeProfileDir]);
     this.engine.executor = this.codex; this.codex.onProgress = () => this.engine.kick();
@@ -43,11 +48,19 @@ export class Workspace {
     return { cursor: this.store.cursor(), connections: state.connections, participants: state.participants,
       discussions: state.discussions.map(d => ({ id: d.id, topic: d.topic, status: d.status, phase: d.phase, revision: d.revision, createdAt: d.createdAt, updatedAt: d.updatedAt })),
       bindings: state.bindings, jobs: state.jobs.slice(-50), browserPaused: state.browserPaused,
+      materialPackages: (state.materialPackages ?? []).map(materialMetadata), materialRoots: this.config.materialRoots,
       capabilities: { sourceFetch: this.config.sourceFetch, browserConfigured: !!this.config.chromeCommand,
         noVncConfigured: this.config.noVncPort !== null, codexConfigured: this.config.workspaceRoots.length > 0 },
       grants: state.grants.map(({ hash: _hash, ...grant }) => grant) };
   }
   discussion(discussionId: string) { return { discussion: findDiscussion(this.store.read(), discussionId), cursor: this.store.cursor() }; }
+  prepareMaterials(input: unknown, requestId: string): string {
+    return this.store.transact((s, emit) => {
+      const pack = this.materials.prepare(input); (s.materialPackages ??= []).push(pack);
+      emit({ type: 'materials.prepared', discussionId: null, data: { packageId: pack.id } }); return pack.id;
+    }, { id: requestId, input: { action: 'materials.prepare', input } });
+  }
+  capabilities(scope?: { discussionId: string; participantId: string; tools: string[] }) { return inspectCapabilities(this, scope); }
   async addDeepSeek(input: unknown): Promise<string> {
     const body = object(input); const key = string(body.key, 4096); const connectionId = id('connection');
     const connection: Connection = { id: connectionId, kind: 'deepseek', label: string(body.label, 80), status: 'unverified', models: [] };

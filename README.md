@@ -6,6 +6,8 @@
 
 ## 바로 실행
 
+로컬 참고 파일의 읽기 전용 첨부와 연결·권한 현황도 지원합니다. [구현·검증 기록](docs/implementation/local-materials-capabilities-20261030.md)과 [설정 절차](docs/operations-runbook.md)를 확인하세요. 로컬 파일 공유는 기본 비활성이며 별도 `WJ_MATERIAL_ROOTS`와 사용자의 첨부 선택이 필요합니다.
+
 Node.js 24.x / npm 11.x가 필요합니다. 초기 설치 이후 모의 참여자로 실행하는 데 실제 AI 계정은 필요하지 않습니다.
 
 ```bash
