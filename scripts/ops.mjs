@@ -17,7 +17,7 @@ try {
       await chmod(path, 0o600); console.log((await readFile(path, 'utf8')).trim()); }
   } else if (action === 'doctor') {
     const checks = { node: { version: process.version, ok: Number(process.versions.node.split('.')[0]) === 24 }, server: { os: platform(), arch: arch(), origin: config.origin },
-      capabilities: { sourceFetch: config.sourceFetch, chrome: !!config.chromeCommand, noVnc: config.noVncPort !== null, codexRoots: config.workspaceRoots.length }, liveProviders: 'NOT_RUN' };
+      capabilities: { sourceFetch: config.sourceFetch, chrome: !!config.chromeCommand, noVnc: config.noVncPort !== null, codexRoots: config.workspaceRoots.length, materialRoots: config.materialRoots.length, materials: 'read_only_snapshot' }, liveProviders: 'NOT_RUN' };
     for (const [name, executable, args] of [['git', 'git', ['--version']], ['tailscale', 'tailscale', ['version']], ['codex', config.codexCommand[0], ['--version']], ['bubblewrap', 'bwrap', ['--version']]]) {
       try { const result = await run(executable, args, { timeout: 4000, maxBuffer: 16000 }); checks[name] = { installed: true, version: result.stdout.trim().split('\n')[0] }; }
       catch { checks[name] = { installed: false }; }

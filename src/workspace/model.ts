@@ -35,7 +35,13 @@ export interface Evidence {
   kind: 'source' | 'user_material' | 'provider_report' | 'execution';
   source: string; text: string; observedAt: string; digest: string;
   status: 'observed' | 'reported' | 'not_run' | 'failed'; reason: string | null;
+  material?: Omit<MaterialFile, 'text' | 'identity'> & { packageId: string };
 }
+export interface MaterialFile {
+  path: string; digest: string; size: number; observedAt: string; excerpt: false; text: string;
+  identity: string;
+}
+export interface MaterialPackage { id: string; label: string; createdAt: string; files: MaterialFile[] }
 export interface Review { claimId: string; stance: 'support' | 'challenge' | 'uncertain'; reason: string }
 export interface VerificationProposal { claimId: string; method: 'source' | 'codex' | 'review'; url: string; question: string }
 export interface StructuredReply {
@@ -71,6 +77,7 @@ export interface Discussion {
   tasks: Task[]; turns: DiscussionTurn[]; claims: Claim[]; evidence: Evidence[]; checkpoints: Checkpoint[];
   interventions: { revision: number; text: string; createdAt: string }[];
   executionBindingId: string | null;
+  materialPackageIds?: string[];
 }
 export interface ExecutionBinding {
   id: string; label: string; host: string; user: string; cwd: string; threadId: string;
@@ -93,6 +100,7 @@ export interface WorkspaceState {
   sessions: { hash: string; expiresAt: number }[];
   grants: { id: string; hash: string; discussionId: string; participantId: string; tools: string[]; revoked: boolean }[];
   browserPaused: boolean;
+  materialPackages?: MaterialPackage[];
 }
 export interface DurableEvent { id: number; type: string; discussionId: string | null; at: string; data: unknown }
 export function initialState(hostId: string): WorkspaceState {

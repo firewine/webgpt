@@ -1,7 +1,8 @@
-import type { Connection, Member, Discussion, ExecutionBinding, CodexJob, DurableEvent, Phase } from '../workspace/model.js';
+import type { Connection, Member, Discussion, ExecutionBinding, CodexJob, DurableEvent, Phase, MaterialPackage } from '../workspace/model.js';
 type Snapshot = { cursor: number; connections: Connection[]; participants: Member[]; discussions: Pick<Discussion, 'id' | 'topic' | 'status' | 'phase' | 'revision' | 'createdAt' | 'updatedAt'>[];
   bindings: ExecutionBinding[]; jobs: CodexJob[]; browserPaused: boolean; grants: { id: string; participantId: string; discussionId: string; revoked: boolean; tools: string[] }[];
-  capabilities: { sourceFetch: boolean; browserConfigured: boolean; noVncConfigured: boolean; codexConfigured: boolean } };
+  capabilities: { sourceFetch: boolean; browserConfigured: boolean; noVncConfigured: boolean; codexConfigured: boolean };
+  materialPackages: { id: string; label: string; createdAt: string; files: Omit<MaterialPackage['files'][number], 'text' | 'identity'>[] }[]; materialRoots: string[] };
 type View = 'discussion' | 'connections' | 'execution';
 const $ = <T extends HTMLElement = HTMLElement>(selector: string): T => document.querySelector<T>(selector)!;
 let state: Snapshot | null = null; let current: Discussion | null = null; let selected = localStorage.getItem('wj.discussion') ?? '';
@@ -9,11 +10,13 @@ let tab = 'timeline'; let view: View = 'discussion'; let stream: EventSource | n
 const effortOptions = [{ value: 'low', label: 'Low · 낮음' }, { value: 'medium', label: 'Medium · 보통' }, { value: 'high', label: 'High · 높음' }, { value: 'xhigh', label: 'Extra high · 매우 높음' }];
 function effortLabel(value: string): string { return effortOptions.find(o => o.value === value)?.label ?? value; }
 let cursor = 0; let refreshing = false; let again = false; let timer = 0; let choiceSignature = ''; let noticeTimer = 0;
+let materialSignature = '';
 const phases: Record<Phase, string> = { independent: '초기안', cross_review: '상호 검토', verification: '검증', revision: '수정안', synthesis: '종합', summary_review: '종합안 검토' };
 const states: Record<string, string> = { running: '진행 중', paused: '일시정지', blocked: '확인 필요', completed: '완료', partial: '부분 완료', cancelled: '취소',
   prepared: '전송 준비', pending: '대기', failed: '실패', unconfirmed: '결과 미확인', stale: '이전 조건의 응답', connected: '연결됨', auth_required: '로그인 필요', unverified: '미확인', error: '연결 오류',
   observed: '자료 관측됨', reported: '참여자 보고', not_run: '미실행', queued: '실행 대기', blocked_approval: '승인 대기', reconciling: '실행 확인 필요', interrupted: '중단됨', ready: '준비됨', fixture: '모의', not_applicable: '해당 없음', waiting: '대기' };
 const errors: Record<string, string> = { authentication_required: '접속 키를 확인해 주세요.', root_workflow_busy: '진행 중인 토의를 먼저 완료하거나 취소해 주세요.', two_participants_required: '참여자를 2명 이상 선택해 주세요.',
+  material_path_not_allowed: '서버의 WJ_MATERIAL_ROOTS에서 허용한 파일·폴더만 읽을 수 있습니다.', material_path_protected: '인증 정보와 보호 파일은 참고 자료로 읽을 수 없습니다.', material_changed: '파일이 수집 후 변경됐습니다. 새 자료로 다시 읽어 주세요.', material_path_unavailable_or_link: '파일이 없거나 읽을 수 없는 링크 경로입니다.', material_regular_unlinked_file_required: '일반 파일만 지원하며 하드링크는 허용하지 않습니다.', material_file_too_large: '파일 하나는 32 KiB 이하여야 합니다.', material_package_too_large: '한 토의의 로컬 자료는 최대 8개 파일, 합계 64 KiB입니다.', material_context_budget_exceeded: '참고 자료를 포함한 입력이 문맥 한도를 넘습니다. 파일 수나 내용을 줄여 주세요.', material_utf8_required: 'UTF-8 텍스트 파일만 첨부할 수 있습니다.', material_text_required: '바이너리 또는 제어 문자가 있는 파일은 첨부할 수 없습니다.', material_directory_too_large: '항목이 100개 이하인 폴더를 선택해 주세요.', material_directory_required: '탐색할 폴더의 경로를 입력해 주세요.',
   invalid_reasoning_effort: '지원하는 사고 깊이 값을 선택해 주세요.', reasoning_effort_not_supported: '선택한 모델이 이 사고 깊이를 지원하지 않습니다. 설정을 바꾼 뒤 이어가세요.', reasoning_requires_oauth: '사고 깊이 요청 설정은 OAuth GPT 토커에 적용됩니다. 기존 dot·Muse는 해당 서비스에서 설정하세요.', participant_settings_require_pause: '일시정지 후 현재 응답이 확정되면 사고 깊이를 바꿀 수 있습니다.', oauth_account_mismatch: '선택한 로그인 계정이 지정한 계정과 다릅니다. 웹 GPT용 계정으로 로그인해 주세요.', isolated_login_unavailable: '현재 Chrome 도구가 분리된 로그인 공간을 지원하지 않습니다. 도구 설정을 확인해 주세요.',
   connection_not_ready: '먼저 연결과 모델 목록을 확인해 주세요.', browser_not_configured: '서버의 Chrome 연결 명령을 설정해 주세요.', browser_manual_control: 'Chrome 수동 조작을 마친 뒤 자동 입력을 재개해 주세요.',
   browser_turn_active: '진행 중인 Chrome 응답이 끝난 뒤 수동 조작을 시작할 수 있습니다.', browser_target_mismatch: '대화 주소 또는 계정 식별 문구가 일치하지 않습니다.',
@@ -89,7 +92,28 @@ function render(): void {
     selectOptions($('#grant-discussion'), state.discussions.map(d => ({ id: d.id, label: d.topic }))); choiceSignature = signature;
   }
   $('#composer').hidden = !!current; $('#discussion-detail').hidden = !current;
-  if (current) renderDiscussion(); renderConnections(); renderJobs(); showView(view);
+  if (current) renderDiscussion(); renderConnections(); renderJobs(); renderMaterials(); showView(view);
+}
+function renderMaterials(): void {
+  if (!state) return;
+  $('#material-roots').textContent = state.materialRoots.length ? '허용 경로: ' + state.materialRoots.join(', ') : '읽기 허용 경로가 없습니다. 서버의 WJ_MATERIAL_ROOTS에 공유할 파일·폴더를 지정하면 사용할 수 있습니다.';
+  const signature = JSON.stringify(state.materialPackages); if (signature === materialSignature) return; materialSignature = signature;
+  const target = $('#material-picker'); const checked = new Set([...target.querySelectorAll<HTMLInputElement>('input:checked')].map(i => i.value)); target.replaceChildren();
+  for (const pack of state.materialPackages) {
+    const card = node('section', '', 'material-package'); const label = node('label', '', 'check'); const check = node('input'); check.type = 'checkbox'; check.value = pack.id; check.checked = checked.has(pack.id); label.append(check, node('span', pack.label));
+    card.append(label, details('수집한 파일과 해시', pack.files.map(f => f.path + '\n' + f.size + ' bytes · ' + time(f.observedAt) + ' · 전체 파일\nSHA-256 ' + f.digest).join('\n\n'), pack.id)); target.append(card);
+  }
+}
+async function browseMaterials(path: string): Promise<void> {
+  const result = await api<{ path: string; entries: { name: string; directory: boolean }[] }>('/api/materials/list', { path });
+  $<HTMLInputElement>('#material-folder').value = result.path; const target = $('#material-directory'); target.replaceChildren();
+  for (const entry of result.entries) {
+    const child = result.path.replace(/\/$/, '') + '/' + entry.name;
+    target.append(button((entry.directory ? '폴더 · ' : '추가 · ') + entry.name, async () => {
+      if (entry.directory) await browseMaterials(child);
+      else { const input = $<HTMLTextAreaElement>('#material-paths'); input.value = [...new Set([...input.value.split('\n').filter(Boolean), child])].join('\n'); }
+    }));
+  }
 }
 function updateModels(): void { const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); selectOptions($('#participant-model'), c?.models ?? []);
   $<HTMLSelectElement>('#participant-effort').disabled = c?.kind !== 'openai-oauth';
@@ -151,6 +175,7 @@ function renderEvidence(target: HTMLElement, d: Discussion): void {
   for (const c of d.claims.filter(c => c.revision === d.revision)) { const item = node('div', '', 'claim'); item.append(node('p', c.text, 'reply'), node('span', `${labelFor(c.participantId)} · ${c.id}`, 'small muted')); if (c.assumptions.length) item.append(node('p', `가정: ${c.assumptions.join(' / ')}`, 'small muted')); const evidence = d.evidence.filter(e => e.claimIds.includes(c.id)); item.append(node('p', evidence.length ? `연결된 자료 ${evidence.length}개 · 관측 ${evidence.filter(e => e.status === 'observed').length}개` : '독립 검증 자료 없음', 'small')); claims.append(item); } target.append(claims);
   if (!d.evidence.length) target.append(node('div', '아직 수집한 근거가 없습니다.', 'empty'));
   for (const e of d.evidence) { const card = node('article', '', 'panel'); const head = node('div', '', 'inline'); head.append(badge(e.status), node('span', e.kind, 'small muted')); card.append(head, node('p', e.source, 'small'));
+    if (e.material) card.append(node('p', e.material.size + ' bytes · 전체 파일 사본 · 주장 검증과 별개', 'small muted'));
     if (/^https?:\/\//.test(e.source)) { const a = node('a', '출처 원문 열기 ↗'); a.href = e.source; a.target = '_blank'; a.rel = 'noopener noreferrer'; card.append(a); }
     card.append(node('div', e.text || '실제로 얻은 자료가 없습니다.', 'reply'), node('p', `${e.reason ?? ''} · ${time(e.observedAt)} · revision ${e.revision}`, 'small muted'), details('근거 ID와 원문 해시', `${e.id}\n${e.digest}\nclaims: ${e.claimIds.join(', ')}`, e.id)); target.append(card); }
 }
@@ -228,7 +253,8 @@ form('#action-form', async values => { await modalAction?.(values); $<HTMLDialog
 $('#action-cancel').addEventListener('click', () => $<HTMLDialogElement>('#action-dialog').close());
 form('#login-form', async (values, el) => { await api('/api/login', { token: values.token }); el.reset(); await refresh(); });
 form('#discussion-form', async values => { const participantIds = [...document.querySelectorAll<HTMLInputElement>('#participant-picker input:checked')].map(i => i.value);
-  const result = await api<{ id: string }>('/api/discussions', { topic: values.topic, criteria: values.criteria, materials: values.materials, participantIds, executionBindingId: values.executionBindingId || null,
+  const materialPackageIds = [...document.querySelectorAll<HTMLInputElement>('#material-picker input:checked')].map(i => i.value);
+  const result = await api<{ id: string }>('/api/discussions', { topic: values.topic, criteria: values.criteria, materials: values.materials, materialPackageIds, participantIds, executionBindingId: values.executionBindingId || null,
     limits: { maxRequests: Number(values.maxRequests), maxRounds: Number(values.maxRounds), maxActiveMs: Number(values.maxMinutes) * 60_000 } }); selected = result.id; localStorage.setItem('wj.discussion', selected); await refresh(); });
 form('#oauth-form', async values => { showOAuth(await api('/api/connections/oauth', values)); await refresh(); });
 form('#deepseek-form', async (values, el) => { try { await api('/api/connections/deepseek', values); await refresh(); } finally { (el.elements.namedItem('key') as HTMLInputElement).value = ''; } });
@@ -245,13 +271,36 @@ form('#browser-form', async (values, form) => {
 });
 form('#binding-form', async values => { await api('/api/bindings', { ...values, allowWrite: values.allowWrite === 'on' }); await refresh(); });
 form('#job-form', async values => { await api('/api/jobs', values); await refresh(); });
-form('#grant-form', async values => { const tools = ['task_get', 'context_get', 'result_submit', ...(values.codex === 'on' ? ['codex_send', 'codex_status', 'codex_result', 'codex_cancel'] : [])];
+form('#grant-form', async values => { const tools = ['task_get', 'context_get', 'result_submit', 'capabilities_get', ...(values.codex === 'on' ? ['codex_send', 'codex_status', 'codex_result', 'codex_cancel'] : [])];
   const result = await api<{ id: string; token: string }>('/api/grants', { ...values, tools }); $('#grant-result').textContent = `한 번만 표시되는 접근 키입니다. 대화 본문에 붙여 넣지 마세요.\nMCP URL: ${location.origin}/mcp\nAuthorization: Bearer ${result.token}\nGrant: ${result.id}`; await refresh(); });
 $('#participant-connection').addEventListener('change', updateModels);
 for (const el of document.querySelectorAll<HTMLElement>('[data-view]')) el.addEventListener('click', () => showView(el.dataset.view as View));
 for (const el of document.querySelectorAll<HTMLElement>('[data-tab]')) el.addEventListener('click', () => { tab = el.dataset.tab!; renderDiscussion(); });
 $('#new-discussion').addEventListener('click', () => { selected = ''; current = null; localStorage.removeItem('wj.discussion'); showView('discussion'); render(); $('#topic').focus(); });
 function click(id: string, action: () => Promise<unknown>): void { $(id).addEventListener('click', () => { void action().catch(report); }); }
+const prepareButton = button('파일 읽고 자료 저장', async () => {
+  const paths = $<HTMLTextAreaElement>('#material-paths').value.split('\n').map(p => p.trim()).filter(Boolean);
+  const result = await api<{ id: string }>('/api/materials', { label: $<HTMLInputElement>('#material-label').value, paths });
+  await refresh(); const check = [...document.querySelectorAll<HTMLInputElement>('#material-picker input')].find(i => i.value === result.id); if (check) check.checked = true;
+  announce('파일 사본을 저장하고 다음 토의의 자료로 선택했습니다.');
+}); prepareButton.id = 'material-prepare'; $('#material-prepare').replaceWith(prepareButton);
+const browseButton = button('폴더 확인', () => browseMaterials($<HTMLInputElement>('#material-folder').value)); browseButton.id = 'material-browse'; $('#material-browse').replaceWith(browseButton);
+type CapabilityView = { observedAt: string; os: { platform: string; release: string; arch: string };
+  tools: Record<string, { status: string; version: string | null } | null>;
+  materials: { access: string; allowedPaths?: string[] };
+  connections: { label: string; kind: string; status: string; lastCheckedAt: string | null }[];
+  execution: { allowedPaths?: string[]; bindings: { label: string; cwd: string; allowWrite: boolean; status: string }[]; jobs: { id: string; status: string; pendingApprovals: number }[] } };
+click('#capabilities-refresh', async () => {
+  const report = await api<CapabilityView>('/api/capabilities'); const target = $('#capabilities-report'); target.replaceChildren();
+  target.append(node('p', report.os.platform + ' ' + report.os.release + ' · ' + report.os.arch + ' · ' + time(report.observedAt), 'small muted'));
+  for (const [name, tool] of Object.entries(report.tools)) target.append(node('p', name + ': ' + (tool?.version ?? (tool?.status === 'unavailable' ? '실행 파일 확인 실패' : tool?.status === 'unknown' ? '버전 확인 불가' : '미설정')), 'small'));
+  target.append(node('p', '자료 읽기 허용: ' + (report.materials.allowedPaths?.join(', ') || '없음'), 'small'), node('p', 'Codex 등록 허용 경로: ' + (report.execution.allowedPaths?.join(', ') || '없음'), 'small'));
+  for (const b of report.execution.bindings) target.append(node('p', b.label + ' · ' + b.cwd + ' · ' + (b.allowWrite ? '수정 허용' : '읽기 전용') + ' · ' + (states[b.status] ?? b.status), 'small'));
+  for (const c of report.connections) target.append(node('p', c.label + ' · ' + c.kind + ' · ' + (states[c.status] ?? c.status) + ' · ' + (c.lastCheckedAt ? '마지막 확인 ' + time(c.lastCheckedAt) : '확인 시각 없음'), 'small'));
+  target.append(node('p', '기록된 실행 ' + report.execution.jobs.length + '개 · 승인 대기 ' + report.execution.jobs.reduce((n, j) => n + j.pendingApprovals, 0) + '건', 'small'));
+  for (const j of report.execution.jobs) target.append(node('p', j.id + ' · ' + (states[j.status] ?? j.status) + ' · 승인 대기 ' + j.pendingApprovals + '건', 'small'));
+  target.append(node('p', '명령 네트워크: turn sandbox 정책으로 차단. Codex App Server: 인증용 호스트 네트워크 사용. 호스트 파일 읽기: private state·Chrome profile 가림을 요구하는 정책. 실제 격리 성공은 별도 실행 검증이 필요합니다.', 'small muted'), details('조회 원문', JSON.stringify(report, null, 2)));
+});
 click('#logout', async () => { await api('/api/logout', {}); lock(); });
 click('#browser-manual', async () => { await api('/api/browser/control', { paused: true }); await refresh(); });
 click('#browser-automatic', async () => { await api('/api/browser/control', { paused: false }); await refresh(); });

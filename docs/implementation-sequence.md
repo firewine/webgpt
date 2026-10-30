@@ -159,7 +159,7 @@ WJ-016은 [Git Writer 계획](./git-writer-plan.md)의 별도 sandbox·remote br
 
 ### WWG 참고 검토에서 보강한 완료 조건
 
-[개발 계획 9.3](./development-plan.md#93-wwg-사례에서-추가할-계획)과 [검토서](./reviews/wwg-plan-review-20261030.md)의 WWG-R1~R7은 기존 WJ 작업에 연결한 미구현 제안이다. 새 WJ milestone이나 구현 완료 표시가 아니다.
+[개발 계획 9.3](./development-plan.md#93-wwg-사례에서-추가할-계획)과 [검토서](./reviews/wwg-plan-review-20261030.md)의 WWG-R1~R7은 기존 WJ 작업에 연결한 후속 범위다. R1의 읽기 전용 자료와 R4의 권한 조회를 [구현·검증](./implementation/local-materials-capabilities-20261030.md)했으며 R2/R3/R5/R6/R7은 미구현이다. 실계정 토론과 실파일 Codex 실행의 완료 판정은 별도다.
 
 - 실계정 연결·토론 MVP-1을 먼저 검증한다. 읽기 자료 패키지·capability·로그 UI는 WJ-009/010/013의 독립 후속 보강으로 진행할 수 있다.
 - Codex의 실제 파일 변경을 검증하기 전에는 WWG-R2/R3의 권한 회수·늦은 승인·repo 비밀 경계를 확인한다. 읽기 전용 PoC와 비교하여 실제로 추가 허용되는 범위를 명시한다.

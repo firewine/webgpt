@@ -4,12 +4,12 @@ import type { WorkspaceState } from '../workspace/model.js';
 import { AppError, digest, id, now, object, string, strings } from '../workspace/util.js';
 import { findDiscussion } from '../workspace/engine.js';
 import { promptFor } from '../workspace/prompts.js';
-const TOOLS = ['task_get', 'context_get', 'result_submit', 'codex_send', 'codex_status', 'codex_result', 'codex_cancel'] as const;
+const TOOLS = ['task_get', 'context_get', 'result_submit', 'capabilities_get', 'codex_send', 'codex_status', 'codex_result', 'codex_cancel'] as const;
 type Grant = WorkspaceState['grants'][number];
 export class McpEndpoint {
   constructor(private readonly app: Workspace) {}
   createGrant(input: unknown): { id: string; token: string } {
-    const body = object(input); const allowed = strings(body.tools, 7);
+    const body = object(input); const allowed = [...new Set(strings(body.tools, TOOLS.length))];
     if (!allowed.length || allowed.some(t => !(TOOLS as readonly string[]).includes(t))) throw new AppError('invalid_tools');
     const token = randomBytes(32).toString('base64url'); const grantId = id('grant');
     this.app.store.transact((state, emit) => {
@@ -47,6 +47,11 @@ export class McpEndpoint {
   }
   private async call(name: string, args: Record<string, unknown>, grant: Grant): Promise<unknown> {
     const state = this.app.store.read(); const d = findDiscussion(state, grant.discussionId);
+    if (name === 'capabilities_get') {
+      const report = await this.app.capabilities(grant);
+      if (!this.app.store.read().grants.some(g => g.id === grant.id && !g.revoked && g.hash === grant.hash)) throw new AppError('mcp_authentication_required', 401);
+      return report;
+    }
     if (name === 'codex_status' || name === 'codex_result' || name === 'codex_cancel') {
       const job = state.jobs.find(j => j.id === args.jobId && j.discussionId === d.id && d.tasks.some(t => t.id === j.taskId && t.participantId === grant.participantId));
       if (!job) throw new AppError('job_not_in_scope', 403);
@@ -82,6 +87,7 @@ export class McpEndpoint {
   }
 }
 const descriptions: Record<string, string> = {
+  capabilities_get: 'Inspect recorded connection and execution status and configured policy in this grant only. Does not grant access or verify isolation by running a job.',
   task_get: 'Get the current task assigned to this participant in the granted discussion.',
   context_get: 'Get the task input snapshot with draft visibility restrictions applied.',
   result_submit: 'Submit a reported result for review; submission does not establish fact verification or task completion.',
@@ -90,6 +96,7 @@ const descriptions: Record<string, string> = {
 };
 const textField = { type: 'string' };
 const schemas: Record<string, unknown> = {
+  capabilities_get: { type: 'object', properties: {}, additionalProperties: false },
   task_get: { type: 'object', properties: { taskId: textField }, additionalProperties: false },
   context_get: { type: 'object', properties: { taskId: textField }, required: ['taskId'], additionalProperties: false },
   result_submit: { type: 'object', properties: { taskId: textField, requestId: textField, text: textField }, required: ['taskId', 'requestId', 'text'], additionalProperties: false },
