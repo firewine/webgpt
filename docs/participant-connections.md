@@ -69,7 +69,7 @@ dot과 Muse는 각자의 실제 기존 agent·대화에 연결한다. 일반 GPT
 
 브라우저 계정·프로필·agent·대화 식별과 OAuth의 account registration은 서로 다른 binding이다. 같은 계정이라는 이유만으로 대화 맥락이나 credential을 섞지 않는다. dot·Muse가 토론에 포함되지 않아도 OAuth GPT와 API 모델만으로 새 토론을 시작할 수 있다.
 
-2026-10-30 사용자가 지정한 실제 Muse 사이드 채팅의 DOM thread ID를 고정해 연결·참여자를 등록했다. URL이 같아도 thread가 다르면 전송을 거절하며, 입력 후 생성되는 전송 버튼과 분할 응답을 처리한다. [실제 연결 기록](./implementation/muse-thread-binding-20261030.md)에 정적 probe·등록·fixture 결과를 남겼다. 실제 모델 응답·혼합 토론은 아직 NOT_RUN이다.
+2026-10-30 사용자가 지정한 실제 Muse 사이드 채팅의 DOM thread ID를 고정해 연결·참여자를 등록했다. URL이 같아도 thread가 다르면 전송을 거절하며, 입력 후 생성되는 전송 버튼과 분할 응답을 처리한다. 이후 사용자가 시작한 첫 실제 요청·응답을 대조하고 표시용 prefix로 인한 수신 누락을 재전송 없이 복구했다. [실제 연결 기록](./implementation/muse-thread-binding-20261030.md)에 정적 probe·등록·fixture·원문 대조 복구를 구분했다. 후속 질문·전체 혼합 토론은 미검증이다.
 
 ## 4. DeepSeek 및 API 참여자
 

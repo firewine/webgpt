@@ -115,7 +115,8 @@ export function observationScript(b: BrowserBinding, marker: string): string {
     const input=document.querySelector(b.inputSelector), send=document.querySelector(b.sendSelector);
     const identity=document.querySelector(b.identitySelector);
     const users=[...document.querySelectorAll(b.userSelector)];
-    const match=marker?users.filter(e=>(e.textContent||'').trim().startsWith(marker)):[];
+    const messageText=e=>{const copy=e.cloneNode(true);copy.querySelectorAll('[data-copy-exclude]').forEach(node=>node.remove());return copy.textContent||'';};
+    const match=marker?users.filter(e=>messageText(e).trim().startsWith(marker)):[];
     const user=match.length===1?match[0]:null;
     const nextUser=user?users[users.indexOf(user)+1]:null;
     const answers=user?[...document.querySelectorAll(b.assistantSelector)].filter(e=>(user.compareDocumentPosition(e)&Node.DOCUMENT_POSITION_FOLLOWING)!==0&&(!nextUser||(e.compareDocumentPosition(nextUser)&Node.DOCUMENT_POSITION_FOLLOWING)!==0)):[];
@@ -123,7 +124,7 @@ export function observationScript(b: BrowserBinding, marker: string): string {
     return {url:u.href,identity:!!identity&&(identity.textContent||'').includes(b.identityText),thread:threadMatches(),
       inputFound:visible(input),sendFound:visible(send),draft:input?('value' in input?input.value:input.textContent):'',
       ready:visible(document.querySelector(b.readySelector)),busy:[...document.querySelectorAll(b.busySelector)].some(visible),
-      matched:!!user,matchCount:match.length,answer:answers.map(e=>e.textContent||'').join('\\n\\n').slice(0,100000)}; }`;
+      matched:!!user,matchCount:match.length,answer:answers.map(messageText).join('\\n\\n').slice(0,100000)}; }`;
 }
 function threadGuardScript(): string {
   return `const threadMatches=()=>{if(!b.thread)return true;const nodes=[...document.querySelectorAll(b.thread.selector)].filter(e=>e.getClientRects().length>0);

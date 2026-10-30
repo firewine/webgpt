@@ -85,6 +85,8 @@ Chrome/VNC/CDP를 Tailnet에 직접 열지 않는다. 예제 VNC는 인증된 ga
 
 Muse의 사이드 채팅처럼 같은 주소를 사용하는 화면은 `같은 주소를 쓰는 사이드 채팅 식별`에서 실제 대화 ID와 DOM 확인 선택자·속성·선택 JSON 키를 등록한다. ID가 사라지거나 바뀌면 입력 전과 클릭 직전에 거절한다. 갱신으로 등록한 대화 ID를 변경·제거할 수 없다. 입력 후 전송 버튼이 생성되는 화면은 해당 옵션을 명시하고 실제 DOM으로 검증한다. [실제 Muse 연결 기록](implementation/muse-thread-binding-20261030.md)은 연결·참여자 등록과 실응답 완료를 구분한다.
 
+Muse가 답했는데 앱의 receipt·본문이 비어 있으면 같은 요청을 다시 보내지 않는다. 본문 앞의 복사 제외 표시를 제거한 뒤 marker·요청 전체·thread·응답 범위를 대조한다. 이미 완료된 응답은 원래 turn의 미확정 수신 대조로 복구하고 명시적으로 재개한다. Chrome MCP 재시작 시 page ID가 달라질 수 있으므로 현재 목록을 URL·thread와 다시 맞춘다.
+
 ## 4. Codex 실행
 
 Codex 로그인은 서버의 실행 OS 사용자 환경에서 별도로 완료한다. `WJ_WORKSPACE_ROOTS` 안의 Git 작업 디렉터리와 기존 Codex thread ID를 UI에서 등록한다. `.git` branch, canonical cwd, host, OS user와 thread metadata를 확인한다. 코드 수정은 main/master가 아닌 작업 브랜치에서만 허용된다.

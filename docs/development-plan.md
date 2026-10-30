@@ -66,7 +66,7 @@ v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위�
 | Ubuntu / Tailscale / 웹 클라이언트 | systemd·linger·실제 HTTPS·SSE·noVNC 입력·서비스 재시작 PASS | 다른 기기·실제 로그아웃·호스트 재부팅 |
 | GPT OAuth 다중 계정 | 계정별 OAuth/vault/Models/Responses 구현·fixture PASS | 실제 2계정 등록·모델·완료 응답·refresh |
 | DeepSeek API | 모델 발견·stream·usage 구현·fixture PASS | 허가된 key·실제 응답 |
-| Chrome / dot / Muse | 실제 Muse 기존 사이드 채팅·thread probe와 참여자 등록 PASS, [기록](./implementation/muse-thread-binding-20261030.md) | 실제 발언·후속 맥락·대화 왕복; dot 연결 |
+| Chrome / dot / Muse | 실제 Muse thread 등록·첫 요청/응답 대조·수신 누락 복구 PASS, [기록](./implementation/muse-thread-binding-20261030.md) | 후속 맥락·전체 토론·자동 복구 확대; dot 연결 |
 | 영속 Core / 능동 토론·검증·비교 | 구현·fixture·SIGKILL 복구 PASS | 혼합 실계정 토론 MVP-1 |
 | 공동 대화 UI / 인계·개입 | 1440/390px Chromium 검사 PASS | 실제 Tailnet 기기 전환 |
 | Scoped MCP / Secure MCP Tunnel | MCP 도구·stdio 전달기 구현·fixture PASS | 실제 터널과 dot 계정 연결 |

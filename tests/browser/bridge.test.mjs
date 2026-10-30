@@ -65,3 +65,34 @@ test('same-URL side chats pin the thread at observation and final click, and kee
   await page.locator('.thread').evaluate(e => e.setAttribute('data-context', 'invalid-json'));
   await assert.rejects(bridge.probe(side), /browser_target_mismatch/);
 });
+
+test('copy-excluded labels preserve receipt matching and recover an existing reply without replay', { timeout: 30000 }, async t => {
+  const { store } = await storage(t); const browser = await chromium.launch({ headless: true, ...(process.env.WJ_TEST_CHROMIUM_EXECUTABLE ? { executablePath: process.env.WJ_TEST_CHROMIUM_EXECUTABLE } : {}) }); t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.route('**/*', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<div id="identity">fixture account · dot</div><div id="messages"></div><textarea id="input"></textarea><button id="send">Send</button><div id="ready">Ready</div><div id="busy" hidden>Busy</div>' }));
+  await page.goto(binding.url);
+  const expected = JSON.stringify({ text: 'Recovered response', claims: [], reviews: [], verifications: [], uncertainty: [] });
+  await page.evaluate(({ expected }) => {
+    window.sends = 0; document.querySelector('#send').onclick = () => { window.sends++; };
+    const log = document.querySelector('#messages');
+    const quoted = document.createElement('div'); quoted.className = 'user'; quoted.textContent = 'Ordinary quoted text: [웹쫀쿠:recover-turn]'; log.append(quoted);
+    const user = document.createElement('div'); user.className = 'user'; user.id = 'actual-request';
+    const label = document.createElement('span'); label.dataset.copyExclude = 'true'; label.textContent = 'UI';
+    const body = document.createElement('p'); body.textContent = '[웹쫀쿠:recover-turn]' + String.fromCharCode(10) + 'Original prompt'; user.append(label, body); log.append(user);
+    const answer = document.createElement('div'); answer.className = 'assistant';
+    const metadata = label.cloneNode(true); const content = document.createElement('p'); content.textContent = expected; answer.append(metadata, content); log.append(answer);
+    const later = document.createElement('div'); later.className = 'user'; later.textContent = 'Later unrelated message'; log.append(later);
+    const other = document.createElement('div'); other.className = 'assistant'; other.textContent = 'Unrelated response'; log.append(other);
+  }, { expected });
+  assert.equal(await page.locator('#actual-request').evaluate(e => e.textContent.trim().startsWith('[웹쫀쿠:recover-turn]')), false);
+  store.transact(s => s.connections.push({ id: 'recover', kind: 'browser', label: 'recovery fixture', status: 'connected', models: [], browser: binding }));
+  const bridge = new BrowserBridge(store, null); bridge.tool = async (name, args) => ({ structuredContent: { result: await page.evaluate('(' + args.function + ')()') } });
+  let dispatched = 0; const receipts = [];
+  const input = { requestId: 'recover-turn', participant: { id: 'recover-p', connectionId: 'recover', kind: 'browser', modelId: 'existing-agent', label: 'fixture', role: '' }, prompt: 'Original prompt', history: [], signal: AbortSignal.timeout(4000), hooks: { dispatched() { dispatched++; }, receipt(value) { receipts.push(value); }, delta() {} } };
+  await page.locator('#input').fill('Keep owner draft');
+  const result = await bridge.complete(input);
+  assert.equal(result.text, expected); assert.equal(await page.evaluate(() => window.sends), 0); assert.equal(dispatched, 0); assert.equal(receipts.length, 1); assert.equal(await page.locator('#input').inputValue(), 'Keep owner draft');
+  await page.locator('#actual-request').evaluate(e => e.after(e.cloneNode(true)));
+  await assert.rejects(bridge.complete({ ...input, signal: AbortSignal.timeout(1000) }), /browser_receipt_ambiguous/);
+  assert.equal(await page.evaluate(() => window.sends), 0);
+});
