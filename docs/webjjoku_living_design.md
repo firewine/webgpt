@@ -1,5 +1,7 @@
 # 웹쫀쿠 Living Design Document
 
+> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-30 페이즈 1 구현/검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
+
 > 지정 코드 C=8f81d861b3f170ef2024b90d9eeba56ce34f0f79, 계획 P의 v0.8 기반 개정이다. 현재 HEAD의 후속 회사 우선/수다 후순위 문구는 승계하지 않았다. 먼저 [1쪽 요약·기준 차이·근거](./plan-revision-20261030.md), [104판정](./reviews/plan-decision-register-20261030.md), [운영 계약](./company-workflow-plan.md), [R1~R8](./resident-implementation-plan.md)을 읽는다. 기존 backend 재사용, 신규는 제안/NOT_RUN, 실제 계정·DOM·호스트는 UNVERIFIED다. 이번은 계획 문서만 수정한다. 개발 시 [디자인 패턴 지침](./development-guidelines.md)의 작은 Adapter/DI·명시 상태 전이·기존 transaction·coordinator/CAS·검사/롤백 기준을 함께 적용한다.
 
 - 문서 상태: Living Design Document

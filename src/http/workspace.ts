@@ -77,6 +77,16 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
       res.on('close', () => upstream.destroy()); upstream.end(); return;
     }
     if (get && path === '/api/state') { json(res, 200, app.snapshot()); return; }
+    if (get && path === '/api/rooms') { json(res, 200, { ...app.resident.snapshot(), cursor: app.store.cursor() }); return; }
+    const roomPath = /^\/api\/rooms\/([\w-]+)(?:\/(messages|control)(?:\/([\w-]+))?)?$/.exec(path);
+    if (get && roomPath) {
+      if (!roomPath[2]) { json(res, 200, app.resident.room(roomPath[1]!)); return; }
+      if (roomPath[2] === 'messages') {
+        if (roomPath[3]) json(res, 200, app.resident.message(roomPath[1]!, roomPath[3]));
+        else json(res, 200, app.resident.messages(roomPath[1]!, pageNumber(url, 'after', 0, 0, Number.MAX_SAFE_INTEGER), pageNumber(url, 'limit', 50, 1, 100)));
+        return;
+      }
+    }
     if (get && path === '/api/capabilities') { json(res, 200, await app.capabilities()); return; }
     if (get && path === '/api/events') {
       let cursor = Number(req.headers['last-event-id'] ?? url.searchParams.get('after') ?? '0');
@@ -105,6 +115,10 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     if (get && path === '/api/browser/snapshot') { json(res, 200, { text: await app.browser.snapshot(integer(Number(url.searchParams.get('pageId')), 0, 0, 1_000_000)) }); return; }
     if (req.method !== 'POST') throw new AppError('not_found', 404);
     const input = object(await body(req));
+    if (roomPath && !roomPath[3]) {
+      if (roomPath[2] === 'control') { json(res, 200, app.resident.control(roomPath[1]!, input, command(req))); return; }
+      if (roomPath[2] === 'messages') { json(res, 201, app.resident.postMessage(roomPath[1]!, input, command(req))); return; }
+    }
     if (path === '/api/materials') { json(res, 201, { id: app.prepareMaterials(input, command(req)) }); return; }
     if (path === '/api/materials/list') { json(res, 200, app.materials.list(input.path)); return; }
     if (path === '/api/logout') { res.setHeader('Set-Cookie', access.logout(req)); json(res, 200, { ok: true }); return; }
@@ -154,6 +168,12 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
   return { server, closeStreams() { for (const stream of streams) stream.end(); for (const socket of sockets) socket.destroy(); } };
 }
 function command(req: IncomingMessage): string { const value = req.headers['idempotency-key']; return string(value, 200); }
+function pageNumber(url: URL, key: string, fallback: number, min: number, max: number): number {
+  const values = url.searchParams.getAll(key);
+  if (!values.length) return fallback;
+  if (values.length !== 1 || !/^(0|[1-9]\d*)$/.test(values[0]!)) throw new AppError('invalid_page');
+  return integer(Number(values[0]), fallback, min, max);
+}
 function json(res: ServerResponse, status: number, value: unknown): void { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); }
 async function body(req: IncomingMessage): Promise<unknown> {
   if (req.headers['content-type']?.split(';')[0]?.trim().toLowerCase() !== 'application/json') throw new AppError('json_required', 415);

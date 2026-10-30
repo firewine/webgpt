@@ -14,14 +14,18 @@ import { CodexExecutor } from '../execution/codex.js';
 import { reasoningEffort } from './settings.js';
 import { LocalMaterials, materialMetadata } from './materials.js';
 import { inspectCapabilities } from './capabilities.js';
+import { ResidentStore } from './resident-store.js';
 
 export class Workspace {
   readonly store: Store; readonly vault: Vault; readonly oauth: OAuthService; readonly browser: BrowserBridge;
   readonly providers: Providers; readonly engine: DiscussionEngine; readonly codex: CodexExecutor;
   readonly accessHash: string;
   readonly materials: LocalMaterials;
+  readonly resident: ResidentStore;
   constructor(readonly config: WorkspaceConfig, fakeDelay = 80) {
     this.store = new Store(config.stateDir);
+    try { this.resident = new ResidentStore(this.store, config.residentEnabled); }
+    catch (error) { this.store.close(); throw error; }
     this.vault = new Vault(join(config.stateDir, 'credentials'));
     const accessPath = join(config.stateDir, 'access-token');
     let token = config.accessToken;
@@ -49,6 +53,7 @@ export class Workspace {
       discussions: state.discussions.map(d => ({ id: d.id, topic: d.topic, status: d.status, phase: d.phase, revision: d.revision, createdAt: d.createdAt, updatedAt: d.updatedAt })),
       bindings: state.bindings, jobs: state.jobs.slice(-50), browserPaused: state.browserPaused,
       materialPackages: (state.materialPackages ?? []).map(materialMetadata), materialRoots: this.config.materialRoots,
+      resident: this.resident.snapshot(),
       capabilities: { sourceFetch: this.config.sourceFetch, browserConfigured: !!this.config.chromeCommand,
         noVncConfigured: this.config.noVncPort !== null, codexConfigured: this.config.workspaceRoots.length > 0 },
       grants: state.grants.map(({ hash: _hash, ...grant }) => grant) };

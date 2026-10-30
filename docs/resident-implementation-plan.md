@@ -1,6 +1,8 @@
 # 상주 운영 단계별 변경·이관·수락·롤백
 
-코드 C와 계획 P는 [개정 요약](./plan-revision-20261030.md)으로 고정한다. 이 문서는 **구현 계획**이며 R1~R8은 전부 NOT_RUN, 실계정/DOM/호스트 적합성은 UNVERIFIED다. 새 타입·파일·심볼·endpoint·검사는 모두 **제안**이다. 기존 파일/심볼은 E 근거표의 C에서 확인했다. 이 문서의 명령은 **후속 구현 검증 때만 실행**하며 이번 개정에서는 실행하지 않는다.
+> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-30 페이즈 1 구현/검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
+
+설계 근거 C와 계획 P는 [개정 요약](./plan-revision-20261030.md)으로 고정한다. 구현 순서·상태는 맨 위 링크의 SSOT를 따른다. R1은 아래 계약으로 구현하고 [실행 증거](./implementation/phase1-resident-foundation-20261030.md)를 남겼다. R2~R8의 새 타입·파일·심볼·endpoint·검사는 아직 **제안**이다. 기존 파일/심볼의 E 근거표는 C 기준이며 실계정/DOM/운영 호스트 적합성은 UNVERIFIED다.
 
 ## 1. 공통 변경·검증 원칙
 
@@ -19,18 +21,20 @@ quiescent 증거: 관련 prepared/running/unconfirmed turn=0, 실행/승인/reco
 
 ## 3. R1 — 기존 Store 위에 방·메시지·참조 이관
 
-**대상:** 기존 `src/workspace/model.ts::WorkspaceState/initialState`, `runtime.ts::Workspace.constructor/snapshot/start/close`, `config.ts::WorkspaceConfig/loadWorkspaceConfig`, `src/http/workspace.ts::createWorkspaceServer.route`. 제안 `src/workspace/resident-model.ts`와 `resident-store.ts::migrateResident/ResidentCommands`. Store의 read/transact/events/cursor 코드는 재작성하지 않는다.
+**대상:** 기존 `src/workspace/model.ts::WorkspaceState`, `runtime.ts::Workspace.constructor/snapshot`, `config.ts::WorkspaceConfig/loadWorkspaceConfig`, `src/http/workspace.ts::createWorkspaceServer.route`. 신규 `src/workspace/resident-model.ts`와 `resident-store.ts::readResident/migrateResident/ResidentStore`를 구현했다. initialState/start/close와 Store의 read/transact/events/cursor 코드는 유지한다.
 
-**계약:** 유지=기존 JSON/테이블/commands/event envelope·HTTP 인증·기존 endpoint. 변경=optional resident 필드와 flag, additive snapshot, 인증된 `GET /api/rooms`·`GET /api/rooms/:id/messages?after=&limit=`·idempotent `POST /api/rooms/:id/control` 등 제안 조회/명령만 추가한다. 구 endpoint 필드 삭제/의미 변경 0건.
+**계약:** 유지=기존 JSON/테이블/commands/event envelope·HTTP 인증·기존 endpoint. 변경=optional resident 필드와 기본 false인 `WJ_RESIDENT_ENABLED`, additive snapshot, 인증된 방/메시지 조회·사용자 메시지 저장·설정 제어 API만 추가한다. 구 endpoint 필드 삭제/의미 변경 0건. 모델 호출은 없으며 `on`은 409 `resident_dispatch_not_available`로 거절한다. 요청·응답·크기/원문/공개 범위 계약은 [R1 실행 기록](./implementation/phase1-resident-foundation-20261030.md)에 명시한다.
 
 **데이터/이관:** ResidentStateV1/Room/RoomMember/RoomMessage/ResidentTurn/DispatchLease 골격, contextCheckpoints 빈 배열, schemaVersion=1, room off·이력 비공개 import 없음. 기존 3종 fixture(기본 v1, materials 포함 v1, 미확정 turn/job 포함 v1)를 현재 state/user_version=1 그대로 읽는다. 과거 토론/task/job은 원본과 link만 보존한다.
 
-| 수락 ID | 숫자·증거 | 방법(후속 실행) |
+이관은 `resident:migration:v1` command receipt를 저장하며 event를 발행하지 않는다. 이로써 기존 cursor를 보존한다. 이후 사용자 명령은 기존 Store transaction으로 state·event·receipt를 함께 저장한다. 방 참여자는 모두 disabled, budget/다음 발화 시각은 null이며 미정 사용자 값을 대신 채우지 않는다. 나머지 미래 컬렉션은 빈 저장 공간이며 업무·Wiki 구현 완료를 뜻하지 않는다.
+
+| 수락 ID | 숫자·증거 | 검증 방법 |
 | --- | --- | --- |
-| R1-A | 3종 fixture의 legacy ID/내용 digest·event cursor·command 결과 100% 동일 | 제안 `node --test tests/resident-store.test.mjs`의 before/after JSON |
-| R1-B | migration 100회 같은 ID 반복→Room 1개, 추가 모델 호출/legacy event 재발행 0 | 같은 fixture 로그 |
-| R1-C | 동일 mutation key 20회→결과/새 event 1개, payload 변경→409 | 제안 API fixture+SQLite journal 조회 |
-| R1-D | 인증 없음/잘못된 Host/Origin→기존 401/403, 새 endpoint 우회 0 | 기존 workspace-http 검사+제안 resident-http 검사 |
+| R1-A | 3종 fixture의 legacy ID/내용 digest·event cursor·command 결과 100% 동일 | `tests/resident-store.test.mjs` before/after·재시작: PASS |
+| R1-B | fixture마다 migration 100회→Room 1개, 추가 모델 호출/legacy event 재발행 0 | 같은 fixture·migration receipt 1개: PASS |
+| R1-C | 메시지/제어 mutation key 각각 20회→각 결과/새 event 1개, payload 변경→409 | `tests/resident-http.test.mjs` HTTP+SQLite journal: PASS |
+| R1-D | 인증 없음/잘못된 Host/Origin→기존 401/403, 새 endpoint 우회 0 | 기존 workspace-http+resident-http: PASS |
 
 **롤백:** 이 단계는 provider/job 호출 0이다. flag off 후 기존 snapshot/화면으로 복귀하고 resident 필드는 보존한다. migration 오류는 transaction 전체 rollback, 기존 3 fixture digest가 같아야 한다. 미래 schemaVersion은 자동 초기화하지 않고 명시 거절한다.
 

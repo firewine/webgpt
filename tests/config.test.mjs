@@ -3,6 +3,16 @@ import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { loadConfig, ConfigError } from '../dist/server/config.js';
 import { createLogger } from '../dist/server/logger.js';
+import { loadWorkspaceConfig } from '../dist/server/workspace/config.js';
+
+test('resident flag defaults off and accepts only literal booleans without leaking invalid values', () => {
+  assert.equal(loadWorkspaceConfig({}).residentEnabled, false);
+  assert.equal(loadWorkspaceConfig({ WJ_RESIDENT_ENABLED: 'true' }).residentEnabled, true);
+  assert.equal(loadWorkspaceConfig({ WJ_RESIDENT_ENABLED: 'false' }).residentEnabled, false);
+  for (const value of ['TRUE', '1', '', 'private-invalid-flag']) assert.throws(() => loadWorkspaceConfig({ WJ_RESIDENT_ENABLED: value }), error => {
+    assert.ok(error instanceof ConfigError); assert.deepEqual(error.fields, ['WJ_RESIDENT_ENABLED']); assert.doesNotMatch(error.message, /private-invalid-flag/); return true;
+  });
+});
 
 test('runs without credentials and accepts bounded local configuration', () => {
   assert.deepEqual(loadConfig({}), { host: '127.0.0.1', port: 3000, logLevel: 'info', fakeDelayMs: 350 });
