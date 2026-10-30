@@ -2,7 +2,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | v0.8 — 토커 계정·사고 깊이·전체 발언 라운드 구현 PASS, 실계정·실세션 검증 대기 |
+| 상태 | v0.9 — WWG 사례로 읽기 자료·권한 수명·실행 기록 계획 보강, 실계정·실세션 검증 대기 |
 | 최초 작성일 | 2026-08-15 |
 | 개정일 | 2026-10-30 (KST) |
 | 저장소 | [firewine/webgpt](https://github.com/firewine/webgpt) |
@@ -52,7 +52,7 @@ v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위�
 
 2026-10-30 Ubuntu 개발 재개 점검 기준:
 
-- 기준 `main`: `07aa852cb9fed29c3cb8be67ac492356d6a45cc9`. PR #1~6이 사용자 병합됐다. 이전 `ad88ef6` merge commit의 GitHub `workspace` Check success는 재개 기록에서 확인한 결과다.
+- 기준 `main`: `a6112c673fcae3e955975bd550c85439259696ad`. PR #1~9가 사용자 병합됐다. 이전 commit의 검사 결과는 날짜별 구현 기록을 따른다.
 - 사용자의 전체 개발 지시에 따라 WJ-002~011, WJ-013의 도구 경로, WJ-014~015의 독립 구현을 하나의 실행 가능한 작업실에 연결했다. [구현 기록](./implementation/wj-002-015.md)에 범위별 증거를 남겼다.
 - strict TypeScript·빌드와 Node 검사 39개, 실제 Chromium 브라우저 검사 4개를 통과했다. 설치한 Chrome DevTools MCP 1.12.0의 실제 도구 왕복과 Codex CLI 0.165.0의 생성 schema도 확인했다.
 - 사용자 Ubuntu의 기존 앱은 `127.0.0.1:4090`에서 실행 중이다. 소유자 로그인·모의 2인 토론 12회 발언·비교·새로고침 복구, Node 검사 39개, 시스템 Chrome 156의 브라우저 검사 3개와 추가 MCP 단독 검사 1개, Codex schema·호스트 bubblewrap 격리를 확인했다. [실환경 재개 기록](./implementation/ubuntu-readiness-20261030.md)에 명령·판정·한계를 남겼다.
@@ -364,6 +364,24 @@ DiscussionCheckpoint는 기준 event cursor·주제 revision, 결론/근거/반�
 | 실행 활동과 증거 | 실제 tool/job event를 참여자·claim·evidence에 연결해 UI 제공 | WJ-009, 010, 014 |
 
 여섯 웹챗 동시 실행을 MVP 한도로 복제하거나 다중 OAuth 계정 격리의 증거로 사용하지 않는다. Ubuntu·Tailscale 웹 UI, GPT OAuth·API·기존 Chrome 연결, root 1개·활성 turn 1개와 단계별 확장을 유지한다. SQLite·WebView2·IDA·Roslyn을 이 사례 때문에 필수 의존성으로 추가하지 않는다. 작업 큐도 미확정 전송을 자동 재시도하는 경로가 아니다.
+
+### 9.3 WWG 사례에서 추가할 계획
+
+사용자 제공 [웹쫀쿠 만듬](https://m.dcinside.com/board/ai_utilize/109771)과 글이 연결한 bangak684/WWG의 `77b6d227fcfa35b1b3e78ed61351e70c29b380bb`을 2026-10-30 정적 검토했다. WWG는 웹 ChatGPT의 MCP 호출을 로컬 파일·명령에 연결하는 도구 앱이다. 기존 공동 토론 Core를 교체하지 않고 [대조 검토서](./reviews/wwg-plan-review-20261030.md)의 제안만 다음 계획에 추가한다. 외부 프로그램·테스트를 실행하지 않았고 아래 항목은 미구현이다.
+
+| 제안 | 적용할 내용 | 우선순위·착수 조건 |
+| --- | --- | --- |
+| WWG-R1 읽기 자료 | owner가 허용한 로컬 파일의 읽기 전용 자료 패키지, 원문 해시·시각·크기·발췌 표시와 모든 토커의 공통 snapshot | P1 / WJ-009·010·013 후속. 일반 파일 쓰기 권한 없이 별도 구현 |
+| WWG-R2 권한 수명 | MCP grant·실행 binding의 만료·회수·scope 세대, dispatch/늦은 승인 재검사, 대기 취소·실제 interrupt 대조 | P0 / 실파일 변경을 포함한 WJ-014·015 전에 검증 |
+| WWG-R3 비밀 경계 | 기존 state/profile 가림에 repo .env* 등 보호 경로·링크·변경 경합 검사와 알려진 비밀 출력 가림 추가 | P0 / 실행기 실파일 검증 전. 필요한 Git·Codex 인증 경로와 구분 |
+| WWG-R4 권한 조회 | owner 화면과 scoped MCP의 실제 허용 경로·읽기/쓰기/네트워크·OS/도구·연결/승인/실행 상태 | P1 / WJ-010·013·014. 조회가 권한 확대가 되지 않음 |
+| WWG-R5 요청별 경과 | 기존 Task→CodexJob→turn/item으로 여러 요청·검사·부분 실패·선택 묶음 중단 표시 | P1 / WJ-014·015. 순차 실행 유지, 다중 job 묶음 확대는 최소 MVP-2 뒤 |
+| WWG-R6 기록 보관 | cursor/page UI·큰 출력의 private 원문/digest/생략 표시, 상세 정리와 idempotency tombstone 수명 분리 | P1 / 로그 정리 활성화 전 회귀. 사용자 대화 자동 삭제 금지 |
+| WWG-R7 파일 경합 | 선택 Writer의 기준 해시·적용 전 재검사·부분 반영/중단 diff 대조 | P2 / WJ-016의 별도 sandbox·draft PR 계약 유지 |
+
+상세 수용 기준과 현재 코드의 차이는 검토서에 기록한다. 특히 WWG의 로그 보관 한도 밖 receipt가 사라지면 같은 ID가 다시 실행될 수 있다는 동작은 복제하지 않는다. 우리의 미확정 재전송 금지에 맞춰 최소 중복 방지 기록을 보존하거나 만료 ID를 거절한다. 자동 승인·범용 셸·파일 삭제·Electron/Windows 배포·SDK 전면 교체는 이 글을 근거로 추가하지 않는다. 게시글의 사용 경험도 계정·모델 가용성이나 공식 Connector 검증을 대신하지 않는다.
+
+기존 실계정 MVP-1과 Codex의 읽기 전용 PoC 우선순위는 유지한다. 새 제안 전체를 구현해야 실계정 연결을 시작할 수 있는 것은 아니며, P0는 실제 파일 변경을 허용하기 전의 실행 완료 조건이다.
 
 ## 10. 단계별 개발 계획
 
