@@ -22,7 +22,7 @@ export interface WorkAttempt {
   id: string; taskId: string; roomId: string; taskVersion: number; participantId: string;
   purpose: 'work' | 'review'; seatVersion: number; contextGeneration: number; epoch: number;
   authorizedScopeRef: string; requestId: string; providerTurnId: string | null;
-  input: Pick<WorkTask, 'title' | 'description' | 'kind' | 'sourceMessageIds' | 'acceptance' | 'dependencies' | 'authorizedScopeRef'>;
+  input: Pick<WorkTask, 'title' | 'description' | 'kind' | 'sourceMessageIds' | 'acceptance' | 'dependencies' | 'authorizedScopeRef'> & { previousReportId: string | null; feedbackReviewIds: string[] };
   inputDigest: string; providerPromptDigest: string | null; reportDigest: string | null;
   status: 'claimed' | 'running' | 'unconfirmed' | 'completed' | 'failed' | 'stale';
   startedAt: string; finishedAt: string | null; reported: boolean; error: string | null;

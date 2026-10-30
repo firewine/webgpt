@@ -39,11 +39,12 @@ test('R5-C: one dependency-blocked task does not stop two eligible tasks; automa
 });
 
 test('R5-E: independent rejection preserves report and creates one new attempt; current report digest prevents old review acceptance', async t => {
-  const base = new FakeResidentCompletion({ complete: async () => { throw new Error('No model'); } }, 1); let reviews = 0;
-  const f = await workFixture(t, { provider: { complete: async input => { const result = await base.complete(input); if (input.prompt.startsWith('웹쫀쿠 상주 업무') && data(input).purpose === 'review' && reviews++ === 0) { const value = JSON.parse(result.text); value.proposals[0].payload.decision = 'rework'; value.proposals[0].payload.reason = '근거와 산출물을 한 번 더 확인해 주세요.'; result.text = JSON.stringify(value); } return result; } } });
+  const base = new FakeResidentCompletion({ complete: async () => { throw new Error('No model'); } }, 1); let reviews = 0; const inputs = [];
+  const f = await workFixture(t, { provider: { complete: async input => { if (input.prompt.startsWith('웹쫀쿠 상주 업무')) inputs.push(data(input)); const result = await base.complete(input); if (input.prompt.startsWith('웹쫀쿠 상주 업무') && data(input).purpose === 'review' && reviews++ === 0) { const value = JSON.parse(result.text); value.proposals[0].payload.decision = 'rework'; value.proposals[0].payload.reason = '근거와 산출물을 한 번 더 확인해 주세요.'; result.text = JSON.stringify(value); } return result; } } });
   const id = f.propose(); await f.step(); const first = f.task(id).reports[0]; assert.equal(f.task(id).status, 'review');
   await f.step(); assert.equal(f.task(id).reviews[0].decision, 'rework'); assert.equal(f.task(id).reports.length, 1);
   await f.step(); const task = f.task(id); assert.equal(task.reports.length, 2); assert.notEqual(task.reports[1].digest, first.digest);
+  const rework = inputs.filter(i => i.purpose === 'work')[1]; assert.equal(rework.previousReport.text, first.text); assert.equal(rework.previousReport.digest, first.digest); assert.equal(rework.reviewFeedback[0].reason, '근거와 산출물을 한 번 더 확인해 주세요.');
   assert.throws(() => f.q.review(f.roomId, id, { expectedVersion: task.version, reportDigest: first.digest, decision: 'accept', reason: '이전 보고 수락' }, key()), /work_report_conflict/);
   await f.step(); assert.equal(f.task(id).status, 'done'); assert.equal(f.app.store.read().resident.workAttempts.filter(a => a.taskId === id && a.purpose === 'work').length, 2);
 });

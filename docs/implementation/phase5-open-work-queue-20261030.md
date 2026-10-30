@@ -48,6 +48,8 @@ WorkAttempt는 픽업 시점의 input snapshot/inputDigest와 taskVersion·seatV
 
 보고는 산출물 원문·당시 수용 기준 snapshot·검사·blocker·원문 refs·digest를 보존한다. 다른 제출자의 검토가 현재 reportDigest/taskVersion과 일치하고 수용 기준의 실제 관측/직접 확인이 갖춰져야 done이다. 조건을 바꾸더라도 이전 보고를 새 조건의 검사 결과로 다시 표시하지 않는다. 이미 확정된 보고는 작성자의 이후 context 인계 때문에 소급 폐기하지 않는다.
 
+재작업의 픽업 입력에는 이전 report ID와 해당 검토 ID들을 함께 고정한다. 실제 다음 prompt에 이전 산출물 원문과 반려 사유·검사·이견을 넣으며, 담당자가 검토 의견을 읽고 수정하도록 한다. 같은 context history에 이전 산출물만 있다는 이유로 새 검토 의견을 생략하지 않는다.
+
 | owner API | 동작 |
 | --- | --- |
 | GET /api/rooms/:room/work?after=N&limit=N | 큐 요약·역할·다음 페이지. 기본50/최대100. 원문/보고 전체를 /api/state에 넣지 않음 |
