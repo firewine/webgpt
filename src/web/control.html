@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ko">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>웹쫀쿠 · 함께 검토하는 작업실</title><link rel="stylesheet" href="/control.css"><script type="module" src="/control.js"></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="light dark"><title>웹쫀쿠 · 함께하는 채팅방</title><link rel="stylesheet" href="/control.css"><script type="module" src="/control.js"></script></head>
 <body>
 <div id="notice" class="notice" role="status" hidden></div>
 <section id="login" class="login">
@@ -12,14 +12,41 @@
   <aside class="sidebar">
     <a class="brand" href="/" aria-label="웹쫀쿠 홈"><span class="brand-mark">W</span><span>웹쫀쿠<small>Discussion workspace</small></span></a>
     <button id="new-discussion" class="primary">+ 새 토의</button>
-    <nav aria-label="작업실 메뉴"><button data-view="discussion" class="nav-button selected">◉ 토의 작업실</button><button data-view="connections" class="nav-button">◎ 참여자와 연결</button><button data-view="execution" class="nav-button">⌘ Codex 실행</button></nav>
+    <nav aria-label="작업실 메뉴"><button data-view="room" class="nav-button">◌ 채팅방</button><button data-view="discussion" class="nav-button selected">◉ 토의 작업실</button><button data-view="connections" class="nav-button">◎ 참여자와 연결</button><button data-view="execution" class="nav-button">⌘ Codex 실행</button></nav>
+    <section id="room-member-panel" aria-label="방 참여자" hidden><div class="sidebar-heading">함께하는 참여자</div><div id="room-members"></div><button id="room-connections" class="text-button">참여자 연결 관리 ↗</button></section>
     <div class="sidebar-heading">토의 기록 <span id="history-count">0</span></div><div id="history" class="history"></div>
     <footer><span id="connection-status" class="network">연결 중</span><button id="logout" class="text-button">로그아웃</button></footer>
   </aside>
   <main>
-    <header class="topbar"><div><span class="status-dot"></span> PRIVATE WORKSPACE</div><span id="mode-label">영구 기록 · 자동 저장</span></header>
+    <header class="topbar"><div><span class="status-dot"></span> PRIVATE WORKSPACE</div><div class="inline"><span id="mode-label">영구 기록 · 자동 저장</span><button id="theme-toggle" class="text-button" aria-pressed="false">어두운 테마</button></div></header>
+    <section id="view-room" class="room-view" aria-label="상주 채팅방" hidden>
+      <div class="chat-column">
+        <header class="room-heading"><div><p class="eyebrow">WEBJJOKU / CHAT ROOM</p><h1 id="room-title">상주 작업실</h1><p id="room-state" class="small muted" role="status"></p></div><div class="room-actions"><button id="room-power" aria-pressed="false">방 켜기</button><button id="room-wake" hidden>깨우기</button><button id="room-member-toggle" aria-haspopup="dialog">참여자</button><button id="room-panel-toggle" aria-haspopup="dialog">자료·상태</button></div></header>
+        <p id="room-disabled" class="room-banner" hidden>상주 기능이 꺼져 있습니다. 토의 작업실에서 기존 토의와 기록을 사용할 수 있습니다.</p>
+        <div id="room-timeline" class="room-timeline" tabindex="0" role="region" aria-label="방 대화 이력"><button id="room-more" hidden>이력 더 읽기</button><div id="room-messages"></div><div id="room-notices" aria-label="운영 알림"></div></div>
+        <div class="unread-row"><button id="room-unread" hidden>읽지 않은 메시지</button><button id="room-latest">최근 메시지로 ↓</button></div>
+        <form id="room-message-form" class="room-composer">
+          <div id="room-reply" class="reply-target" hidden></div><div id="room-mentions" class="mention-chips"></div>
+          <label class="sr-only" for="room-text">방에 메시지 보내기</label><textarea id="room-text" name="text" rows="2" maxlength="20000" placeholder="대화에 참여하세요. @로 참여자를 부를 수 있어요." required></textarea>
+          <div id="room-suggestions" role="group" aria-label="멘션할 참여자" hidden></div>
+          <div class="composer-tools"><div class="inline"><label class="sr-only" for="room-mention-select">멘션 대상</label><select id="room-mention-select"><option value="">@ 참여자</option></select><button id="room-mention-add" type="button">멘션</button></div><span class="small muted">Enter 전송 · Shift+Enter 줄바꿈</span><button id="room-send" class="primary" type="submit">보내기 ↑</button></div>
+          <p id="room-send-state" class="small muted" role="status"></p>
+        </form>
+      </div>
+      <aside id="room-panel" class="room-panel" aria-label="방 자료와 실행 상태">
+        <div class="panel-heading"><h2>작업실 보드</h2><button id="room-settings" class="text-button">방 설정</button></div>
+        <section class="board-section"><h3>진행 한도</h3><div id="room-usage"></div></section>
+        <section class="board-section"><h3>주제 토론</h3><div id="room-focus"></div><button id="room-focus-new">이 방에서 주제 토론</button></section>
+        <details class="board-section"><summary>연결·응답·실행 관측</summary><div id="room-status"></div></details>
+        <details class="board-section"><summary>참고 자료</summary><div id="room-materials"></div><button id="room-material-manage">자료 준비하기 ↗</button></details>
+        <details class="board-section" open><summary>실행·승인</summary><div id="room-jobs"></div><button id="room-execution">Codex 실행 열기 ↗</button></details>
+        <details class="board-section"><summary>원본과 복구</summary><div id="room-records"></div><div id="room-raw"></div></details>
+        <p class="small muted">열린 작업큐와 공유 Wiki는 준비 중입니다. 업무·Wiki 제안은 아직 실행되지 않습니다.</p>
+      </aside>
+    </section>
     <section id="view-discussion" class="view">
       <div id="composer">
+        <p id="discussion-mode" class="room-banner" hidden></p>
         <div class="page-heading"><p class="eyebrow">ONE TOPIC, MULTIPLE PERSPECTIVES</p><h1>함께 생각할 주제는 무엇인가요?</h1><p class="muted">각자의 답변을 모두 모은 뒤, 서로의 전체 발언을 읽고 독립적으로 재분석·반론·수정을 반복합니다.</p></div>
         <form id="discussion-form" class="panel composer">
           <label class="sr-only" for="topic">토의 주제</label><textarea id="topic" name="topic" required maxlength="5000" rows="4" placeholder="예: 개인용 AI 작업실을 Ubuntu 서버에서 운영하려면 어떤 구성이 가장 안정적일까?"></textarea>
@@ -64,4 +91,7 @@
   </main>
 </div>
 <dialog id="action-dialog"><form id="action-form"><h2 id="action-title"></h2><div id="action-fields"></div><div class="toolbar"><button id="action-cancel" type="button">닫기</button><button class="primary" type="submit">적용</button></div></form></dialog>
+<dialog id="room-members-dialog" class="room-drawer" aria-labelledby="room-members-dialog-title"><div class="panel-heading"><h2 id="room-members-dialog-title">방 참여자</h2><button type="button" data-close-drawer>닫기</button></div><div id="room-members-slot"></div></dialog>
+<dialog id="room-panel-dialog" class="room-drawer" aria-labelledby="room-panel-dialog-title"><div class="panel-heading"><h2 id="room-panel-dialog-title">자료와 상태</h2><button type="button" data-close-drawer>닫기</button></div><div id="room-panel-slot"></div></dialog>
+<dialog id="room-settings-dialog" aria-labelledby="room-settings-title"><form id="room-settings-form"><h2 id="room-settings-title">방 진행 한도와 속도</h2><p class="small muted">방을 끈 상태에서 저장합니다. 값을 직접 정해 주세요. 한도를 바꿔도 누적 요청과 사용량은 유지됩니다.</p><div class="two-columns"><label>누적 요청 한도<input name="maxRequests" type="number" min="1" max="10000" required></label><label>보고된 토큰 한도<input name="maxTokens" type="number" min="1" max="100000000" required></label><label>누적 도구 작업 한도<input name="maxToolJobs" type="number" min="0" max="100" required></label><label>진행 종료 시각 (이 기기 현지 시각)<input name="deadlineAt" type="datetime-local" required></label><label>발언 사이 최소 간격 (초)<input name="minInterval" type="number" min="0.001" max="3600" step="0.001" required></label><label>조용할 때 다시 묻기 (초)<input name="idleNudge" type="number" min="0.001" max="86400" step="0.001" required></label><label>pass 후 대기 기준 (초)<input name="passBackoff" type="number" min="0.001" max="86400" step="0.001" required></label><label>연속 pass 휴면 횟수<input name="sleepAfterPasses" type="number" min="1" max="100" required></label></div><p class="small muted">토큰 한도는 실제 보고된 소비량으로 다음 요청을 막습니다. 사용량 미제공은 별도로 표시합니다.</p><div class="toolbar"><button type="button" data-close-drawer>닫기</button><button class="primary" type="submit">설정 저장</button></div></form></dialog>
 </body></html>
