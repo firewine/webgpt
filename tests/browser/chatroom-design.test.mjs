@@ -47,7 +47,7 @@ test('reference layout: compact members/power, avatar bubbles, tabbed board and 
       const box = selector => { const r = document.querySelector(selector).getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, bottom: r.bottom, right: r.right }; };
       return { overflow: document.documentElement.scrollWidth > innerWidth, chat: box('.chat-column'), sidebar: box('.sidebar'), composer: box('#room-message-form'), timeline: box('#room-timeline'), bubble: box('.room-message:not(.mine) .message-text'), avatar: box('.room-message:not(.mine) .avatar'), color: getComputedStyle(document.querySelector('#view-room')).backgroundColor };
     });
-    assert.equal(bounds.overflow, false); assert.ok(bounds.composer.bottom <= (width === 390 ? 844 : 1000)); assert.ok(bounds.timeline.height > 250); assert.equal(bounds.color, 'rgb(240, 242, 247)');
+    assert.equal(bounds.overflow, false); assert.ok(bounds.composer.bottom <= (width === 390 ? 844 : 1000)); assert.ok(bounds.timeline.height > 250); assert.equal(bounds.color, 'rgb(245, 245, 245)');
     assert.ok(bounds.avatar.x < bounds.bubble.x); assert.ok(bounds.avatar.width >= 30);
     if (width === 1440) {
       const leftPower = await page.locator('#room-power').boundingBox(); const board = await page.locator('#room-panel').boundingBox();

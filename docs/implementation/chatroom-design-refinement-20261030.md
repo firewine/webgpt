@@ -1,20 +1,20 @@
 # R3 GUI 디자인 보완 — 96397 단톡방 예시
 
-진행 상태는 [개발 페이즈 SSOT](../development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)를 따른다. 2026-10-30 사용자 요청 “페이즈 5 전에 GUI 보완부터 하자. 내가 보여준 예시처럼 디자인을 맞추고 기존 백엔드는 유지해”에 따른 R3 보완이다. 새 기능 페이즈를 만들거나 기존 수락 기준을 변경하지 않았다.
+진행 상태는 [개발 페이즈 SSOT](../development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)를 따른다. 2026-10-30 사용자 요청 “페이즈 5 전에 GUI 보완부터 하자. 내가 보여준 예시처럼 디자인을 맞추고 기존 백엔드는 유지해”에 따른 R3 보완이다. PR #17 병합 후 사용자가 요청한 Black & White 테마를 추가 반영했다. 새 기능 페이즈를 만들거나 기존 수락 기준을 변경하지 않았다.
 
 | 항목 | 확인 |
 | --- | --- |
 | 기준 main / 브랜치 | 765a4db442d8957d013c70748e4d4111c52ec976 (PR #16 사용자 병합) / codex/chatroom-design-refinement-20261030 |
 | 디자인 참고 | 사용자 지정 96397 글의 첫 단톡방 이미지, Moris-kr/ai-chatroom 고정 revision 817c165b92ce42f5a96504198a346b936d3e2f38. [기존 참고 검토](../reviews/chatroom-ui-review-20261030.md)의 고정 자료를 재대조 |
 | 원래 차이 | 큰 내비게이션/관리 폼·녹색 계열 배경이 남아 예시의 작은 멤버 목록·아바타 옆 말풍선·회색 중앙·탭 보드 인상을 충분히 반영하지 못함 |
-| 결과 | 작은 좌측 멤버·방 제어/설정, 중앙 회색 대화·화자별 색/원형 아바타·인용 말풍선, 우측 작업실/사용량/실행·상태 탭, 보드 접기와 밝음/어두움 테마 |
+| 결과 | 작은 좌측 멤버·방 제어/설정, 중앙 회색 대화·화자별 회색 명도/원형 아바타·인용 말풍선, 우측 작업실/사용량/실행·상태 탭, 보드 접기와 밝음/어두움 흑백 테마 |
 | 검사 환경 | Node 24.18.0 / npm 11.16.0 / 실제 Chrome 156.0.8078.47 / Chrome DevTools MCP 1.12.0. 임시 DB·synthetic 계정/대화만 사용 |
 | 자동 검사 | strict TypeScript·빌드·Node 132 PASS, 실제 Chrome/MCP 24 PASS, 모두 0 FAIL / 0 SKIP |
 | 미실행 | 운영 배포·서비스 재시작·.env 변경·실계정 호출 NOT_RUN. R3-E 실제 기기 IME/가상 키보드/터치와 R4-D 실제 dot/Muse 왕복은 여전히 UNVERIFIED |
 
 ## 1. 변경 화면
 
-아래는 **모의 참여자와 합성 대화**를 실제 앱에 표시한 Chromium 캡처다. 개인 계정·사적 대화나 외부 캐릭터 그림을 사용하지 않았다. 렌더링된 UI이며 별도의 시안 앱이 아니다.
+아래는 후속 흑백 테마를 반영해 **모의 참여자와 합성 대화**를 실제 앱에 표시한 Chromium 캡처다. 개인 계정·사적 대화나 외부 캐릭터 그림을 사용하지 않았다. 렌더링된 UI이며 별도의 시안 앱이 아니다.
 
 ![1440px 단톡방](./assets/gui-refinement-20261030/chatroom-1440.png)
 
@@ -26,13 +26,13 @@
 | --- | --- |
 | 실제 frontend | [control.html](../../src/web/control.html)·[control.css](../../src/web/control.css)·[RoomView](../../src/web/room-view.ts)만 변경. 기존 renderer/API facade를 재사용. 서버·API·DB·provider·엔진·Codex·승인/복구 변경0 |
 | 레이아웃 | 방 제어/속도 설정을 멤버 목록에 배치. 1440px는 3열, 1024px는 좌측 멤버+중앙 대화/보드 drawer, 768/390px는 중앙 대화+멤버/보드 dialog. 연결/토의/실행 상세도 같은 색상·간격으로 정리하고 원래 메뉴/폼 유지 |
-| 메시지 | 원래 message/participant ID·replyTo·mentions·digest/원문 그대로. 표시용 화자 색/이니셜 아바타/모델 표시와 말풍선만 변경. 축약한 시각은 time 요소의 원래 datetime·전체 시각 title을 유지 |
+| 메시지 | 원래 message/participant ID·replyTo·mentions·digest/원문 그대로. 표시용 회색 명도/이니셜 아바타/모델 표시와 말풍선만 변경. 축약한 시각은 time 요소의 원래 datetime·전체 시각 title을 유지 |
 | 보드·접근성 | 작업실/사용량/실행·상태를 같은 DOM의 탭으로 표시. 좌우/Home/End 키·포커스·aria-selected, 데스크톱 접기, 모바일 native dialog. 원문을 열면 원본/복구 탭이 열림 |
 | 로컬 상태 | 기존 wj.discussion·wj.room.*·읽기 위치/펼침/답장/테마 유지. 보드 탭/접힘 표시 상태만 추가. SSE·provider 호출·DB 이관/command/event 변경0 |
 | 안전 경계 | 기능 flag·명시 예산/속도·off 기본·xhigh·수동 Chrome·identity/thread·미확정 대조·Codex 승인 모두 유지. 미정 U2의 느긋/보통/활발 숫자를 새로 정하거나 자동 on하지 않음 |
-| 외부 자산 | 고정 참고의 배치·색상 분위기를 대조했으며 자체 HTML/CSS/이니셜 사용. 외부 JS/CSS 파일·폰트/CDN·캐릭터 이미지 복사0. 지도/건물/3D·sticker/boost 기능 추가0 |
+| 외부 자산 | 고정 참고의 배치를 대조하고 색상은 사용자의 흑백 요청을 우선했으며 자체 HTML/CSS/이니셜 사용. 외부 JS/CSS 파일·폰트/CDN·캐릭터 이미지 복사0. 지도/건물/3D·sticker/boost 기능 추가0 |
 
-현재 변경량은 frontend3개, browser 검사2개, SSOT/README/실행 기록3개, 합성 캡처3개다. UI의 작은 Adapter와 같은 DOM projection을 유지해 새 renderer framework·backend 의존성을 만들지 않았다.
+최초 디자인 보완(PR #17)의 변경량은 frontend3개, browser 검사2개, SSOT/README/실행 기록3개, 합성 캡처3개다. UI의 작은 Adapter와 같은 DOM projection을 유지해 새 renderer framework·backend 의존성을 만들지 않았다.
 
 | 후속 페이즈 | 영향·변경량 검토 |
 | --- | --- |
@@ -62,3 +62,11 @@ node --test --test-reporter=spec tests/browser/*.test.mjs
 변경 문서3개의 로컬 링크/앵커74개 오류0, 사용자 기존 미추적 파일35개 hash 변화0, git diff --check 오류0을 확인했다. 비밀·개인 계정/대화·운영 캡처는 이 PR에 넣지 않는다.
 
 UI만 되돌릴 때는 이전 frontend의 control/RoomView를 함께 되돌려 같은 API/DB/원문을 사용한다. 새 로컬 표시 키는 지우지 않아도 기존 reader에 영향을 주지 않는다. 실제 서버까지 이전 버전으로 전환할 때는 기존 G0의 진행·미확정 turn/job/receipt 대조를 따른다. DB 삭제/backup restore·계정 로그아웃·Chrome 초기화로 디자인 변경을 복구하지 않는다.
+
+## 4. 후속 흑백 테마 요청
+
+사용자의 “녹색테마 말고 black anf white로 하자” 요청에 따라 PR #17 병합 main `221f6539b1804973ea41dc8ffb709598672971c9`에서 `codex/monochrome-theme-20261030` 브랜치를 시작했다. 밝음은 흰색 바탕·검정 강조, 어두움은 검정 바탕·흰색 강조다. 로고·화자/아바타·버튼·토글·인용·포커스와 로그인/연결/토의/실행 화면 모두 회색 계열을 사용한다. 색상은 `--accent`·`--on-accent`·표면/문자/포커스 CSS 변수로 관리하고 기존 이름·이니셜·상태 문구·선택 위치를 유지했다.
+
+이번 변경은 CSS1개, 기존 디자인 검사의 배경색 기대값1개, 문서3개와 합성 캡처3개다. DOM·TypeScript·API·DB·dependency·실행/계정/승인 변경0이며 페이즈 5~8의 계약·순서·추가 backend 재작업0이다. 운영 서비스 재시작·배포·실계정 호출은 NOT_RUN이다.
+
+같은 명령으로 strict TypeScript·빌드·Node132 PASS 및 실제 Chrome/MCP browser24 PASS(각 FAIL0/SKIP0)를 확인했다. CSS의 색상 리터럴은 모두 R=G=B이고, 사용한 CSS 변수의 미정의·자기 참조는0이다. 현재 본문의 PC·모바일·어두운 테마 캡처는 이 검사에서 재생성했다. CSS만 이전 버전으로 되돌리면 같은 DOM·API·데이터로 이전 색상을 표시할 수 있다.

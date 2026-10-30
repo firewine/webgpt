@@ -2,13 +2,13 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
-2026-10-30 사용자 지시에 따라 **이 표를 페이즈 범위·순서·진행 상태의 SSOT**로 사용한다. 아래 설계/검토 문서의 과거 “계획 문서만” 제한은 당시 작업 이력이며, 현재 승인 작업은 **페이즈 5 전 R3 GUI 디자인 보완**이다. 사용자 요청대로 96397 예시에 맞춰 화면을 보완하며 기존 backend·R3 수락 기준·페이즈 5~8 계약을 변경하지 않는다. 제품 목표·기존 데이터·승인/미확정 대조는 유지한다. 세부 수락 gate·롤백은 [단계별 계약](./resident-implementation-plan.md)을 참조한다. 계획 변경이 필요하면 **현재 단계와 남은 모든 페이즈의 영향·총변경량을 먼저 검토해 사용자 승인을 받은 뒤** 이 SSOT와 관련 계획서를 함께 변경한다. 구현 결과에 맞춰 계획을 사후 정당화하지 않는다. 구체적인 변경 승인 절차는 [개발 지침](./development-guidelines.md#5-계획-변경-사전-승인과-후속-페이즈-영향-검토)을 따른다.
+2026-10-30 사용자 지시에 따라 **이 표를 페이즈 범위·순서·진행 상태의 SSOT**로 사용한다. 아래 설계/검토 문서의 과거 “계획 문서만” 제한은 당시 작업 이력이며, 현재 승인 작업은 **페이즈 5 전 R3 GUI 디자인 보완과 사용자 요청의 흑백 테마 적용**이다. 사용자 요청대로 96397 예시의 배치를 유지하고 색상은 흑백으로 맞추며 기존 backend·R3 수락 기준·페이즈 5~8 계약을 변경하지 않는다. 제품 목표·기존 데이터·승인/미확정 대조는 유지한다. 세부 수락 gate·롤백은 [단계별 계약](./resident-implementation-plan.md)을 참조한다. 계획 변경이 필요하면 **현재 단계와 남은 모든 페이즈의 영향·총변경량을 먼저 검토해 사용자 승인을 받은 뒤** 이 SSOT와 관련 계획서를 함께 변경한다. 구현 결과에 맞춰 계획을 사후 정당화하지 않는다. 구체적인 변경 승인 절차는 [개발 지침](./development-guidelines.md#5-계획-변경-사전-승인과-후속-페이즈-영향-검토)을 따른다.
 
 | 페이즈 | R단계 | 개발 범위 | 완료 판정 | 상태 |
 | --- | --- | --- | --- | --- |
 | 1. 방 데이터 기반 | R1 | optional resident state·기존 DB 이관·방/메시지 조회·설정 제어 API·기능 flag | 기존 데이터/원문/event cursor/명령 보존, 중복 이관/명령 방지·인증·꺼짐 복구 | **완료 / PR #13 병합** ([증거](./implementation/phase1-resident-foundation-20261030.md)) |
 | 2. 상주 실행 | R2 | 공통 dispatch·방 on/off·발화/JSON·예산/휴면·topic focus·문맥 인계 | provider 최대1·미확정 재전송0·초안 공개/세대 대조·인계/복구 | **완료 / PR #14 병합** ([증거](./implementation/phase2-resident-runtime-20261030.md)) |
-| 3. 단톡방 GUI | R3 | 기존 control.*의 멤버·말풍선·답장/멘션·미읽음·보조 패널·상태 알림 | 4 viewport·IME/접근성·장문·재접속·기존 승인/복구 UI 보존 | **PR #15 병합 · 디자인 보완 구현/자동 검사 완료·병합 대기 · 실기기 UNVERIFIED** ([R3 증거](./implementation/phase3-chatroom-gui-20261030.md)·[보완 화면/증거](./implementation/chatroom-design-refinement-20261030.md)) |
+| 3. 단톡방 GUI | R3 | 기존 control.*의 멤버·말풍선·답장/멘션·미읽음·보조 패널·상태 알림 | 4 viewport·IME/접근성·장문·재접속·기존 승인/복구 UI 보존 | **PR #15·#17 병합 · 흑백 테마 자동 검사 완료·병합 대기 · 실기기 UNVERIFIED** ([R3 증거](./implementation/phase3-chatroom-gui-20261030.md)·[보완 화면/증거](./implementation/chatroom-design-refinement-20261030.md)) |
 | 4. 연결 편의성 | R4 | browser discovery/preset→기존 probe·advanced fallback | 사용자 CSS 입력 최소화·identity/thread/draft 불일치 전송0 | **PR #16 병합 · R4-D 실계정 왕복 UNVERIFIED** ([증거](./implementation/phase4-browser-discovery-20261030.md)) |
 | 5. 역할·열린 작업큐 | R5 | 일감 제안·완료 조건/의존성·역할/가용 자원·pickup·보고/리뷰/재작업 | 동시 claim1·불완전/권한 밖 ready0·자기 승인/근거 없는 done0 | 대기 |
 | 6. 실제 업무 수행 | R6 | 기존 Codex·scope 재검사·실행 근거/방 보고·독립 리뷰 | 중복 실행0·늦은 승인/결과 대조·실파일 안전 gate·업무 리뷰 | 대기 |
