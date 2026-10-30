@@ -2,6 +2,8 @@
 
 실제 사용자 Ubuntu 서버에 적용할 절차다. 개발 컨테이너에서 계정 로그인이나 Tailnet 배포를 완료했다는 기록이 아니다. 처음에는 같은 OS 사용자가 관리하는 개인 서버를 대상으로 한다.
 
+2026-10-30 실제 Ubuntu 점검은 [개발 재개 기록](implementation/ubuntu-readiness-20261030.md)에 남겼다. 당시 앱은 `.env`의 4090에서 이미 실행 중이었고 3000은 다른 서비스가 사용했다. 아래 기본 포트를 실제 값으로 가정하지 말고 현재 `.env`·수신 포트·프로세스·Serve 설정부터 읽는다. 같은 state를 사용하는 앱을 중복 실행하지 않는다.
+
 ## 1. 환경과 설치
 
 Node.js 24.x, npm 11.x, Git, Tailscale, Chrome과 필요한 계정 권한을 준비한다. 아래 Linux 패키지는 Chrome 화면과 Codex의 비밀 경로 격리에 사용한다. Codex 실행에는 mount/PID namespace와 전용 procfs를 만들 수 있는 bubblewrap 환경이 필요하다. 이 개발 컨테이너는 namespace 생성을 허용하지 않았으며, 운영 호스트에서 이를 확인해야 한다. 실패 시 격리를 끄고 실행하지 않는다.
@@ -45,7 +47,7 @@ npm run serve:tailnet
 | 경계 | 주소 |
 | --- | --- |
 | 사용자의 웹 UI/API/SSE/noVNC | Tailscale HTTPS 한 origin |
-| 앱 | `127.0.0.1:3000` |
+| 앱 | `.env`의 loopback 주소·`WJ_PORT`; 예제 기본 `127.0.0.1:3000` |
 | OAuth callback | `127.0.0.1:1455/auth/callback` |
 | Chrome CDP | `127.0.0.1:9222` |
 | noVNC/websockify | `127.0.0.1:6080` |
