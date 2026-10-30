@@ -42,6 +42,8 @@ Linux의 /proc/self/fd와 `O_NOFOLLOW`를 사용해 열린 디렉터리 inode에
 
 첫 sandbox 내부 전체 검사에서 소켓/프로세스 제약으로 파일 단위 실패를 관측해 Ubuntu 권한으로 재실행했다. 이후 버전 파싱 오류를 고치고 최종 소스에서 위 전체 검사와 browser 검사를 통과했다. SKIP을 PASS로 세지 않았다.
 
+첫 PR CI의 browser 단계에서 자료 저장 응답보다 SSE 목록 갱신이 먼저 시작되면 자동 선택이 빠지는 오류를 발견했다. 저장한 자료 ID를 보류하고 실제 목록 렌더링 때 선택하도록 고쳤다. browser fixture는 state 응답을 의도적으로 보류하고 자료 저장 응답을 먼저 완료해 같은 순서를 재현한다. 타임아웃을 늘려 통과시키는 방식은 사용하지 않았다.
+
 ## 실제 서비스 반영
 
 반영 직전 prepared/running/unconfirmed turn=0, queued/running/approval/reconciling job=0 및 OAuth callback listener 없음 확인. `npm run backup`으로 private SQLite `backups/2026-10-30T04-28-00.429Z.sqlite`를 생성했다. 이 운영 백업은 provider token을 제외하므로 복구 시 해당 계정은 재연결해야 한다. 앱 `webjjoku.service`만 재시작하고 desktop·Chrome profile·3000의 다른 서비스·Tailscale 설정은 변경하지 않았다. 운영 포트 4090·HTTPS 8443을 유지한다.

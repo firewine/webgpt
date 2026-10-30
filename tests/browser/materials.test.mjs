@@ -16,7 +16,23 @@ test('owner attaches server files, sees immutable evidence and inspects policy o
   await page.goto(f.url); await page.waitForFunction(() => !document.querySelector('#workspace').hidden);
   await page.locator('.material-controls summary').click(); await page.locator('#material-folder').fill(root); await page.locator('#material-browse').click();
   await page.getByRole('button', { name: '추가 · requirements.txt', exact: true }).click(); assert.equal(await page.locator('#material-paths').inputValue(), file);
+  // Force SSE to start a slow state refresh before the material POST returns.
+  // The POST handler must retain the selection until that render actually runs.
+  let saved = false; let held = false; let releaseRefresh; let reportRefresh;
+  const refreshStarted = new Promise(resolve => { reportRefresh = resolve; });
+  const refreshReleased = new Promise(resolve => { releaseRefresh = resolve; });
+  await page.route('**/api/state', async route => {
+    const response = await route.fetch();
+    if (saved && !held) { held = true; reportRefresh(); await refreshReleased; }
+    await route.fulfill({ response });
+  });
+  await page.route('**/api/materials', async route => {
+    saved = true; const response = await route.fetch(); await refreshStarted; await route.fulfill({ response });
+  });
   await page.locator('#material-label').fill('설계 원문'); await page.locator('#material-prepare').click();
+  await refreshStarted;
+  await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('파일 사본을 저장'));
+  releaseRefresh();
   await page.locator('#material-picker input:checked').waitFor(); await page.locator('#material-picker summary').click(); assert.match(await page.locator('#material-picker').textContent(), /SHA-256/);
   await page.reload(); await page.waitForFunction(() => !document.querySelector('#workspace').hidden); assert.match(await page.locator('#material-picker').textContent(), /설계 원문/);
   await page.locator('.material-controls summary').first().click(); await page.locator('#material-picker input').check();

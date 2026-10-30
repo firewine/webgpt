@@ -11,6 +11,7 @@ const effortOptions = [{ value: 'low', label: 'Low · 낮음' }, { value: 'mediu
 function effortLabel(value: string): string { return effortOptions.find(o => o.value === value)?.label ?? value; }
 let cursor = 0; let refreshing = false; let again = false; let timer = 0; let choiceSignature = ''; let noticeTimer = 0;
 let materialSignature = '';
+let pendingMaterialSelection: string | null = null;
 const phases: Record<Phase, string> = { independent: '초기안', cross_review: '상호 검토', verification: '검증', revision: '수정안', synthesis: '종합', summary_review: '종합안 검토' };
 const states: Record<string, string> = { running: '진행 중', paused: '일시정지', blocked: '확인 필요', completed: '완료', partial: '부분 완료', cancelled: '취소',
   prepared: '전송 준비', pending: '대기', failed: '실패', unconfirmed: '결과 미확인', stale: '이전 조건의 응답', connected: '연결됨', auth_required: '로그인 필요', unverified: '미확인', error: '연결 오류',
@@ -97,12 +98,16 @@ function render(): void {
 function renderMaterials(): void {
   if (!state) return;
   $('#material-roots').textContent = state.materialRoots.length ? '허용 경로: ' + state.materialRoots.join(', ') : '읽기 허용 경로가 없습니다. 서버의 WJ_MATERIAL_ROOTS에 공유할 파일·폴더를 지정하면 사용할 수 있습니다.';
-  const signature = JSON.stringify(state.materialPackages); if (signature === materialSignature) return; materialSignature = signature;
-  const target = $('#material-picker'); const checked = new Set([...target.querySelectorAll<HTMLInputElement>('input:checked')].map(i => i.value)); target.replaceChildren();
-  for (const pack of state.materialPackages) {
-    const card = node('section', '', 'material-package'); const label = node('label', '', 'check'); const check = node('input'); check.type = 'checkbox'; check.value = pack.id; check.checked = checked.has(pack.id); label.append(check, node('span', pack.label));
-    card.append(label, details('수집한 파일과 해시', pack.files.map(f => f.path + '\n' + f.size + ' bytes · ' + time(f.observedAt) + ' · 전체 파일\nSHA-256 ' + f.digest).join('\n\n'), pack.id)); target.append(card);
+  const signature = JSON.stringify(state.materialPackages); const target = $('#material-picker');
+  if (signature !== materialSignature) {
+    materialSignature = signature; const checked = new Set([...target.querySelectorAll<HTMLInputElement>('input:checked')].map(i => i.value)); target.replaceChildren();
+    for (const pack of state.materialPackages) {
+      const card = node('section', '', 'material-package'); const label = node('label', '', 'check'); const check = node('input'); check.type = 'checkbox'; check.value = pack.id; check.checked = checked.has(pack.id); label.append(check, node('span', pack.label));
+      card.append(label, details('수집한 파일과 해시', pack.files.map(f => f.path + '\n' + f.size + ' bytes · ' + time(f.observedAt) + ' · 전체 파일\nSHA-256 ' + f.digest).join('\n\n'), pack.id)); target.append(card);
+    }
   }
+  const prepared = [...target.querySelectorAll<HTMLInputElement>('input')].find(i => i.value === pendingMaterialSelection);
+  if (prepared) { prepared.checked = true; pendingMaterialSelection = null; }
 }
 async function browseMaterials(path: string): Promise<void> {
   const result = await api<{ path: string; entries: { name: string; directory: boolean }[] }>('/api/materials/list', { path });
@@ -281,7 +286,7 @@ function click(id: string, action: () => Promise<unknown>): void { $(id).addEven
 const prepareButton = button('파일 읽고 자료 저장', async () => {
   const paths = $<HTMLTextAreaElement>('#material-paths').value.split('\n').map(p => p.trim()).filter(Boolean);
   const result = await api<{ id: string }>('/api/materials', { label: $<HTMLInputElement>('#material-label').value, paths });
-  await refresh(); const check = [...document.querySelectorAll<HTMLInputElement>('#material-picker input')].find(i => i.value === result.id); if (check) check.checked = true;
+  pendingMaterialSelection = result.id; await refresh();
   announce('파일 사본을 저장하고 다음 토의의 자료로 선택했습니다.');
 }); prepareButton.id = 'material-prepare'; $('#material-prepare').replaceWith(prepareButton);
 const browseButton = button('폴더 확인', () => browseMaterials($<HTMLInputElement>('#material-folder').value)); browseButton.id = 'material-browse'; $('#material-browse').replaceWith(browseButton);
