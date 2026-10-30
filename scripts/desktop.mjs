@@ -13,11 +13,14 @@ for (const path of ['/tmp/.X11-unix/X99', '/tmp/.X99-lock']) {
   catch (error) { if (error.code !== 'ENOENT') throw error; }
 }
 const display = ':99'; const env = { ...process.env, DISPLAY: display };
+// The dedicated Xvfb desktop must not inherit the interactive Wayland session.
+delete env.WAYLAND_DISPLAY; delete env.XAUTHORITY; env.XDG_SESSION_TYPE = 'x11';
 // Core/provider secrets do not belong in Chrome or VNC child environments.
 for (const key of Object.keys(env)) if (/^(WJ_|OPENAI_API_KEY|DEEPSEEK_API_KEY|CONTROL_PLANE_API_KEY)/.test(key)) delete env[key];
 function start(command, args) {
   const child = spawn(command, args, { env, shell: false, stdio: ['ignore', 'ignore', 'ignore'] }); children.push(child);
-  child.once('error', () => stop(1)); child.once('exit', () => { if (!stopping) stop(1); }); return child;
+  child.once('error', () => { console.error(`Desktop dependency failed to start: ${command}`); stop(1); });
+  child.once('exit', (code, signal) => { if (!stopping) { console.error(`Desktop dependency exited: ${command} (${signal ?? code})`); stop(1); } }); return child;
 }
 function stop(code = 0) { if (stopping) return; stopping = true; process.exitCode = code; for (const child of children.toReversed()) child.kill('SIGTERM'); }
 process.on('SIGTERM', () => stop()); process.on('SIGINT', () => stop());

@@ -1,4 +1,4 @@
-# Ubuntu 운영 절차 — v0.2
+# Ubuntu 운영 절차 — v0.3
 
 실제 사용자 Ubuntu 서버에 적용할 절차다. 개발 컨테이너에서 계정 로그인이나 Tailnet 배포를 완료했다는 기록이 아니다. 처음에는 같은 OS 사용자가 관리하는 개인 서버를 대상으로 한다.
 
@@ -6,7 +6,9 @@
 
 ## 1. 환경과 설치
 
-Node.js 24.x, npm 11.x, Git, Tailscale, Chrome과 필요한 계정 권한을 준비한다. 아래 Linux 패키지는 Chrome 화면과 Codex의 비밀 경로 격리에 사용한다. Codex 실행에는 mount/PID namespace와 전용 procfs를 만들 수 있는 bubblewrap 환경이 필요하다. 이 개발 컨테이너는 namespace 생성을 허용하지 않았으며, 운영 호스트에서 이를 확인해야 한다. 실패 시 격리를 끄고 실행하지 않는다.
+2026-10-30 승인 후 [상시 운영·HTTPS·원격 Chrome 적용](implementation/ubuntu-services-20261030.md)을 수행했다. 앱·desktop은 systemd로 실행 중이고 linger·HTTPS 8443·인증 noVNC 입력·서비스 재시작까지 확인했다. 다른 기기·실제 호스트 재부팅·실계정 완료 판정과 구분한다.
+
+Node.js 24.x, npm 11.x, Git, Tailscale, Chrome과 필요한 계정 권한을 준비한다. 아래 Linux 패키지는 Chrome 화면과 Codex의 비밀 경로 격리에 사용한다. Codex 실행에는 mount/PID namespace와 전용 procfs를 만들 수 있는 bubblewrap 환경이 필요하다. 통합 구현 당시 개발 컨테이너에서는 namespace 생성이 차단됐지만 2026-10-30 Ubuntu 호스트의 격리 검사는 통과했다. 새 호스트에서는 다시 확인하며 실패 시 격리를 끄고 실행하지 않는다.
 
 ```bash
 sudo apt-get install xvfb x11vnc novnc websockify bubblewrap fonts-noto-cjk
@@ -44,6 +46,10 @@ npm run serve:tailnet
 
 스크립트는 지정 포트에 기존 Serve 설정이 있으면 중단한다. `serve reset`이나 Funnel을 사용하지 않는다. 수동으로 이미 같은 포트를 설정했다면 기존 경로가 loopback 앱을 가리키는지 확인하고 그대로 사용한다. origin 변경 후 `systemctl --user restart webjjoku`를 실행한다.
 
+기존에 수동 실행한 앱이 있다면 active 토의·job을 확인하고 SQLite 백업 후 그 앱만 graceful 종료한다. state lock이 해제된 뒤 user service를 시작한다. installer는 WorkingDirectory를 systemd path directive로 기록하고 실제 Node 디렉터리를 서비스 PATH에 넣는다. Node 설치 경로가 바뀌면 unit을 다시 설치하고 `systemd-analyze --user verify`로 확인한다.
+
+Tailscale이 Serve 미활성화를 알리면 표시된 관리 화면에서 해당 Tailnet의 Serve를 활성화한다. 이후 `serve config denied`이면 해당 hostname·HTTPS 포트·upstream을 확인한 뒤 같은 Serve 명령만 사용자 터미널에서 sudo로 실행한다. 전체 operator 권한이나 reset은 필요하지 않다.
+
 | 경계 | 주소 |
 | --- | --- |
 | 사용자의 웹 UI/API/SSE/noVNC | Tailscale HTTPS 한 origin |
@@ -56,6 +62,8 @@ npm run serve:tailnet
 Chrome/VNC/CDP를 Tailnet에 직접 열지 않는다. 예제 VNC는 인증된 gateway 뒤의 loopback 통로이며 같은 호스트의 다른 OS 사용자를 격리하는 제품이 아니다. 다중 비신뢰 OS 사용자가 있는 호스트에는 이 배치를 그대로 사용하지 않는다.
 
 웹 UI에서 `수동 조작 시작` 후 서버 Chrome 화면을 연다. 기존 자동 browser turn이 있으면 끝날 때까지 수동 lease를 받을 수 없다. 수동 조작을 끝내고 자동 입력을 재개하면 VNC WebSocket은 닫힌다. 앱·브라우저·실행 작업은 웹 클라이언트 탭과 별도로 유지된다.
+
+전용 desktop은 GNOME의 Wayland·XAUTHORITY를 상속하지 않고 Xvfb에 연결한다. X99 잠금이 있다면 소유 PID와 socket을 대조한다. 살아 있는 화면을 종료하거나 잠금을 임의 삭제하지 않는다. 확인된 stale lock은 별도 보존한 뒤 다시 시작한다. noVNC 1.6의 viewer 링크는 `/browser/vnc.html?autoconnect=1&path=websockify&resize=scale`이며 WebSocket endpoint가 `/browser/websockify`로 해석되는지 확인한다. 로컬 스케일링으로 서버 해상도 전체를 접속 기기 화면에 맞춘다. 이미 열린 viewer가 잘리면 설정 → 스케일링 모드 → 로컬 스케일링을 선택하거나 작업실을 새로고침하고 Chrome 화면을 다시 연다. Xvfb에 원격 해상도 변경을 요청하는 `resize=remote`는 기본값으로 사용하지 않는다.
 
 ## 3. 계정과 기존 대화
 

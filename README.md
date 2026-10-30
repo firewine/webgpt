@@ -2,7 +2,7 @@
 
 주제 하나를 여러 AI가 독립적으로 제안하고, 서로 검토하고, 근거를 확인한 뒤 결과를 비교하는 개인용 웹 작업실입니다. Ubuntu 서버에서 실행하고 허용된 Tailscale 기기의 브라우저로 접속합니다.
 
-**v0.2 구현:** 공동 대화 UI, 영속 토의 엔진, GPT 다중 OAuth·DeepSeek·기존 Chrome 대화 어댑터, MCP 도구, Codex 실행·승인·결과 환류, 운영 스크립트. [실제 Ubuntu의 로컬 로그인·모의 토론](docs/implementation/ubuntu-readiness-20261030.md)은 확인했습니다. 실계정·Tailnet HTTPS·실제 Codex 세션의 MVP 판정은 아직 **NOT_RUN**입니다. [구현·검증 기록](docs/implementation/wj-002-015.md)을 함께 확인하세요.
+**v0.2 구현:** 공동 대화 UI, 영속 토의 엔진, GPT 다중 OAuth·DeepSeek·기존 Chrome 대화 어댑터, MCP 도구, Codex 실행·승인·결과 환류, 운영 스크립트. [Ubuntu 로컬 모의 토론](docs/implementation/ubuntu-readiness-20261030.md)과 [systemd·실제 HTTPS·인증 noVNC 입력](docs/implementation/ubuntu-services-20261030.md)을 확인했습니다. 실계정·다른 Tailnet 기기·실제 재부팅·실제 Codex 세션의 완료 판정은 아직 **NOT_RUN**입니다. [구현·검증 기록](docs/implementation/wj-002-015.md)을 함께 확인하세요.
 
 ## 바로 실행
 
@@ -76,7 +76,7 @@ npx playwright install --with-deps chromium
 npm run test:browser
 ```
 
-현재 Node 검사 39개와 실제 Chromium 검사 4개를 검증했습니다. 네 번째 browser 검사는 설치된 Chrome DevTools MCP가 필요하므로 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
+현재 Node 검사 40개와 실제 Chromium 검사 4개를 검증했습니다. Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. 네 번째 browser 검사는 설치된 Chrome DevTools MCP가 필요하므로 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
 
 ```bash
 npm install --no-save --package-lock=false @openai/codex@0.165.0 chrome-devtools-mcp@1.12.0
