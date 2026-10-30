@@ -63,7 +63,7 @@ Chrome/VNC/CDP를 Tailnet에 직접 열지 않는다. 예제 VNC는 인증된 ga
 
 웹 UI에서 `수동 조작 시작` 후 서버 Chrome 화면을 연다. 기존 자동 browser turn이 있으면 끝날 때까지 수동 lease를 받을 수 없다. 수동 조작을 끝내고 자동 입력을 재개하면 VNC WebSocket은 닫힌다. 앱·브라우저·실행 작업은 웹 클라이언트 탭과 별도로 유지된다.
 
-전용 desktop은 GNOME의 Wayland·XAUTHORITY를 상속하지 않고 Xvfb에 연결한다. X99 잠금이 있다면 소유 PID와 socket을 대조한다. 살아 있는 화면을 종료하거나 잠금을 임의 삭제하지 않는다. 확인된 stale lock은 별도 보존한 뒤 다시 시작한다. noVNC 1.6의 viewer 링크는 `/browser/vnc.html?autoconnect=1&path=websockify&resize=remote`이며 WebSocket endpoint가 `/browser/websockify`로 해석되는지 확인한다.
+전용 desktop은 GNOME의 Wayland·XAUTHORITY를 상속하지 않고 Xvfb에 연결한다. X99 잠금이 있다면 소유 PID와 socket을 대조한다. 살아 있는 화면을 종료하거나 잠금을 임의 삭제하지 않는다. 확인된 stale lock은 별도 보존한 뒤 다시 시작한다. noVNC 1.6의 viewer 링크는 `/browser/vnc.html?autoconnect=1&path=websockify&resize=scale`이며 WebSocket endpoint가 `/browser/websockify`로 해석되는지 확인한다. 로컬 스케일링으로 서버 해상도 전체를 접속 기기 화면에 맞춘다. 이미 열린 viewer가 잘리면 설정 → 스케일링 모드 → 로컬 스케일링을 선택하거나 작업실을 새로고침하고 Chrome 화면을 다시 연다. Xvfb에 원격 해상도 변경을 요청하는 `resize=remote`는 기본값으로 사용하지 않는다.
 
 ## 3. 계정과 기존 대화
 

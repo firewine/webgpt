@@ -24,6 +24,7 @@ test('owner UI: responsive topic discussion, pause/revise/resume, persisted comp
     await page.locator('[data-view=connections]').click(); assert.equal(await page.locator('#oauth-form').isVisible(), true);
     const viewer = new URL(await page.locator('#browser-link').getAttribute('href'), url);
     assert.equal(new URL(viewer.searchParams.get('path'), viewer).pathname, '/browser/websockify');
+    assert.equal(viewer.searchParams.get('resize'), 'scale');
     await page.locator('[data-view=execution]').click(); assert.equal(await page.locator('#binding-form').isVisible(), true);
     assert.deepEqual(errors, []); assert.deepEqual(external, []); await page.close();
   }
