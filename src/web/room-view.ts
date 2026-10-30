@@ -1,6 +1,9 @@
 import type { Connection, Member, CodexJob, Discussion, MaterialPackage } from '../workspace/model.js';
 import type { RoomSummary, RoomMessage, ResidentTurn, ResidentCheckpoint } from '../workspace/resident-model.js';
 import type { ResidentStatusProjection } from '../workspace/resident-status.js';
+import type { WorkTask, WorkAttempt, SeatAssignment } from '../workspace/work-model.js';
+type WorkItem = Omit<WorkTask, 'reports' | 'reviews'> & { reportCount: number; reviewCount: number };
+type WorkSnapshot = { items: WorkItem[]; seats: SeatAssignment[]; nextAfter: number; hasMore: boolean; cursor: number; enabled: boolean };
 
 type Message = Omit<RoomMessage, 'text'> & { preview: string; truncated: boolean; textLength: number; digest: string };
 type Turn = Pick<ResidentTurn, 'id' | 'participantId' | 'status' | 'generation' | 'epoch' | 'startedAt' | 'finishedAt' | 'error' | 'messageId' | 'proposalsStatus'>;
@@ -8,6 +11,7 @@ type RoomDetail = { room: RoomSummary; enabled: boolean; dispatchAvailable: bool
 export type RoomSnapshot = {
   cursor: number;
   participants: Member[]; connections: Connection[]; jobs: CodexJob[];
+  bindings: { id: string; label: string }[];
   discussions: Pick<Discussion, 'id' | 'topic' | 'status' | 'phase' | 'revision' | 'createdAt' | 'updatedAt'>[];
   materialPackages: { id: string; label: string; files: Omit<MaterialPackage['files'][number], 'text' | 'identity'>[] }[];
   resident: { enabled: boolean; rooms: RoomSummary[] };
@@ -23,10 +27,12 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, text = '', cls = ''):
 function stored(key: string): string | null { try { return localStorage.getItem('wj.room.' + key); } catch { return null; } }
 function save(key: string, value: string): void { try { localStorage.setItem('wj.room.' + key, value); } catch { /* Display still works without browser storage. */ } }
 function date(value: string | null): string { return value ? new Date(value).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '관측 없음'; }
-const labels: Record<string, string> = { off: '꺼짐', on: '상주 중', sleeping: '휴면', blocked: '확인 필요', budget_exhausted: '진행 한도 소진', unknown: '미관측', not_run: '미실행', not_applicable: '해당 없음', unconfirmed: '응답 미확인', stale: '이전 세대', prepared: '전송 준비', running: '진행 중', paused: '일시정지', completed: '완료', partial: '부분 완료', cancelled: '취소', failed: '실패', fixture: '모의', connected: '연결됨', auth_required: '로그인 필요', queued: '실행 대기', blocked_approval: '승인 대기', reconciling: '대조 필요', interrupted: '중단', waiting: '응답 대기', ready: '준비됨' };
+const labels: Record<string, string> = { off: '꺼짐', on: '상주 중', sleeping: '휴면', blocked: '확인 필요', budget_exhausted: '진행 한도 소진', unknown: '미관측', not_run: '미실행', not_applicable: '해당 없음', unconfirmed: '응답 미확인', stale: '이전 세대', prepared: '전송 준비', running: '진행 중', paused: '일시정지', completed: '완료', partial: '부분 완료', cancelled: '취소', failed: '실패', fixture: '모의', connected: '연결됨', auth_required: '로그인 필요', queued: '실행 대기', blocked_approval: '승인 대기', reconciling: '대조 필요', interrupted: '중단', waiting: '응답 대기', ready: '준비됨', backlog: '조건 대기', claimed: '픽업됨', review: '독립 검토', rework: '재작업', done: '업무 완료', observed_pass: '관측 검사 통과', observed_fail: '관측 검사 실패', reported: '참여자 보고' };
 const label = (value: string): string => labels[value] ?? value;
 const topicPhases: Record<Discussion['phase'], string> = { independent: '독립 초기안', cross_review: '상호 검토', verification: '근거 검증', revision: '수정안', synthesis: '종합안 작성', summary_review: '종합안 동료 검토' };
 const topicReasons: Record<string, string> = { procedure_completed: '예정된 토론 절차 완료', budget_exhausted: '진행 한도에 도달함', user_cancelled: '사용자가 토론을 취소함', participant_excluded: '일부 참여자가 제외됨', partial_unstructured_reply: '일부 응답의 형식을 확인하지 못함', restart_requires_reconciliation: '재시작 전 응답의 대조가 필요함' };
+const workReasons: Record<string, string> = { work_source_required: '근거가 된 공개 발언을 선택해 주세요.', work_acceptance_required: '수용 기준이 필요합니다.', work_assignment_required: '허용 참여자와 범위를 정해 주세요.', work_execution_phase_pending: '실제 코드 실행은 페이즈 6 연결을 기다립니다.', work_dependency_pending: '선행 일감의 완료를 기다립니다.', work_scope_not_authorized: '해당 범위를 허용한 업무 역할이 필요합니다.', work_acceptance_not_observed: '수용 기준의 직접 확인이나 실제 근거가 필요합니다.', room_settings_required: '방의 진행 한도와 속도를 설정해 주세요.', budget_exhausted: '방의 진행 한도에 도달했습니다.', work_reconciliation_required: '원래 요청·응답을 대조해 주세요.', work_scope_or_report_changed: '배정·범위·보고가 바뀌어 결과를 보류했습니다.', owner_cancelled: '소유자가 취소했습니다.' };
+const workReason = (reason: string): string => workReasons[reason] ?? '추가 확인이 필요합니다. 원래 요청·응답에서 사유를 확인해 주세요.';
 
 // Match the existing focus publication boundary. A completed speaker alone does
 // not publish an unfinished round, a retry, or a previous topic revision.
@@ -75,6 +81,12 @@ export class RoomView {
   private topic: Discussion | null = null;
   private topicKey = '';
   private topicUnavailable = false;
+  private work: WorkSnapshot | null = null;
+  private workOffset = 0;
+  private workDraftKey = crypto.randomUUID();
+  private workEditing: WorkTask | null = null;
+  private workDetailRequest = 0;
+  private seatEditVersion = 0;
   private boardTab = ['workspace', 'usage', 'activity'].includes(stored('boardTab') ?? '') ? stored('boardTab')! : 'workspace';
   private boardClosed = stored('boardClosed') === 'true';
   constructor(private readonly deps: Dependencies) {
@@ -91,6 +103,11 @@ export class RoomView {
     this.on('#room-topic-open', () => this.openTopic());
     this.on('#room-topic-result', () => { if (this.topic) { this.renderTopicResults(); $<HTMLDialogElement>('#room-result-dialog').showModal(); } });
     this.on('#room-result-evidence', () => this.openTopic());
+    this.on('#work-new', () => this.workForm());
+    this.on('#work-seats', () => this.seatForm());
+    this.on('#work-more', async () => { this.workOffset = this.work?.hasMore ? this.work.nextAfter : 0; await this.deps.refresh(); });
+    $('#work-seat-form [name=participantId]').addEventListener('change', () => this.fillSeat());
+    for (const [selector, submit] of [['#work-form', () => this.saveWork()], ['#work-seat-form', () => this.saveSeat()]] as const) $(selector).addEventListener('submit', event => { event.preventDefault(); const b = $(selector).querySelector<HTMLButtonElement>('[type=submit]')!; b.disabled = true; void submit().catch(this.deps.report).finally(() => { b.disabled = false; }); });
     this.on('#room-member-toggle', () => this.drawer('#room-members-dialog', '#room-member-panel', '#room-members-slot'));
     this.on('#room-panel-toggle', () => { if (innerWidth >= 1280) this.setBoardClosed(!this.boardClosed); else this.drawer('#room-panel-dialog', '#room-panel', '#room-panel-slot'); });
     this.on('#room-panel-close', () => { if ($<HTMLDialogElement>('#room-panel-dialog').open) $<HTMLDialogElement>('#room-panel-dialog').close(); else this.setBoardClosed(true); });
@@ -141,6 +158,7 @@ export class RoomView {
     $('#room-messages').replaceChildren(); $('#room-notices').replaceChildren(); $('#room-text').textContent = ''; $<HTMLTextAreaElement>('#room-text').value = '';
     $('#room-raw').replaceChildren(); $('#room-members').replaceChildren(); $('#room-status').replaceChildren(); $('#room-records').replaceChildren();
     this.topic = null; this.topicKey = ''; this.topicUnavailable = false; $('#room-result-content').replaceChildren(); delete $('#room-result-content').dataset.signature; this.renderTopic();
+    this.work = null; this.workOffset = 0; $('#work-items').replaceChildren(); $('#work-detail').replaceChildren();
     this.replyTo = null; this.mentions.clear(); this.uncertain = false; this.sending = false; this.panelsSignature = ''; this.restoreOnShow = true; this.loaded = false; this.renderReply();
   }
   async refresh(snapshot: RoomSnapshot): Promise<void> {
@@ -149,10 +167,11 @@ export class RoomView {
     if (!next) {
       this.detail = null; $('#room-disabled').hidden = false; $('#room-state').textContent = '상주 기능 꺼짐 · 기존 토의와 연결은 보존됩니다';
       for (const id of ['#room-send', '#room-power', '#room-settings', '#room-focus-new']) $<HTMLButtonElement>(id).disabled = true;
-      this.topic = null; this.topicKey = ''; this.topicUnavailable = false; this.renderTopic(); this.renderMembers(snapshot, [], []); return;
+      this.topic = null; this.topicKey = ''; this.topicUnavailable = false; this.work = null; this.renderTopic(); this.renderWork(); this.renderMembers(snapshot, [], []); return;
     }
     if (this.roomId !== next.id) {
       this.topic = null; this.topicKey = '';
+      this.work = null; this.workOffset = 0;
       this.loaded = false; this.messages.clear(); this.originals.clear(); this.rows.clear(); this.noticeIds.clear(); $('#room-messages').replaceChildren(); $('#room-notices').replaceChildren();
       this.roomId = next.id; this.after = Math.max(0, next.lastMessageSequence - 50); this.before = this.after;
       this.read = Math.min(next.lastMessageSequence, Math.max(0, Number(stored(this.roomId + '.read')) || 0)); this.openingRead = this.read;
@@ -181,10 +200,94 @@ export class RoomView {
     }
     this.turns = turns;
     await this.loadTopic();
+    this.work = await this.deps.api<WorkSnapshot>(this.path(`/work?after=${this.workOffset}&limit=50`));
     this.render(); this.loaded = true; this.applyPosition(anchor);
     if (this.active) { if (this.restoreOnShow) this.restorePosition(); requestAnimationFrame(() => this.markRead()); }
   }
   private path(suffix = ''): string { return '/api/rooms/' + this.roomId + suffix; }
+  private choices(target: HTMLElement, name: string, items: { id: string; label: string }[], selected: string[] = []): void {
+    target.replaceChildren();
+    for (const item of items) { const label = el('label'); const input = el('input'); input.type = 'checkbox'; input.name = name; input.value = item.id; input.checked = selected.includes(item.id); label.append(input, el('span', item.label)); target.append(label); }
+  }
+  private scopeChoices(): { id: string; label: string }[] { return [{ id: 'room:' + this.roomId, label: '현재 방의 공개 자료·분석 산출물' }, ...(this.snapshot?.bindings ?? []).map(b => ({ id: 'binding:' + b.id, label: '등록 작업 공간 · ' + b.label }))]; }
+  private workForm(task?: WorkTask, sourceId?: string): void {
+    if (!this.detail?.enabled || !this.work) return; this.closeDrawers(); this.workDraftKey = crypto.randomUUID(); this.workEditing = task ?? null;
+    const form = $<HTMLFormElement>('#work-form'); form.reset();
+    const values: Record<string, string> = { taskId: task?.id ?? '', expectedVersion: String(task?.version ?? ''), title: task?.title ?? '', description: task?.description ?? '', kind: task?.kind ?? 'analysis', priority: String(task?.priority ?? 0), requiredRole: task?.requiredRole ?? '', acceptance: task?.acceptance.map(a => a.text).join('\n') ?? '', checkKind: task?.acceptance[0]?.check.kind ?? 'manual' };
+    for (const [key, value] of Object.entries(values)) (form.elements.namedItem(key) as HTMLInputElement).value = value;
+    $('#work-form-title').textContent = task ? '일감 조건 보완' : '일감 제안';
+    const sourceIds = task?.sourceMessageIds ?? (sourceId ? [sourceId] : []); const sources = [...this.messages.values()].map(m => ({ id: m.id, label: `${this.name(m.authorId)} · ${m.preview.slice(0, 90)}` }));
+    for (const id of sourceIds) if (!sources.some(s => s.id === id)) sources.push({ id, label: '기록된 공개 발언 · ' + id });
+    this.choices($('#work-sources'), 'sourceMessageId', sources, sourceIds);
+    this.choices($('#work-assignees'), 'allowedParticipantId', this.snapshot!.participants.filter(p => this.detail!.room.members.some(m => m.participantId === p.id)).map(p => ({ id: p.id, label: p.label })), task?.allowedParticipantIds);
+    const dependencies = this.work.items.filter(t => t.id !== task?.id).map(t => ({ id: t.id, label: t.title }));
+    for (const id of task?.dependencies ?? []) if (!dependencies.some(d => d.id === id)) dependencies.push({ id, label: '기록된 선행 일감 · ' + id });
+    this.choices($('#work-dependencies'), 'dependencyId', dependencies, task?.dependencies);
+    const scope = form.elements.namedItem('authorizedScopeRef') as HTMLSelectElement; scope.replaceChildren();
+    for (const s of this.scopeChoices()) { const option = el('option', s.label); option.value = s.id; scope.append(option); } scope.value = task?.authorizedScopeRef || 'room:' + this.roomId;
+    $<HTMLDialogElement>('#work-form-dialog').showModal();
+  }
+  private async saveWork(): Promise<void> {
+    const form = $<HTMLFormElement>('#work-form'); const f = new FormData(form); const lines = (value: FormDataEntryValue | null) => String(value ?? '').split('\n').map(s => s.trim()).filter(Boolean);
+    const checkKind = String(f.get('checkKind')); const taskId = String(f.get('taskId'));
+    const unchangedAcceptance = this.workEditing && String(f.get('acceptance')) === this.workEditing.acceptance.map(a => a.text).join('\n') && checkKind === (this.workEditing.acceptance[0]?.check.kind ?? 'manual');
+    const input = { title: f.get('title'), description: f.get('description'), kind: f.get('kind'), priority: Number(f.get('priority')), requiredRole: f.get('requiredRole') || null,
+      acceptance: unchangedAcceptance ? this.workEditing!.acceptance : lines(f.get('acceptance')).map((text, index) => ({ id: 'acceptance-' + (index + 1), text, check: { kind: checkKind, ...(checkKind === 'text_includes' ? { value: text } : {}) } })), sourceMessageIds: f.getAll('sourceMessageId'), allowedParticipantIds: f.getAll('allowedParticipantId'), dependencies: f.getAll('dependencyId'), authorizedScopeRef: f.get('authorizedScopeRef'),
+      ...(taskId ? { expectedVersion: Number(f.get('expectedVersion')) } : { proposalKey: this.workDraftKey }) };
+    await this.deps.api(this.path(taskId ? `/work/${taskId}/update` : '/work'), input, 'work-form:' + this.workDraftKey);
+    $<HTMLDialogElement>('#work-form-dialog').close(); await this.deps.refresh();
+  }
+  private seatForm(): void {
+    if (!this.detail?.enabled || !this.work) return; this.closeDrawers(); const select = $<HTMLSelectElement>('#work-seat-form [name=participantId]'); const old = select.value; select.replaceChildren();
+    for (const p of this.snapshot!.participants.filter(p => this.detail!.room.members.some(m => m.participantId === p.id))) { const option = el('option', p.label); option.value = p.id; select.append(option); } if ([...select.options].some(o => o.value === old)) select.value = old;
+    this.fillSeat(); $<HTMLDialogElement>('#work-seat-dialog').showModal();
+  }
+  private fillSeat(): void {
+    const form = $<HTMLFormElement>('#work-seat-form'); const pid = (form.elements.namedItem('participantId') as HTMLSelectElement).value; const seat = this.work?.seats.find(s => s.participantId === pid);
+    this.seatEditVersion = seat?.version ?? 0;
+    (form.elements.namedItem('role') as HTMLSelectElement).value = seat?.role ?? 'specialist';
+    for (const key of ['enabled', 'analysis', 'codex'] as const) (form.elements.namedItem(key) as HTMLInputElement).checked = key === 'enabled' ? seat?.enabled ?? false : seat?.kinds.includes(key) ?? false;
+    this.choices($('#work-seat-scopes'), 'scopeRef', this.scopeChoices(), seat?.scopeRefs ?? []);
+  }
+  private async saveSeat(): Promise<void> {
+    const f = new FormData($<HTMLFormElement>('#work-seat-form'));
+    await this.deps.api(this.path('/seats'), { participantId: f.get('participantId'), role: f.get('role'), enabled: f.has('enabled'), kinds: ['analysis', 'codex'].filter(k => f.has(k)), scopeRefs: f.getAll('scopeRef'), expectedVersion: this.seatEditVersion });
+    $<HTMLDialogElement>('#work-seat-dialog').close(); await this.deps.refresh();
+  }
+  private renderWork(): void {
+    const target = $('#work-items'); target.replaceChildren(); const w = this.work;
+    for (const id of ['#work-new', '#work-seats']) $<HTMLButtonElement>(id).disabled = !this.detail?.enabled;
+    if (!w?.items.length) target.append(el('p', '등록된 일감이 없습니다. 대화에서 일감을 제안하거나 직접 추가하세요.', 'small muted'));
+    for (const task of w?.items ?? []) { const card = el('article', '', 'work-card'); card.dataset.taskId = task.id; card.dataset.reason = task.reason ?? ''; card.append(el('h4', task.title), el('p', `${label(task.status)} · 우선순위 ${task.priority}${task.claimantId ? ' · ' + this.name(task.claimantId) : ''}`, 'small'), el('p', task.reason ? workReason(task.reason) : `보고 ${task.reportCount} · 검토 ${task.reviewCount}`, 'small muted'), this.btn('일감·보고·검토', () => this.openWork(task.id))); target.append(card); }
+    $('#work-more').hidden = !w?.hasMore && !this.workOffset; $('#work-more').textContent = w?.hasMore ? '다음 일감' : '처음 일감';
+  }
+  private async openWork(taskId: string): Promise<void> {
+    const request = ++this.workDetailRequest; const roomId = this.roomId; const wasOpen = $<HTMLDialogElement>('#work-detail-dialog').open;
+    const { task: t, attempts } = await this.deps.api<{ task: WorkTask; attempts: WorkAttempt[] }>(this.path('/work/' + taskId));
+    if (!this.active || request !== this.workDetailRequest || roomId !== this.roomId || wasOpen && !$<HTMLDialogElement>('#work-detail-dialog').open) return; this.closeDrawers();
+    const target = $('#work-detail'); target.dataset.taskId = t.id; target.dataset.version = String(t.version); target.replaceChildren(el('h3', t.title), el('p', `${label(t.status)}${t.reason ? ' · ' + workReason(t.reason) : ''}`, 'small muted'), el('p', t.description, 'pre-line'));
+    target.append(this.btn('기록 새로고침', () => this.openWork(t.id)));
+    for (const a of t.acceptance) target.append(el('p', '수용 기준 · ' + a.text, 'small'));
+    target.append(el('p', `근거 발언 ${t.sourceMessageIds.length} · 선행 일감 ${t.dependencies.length} · ${this.scopeChoices().find(s => s.id === t.authorizedScopeRef)?.label ?? '등록한 범위 확인 필요'}`, 'small muted'));
+    for (const [index, sourceId] of t.sourceMessageIds.entries()) target.append(this.btn(`근거 발언 ${index + 1}`, () => { this.closeDrawers(); return this.jump(sourceId); }));
+    if (this.detail?.enabled) {
+      if (!['done', 'cancelled'].includes(t.status) && !attempts.some(a => ['claimed', 'running', 'unconfirmed'].includes(a.status))) target.append(this.btn('일감 조건 보완', () => this.workForm(t)));
+      if (!['done', 'cancelled'].includes(t.status)) target.append(this.btn('업무 취소', async () => { await this.deps.api(this.path(`/work/${t.id}/cancel`), { expectedVersion: t.version }); $<HTMLDialogElement>('#work-detail-dialog').close(); await this.deps.refresh(); }));
+      if (t.status === 'ready') { const select = el('select'); select.setAttribute('aria-label', '픽업할 참여자'); for (const pid of t.allowedParticipantIds) { const option = el('option', this.name(pid)); option.value = pid; select.append(option); } target.append(select, this.btn('선택 참여자가 픽업', async () => { await this.deps.api(this.path(`/work/${t.id}/claim`), { expectedVersion: t.version, participantId: select.value }); await this.deps.refresh(); if ($<HTMLDialogElement>('#work-detail-dialog').open) await this.openWork(t.id); })); }
+    }
+    for (const report of t.reports) { const details = el('details'); details.open = report.id === t.currentReportId; details.append(el('summary', `산출물 · ${this.name(report.authorId)} · ${date(report.createdAt)}`), el('div', report.text, 'reply'));
+      for (const check of report.checks) details.append(el('p', `${report.acceptance.find(a => a.id === check.acceptanceId)?.text ?? check.acceptanceId} · ${label(check.outcome)}\n${check.observation}`, 'small pre-line')); for (const blocker of report.blockers) details.append(el('p', '차단 · ' + blocker, 'small')); target.append(details); }
+    for (const review of t.reviews) target.append(el('p', `검토 · ${this.name(review.reviewerId)} · ${review.decision}\n${review.reason}`, 'topic-caveat pre-line'));
+    for (const attempt of attempts.filter(a => a.status === 'unconfirmed' || a.status === 'stale' || a.status === 'failed')) { target.append(el('p', `${this.name(attempt.participantId)} · ${label(attempt.status)} · ${attempt.error ?? ''}`, 'small')); if (attempt.providerTurnId) target.append(this.btn('원래 요청·응답 대조', () => { this.closeDrawers(); return this.rawTurn(attempt.providerTurnId!); })); }
+    if (this.detail?.enabled && (t.status === 'review' || t.status === 'blocked' && t.reason === 'work_acceptance_not_observed')) {
+      const report = t.reports.find(r => r.id === t.currentReportId)!; const review = el('form'); review.id = 'work-review-form';
+      const reason = el('textarea'); reason.name = 'reason'; reason.required = true; reason.rows = 3; reason.setAttribute('aria-label', '독립 검토 사유'); reason.placeholder = '확인한 산출물·근거와 검토 사유'; review.append(reason);
+      for (const a of t.acceptance.filter(a => a.check.kind === 'manual')) { const label = el('label', '', 'check'); const input = el('input'); input.type = 'checkbox'; input.name = 'confirmedAcceptanceId'; input.value = a.id; label.append(input, el('span', '직접 확인함 · ' + a.text)); review.append(label); }
+      const decision = el('select'); decision.name = 'decision'; decision.setAttribute('aria-label', '검토 결정'); for (const [value, text] of [['accept', '수용 기준 확인 후 완료'], ['rework', '반려하고 재작업'], ['blocked', '확인 보류']]) { const o = el('option', text); o.value = value!; decision.append(o); } review.append(decision); const submit = el('button', '독립 검토 저장'); submit.type = 'submit'; review.append(submit);
+      review.addEventListener('submit', event => { event.preventDefault(); submit.disabled = true; const f = new FormData(review); void this.deps.api(this.path(`/work/${t.id}/review`), { expectedVersion: t.version, reportDigest: report.digest, decision: f.get('decision'), reason: f.get('reason'), confirmedAcceptanceIds: f.getAll('confirmedAcceptanceId') }).then(async () => { await this.deps.refresh(); if ($<HTMLDialogElement>('#work-detail-dialog').open) await this.openWork(t.id); }).catch(this.deps.report).finally(() => { submit.disabled = false; }); }); target.append(review);
+    }
+    $<HTMLDialogElement>('#work-detail-dialog').showModal();
+  }
   private async loadTopic(): Promise<void> {
     const room = this.detail!.room; const s = this.snapshot!;
     const id = room.topicLink ?? room.legacyDiscussionIds.at(-1);
@@ -294,7 +397,7 @@ export class RoomView {
         row.id = 'msg-' + m.id; row.dataset.messageId = m.id; row.dataset.sequence = String(m.sequence); row.dataset.tone = this.tone(m.authorId);
         const head = el('header', '', 'message-head'); const avatar = this.avatar(m.authorId); const name = el('strong', this.name(m.authorId));
         const timestamp = el('time', new Date(m.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })); timestamp.dateTime = m.createdAt; timestamp.title = date(m.createdAt);
-        const model = this.snapshot?.participants.find(p => p.id === m.authorId); head.append(avatar, name, el('span', model?.kind === 'fake' ? '모의' : model?.kind === 'browser' ? '기존 대화' : model?.modelId ?? '', 'message-model'), timestamp, el('span', m.sourceKind === 'topic' ? '주제 토론' : '', 'message-mode'));
+        const model = this.snapshot?.participants.find(p => p.id === m.authorId); head.append(avatar, name, el('span', model?.kind === 'fake' ? '모의' : model?.kind === 'browser' ? '기존 대화' : model?.modelId ?? '', 'message-model'), timestamp, el('span', m.sourceKind === 'topic' ? '주제 토론' : m.sourceKind === 'work' ? '업무' : '', 'message-mode'));
         row.append(head);
         if (m.replyTo) { const ref = this.messages.get(m.replyTo); const b = this.btn('↳ ' + (ref ? this.name(ref.authorId) + ' · ' + ref.preview.slice(0, 90) : '인용한 원문 보기'), () => this.jump(m.replyTo!)); b.className = 'message-quote'; b.dataset.replyTo = m.replyTo; row.append(b); }
         const text = el('div', m.preview, 'message-text'); text.dataset.digest = m.digest; row.append(text);
@@ -311,6 +414,7 @@ export class RoomView {
         if (m.mentions.length) row.append(el('div', m.mentions.map(id => '@' + this.name(id)).join(' '), 'message-mentions'));
         const actions = el('div', '', 'message-actions');
         actions.append(this.btn('답장', () => { this.replyTo = m.id; save(this.roomId + '.reply', m.id); this.renderReply(); $('#room-text').focus(); }), this.btn('원문·근거', () => this.raw(m)));
+        if (this.snapshot?.resident.enabled) actions.append(this.btn('일감 만들기', () => this.workForm(undefined, m.id)));
         row.append(actions); this.rows.set(m.id, row);
       }
       if (previous ? previous.nextElementSibling !== row : target.firstElementChild !== row) target.insertBefore(row, previous ? previous.nextElementSibling : target.firstChild);
@@ -397,9 +501,9 @@ export class RoomView {
   }
   private renderPanels(): void {
     const d = this.detail!; const s = this.snapshot!; const r = d.room;
-    const signature = JSON.stringify([r, d.contexts, d.status.members, s.participants, s.connections, s.jobs, s.materialPackages, this.turns, this.topicKey]);
+    const signature = JSON.stringify([r, d.contexts, d.status.members, s.participants, s.connections, s.jobs, s.materialPackages, this.turns, this.topicKey, this.work]);
     if (signature === this.panelsSignature) return; this.panelsSignature = signature;
-    this.renderMembers(s, r.members, d.status.members);
+    this.renderMembers(s, r.members, d.status.members); this.renderWork();
     const usage = $('#room-usage'); usage.replaceChildren();
     if (!r.budgets) usage.append(el('p', '한도·속도 설정이 필요합니다.', 'small muted'));
     else { const used = r.used; usage.append(el('p', `요청 ${used?.requests ?? 0} / ${r.budgets.maxRequests}`, 'usage-number'), el('p', `보고 토큰 ${(used?.inputTokens ?? 0) + (used?.outputTokens ?? 0)} / ${r.budgets.maxTokens}\n사용량 미제공 ${used?.unknownUsage ?? 0}회 · 도구 ${used?.toolJobs ?? 0} / ${r.budgets.maxToolJobs}\n종료 ${date(r.budgets.deadlineAt)}`, 'small pre-line'));
@@ -410,7 +514,7 @@ export class RoomView {
     else focus.append(el('p', this.topic ? '자유 대화로 복귀 · 마지막 주제와 결과는 대화 상단에 보존합니다.' : '자유 대화 · 상단에서 주제를 정하면 검토·검증·종합을 이어갑니다.', 'small muted'));
     const statuses = $('#room-status'); statuses.replaceChildren();
     for (const c of d.status.members) { const card = el('section', '', 'status-card'); card.append(el('h3', this.name(c.participantId) + ` · 문맥 ${c.generation}${c.previousGeneration ? ' · 이전 세대 응답' : ''}`));
-      const sources: Record<string, string> = { connection: '등록한 연결', resident_turn: '발언 기록', unobserved: '확인된 관측 없음', work_queue_pending: '작업큐 준비 중', codex_job: 'Codex 실행 기록', fake: '모의 관측', browser: 'Chrome 관측', 'openai-oauth': 'GPT 응답', deepseek: 'DeepSeek 응답' };
+      const sources: Record<string, string> = { connection: '등록한 연결', resident_turn: '발언 기록', unobserved: '확인된 관측 없음', work_queue_pending: '할당된 업무 없음', work_queue: '업무 큐 기록', codex_job: 'Codex 실행 기록', fake: '모의 관측', browser: 'Chrome 관측', 'openai-oauth': 'GPT 응답', deepseek: 'DeepSeek 응답' };
       for (const [title, a] of [['연결', c.connection], ['응답', c.response], ['도구', c.tool], ['업무', c.work]] as const) card.append(el('p', `${title} · ${label(a.state)}\n${date(a.observedAt)} · ${sources[a.source] ?? '기록된 관측'}${a.reason ? '\n확인 사유: ' + a.reason : ''}`, 'small pre-line'));
       card.append(el('p', `마지막 발언 ${date(c.lastSpeechAt)}\n마지막 진행 ${date(c.lastProgressAt)}`, 'small muted pre-line')); statuses.append(card);
     }
@@ -491,7 +595,7 @@ export class RoomView {
     finally { submit.disabled = false; }
   }
   private drawer(dialogId: string, panel: string, slot: string): void { $(slot).append($(panel)); $(panel).hidden = false; const d = $<HTMLDialogElement>(dialogId); if (!d.open) d.showModal(); if (panel === '#room-panel') $('#room-panel-toggle').setAttribute('aria-expanded', 'true'); }
-  private closeDrawers(): void { for (const id of ['#room-members-dialog', '#room-panel-dialog', '#room-settings-dialog', '#room-result-dialog']) { const d = $<HTMLDialogElement>(id); if (d.open) d.close(); } }
+  private closeDrawers(): void { for (const id of ['#room-members-dialog', '#room-panel-dialog', '#room-settings-dialog', '#room-result-dialog', '#work-form-dialog', '#work-seat-dialog', '#work-detail-dialog']) { const d = $<HTMLDialogElement>(id); if (d.open) d.close(); } }
   private navigate(view: 'connections' | 'execution' | 'discussion'): void { this.closeDrawers(); this.deps.openView(view); }
 }
 function localDate(value: string): string { const d = new Date(value); return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); }

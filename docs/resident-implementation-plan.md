@@ -117,14 +117,16 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 
 32669의 관리·관리보조·분야 담당·실행·상태 알리미는 RoomMember의 **정책 예시**로 구체화한다. roleLabel 문자열이 권한을 만들지 않으며 server가 허용 action/업무 종류·정책 버전을 검사한다. U3 선택 없이 새 모델/고정 인원을 만들지 않는다. 인계 때 role/정책과 context generation을 고정하고 원래 task/attempt/receipt를 재사용한다.
 
-| 수락 ID | 숫자·증거 | 방법(후속 실행) |
+**구현 대응:** 제안 모델은 실제 `work-model.ts`에 분리하고 `resident-model.ts`에서 재노출했다. `WorkQueue.propose/claim/update/review/finishTurn`과 순수 `work-policy.ts`가 기존 Store transaction을 사용한다. 새 업무 loop 대신 기존 ResidentRunner의 prepared/receipt/대조 driver를 재사용하며 workGuard만 실제 전송 직전에 추가했다. 기존 complete·topic·Codex API/격리·승인 계약은 유지했다. 분석 산출물/독립 검토의 자동 fixture가 완료됐고, 실제 code job 연결은 예정된 R6 범위다. 수락·이관·후속 접점·복귀 증거는 [R5 실행 기록](./implementation/phase5-open-work-queue-20261030.md)에 있다. 기존 수락 숫자·범위·후속 순서를 변경하지 않았다.
+
+| 수락 ID | 숫자·증거 | 실행 증거 |
 | --- | --- | --- |
-| R5-A | ready 업무 1개에 2소비자/100동시 HTTP claim→정확히 1claim·1lease | 제안 `node --test tests/resident-work-queue.test.mjs`+Store journal |
-| R5-B | 같은 proposal 20회→업무 1개; acceptance 없음·없는 source/dep·순환·권한 밖은 ready 0 | 제안 work fixture |
-| R5-C | 3개 업무 중 1개 dependency blocked이면 나머지 허용 ready 2개 처리 가능, 동일 slot 중복 0 | fake scheduler 로그 |
-| R5-D | claim 후 재시작·timeout·멤버 off에서 새 attempt 무단 생성 0 | crash/state fixture |
-| R5-E | 다른 제출자 리뷰 없이는 done 0, 반려 1회→기존 결과 유지·새 attempt 1개 | 제안 result/review fixture |
-| R5-F | 5역할 정책 예시에서 각각 scope 밖 명령1종→수락0, “상위 지시”/역할 문구만으로 권한 확대0·자기 승인0 | 제안 role/WorkTask 정책 fixture |
+| R5-A | ready 업무 1개에 2소비자/100동시 HTTP claim→정확히 1claim·1lease | PASS · 실제 HTTP100/Store journal/WorkAttempt lease1 |
+| R5-B | 같은 proposal 20회→업무 1개; acceptance 없음·없는 source/dep·순환·권한 밖은 ready 0 | PASS · `tests/resident-work-queue.test.mjs` |
+| R5-C | 3개 업무 중 1개 dependency blocked이면 나머지 허용 ready 2개 처리 가능, 동일 slot 중복 0 | PASS · fake work/review4회·provider 최대1·계정 별칭 slot 중복0 |
+| R5-D | claim 후 재시작·timeout·멤버 off에서 새 attempt 무단 생성 0 | PASS · 실제 SIGKILL4지점+미확정100tick·원래 ID/receipt/보고 유지 |
+| R5-E | 다른 제출자 리뷰 없이는 done 0, 반려 1회→기존 결과 유지·새 attempt 1개 | PASS · 독립 검토/재작업·과거 digest 거절·조건 snapshot 보존 |
+| R5-F | 5역할 정책 예시에서 각각 scope 밖 명령1종→수락0, “상위 지시”/역할 문구만으로 권한 확대0·자기 승인0 | PASS · 역할/범위/late policy fixture+stale seat 폼 CAS browser |
 
 **롤백:** G0 후 신규 pickup/업무 도구를 차단하고 큐를 read-only로 둔다. claimed/running을 무조건 ready로 돌리지 않으며 기존 topic Task/CodexJob와 분리해 보존한다. 신규 엔티티/command 결과를 삭제하지 않는다.
 

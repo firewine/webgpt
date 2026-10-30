@@ -8,11 +8,12 @@ import { DispatchCoordinator, budgetReason, unresolvedProvider } from './dispatc
 import { roomContext, rotateResidentContext } from './resident-context.js';
 import { parseResidentReply, promptForRoom, publicRoomData } from './resident-prompts.js';
 import { AppError, code, digest, id, now, object, string } from './util.js';
+import type { WorkQueue } from './work-queue.js';
 
 type Emit = Parameters<Parameters<Store['transact']>[0]>[1];
 const LIVE = ['prepared', 'running', 'unconfirmed'];
 const WAKE = new Set(['resident.room_changed', 'resident.message_created', 'resident.turn_finished', 'resident.reconciled', 'resident.context_rotated',
-  'turn.finished', 'discussion.phase', 'discussion.created', 'discussion.pause', 'discussion.resume', 'discussion.cancel', 'discussion.reconcile', 'browser.manual_control']);
+  'turn.finished', 'discussion.phase', 'discussion.created', 'discussion.pause', 'discussion.resume', 'discussion.cancel', 'discussion.reconcile', 'browser.manual_control', 'resident.work_changed']);
 
 export class ResidentRunner {
   private started = false; private stopping = false; private queued = false; private pending = false;
@@ -21,11 +22,12 @@ export class ResidentRunner {
   private readonly clock: () => number;
   constructor(private readonly store: Store, private readonly resident: ResidentStore, private readonly dispatch: DispatchCoordinator,
     private readonly provider: Pick<Providers, 'complete'>, private readonly engine: DiscussionEngine, private readonly timeoutMs: number,
-    private readonly options: { clock?: () => number; autoSchedule?: boolean } = {}) { this.clock = options.clock ?? Date.now; }
+    private readonly options: { clock?: () => number; autoSchedule?: boolean; work?: WorkQueue } = {}) { this.clock = options.clock ?? Date.now; }
 
   recover(): void {
     if (!this.store.read().resident) return;
     this.store.transact((state, emit) => {
+      this.options.work?.recoverState(state);
       for (const turn of state.resident!.turns) if (['prepared', 'running'].includes(turn.status)) {
         turn.status = 'unconfirmed'; turn.error = 'restart_requires_reconciliation';
         const room = state.resident!.rooms.find(r => r.id === turn.roomId);
@@ -93,10 +95,12 @@ export class ResidentRunner {
       if (unresolvedProvider(state) || state.resident!.dispatchLeases.some(l => l.state !== 'released') || state.jobs.some(j => j.status === 'reconciling') ||
           state.discussions.some(d => ['running', 'paused', 'blocked'].includes(d.status))) return null;
       if (room.nextEligibleAt && Date.parse(room.nextEligibleAt) > this.clock()) return null;
+      const work = this.options.work?.prepareTurn(state, room, emit, this.clock());
+      if (work) return { turn: work, remainingMs: Date.parse(room.budgets!.deadlineAt) - this.clock() };
       const members = room.members.filter(m => m.enabled && !m.blockedReason).map(m => state.participants.find(p => p.id === m.participantId)).filter(p => p !== undefined);
       if (!members.length) { room.observedStatus = 'blocked'; room.reason = 'no_eligible_members'; room.nextEligibleAt = null;
         emit({ type: 'resident.status_changed', discussionId: null, data: { roomId: room.id, status: room.observedStatus, reason: room.reason } }); return null; }
-      const repair = state.resident!.turns.find(t => t.roomId === room.id && t.epoch === room.epoch && t.error === 'format_invalid' && !t.repairOf &&
+      const repair = state.resident!.turns.find(t => !t.workAttemptId && t.roomId === room.id && t.epoch === room.epoch && t.error === 'format_invalid' && !t.repairOf &&
         members.some(m => m.id === t.participantId) && roomContext(room, t.participantId).generation === t.generation && !state.resident!.turns.some(r => r.repairOf === t.id));
       let index = (room.nextMemberIndex ?? 0) % members.length;
       if (repair) index = members.findIndex(m => m.id === repair.participantId);
@@ -118,7 +122,7 @@ export class ResidentRunner {
       const turn: ResidentTurn = { id: id('resident_turn'), roomId: room.id, participantId: participant.id, participant: structuredClone(participant),
         generation: context.generation, epoch: room.epoch, status: 'prepared', prompt, promptDigest: digest(prompt), history: structuredClone(context.history),
         basisSequence: room.lastMessageSequence, text: '', receipt: null, reply: null, usage: null, startedAt: new Date(this.clock()).toISOString(), finishedAt: null,
-        error: null, repairOf: repair?.id ?? null, messageId: null, proposalsStatus: 'none' };
+        error: null, repairOf: repair?.id ?? null, messageId: null, proposalsStatus: 'none', workSeatVersion: room.seats?.find(s => s.participantId === participant.id)?.version ?? 0 };
       const denied = this.dispatch.reserve(state, { requestId: turn.id, kind: 'resident', participantId: participant.id, generation: context.generation, roomId: room.id }, this.clock());
       if (denied) return null;
       state.resident!.turns.push(turn); room.nextMemberIndex = (index + 1) % members.length;
@@ -149,6 +153,7 @@ export class ResidentRunner {
         else if (member) member.blockedReason = turn.error;
         room.observedStatus = room.desiredOn ? 'blocked' : 'off'; room.reason = turn.error; room.nextEligibleAt = null;
       }
+      this.options.work?.finishTurn(state, room, turn, emit);
       this.dispatch.settle(state, turn.id, turn.usage, turn.error, turn.status === 'unconfirmed');
       emit({ type: 'resident.turn_finished', discussionId: null, data: { roomId: room.id, turnId: turn.id, status: turn.status, reason: turn.error } });
     });
@@ -157,6 +162,7 @@ export class ResidentRunner {
     turn.text = result.text; turn.receipt = result.receipt; turn.usage = result.usage;
     const context = roomContext(room, turn.participantId);
     if (turn.epoch !== room.epoch || turn.generation !== context.generation) { turn.status = 'stale'; turn.proposalsStatus = 'stale'; return; }
+    if (turn.workAttemptId && (!this.options.work || !this.options.work.canDispatch(state, turn))) { turn.status = 'stale'; turn.proposalsStatus = 'stale'; return; }
     const data = publicRoomData(state, room); const messages = data.messages.filter(m => m.sequence <= turn.basisSequence);
     turn.reply = parseResidentReply(turn.text, { messageIds: messages.map(m => m.id), participantIds: room.members.map(m => m.participantId),
       claimIds: data.claims.filter(c => messages.some(m => m.sourceId === c.turnId)).map(c => c.id) });
@@ -168,6 +174,7 @@ export class ResidentRunner {
       if (turn.repairOf) { room.observedStatus = 'blocked'; room.reason = 'format_invalid'; const member = room.members.find(m => m.participantId === turn.participantId); if (member) member.blockedReason = 'format_invalid'; }
       return;
     }
+    if (turn.workAttemptId) { room.passCount = 0; return; }
     turn.proposalsStatus = turn.reply.proposals.length ? 'not_run' : 'none';
     if (turn.reply.action === 'pass') {
       room.passCount = (room.passCount ?? 0) + 1;
@@ -228,6 +235,7 @@ export class ResidentRunner {
         if (turn.status !== 'stale' && !turn.reply) throw new AppError('format_invalid');
       } else if (body.resolution === 'not_sent' || body.resolution === 'skip') { turn.status = 'failed'; turn.error = 'owner_confirmed_' + body.resolution; }
       else throw new AppError('invalid_resolution');
+      this.options.work?.finishTurn(state, room, turn, emit);
       this.dispatch.settle(state, turn.id, turn.usage, turn.error, false);
       room.observedStatus = room.desiredOn ? 'blocked' : 'off'; room.reason = 'owner_resume_required'; room.nextEligibleAt = null;
       emit({ type: 'resident.reconciled', discussionId: null, data: { roomId, turnId, status: turn.status } });

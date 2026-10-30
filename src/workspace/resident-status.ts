@@ -30,6 +30,8 @@ export function projectResidentStatus(state: WorkspaceState, roomId: string, eve
     const generation = context?.generation ?? 1;
     const previousGeneration = !!turn && (turn.generation !== generation || turn.epoch !== room.epoch || turn.status === 'stale');
     const observation = topicContext?.observation;
+    const workAttempt = state.resident!.workAttempts.filter(a => a.roomId === roomId && a.participantId === member.participantId).at(-1);
+    const workTask = workAttempt && state.resident!.workItems.find(t => t.id === workAttempt.taskId);
     const activity = job?.activities.at(-1);
     return {
       participantId: member.participantId, generation, previousGeneration,
@@ -38,7 +40,7 @@ export function projectResidentStatus(state: WorkspaceState, roomId: string, eve
         : axis(turn ? previousGeneration ? 'stale' : turn.status : 'unknown', observed?.at ?? turn?.finishedAt ?? turn?.startedAt ?? null, turn ? 'resident_turn' : 'unobserved', turn?.error ?? member.blockedReason ?? null),
       tool: job ? axis(job.status, activity?.observedAt ?? job.finishedAt ?? job.createdAt, 'codex_job', job.error)
         : observation ? axis(observation.tool, observation.observedAt, observation.source, observation.reason) : axis('unknown', null, 'unobserved'),
-      work: observation ? axis(observation.work, observation.observedAt, observation.source, observation.reason) : axis('not_run', null, 'work_queue_pending'),
+      work: workTask ? axis(workTask.status, workAttempt!.finishedAt ?? workTask.updatedAt, 'work_queue', workTask.reason) : observation ? axis(observation.work, observation.observedAt, observation.source, observation.reason) : axis('not_run', null, 'work_queue_pending'),
       lastSpeechAt: state.resident!.messages.filter(m => m.roomId === roomId && m.visibility === 'room_public' && m.authorId === member.participantId).at(-1)?.createdAt ?? null,
       lastProgressAt: observation?.lastProgressAt ?? progress?.at ?? turn?.finishedAt ?? null,
     };
