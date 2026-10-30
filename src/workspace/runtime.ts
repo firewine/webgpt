@@ -9,6 +9,7 @@ import { AppError, digest, id, now, object, string } from './util.js';
 import { OAuthService } from '../connections/oauth.js';
 import { Providers } from '../connections/providers.js';
 import { BrowserBridge, validateBinding } from '../connections/browser.js';
+import { BrowserDiscovery } from '../connections/browser-discovery.js';
 import { DiscussionEngine, findDiscussion } from './engine.js';
 import { CodexExecutor } from '../execution/codex.js';
 import { reasoningEffort } from './settings.js';
@@ -25,6 +26,7 @@ export class Workspace {
   readonly accessHash: string;
   readonly materials: LocalMaterials;
   readonly resident: ResidentStore;
+  readonly browserDiscovery: BrowserDiscovery;
   readonly dispatch: DispatchCoordinator; readonly residentRunner: ResidentRunner;
   constructor(readonly config: WorkspaceConfig, fakeDelay = 80, options: { residentProvider?: Pick<Providers, 'complete'>; residentClock?: () => number; residentAutoSchedule?: boolean } = {}) {
     this.store = new Store(config.stateDir);
@@ -42,6 +44,7 @@ export class Workspace {
     this.accessHash = digest(token);
     this.oauth = new OAuthService(this.store, this.vault, config.oauthPort);
     this.browser = new BrowserBridge(this.store, config.chromeCommand);
+    this.browserDiscovery = new BrowserDiscovery(this.browser);
     this.providers = new Providers(this.store, this.vault, this.oauth, this.browser, fetch, fakeDelay);
     this.dispatch = new DispatchCoordinator(config.residentEnabled);
     this.engine = new DiscussionEngine(this.store, this.providers, config, undefined, this.dispatch);
@@ -97,7 +100,17 @@ export class Workspace {
         emit({ type: 'connection.failed', discussionId: null, data: { connectionId, code: c.error } }); }); throw error;
     }
   }
-  async addBrowser(input: unknown): Promise<string> {
+  async discoverBrowser(input: unknown) {
+    const body = object(input); const c = body.connectionId ? this.store.read().connections.find(c => c.id === body.connectionId && c.kind === 'browser') : null;
+    if (body.connectionId && !c?.browser) throw new AppError('connection_not_found', 404);
+    if (c) this.assertNoActiveTurn(c.id);
+    return this.browserDiscovery.discover(input, c?.browser ? { id: c.id, browser: c.browser } : undefined);
+  }
+  async confirmBrowser(input: unknown, requestId: string): Promise<string> {
+    const body = object(input); const candidate = await this.browserDiscovery.resolve(body);
+    return this.addBrowser({ label: string(body.label, 80), ...(candidate.connectionId ? { connectionId: candidate.connectionId } : {}), binding: candidate.binding }, requestId, candidate.binding.discovery);
+  }
+  async addBrowser(input: unknown, requestId?: string, discovery?: BrowserBinding['discovery']): Promise<string> {
     const body = object(input); const raw = object(body.binding);
     const existing = body.connectionId ? this.store.read().connections.find(c => c.id === body.connectionId && c.kind === 'browser') : null;
     if (body.connectionId && !existing) throw new AppError('connection_not_found', 404);
@@ -114,18 +127,34 @@ export class Workspace {
       if (typeof raw.sendAppearsAfterInput !== 'boolean') throw new AppError('invalid_input');
       binding.sendAppearsAfterInput = raw.sendAppearsAfterInput;
     }
+    // Discovery evidence is server-owned. Manual requests cannot forge a probe.
+    if (discovery) binding.discovery = discovery;
+    else if (existing?.browser?.discovery) binding.discovery = existing.browser.discovery;
     validateBinding(binding);
     if (existing?.browser && ['url', 'accountLabel', 'agentLabel', 'identityText'].some(key => existing.browser![key as keyof BrowserBinding] !== binding[key as keyof BrowserBinding])) throw new AppError('browser_identity_change_not_allowed', 409);
     if (existing?.browser && existing.browser.thread?.value !== binding.thread?.value) throw new AppError('browser_identity_change_not_allowed', 409);
     await this.browser.probe(binding);
+    if (requestId) {
+      const observation = await this.browser.inspect(binding);
+      if (observation.draft || observation.busy === true || observation.ready !== true) throw new AppError('browser_discovery_changed', 409);
+      if (observation.identity !== true || observation.thread !== true || observation.url !== binding.url) throw new AppError('browser_target_mismatch', 409);
+    }
     const connectionId = existing?.id ?? id('connection');
-    this.store.transact((s, emit) => {
+    return this.store.transact((s, emit) => {
+      // Probe awaits external observation. Recheck active/uncertain work and the
+      // exact prior binding inside the save transaction, never update mid-turn.
+      if (existing) {
+        this.assertNoActiveTurn(existing.id);
+        if (JSON.stringify(s.connections.find(c => c.id === existing.id)?.browser) !== JSON.stringify(existing.browser)) throw new AppError('browser_binding_changed', 409);
+      }
       if (s.connections.some(c => c.id !== connectionId && c.browser && (c.browser.pageId === binding.pageId || c.browser.url === binding.url))) throw new AppError('browser_already_bound', 409);
       const connection: Connection = { id: connectionId, kind: 'browser', label: string(body.label, 80), status: 'connected', browser: binding,
         models: [{ id: 'existing-agent', label: binding.agentLabel }], lastCheckedAt: now() };
+      if (existing?.browser) connection.browserHistory = [...(existing.browserHistory ?? []), { changedAt: now(), binding: existing.browser }];
       const index = s.connections.findIndex(c => c.id === connectionId); if (index >= 0) s.connections[index] = connection; else s.connections.push(connection);
       emit({ type: 'connection.added', discussionId: null, data: { connectionId } });
-    }); return connectionId;
+      return connectionId;
+    }, requestId ? { id: 'browser:confirm:' + requestId, input: body } : undefined);
   }
   participant(input: unknown, existingId?: string): string {
     const body = object(input); const participantId = existingId ?? id('participant');

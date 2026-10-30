@@ -11,12 +11,14 @@ export interface BrowserBinding {
   userSelector: string; assistantSelector: string; busySelector: string; readySelector: string;
   thread?: { selector: string; attribute: string; value: string; jsonKey?: string };
   sendAppearsAfterInput?: boolean;
+  discovery?: { presetVersion: string; observedAt: string; evidenceDigest: string; profile: string };
 }
 export interface Connection {
   id: string; kind: Exclude<ProviderKind, 'fake'>; label: string;
   status: 'connected' | 'auth_required' | 'unverified' | 'error';
   models: ModelChoice[]; clientId?: string; subject?: string; email?: string; expectedEmail?: string;
   browser?: BrowserBinding; lastCheckedAt?: string; error?: string;
+  browserHistory?: { changedAt: string; binding: BrowserBinding }[];
 }
 export interface Member {
   id: string; label: string; kind: ProviderKind; connectionId: string | null; modelId: string; role: string;

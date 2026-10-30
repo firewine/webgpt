@@ -49,6 +49,10 @@ export class BrowserBridge {
     await this.tool('new_page', { url: target.href, isolatedContext: 'webjjoku-oauth-' + connectionId });
   }
   async inspect(binding: BrowserBinding, marker = ''): Promise<Record<string, unknown>> {
+    if (binding.discovery) {
+      const page = browserPages(await this.tool('list_pages', {})).find(p => p.id === binding.pageId);
+      if (!page || cleanUrl(page.url) !== cleanUrl(binding.url) || (page.isolatedContext === undefined ? 'default' : 'isolated:' + page.isolatedContext) !== binding.discovery.profile) throw new AppError('browser_target_mismatch', 409);
+    }
     const result = await this.tool('evaluate_script', { pageId: binding.pageId, function: observationScript(binding, marker), waitForStableDom: false, dialogAction: 'dismiss' });
     return toolObject(result);
   }
@@ -107,7 +111,34 @@ export function validateBinding(b: BrowserBinding): void {
 }
 function cleanUrl(value: string): string { const url = new URL(value); url.hash = ''; return url.href; }
 function toolText(result: Record<string, unknown>): string { return (Array.isArray(result.content) ? result.content : []).map(object).filter(c => c.type === 'text').map(c => String(c.text)).join('\n'); }
-function toolObject(result: Record<string, unknown>): Record<string, unknown> {
+// MCP 1.12.0 returns structuredContent only with its experimental option. Read
+// its default page-list format too, without guessing a page ID from arbitrary
+// mentions in titles or selecting a page. DOM origin is rechecked independently.
+export function browserPages(result: Record<string, unknown>): { id: number; url: string; title: string; isolatedContext?: string }[] {
+  if (result.structuredContent) {
+    const structured = toolObject(result);
+    if (!Array.isArray(structured.pages)) throw new AppError('browser_discovery_pages_unavailable', 409);
+    return structured.pages.slice(0, 200).map(raw => {
+      const page = object(raw);
+      if (!Number.isInteger(page.id) || Number(page.id) < 0 || Number(page.id) > 1_000_000 || typeof page.url !== 'string') throw new AppError('browser_discovery_pages_unavailable', 409);
+      return { id: Number(page.id), url: page.url, title: typeof page.title === 'string' ? page.title.slice(0, 200) : '', ...(typeof page.isolatedContext === 'string' ? { isolatedContext: page.isolatedContext } : {}) };
+    });
+  }
+  const pages = [];
+  const section = /(?:^|\n)## Pages\n([\s\S]*?)(?=\n## |$)/.exec(toolText(result));
+  if (!section) throw new AppError('browser_discovery_pages_unavailable', 409);
+  for (const line of section[1]!.split('\n').filter(Boolean).slice(0, 200)) {
+    const entry = /^(\d+): (.+?)(?: \[selected\])?(?: isolatedContext=(.+))?$/.exec(line);
+    if (!entry) throw new AppError('browser_discovery_pages_unavailable', 409);
+    const titled = /^(.*) \(([a-zA-Z][\w+.-]*:\S*)\)$/.exec(entry[2]!);
+    const url = titled?.[2] ?? entry[2]!;
+    if (!/^[a-zA-Z][\w+.-]*:\S+$/.test(url)) throw new AppError('browser_discovery_pages_unavailable', 409);
+    const id = Number(entry[1]); if (!Number.isSafeInteger(id) || id > 1_000_000) throw new AppError('browser_discovery_pages_unavailable', 409);
+    pages.push({ id, url, title: titled?.[1] ?? '', ...(entry[3] ? { isolatedContext: entry[3] } : {}) });
+  }
+  return pages;
+}
+export function toolObject(result: Record<string, unknown>): Record<string, unknown> {
   if (result.structuredContent) {
     const value = object(result.structuredContent);
     return value.result && typeof value.result === 'object' ? object(value.result) : value;
@@ -128,7 +159,8 @@ export function observationScript(b: BrowserBinding, marker: string): string {
     const nextUser=user?users[users.indexOf(user)+1]:null;
     const answers=user?[...document.querySelectorAll(b.assistantSelector)].filter(e=>(user.compareDocumentPosition(e)&Node.DOCUMENT_POSITION_FOLLOWING)!==0&&(!nextUser||(e.compareDocumentPosition(nextUser)&Node.DOCUMENT_POSITION_FOLLOWING)!==0)):[];
     const u=new URL(location.href);u.hash='';
-    return {url:u.href,identity:!!identity&&(identity.textContent||'').includes(b.identityText),thread:threadMatches(),
+    const unique=!b.discovery||[b.identitySelector,b.inputSelector,b.readySelector].every(s=>document.querySelectorAll(s).length===1)&&document.querySelectorAll(b.sendSelector).length<=1;
+    return {url:u.href,identity:unique&&!!identity&&(identity.textContent||'').includes(b.identityText),thread:threadMatches(),
       inputFound:visible(input),sendFound:visible(send),draft:input?('value' in input?input.value:input.textContent):'',
       ready:visible(document.querySelector(b.readySelector)),busy:[...document.querySelectorAll(b.busySelector)].some(visible),
       matched:!!user,matchCount:match.length,answer:answers.map(messageText).join('\\n\\n').slice(0,100001)}; }`;
@@ -144,7 +176,8 @@ export function sendScript(b: BrowserBinding, prompt: string): string {
     const identity=document.querySelector(b.identitySelector),input=document.querySelector(b.inputSelector);
     let button=document.querySelector(b.sendSelector);
     const visible=e=>!!e&&e.getClientRects().length>0;
-    if(!identity||!(identity.textContent||'').includes(b.identityText)||!threadMatches()||!visible(input)||(!visible(button)&&!b.sendAppearsAfterInput)||[...document.querySelectorAll(b.busySelector)].some(visible)||!visible(document.querySelector(b.readySelector)))return {sent:false};
+    const unique=()=>!b.discovery||[b.identitySelector,b.inputSelector,b.readySelector].every(s=>document.querySelectorAll(s).length===1)&&document.querySelectorAll(b.sendSelector).length<=1;
+    if(!unique()||!identity||!(identity.textContent||'').includes(b.identityText)||!threadMatches()||!visible(input)||(!visible(button)&&!b.sendAppearsAfterInput)||[...document.querySelectorAll(b.busySelector)].some(visible)||!visible(document.querySelector(b.readySelector)))return {sent:false};
     if(('value' in input?input.value:input.textContent).trim())return {sent:false};
     if(input instanceof HTMLTextAreaElement||input instanceof HTMLInputElement){
       const proto=input instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
@@ -154,5 +187,5 @@ export function sendScript(b: BrowserBinding, prompt: string): string {
     await new Promise(resolve=>setTimeout(resolve,150));
     button=document.querySelector(b.sendSelector);
     const current=new URL(location.href);current.hash='';
-    if(current.href!==u.href||!(document.querySelector(b.identitySelector)?.textContent||'').includes(b.identityText)||!threadMatches()||!input.isConnected||!visible(button)||!button.isConnected||('value' in input?input.value:input.textContent)!==text||button.disabled||button.getAttribute('aria-disabled')==='true'||!visible(document.querySelector(b.readySelector))||[...document.querySelectorAll(b.busySelector)].some(visible))return {sent:false};button.click();return {sent:true};}`;
+    if(!unique()||current.href!==u.href||!(document.querySelector(b.identitySelector)?.textContent||'').includes(b.identityText)||!threadMatches()||!input.isConnected||!visible(button)||!button.isConnected||('value' in input?input.value:input.textContent)!==text||button.disabled||button.getAttribute('aria-disabled')==='true'||!visible(document.querySelector(b.readySelector))||[...document.querySelectorAll(b.busySelector)].some(visible))return {sent:false};button.click();return {sent:true};}`;
 }

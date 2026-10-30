@@ -16,6 +16,7 @@ for (const config of ['tsconfig.server.json', 'tsconfig.web.json']) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 await mkdir(new URL('dist/client/web/', root), { recursive: true });
+await cp(new URL('src/connections/browser-presets/', root), new URL('dist/server/connections/browser-presets/', root), { recursive: true });
 for (const file of ['index.html', 'styles.css', 'control.html', 'control.css']) {
   await cp(new URL(`src/web/${file}`, root), new URL(`dist/client/web/${file}`, root));
 }
