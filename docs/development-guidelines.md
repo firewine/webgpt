@@ -1,6 +1,6 @@
 # 후속 개발 지침 — 기존 계약을 지키는 디자인 패턴
 
-> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-30 페이즈 1 구현/검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
+> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 현재 승인 범위와 결과는 위 SSOT를 따른다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
 
 2026-10-30 추가 사용자 지침을 계획 묶음에 반영한다. 이 문서는 **구현 지침**이며 작업 승인 범위를 스스로 넓히지 않는다. 원 계획 개정·문서 발행은 [개정 요약](./plan-revision-20261030.md)의 이력이고, 현재 구현 지시는 맨 위 SSOT가 관리한다. 설계 코드 근거 C/계획 P는 유지하며 변경 단위는 [R1~R8](./resident-implementation-plan.md)이다.
 
@@ -51,4 +51,4 @@
 - R7: Wiki CAS/출처 projection·scoped intent. reported 자동 게시가 검증/권한 자동 승격이 되면 안 됨.
 - R8: pattern 채택 여부보다 실제 전체 흐름·실패/롤백·기존 계약 회귀로 완료 판정. 실제 검증하지 않은 새 타입/패턴에 “구현 완료” 표시 금지.
 
-이 지침의 수락은 단계별 기록에서 ① 계약 유지/변경 표 ② 작은 변경 근거 ③ 해당 경쟁/장애 gate ④ 데이터 보존 rollback이 모두 있는지로 확인한다. 첫 적용은 [R1 실행 기록](./implementation/phase1-resident-foundation-20261030.md)의 composition·기존 transaction·명시 CAS와 실패 fixture에서 확인한다. 후속 단계의 패턴·실행 증거를 선행 완료로 간주하지 않는다.
+이 지침의 수락은 단계별 기록에서 ① 계약 유지/변경 표 ② 작은 변경 근거 ③ 해당 경쟁/장애 gate ④ 데이터 보존 rollback이 모두 있는지로 확인한다. [R1 실행 기록](./implementation/phase1-resident-foundation-20261030.md)의 composition·기존 transaction·명시 CAS와 [R2 실행 기록](./implementation/phase2-resident-runtime-20261030.md)의 공통 coordinator/JSON adapter·전송 직전 port·인계 CAS/SIGKILL fixture로 적용을 확인한다. 후속 단계의 패턴·실행 증거를 선행 완료로 간주하지 않는다.

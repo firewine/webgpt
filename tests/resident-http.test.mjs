@@ -64,7 +64,7 @@ test('room CAS controls do not mutate legacy participants/discussions or dispatc
   assert.equal((await enabled.json()).version, 2);
   await errorCode(await f.api(root + '/control', { action: 'rename', expectedVersion: 1, title: 'stale' }), 409, 'room_version_conflict');
   await errorCode(await f.api(root + '/control', { action: 'set_member', expectedVersion: 2, participantId: 'unknown', enabled: true }), 404, 'participant_not_found');
-  await errorCode(await f.api(root + '/control', { action: 'on', expectedVersion: 2 }), 409, 'resident_dispatch_not_available');
+  await errorCode(await f.api(root + '/control', { action: 'on', expectedVersion: 2 }), 409, 'room_settings_required');
   const cursor = f.app.store.cursor(); assert.equal((await (await f.api(root + '/control', { action: 'off', expectedVersion: 2 })).json()).changed, false);
   assert.equal(f.app.store.cursor(), cursor);
   assert.equal((await f.api(root + '/messages', { text: 'Message while off', mentions: ['fake-a'] })).status, 201);

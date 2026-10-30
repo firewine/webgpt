@@ -2,6 +2,7 @@ import type { WorkspaceState } from './model.js';
 import type { ResidentStateV1, Room, RoomMessage, RoomSummary } from './resident-model.js';
 import type { Store } from './store.js';
 import { AppError, digest, id, integer, now, object, string, strings } from './util.js';
+import { budgetReason, usageFor, unresolvedProvider, validBudget, validPacing } from './dispatch.js';
 
 const MIGRATION = 'resident:migration:v1';
 const COLLECTIONS = ['rooms', 'messages', 'turns', 'dispatchLeases', 'contextCheckpoints', 'workItems', 'workAttempts', 'wikiPages', 'wikiVersions', 'jobLinks', 'residentGrants'] as const;
@@ -19,7 +20,11 @@ export function readResident(state: WorkspaceState): ResidentStateV1 | null {
         typeof room.desiredOn !== 'boolean' || !['off', 'on', 'sleeping', 'blocked', 'budget_exhausted'].includes(room.observedStatus) ||
         !Array.isArray(room.members) || room.members.some(m => !m || !isText(m.participantId) || typeof m.enabled !== 'boolean') ||
         !Array.isArray(room.legacyDiscussionIds) || !room.legacyDiscussionIds.every(isText) ||
-        !(room.topicLink === null || isText(room.topicLink)) || !isCount(room.lastMessageSequence) || !isText(room.createdAt) || !isText(room.updatedAt)) ||
+        !(room.topicLink === null || isText(room.topicLink)) || !isCount(room.lastMessageSequence) || !isText(room.createdAt) || !isText(room.updatedAt) ||
+        room.budgets !== null && !validBudget(room.budgets) || room.pacing !== undefined && room.pacing !== null && !validPacing(room.pacing) ||
+        room.ledger !== undefined && (!Array.isArray(room.ledger) || room.ledger.some(e => !e || !isText(e.requestId) || !['topic', 'resident', 'work'].includes(e.kind) || !isText(e.reservedAt) || !(e.settledAt === null || isText(e.settledAt)) ||
+          !(e.usage === null || e.usage && isCount(e.usage.input) && isCount(e.usage.output)))) ||
+        room.contexts !== undefined && (!Array.isArray(room.contexts) || room.contexts.some(c => !c || !isText(c.participantId) || !isCount(c.generation, 1) || !isCount(c.lastSeenSequence) || !Array.isArray(c.history) || c.history.some(h => !h || !['user', 'assistant'].includes(h.role) || typeof h.content !== 'string')))) ||
       resident.messages.some(m => !m || !isText(m.id) || !isText(m.roomId) || !isCount(m.sequence, 1) || typeof m.text !== 'string' ||
         !['user', 'room', 'topic', 'work', 'wiki', 'system'].includes(m.sourceKind) || !(m.sourceId === null || isText(m.sourceId)) ||
         !isText(m.authorId) || !(m.replyTo === null || isText(m.replyTo)) || !Array.isArray(m.mentions) || !m.mentions.every(isText) ||
@@ -47,6 +52,7 @@ export function migrateResident(store: Store): void {
 }
 
 export class ResidentStore {
+  dispatchAvailable = false;
   constructor(private readonly store: Store, readonly enabled: boolean) {
     // Refuse unknown schema before any new lifecycle/connection can start.
     readResident(store.read());
@@ -54,10 +60,10 @@ export class ResidentStore {
   }
   snapshot() {
     const state = readResident(this.store.read());
-    return { enabled: this.enabled, schemaVersion: state?.schemaVersion ?? null, dispatchAvailable: false,
+    return { enabled: this.enabled, schemaVersion: state?.schemaVersion ?? null, dispatchAvailable: this.enabled && this.dispatchAvailable,
       rooms: (state?.rooms ?? []).map(summary) };
   }
-  room(roomId: string) { return { room: summary(findRoom(this.required(), roomId)), dispatchAvailable: false, enabled: this.enabled, cursor: this.store.cursor() }; }
+  room(roomId: string) { const room = findRoom(this.required(), roomId); return { room: summary(room), contexts: (room.contexts ?? []).map(c => ({ participantId: c.participantId, generation: c.generation, checkpointId: c.checkpointId })), dispatchAvailable: this.enabled && this.dispatchAvailable, enabled: this.enabled, cursor: this.store.cursor() }; }
   messages(roomId: string, after: number, limit: number) {
     integer(after, 0, 0, Number.MAX_SAFE_INTEGER); integer(limit, 50, 1, 100);
     const state = this.required(); const room = findRoom(state, roomId);
@@ -75,7 +81,7 @@ export class ResidentStore {
   }
   control(roomId: string, input: unknown, requestId: string) {
     const body = object(input); const action = string(body.action, 40); const key = string(requestId, 200);
-    const fields = action === 'rename' ? ['title'] : action === 'set_member' ? ['participantId', 'enabled'] : [];
+    const fields = action === 'rename' ? ['title'] : action === 'set_member' ? ['participantId', 'enabled'] : action === 'configure' ? ['budgets', 'pacing'] : [];
     only(body, ['action', 'expectedVersion', ...fields]);
     readResident(this.store.read());
     return this.store.transact((state, emit) => {
@@ -89,13 +95,32 @@ export class ResidentStore {
         if (typeof body.enabled !== 'boolean') throw new AppError('invalid_input');
         if (!state.participants.some(p => p.id === pid)) throw new AppError('participant_not_found', 404);
         const member = room.members.find(m => m.participantId === pid);
-        if (member) { changed = member.enabled !== body.enabled; member.enabled = body.enabled; }
+        if (member) { changed = member.enabled !== body.enabled || !!member.blockedReason; member.enabled = body.enabled; member.blockedReason = null; }
         else { room.members.push({ participantId: pid, enabled: body.enabled }); changed = true; }
+      } else if (action === 'configure') {
+        if (room.desiredOn || state.resident!.turns.some(t => t.roomId === roomId && ['prepared', 'running', 'unconfirmed'].includes(t.status)) || state.resident!.dispatchLeases.some(l => l.roomId === roomId && l.state !== 'released')) throw new AppError('room_configuration_requires_off', 409);
+        const budget = object(body.budgets); const pacing = object(body.pacing);
+        only(budget, ['maxRequests', 'maxTokens', 'maxToolJobs', 'deadlineAt']); only(pacing, ['minIntervalMs', 'idleNudgeMs', 'passBackoffMs', 'sleepAfterPasses']);
+        const deadlineAt = string(budget.deadlineAt, 100);
+        if (!Number.isFinite(Date.parse(deadlineAt)) || Date.parse(deadlineAt) <= Date.now() || new Date(deadlineAt).toISOString() !== deadlineAt) throw new AppError('invalid_room_deadline');
+        room.budgets = { maxRequests: requiredInteger(budget.maxRequests, 1, 10_000), maxTokens: requiredInteger(budget.maxTokens, 1, 100_000_000), maxToolJobs: requiredInteger(budget.maxToolJobs, 0, 100), deadlineAt };
+        room.pacing = { minIntervalMs: requiredInteger(pacing.minIntervalMs, 1, 3_600_000), idleNudgeMs: requiredInteger(pacing.idleNudgeMs, 1, 86_400_000), passBackoffMs: requiredInteger(pacing.passBackoffMs, 1, 86_400_000), sleepAfterPasses: requiredInteger(pacing.sleepAfterPasses, 1, 100) };
+        // Counts and immutable request IDs survive every explicit budget update.
+        changed = true; room.reason = null;
       } else if (action === 'off') {
         changed = room.desiredOn || room.observedStatus !== 'off';
         if (changed) room.epoch++;
         room.desiredOn = false; room.observedStatus = 'off'; room.nextEligibleAt = null;
-      } else if (action === 'on') throw new AppError('resident_dispatch_not_available', 409);
+      } else if (action === 'on' || action === 'wake') {
+        if (!this.dispatchAvailable) throw new AppError('resident_dispatch_not_available', 409);
+        const reason = budgetReason(room); if (reason) throw new AppError(reason, 409);
+        if (unresolvedProvider(state) || state.resident!.dispatchLeases.some(l => l.state !== 'released')) throw new AppError('reconciliation_required', 409);
+        if (!room.members.some(m => m.enabled && !m.blockedReason)) throw new AppError('room_members_required', 409);
+        if (action === 'on' && room.desiredOn && room.observedStatus === 'on') return { roomId, version: room.version, changed: false };
+        if (!room.desiredOn) room.epoch++;
+        changed = true; room.desiredOn = true; room.observedStatus = 'on'; room.reason = null; room.passCount = 0;
+        room.nextEligibleAt = room.lastCompletedAt && room.pacing ? new Date(Math.max(Date.now(), Date.parse(room.lastCompletedAt) + room.pacing.minIntervalMs)).toISOString() : now();
+      }
       else throw new AppError('unknown_room_control');
       if (changed) {
         room.version++; room.updatedAt = now();
@@ -119,6 +144,8 @@ export class ResidentStore {
         sourceKind: 'user', sourceId: null, authorId: 'owner', text, replyTo, mentions,
         visibility: 'room_public', createdAt: now() };
       resident.messages.push(message); room.updatedAt = message.createdAt;
+      if (room.desiredOn && room.observedStatus === 'sleeping' && !budgetReason(room)) { room.observedStatus = 'on'; room.reason = null; room.passCount = 0;
+        room.nextEligibleAt = new Date(Math.max(Date.now(), room.lastCompletedAt && room.pacing ? Date.parse(room.lastCompletedAt) + room.pacing.minIntervalMs : 0)).toISOString(); }
       emit({ type: 'resident.message_created', discussionId: null, data: { roomId, messageId: message.id, sequence: message.sequence } });
       return { roomId, messageId: message.id, sequence: message.sequence };
     }, { id: 'resident:command:' + key, input: { roomId, operation: 'message', body } });
@@ -132,15 +159,16 @@ function findRoom(state: ResidentStateV1, roomId: string): Room {
 }
 function summary(room: Room): RoomSummary {
   return { id: room.id, title: room.title, version: room.version, epoch: room.epoch, desiredOn: room.desiredOn,
-    observedStatus: room.observedStatus, members: room.members.map(m => ({ participantId: m.participantId, enabled: m.enabled })),
+    observedStatus: room.observedStatus, members: room.members.map(m => ({ participantId: m.participantId, enabled: m.enabled, ...(m.blockedReason ? { blockedReason: m.blockedReason } : {}) })),
     legacyDiscussionIds: [...room.legacyDiscussionIds], topicLink: room.topicLink, lastMessageSequence: room.lastMessageSequence,
-    createdAt: room.createdAt, updatedAt: room.updatedAt };
+    createdAt: room.createdAt, updatedAt: room.updatedAt, budgets: room.budgets, pacing: room.pacing ?? null, reason: room.reason ?? null, nextEligibleAt: room.nextEligibleAt, used: usageFor(room) };
 }
 function only(body: Record<string, unknown>, allowed: string[]): void {
   if (Object.keys(body).some(key => !allowed.includes(key))) throw new AppError('invalid_room_fields');
 }
 function isText(value: unknown): value is string { return typeof value === 'string' && value.length > 0; }
 function isCount(value: unknown, min = 0): boolean { return typeof value === 'number' && Number.isSafeInteger(value) && value >= min; }
+function requiredInteger(value: unknown, min: number, max: number): number { if (value === undefined) throw new AppError('room_settings_required'); return integer(value, min, min, max); }
 function messageMetadata(m: RoomMessage): Omit<RoomMessage, 'text'> {
   return { id: m.id, roomId: m.roomId, sequence: m.sequence, sourceKind: m.sourceKind, sourceId: m.sourceId,
     authorId: m.authorId, replyTo: m.replyTo, mentions: [...m.mentions], visibility: m.visibility, createdAt: m.createdAt };

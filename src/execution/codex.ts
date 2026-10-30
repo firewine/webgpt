@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 import { RpcProcess } from '../connections/rpc.js';
 import type { RpcId } from '../connections/rpc.js';
 import type { Store } from '../workspace/store.js';
-import type { CodexJob, ExecutionBinding } from '../workspace/model.js';
+import type { CodexJob, ExecutionBinding, WorkspaceState } from '../workspace/model.js';
 import { AppError, code, digest, id, integer, now, object, string } from '../workspace/util.js';
 const execute = promisify(execFile);
 const ACTIVE = ['running', 'blocked_approval', 'reconciling'];
@@ -18,6 +18,7 @@ export class CodexExecutor {
   private closed = false;
   private readonly watchdog: NodeJS.Timeout;
   onProgress: () => void = () => {};
+  beforeDispatch: ((state: WorkspaceState, job: CodexJob) => void) | null = null;
   constructor(private readonly store: Store, private readonly command: string[], private readonly roots: string[], private readonly protectedPaths: string[] = []) {
     this.watchdog = setInterval(() => this.expire(), 1000); this.watchdog.unref();
   }
@@ -94,6 +95,8 @@ export class CodexExecutor {
       const current = s.jobs.find(j => j.id === job.id)!;
       if (current.status !== 'queued') throw new AppError('job_state_changed', 409);
       if (current.discussionId && !s.discussions.some(d => d.id === current.discussionId && d.revision === current.revision && d.status === 'running')) throw new AppError('discussion_not_running', 409);
+      if (s.discussions.some(d => d.id === current.discussionId && d.roomId) && !this.beforeDispatch) throw new AppError('room_dispatch_guard_required', 409);
+      this.beforeDispatch?.(s, current);
       current.status = 'running';
       current.deadlineAt = new Date(Date.now() + current.maxDurationMs).toISOString();
       const b = s.bindings.find(b => b.id === binding.id)!; b.sessionTreeId = typeof thread.sessionId === 'string' ? thread.sessionId : null;

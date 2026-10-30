@@ -76,6 +76,7 @@ export class McpEndpoint {
       const prompt = string(args.prompt, 30_000);
       if (task.jobId) { const prior = state.jobs.find(j => j.id === task.jobId); if (prior?.promptDigest !== digest(prompt)) throw new AppError('idempotency_conflict', 409); return { jobId: task.jobId, status: prior.status }; }
       if (d.used.toolJobs >= d.limits.maxToolJobs || task.status !== 'running' || !d.turns.some(t => t.id === task.turnId && ['prepared', 'running'].includes(t.status))) throw new AppError('execution_not_in_scope', 403);
+      if (d.roomId) this.app.store.transact(s => this.app.dispatch.reserveTool(s, d.id, task.id));
       const jobId = this.app.codex.submit({ bindingId: d.executionBindingId, prompt, requestId: task.id,
         discussionId: d.id, taskId: task.id, revision: d.revision, maxDurationMs: Math.max(1, d.limits.maxActiveMs - d.used.activeMs) });
       this.app.store.transact((s, emit) => { const current = findDiscussion(s, d.id); const currentTask = current.tasks.find(t => t.id === task.id)!;

@@ -8,6 +8,9 @@ import { fileURLToPath } from 'node:url';
 import { CodexExecutor } from '../dist/server/execution/codex.js';
 import { DiscussionEngine } from '../dist/server/workspace/engine.js';
 import { McpEndpoint } from '../dist/server/http/mcp.js';
+import { ResidentStore } from '../dist/server/workspace/resident-store.js';
+import { DispatchCoordinator } from '../dist/server/workspace/dispatch.js';
+import { budget, pacing } from './resident-fixture.mjs';
 import { storage, until, topic, response } from './workspace-helpers.mjs';
 const script = fileURLToPath(new URL('fixtures/codex-rpc.mjs', import.meta.url));
 async function fixture(t, mode = 'normal') {
@@ -85,3 +88,24 @@ test('unavailable isolation fails closed without launching the Codex adapter', a
     await assert.rejects(readFile(join(f.cwd, 'rpc-trace.jsonl')), { code: 'ENOENT' });
   } finally { process.env.PATH = priorPath; isolated.close(); await rm(bin, { recursive: true, force: true }); }
 });
+
+for (const mode of ['on', 'off', 'expired', 'flag_off', 'guard_missing']) {
+  test('room Codex job checks ' + mode + ' at actual dispatch and sends only an authorized turn/start', async t => {
+    const f = await fixture(t); const bindingId = await f.register();
+    const resident = new ResidentStore(f.store, true); resident.dispatchAvailable = true; const roomId = resident.snapshot().rooms[0].id;
+    const control = body => resident.control(roomId, { expectedVersion: f.store.read().resident.rooms[0].version, ...body }, crypto.randomUUID());
+    control({ action: 'configure', budgets: { ...budget(Date.now()), maxToolJobs: 1 }, pacing }); control({ action: 'set_member', participantId: 'fake-a', enabled: true }); control({ action: 'on' });
+    const dispatch = new DispatchCoordinator(); const engine = new DiscussionEngine(f.store, { complete: async () => assert.fail('unexpected provider') }, { sourceFetch: false, turnTimeoutMs: 1000 }, undefined, dispatch); engine.kick = () => {}; t.after(() => engine.close());
+    const did = engine.create({ ...topic, executionBindingId: bindingId }, 'guard-topic', roomId); const taskId = f.store.read().discussions[0].tasks[0].id;
+    f.store.transact(s => dispatch.reserveTool(s, did, taskId));
+    const kick = f.codex.kick.bind(f.codex); f.codex.kick = () => {};
+    f.codex.submit({ bindingId, requestId: taskId, prompt: 'guard fixture only', discussionId: did, taskId, revision: 1 });
+    f.codex.beforeDispatch = (s, job) => (mode === 'flag_off' ? new DispatchCoordinator(false) : dispatch).validateToolDispatch(s, job);
+    if (mode === 'off') control({ action: 'off' });
+    if (mode === 'expired') f.store.transact(s => { s.resident.rooms[0].budgets.deadlineAt = new Date(Date.now() - 1000).toISOString(); });
+    if (mode === 'guard_missing') f.codex.beforeDispatch = null;
+    kick(); await until(() => f.store.read().jobs[0].status === (mode === 'on' ? 'completed' : 'failed'));
+    if (mode !== 'on') assert.equal(f.store.read().jobs[0].error, mode === 'guard_missing' ? 'room_dispatch_guard_required' : 'room_tool_scope_changed');
+    assert.equal((await f.trace()).filter(m => m.method === 'turn/start').length, mode === 'on' ? 1 : 0);
+  });
+}

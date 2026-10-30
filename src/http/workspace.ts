@@ -78,7 +78,7 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     }
     if (get && path === '/api/state') { json(res, 200, app.snapshot()); return; }
     if (get && path === '/api/rooms') { json(res, 200, { ...app.resident.snapshot(), cursor: app.store.cursor() }); return; }
-    const roomPath = /^\/api\/rooms\/([\w-]+)(?:\/(messages|control)(?:\/([\w-]+))?)?$/.exec(path);
+    const roomPath = /^\/api\/rooms\/([\w-]+)(?:\/(messages|control|turns|handoff|focus|checkpoints)(?:\/([\w-]+))?)?$/.exec(path);
     if (get && roomPath) {
       if (!roomPath[2]) { json(res, 200, app.resident.room(roomPath[1]!)); return; }
       if (roomPath[2] === 'messages') {
@@ -86,6 +86,10 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
         else json(res, 200, app.resident.messages(roomPath[1]!, pageNumber(url, 'after', 0, 0, Number.MAX_SAFE_INTEGER), pageNumber(url, 'limit', 50, 1, 100)));
         return;
       }
+      if (roomPath[2] === 'turns') {
+        json(res, 200, roomPath[3] ? app.residentRunner.turn(roomPath[1]!, roomPath[3]) : app.residentRunner.turns(roomPath[1]!, pageNumber(url, 'after', 0, 0, Number.MAX_SAFE_INTEGER), pageNumber(url, 'limit', 50, 1, 100))); return;
+      }
+      if (roomPath[2] === 'checkpoints' && roomPath[3]) { json(res, 200, app.residentRunner.checkpoint(roomPath[1]!, roomPath[3])); return; }
     }
     if (get && path === '/api/capabilities') { json(res, 200, await app.capabilities()); return; }
     if (get && path === '/api/events') {
@@ -115,9 +119,13 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     if (get && path === '/api/browser/snapshot') { json(res, 200, { text: await app.browser.snapshot(integer(Number(url.searchParams.get('pageId')), 0, 0, 1_000_000)) }); return; }
     if (req.method !== 'POST') throw new AppError('not_found', 404);
     const input = object(await body(req));
+    const residentReconcile = /^\/api\/rooms\/([\w-]+)\/turns\/([\w-]+)\/reconcile$/.exec(path);
+    if (residentReconcile) { json(res, 200, app.residentRunner.reconcile(residentReconcile[1]!, residentReconcile[2]!, input, command(req))); return; }
     if (roomPath && !roomPath[3]) {
       if (roomPath[2] === 'control') { json(res, 200, app.resident.control(roomPath[1]!, input, command(req))); return; }
       if (roomPath[2] === 'messages') { json(res, 201, app.resident.postMessage(roomPath[1]!, input, command(req))); return; }
+      if (roomPath[2] === 'focus') { json(res, 201, { discussionId: app.residentRunner.focus(roomPath[1]!, input, command(req)) }); return; }
+      if (roomPath[2] === 'handoff') { json(res, 200, app.residentRunner.handoff(roomPath[1]!, input, command(req))); return; }
     }
     if (path === '/api/materials') { json(res, 201, { id: app.prepareMaterials(input, command(req)) }); return; }
     if (path === '/api/materials/list') { json(res, 200, app.materials.list(input.path)); return; }

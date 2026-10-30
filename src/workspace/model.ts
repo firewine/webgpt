@@ -63,6 +63,7 @@ export interface DiscussionTurn {
   startedAt: string; finishedAt: string | null; receipt: string | null; error: string | null;
   usage: { input: number; output: number } | null; evidenceIds: string[];
   reasoningEffort?: ReasoningEffort;
+  dispatchStartedAt?: string;
 }
 export interface Checkpoint {
   id: string; participantId: string; revision: number; generation: number; basisCursor: number;
@@ -80,6 +81,8 @@ export interface Discussion {
   interventions: { revision: number; text: string; createdAt: string }[];
   executionBindingId: string | null;
   materialPackageIds?: string[];
+  roomId?: string;
+  roomMaterial?: { text: string; digest: string };
 }
 export interface ExecutionBinding {
   id: string; label: string; host: string; user: string; cwd: string; threadId: string;

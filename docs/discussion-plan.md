@@ -1,12 +1,12 @@
 # 웹쫀쿠 능동 토론·상호 검증 계획
 
-> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-30 페이즈 1 구현/검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
+> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 현재 승인 범위와 결과는 위 SSOT를 따른다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
 
-> 지정 코드 C=8f81d861b3f170ef2024b90d9eeba56ce34f0f79, 계획 P=8db0f42f499f674c66c3a0df0a4d8e0f25fb216e를 고정한 개정이다. 먼저 [1쪽 요약·기준 차이·근거](./plan-revision-20261030.md), [104항목 판정](./reviews/plan-decision-register-20261030.md), [운영 계약](./company-workflow-plan.md), [8단계 변경·이관·수락·롤백](./resident-implementation-plan.md)을 읽는다. backend 재사용이 기본이며 신규 기능은 제안/NOT_RUN, 실제 계정·DOM·호스트 적합성은 UNVERIFIED다. 과거 PASS 보고를 이번 실행 결과로 승계하지 않는다. 이번 작업은 계획 문서만 수정하며 코드/서비스/commit/push/PR/로그인/모델 호출을 하지 않는다. 개발 시 [디자인 패턴 지침](./development-guidelines.md)의 작은 Adapter/DI·명시 상태 전이·기존 transaction·coordinator/CAS·검사/롤백 기준을 함께 적용한다.
+> 지정 코드 C=8f81d861b3f170ef2024b90d9eeba56ce34f0f79, 계획 P=8db0f42f499f674c66c3a0df0a4d8e0f25fb216e를 고정한 개정이다. 먼저 [1쪽 요약·기준 차이·근거](./plan-revision-20261030.md), [104항목 판정](./reviews/plan-decision-register-20261030.md), [운영 계약](./company-workflow-plan.md), [8단계 변경·이관·수락·롤백](./resident-implementation-plan.md)을 읽는다. backend 재사용이 기본이며 구현 상태는 위 SSOT, 실계정·DOM·호스트 적합성은 별도 검증 전 UNVERIFIED다. 과거 PASS 보고를 이번 실행 결과로 승계하지 않는다. 계획 개정 당시에는 문서만 수정했다. 현재 구현 지시는 위 SSOT가 관리하며 실계정·배포는 별도 범위다. 개발 시 [디자인 패턴 지침](./development-guidelines.md)의 작은 Adapter/DI·명시 상태 전이·기존 transaction·coordinator/CAS·검사/롤백 기준을 함께 적용한다.
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | v0.4-R1 — topic 엔진 보존·상주 Room과 공존 계획, 새 기능 NOT_RUN/실환경 UNVERIFIED |
+| 상태 | topic 엔진·상주 Room 공존 설계, 구현 상태는 SSOT / 실환경은 별도 검증 |
 | 개정일 | 2026-10-30 (KST) |
 | 상위 계획 | [development-plan.md](./development-plan.md) |
 | 전체 설계 / 운영 | [Living Design](./webjjoku_living_design.md) / [Ubuntu 운영](./ubuntu-operations.md) |
@@ -19,7 +19,7 @@
 
 ## 1. 제품 목표
 
-제품의 상위 수명은 Room이다. 자유 대화→일감 큐→픽업/보고→Wiki가 방 안에서 진행하고 아래 주제 토론은 focus mode로 사용한다. 기존 DiscussionEngine/Task/StructuredReply는 유지한다. 새 Room/WorkTask/Wiki는 제안이며 backend 전면 재작성이나 별도 유료 모델은 전제가 아니다.
+제품의 상위 수명은 Room이다. 자유 대화→일감 큐→픽업/보고→Wiki가 방 안에서 진행하고 아래 주제 토론은 focus mode로 사용한다. 기존 DiscussionEngine/Task/StructuredReply는 유지한다. Room/WorkTask/Wiki의 실제 상태는 SSOT로 판정하며 backend 전면 재작성이나 별도 유료 모델은 전제가 아니다.
 
 사용자가 주제를 한 번 입력하면 선택한 여러 AI 참여자가 각자 답을 만들고, 상대의 주장과 근거를 검토하고, 필요한 검증을 수행한 뒤 결과를 비교하는 **능동적인 공동 대화창**을 만든다. 사용자에게 답변 복사·붙여넣기나 매 발언의 계속 지시를 요구하지 않는다. 사용자는 진행을 보거나 중간에 조건·자료를 추가하고 방향을 바꿀 수 있다.
 

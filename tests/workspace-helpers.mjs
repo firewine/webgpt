@@ -14,10 +14,10 @@ export async function storage(t) {
   const directory = await mkdtemp(join(tmpdir(), 'wj-state-')); const store = new Store(directory); const vault = new Vault(join(directory, 'credentials'));
   t.after(async () => { store.close(); await rm(directory, { recursive: true, force: true }); }); return { store, vault, directory };
 }
-export async function workspace(t, extra = {}) {
+export async function workspace(t, extra = {}, runtimeOptions = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'wj-app-')); const port = await unusedPort();
   const config = loadWorkspaceConfig({ WJ_STATE_DIR: directory, WJ_CHROME_PROFILE_DIR: join(directory, 'chrome'), WJ_ACCESS_TOKEN: ownerKey, WJ_PORT: String(port), WJ_PUBLIC_ORIGIN: `http://127.0.0.1:${port}` });
-  const app = new Workspace({ ...config, ...extra }, 2); const http = await createWorkspaceServer(app, () => {}); http.server.listen(port, '127.0.0.1'); await once(http.server, 'listening'); app.start();
+  const app = new Workspace({ ...config, ...extra }, 2, runtimeOptions); const http = await createWorkspaceServer(app, () => {}); http.server.listen(port, '127.0.0.1'); await once(http.server, 'listening'); app.start();
   t.after(async () => { http.closeStreams(); await new Promise(resolve => { http.server.close(resolve); http.server.closeAllConnections(); }); await app.close(); await rm(directory, { recursive: true, force: true }); });
   const api = async (path, data, options = {}) => fetch(`${config.origin}${path}`, { headers: { Authorization: `Bearer ${ownerKey}`, ...(data === undefined ? {} : { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() }), ...(options.headers ?? {}) },
     ...(data === undefined ? {} : { method: 'POST', body: JSON.stringify(data) }), ...Object.fromEntries(Object.entries(options).filter(([k]) => k !== 'headers')) });
