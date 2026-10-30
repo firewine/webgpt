@@ -1,9 +1,11 @@
 # 웹쫀쿠 Living Design Document
 
+> 지정 코드 C=8f81d861b3f170ef2024b90d9eeba56ce34f0f79, 계획 P의 v0.8 기반 개정이다. 현재 HEAD의 후속 회사 우선/수다 후순위 문구는 승계하지 않았다. 먼저 [1쪽 요약·기준 차이·근거](./plan-revision-20261030.md), [104판정](./reviews/plan-decision-register-20261030.md), [운영 계약](./company-workflow-plan.md), [R1~R8](./resident-implementation-plan.md)을 읽는다. 기존 backend 재사용, 신규는 제안/NOT_RUN, 실제 계정·DOM·호스트는 UNVERIFIED다. 이번은 계획 문서만 수정한다. 개발 시 [디자인 패턴 지침](./development-guidelines.md)의 작은 Adapter/DI·명시 상태 전이·기존 transaction·coordinator/CAS·검사/롤백 기준을 함께 적용한다.
+
 - 문서 상태: Living Design Document
-- 버전: v0.7
+- 버전: v0.8-R1 (지정 계획 기반 개정)
 - 최초 기준일: 2026-08-14
-- 개정일: 2026-10-29 (KST)
+- 개정일: 2026-10-30 (KST)
 - 문서 형식: Markdown
 - 원칙: 이후의 아이디어, 설계 결정, 구현 메모는 이 문서에 누적 업데이트한다.
 - 현재 릴리스 순서·완료 조건: [개발 계획서](./development-plan.md)
@@ -13,7 +15,7 @@
 - 서버·웹 클라이언트: [Ubuntu 운영 계획](./ubuntu-operations.md)
 - 선택 코드 실행 모듈: [Git Writer PRD](./prd.md) / [상세 계획](./git-writer-plan.md)
 
-> 현재 핵심은 주제를 주면 여러 AI가 자동으로 토의·검증·비교하는 공동 대화다. 여러 GPT OAuth 계정·dot·Muse·DeepSeek API를 참여자로 연결한다. Ubuntu가 실행하고 Tailscale이 허용된 기기의 웹 브라우저로 접속한다. 태블릿은 예시다. 연결 adapter·영속 Core·능동 토론 UI·scoped MCP·Codex 환류를 통합 구현했고 자동 검사를 통과했다. [구현 기록](./implementation/wj-002-015.md)과 [운영 절차](./operations-runbook.md)를 기준으로 실제 계정·운영 서버를 검증한다. 실계정 MVP는 NOT_RUN이며 MCP Events/Connector·조직·팀·Wiki는 후속 범위다.
+> 목표는 상주 단톡방+작업큐+Wiki다. 참여자는 자유 논의·일감 적재·픽업/수행·보고와 Wiki 갱신을 이어간다. 사용자는 방을 켜고 관전/중간 참여한다. 기존 topic 엔진은 방 안의 focus로 남긴다. 연결·인증·Store/이벤트·MCP·Codex/승인·원격 운영은 재사용한다. 현재 Room/WorkTask/Wiki는 없으며 제안/NOT_RUN이다. 과거 모듈 검사 보고는 이 새 기능의 완료 증거가 아니다.
 
 ---
 
@@ -21,13 +23,13 @@
 
 ### 1.1 웹쫀쿠란?
 
-웹쫀쿠는 **여러 AI 참여자가 하나의 주제에 대해 토의하고, 근거를 검증하고, 각자의 결과를 비교하는 웹 대화 시스템**이다. 사용자가 주제를 한 번 주면 Core가 후속 질문·반론·확인·수정을 이어간다. dot과 Muse는 각각 한 참여자이며 일반 GPT 여러 계정과 API 모델도 동등하게 참여한다.
+웹쫀쿠는 **여러 AI가 단톡방에 상주하며 자유 논의·작업큐·Wiki로 협업하는 웹 작업실**이다. 방 켜기/끄기로 상주 수명을 제어하고 사용자는 관전자이자 중간 참여자다. dot/Muse·GPT OAuth 여러 계정·API 모델의 연결과 기억 경계를 유지한다. 매번 주제를 입력해야 시작하는 고정 pipeline으로 한정하지 않는다.
 
 핵심 목표는 다음과 같다.
 
-> 주제 입력 → 참여자별 독립 초안 → 상호 질문·반론 → 근거 확인 → 수정·결과 비교 → 합의점과 미해결 쟁점. 일반 GPT는 OAuth, DeepSeek 등은 API, 기존 dot·Muse는 실제 agent 대화에 연결한다. 필요한 코드·계산·실험은 후속 Codex 실행으로 검증할 수 있다.
+> 상주 방의 논의 → 실행 가능한 일감 제안 → 큐 pickup/수행 → 같은 방에 결과/리뷰 보고 → Wiki 자동 갱신·다음 발화 인용. 필요할 때 기존 독립 초안·검증·비교를 focus activity로 수행하고 같은 방으로 복귀한다. 실제 코드는 기존 허용 Codex로 연결한다.
 
-사용자는 Tailscale에 연결된 허용 기기에서 동일한 공동 대화를 보고 개입한다. 개발·조사·기술 검토·설계안 비교를 모두 지원하며 **AI Software Company Control Room**은 이 대화 시스템 위에 확장할 장기 운영 형태다.
+사용자는 기존 Tailscale HTTPS 단톡방 GUI에서 대화·업무·지식을 보고 개입한다. 최소 role/seat·큐·Wiki는 필수 운영이다. 회사형 팀/정책/역할은 책임을 표현하되 거대 조직 DB·새 계정/도구를 먼저 재작성하지 않는다. 지도·건축·3D 월드는 제외한다.
 
 ### 1.2 핵심 원칙
 
@@ -64,7 +66,7 @@
 
 ### 2.1 동시 실행 한도
 
-대화 MVP-1은 **root workflow 1개와 활성 provider turn 1개**로 시작하되 여러 GPT 계정·dot·Muse·API 참여자의 순차 토론을 포함한다. 다중 참여와 동시 실행을 구분한다. Phase 5는 동시 발언·여러 workflow의 검증된 확대이며 계정·credential별 한도를 지킨다.
+기존 DiscussionEngine의 활성 토론 1개·provider turn 1개는 유지한다. 새 Room/work/review/wiki는 R2 공통 dispatch에서 그 provider 슬롯 1개를 공유한다. Room은 상주 수명, topic은 focus다. 기존 root_workflow_busy를 없애거나 loop마다 1개씩 병렬 호출하지 않는다. 계정/workspace 용량 확대는 별도다.
 
 일반 ChatGPT와 dot이 같은 계정을 사용하면 동시 실행 한도도 공유한다. “기존 5개 + dot + Muse = 7개 Seat”로 자동 산정하지 않는다. 실제 연결된 독립 계정·provider의 검증 결과로 실행 용량을 정한다.
 
@@ -299,6 +301,8 @@ mode 선택·첨부·새 대화·원격 중단·MCP·이벤트는 capability다.
 
 ## 8. MCP를 웹쫀쿠의 통신 버스로 사용하기
 
+현재 discussion grant/tool은 유지하고 새 room/work/wiki 도구는 R7 명시 scope로 추가한다. Core/owner API가 같은 명령 서비스를 사용하므로 공식 Events/Connector가 상주 운영의 선행 조건은 아니다. 새 도구는 제안이며 기존 도구가 범용 업무 큐라고 하지 않는다.
+
 MCP가 가능한 Provider에서는 단순 화면 scraping보다 **웹쫀쿠 자체를 Remote MCP Server로 제공하는 방식**을 우선한다.
 
 아래는 장기 도구 후보이다. 상위 Phase 3의 최소 범위는 task_get, context_get, result_submit이며 필요한 경우 task_claim을 추가한다. 일반 MCP 도구 연결만으로 외부에서 웹 대화를 시작할 수 있다고 가정하지 않는다. dot의 이벤트 구독은 별도 capability로 검증한다.
@@ -519,7 +523,7 @@ cancelled
 
 ## 13. Work Queue
 
-Task Queue는 웹쫀쿠의 실제 운영 중심이다.
+열린 업무 큐는 상주 운영의 필수 층이다. 현재 코드 Task는 discussion 발언/검증 과제다(E7). 신규 WorkTask/SeatAssignment/WorkAttempt와 기존 CodexJob의 side link는 제안이다. pickup/claim·보고/리뷰는 R5/R6, 이관/롤백은 [운영 계약](./company-workflow-plan.md)에 둔다. 기존 Task/backend를 통째 교체하지 않는다.
 
 ```text
 Task
@@ -562,7 +566,7 @@ Task
 
 ## 14. 능동 토론·검증·비교
 
-Discussion은 MVP-1의 핵심 root workflow다. 사용자가 주제를 한 번 입력하면 선택한 N명의 참여자가 독립 초안·상호 검토·근거 확인·수정·비교·종합을 진행한다. 특정 dot·Muse가 필수 진행자나 심판이 아니며 여러 GPT OAuth 계정과 API 모델도 같은 계약으로 참여한다.
+Discussion은 현재 코드의 root workflow다. 개정 운영에서는 같은 엔진을 Room focus로 연결한다. 공개 snapshot으로 기존 독립 초안·검토·검증·비교를 진행하고 종료 후 방으로 복귀한다. 모든 일감/자유 발화를 6단계로 바꾸지 않는다. 특정 dot/Muse를 필수 진행자/심판으로 고정하지 않는다.
 
 | 단계 | 계약 |
 | --- | --- |
@@ -587,6 +591,14 @@ Discussion은 MVP-1의 핵심 root workflow다. 사용자가 주제를 한 번 �
 상호 검토의 쟁점을 claim·revision·완료 증거·의존성·capability·권한·예산을 가진 VerificationTask로 만든다. 초기 단일 활성 turn scheduler에서 준비된 과제를 배정하며 미확정 전송은 재조정 전에 자동 재배정하지 않는다. 실행 결과는 task/attempt/job과 실제 관측 출처를 가진 ToolActivity·Evidence로 연결한다. 모델의 실행 주장, 도구 종료, claim의 검증 성공은 서로 다른 상태다.
 
 인계·큐·상태의 상세 전환과 완료 기준은 [능동 토론 계획 6장](./discussion-plan.md#6-저장스케줄링복구), WJ별 담당 범위는 [개발 실행 순서](./implementation-sequence.md)를 따른다. 이 설계는 [FlowDesk 사례 적용 검토](./development-plan.md#92-flowdesk-사례에서-반영할-아이디어)를 반영하되 기존 OAuth/API/Chrome 연결과 단계별 동시 실행 확대를 유지한다.
+
+---
+
+### 14.3 자유 대화·자동 수다 (추가 계획)
+
+자유 논의는 방의 기본 운영이다. 실제 text와 구조화 기록은 제안 ResidentReplyV1 JSON envelope로 공존시키고 Providers.complete는 유지한다. say/pass·지목/공정 배정·침묵 깨기·sleep·예산·복구는 R2를 따른다. 기존 전송 전 기록/미확정 대조를 우회하지 않는다.
+
+focus 중 Room 수명/입력은 유지하고 ambient 발화만 대기한다. private 초안·같은 라운드 새 답을 Room/Wiki/인용으로 유출하지 않는다. 기존 API/browser 맥락과 xhigh를 보존한다. 기본 시간/간격은 U1/U2에서 결정한다. 새 기능은 NOT_RUN이다.
 
 ---
 
@@ -662,7 +674,7 @@ Control Room은 Event를 사람이 읽기 좋은 메시지로 렌더링하고 SS
 
 ## 16. Wiki / Shared Memory
 
-에이전트가 매번 전체 대화를 읽지 않도록 프로젝트 지식을 문서화한다.
+Wiki는 필수 공유 기억이다. 아래 /wiki 구조는 논리적 분류 예시이며 repo 자동 쓰기 지시가 아니다. R7은 기존 Store private DB의 version/CAS/sourceRefs를 쓴다. owner/허용 참여자가 reported 버전을 자동 게시하고 출처·검토/관측·충돌/대체 이력을 보존한다. 다음 대화/업무에서 pinned page/version/digest로 인용하며 현재 상태의 권위는 큐다. 자료/checkpoint/provider 기억과 구분한다. 현재 미구현/제안이다.
 
 ```text
 /wiki
@@ -720,7 +732,7 @@ worktrees/
 
 ## 18. UI - Control Room
 
-대화 MVP-1의 첫 화면은 주제 입력과 공동 대화창이다. 선택한 GPT OAuth 계정·dot·Muse·API 참여자의 발언, 질문·반론, 실제 근거, 결론 수정을 연결해서 보여준다. 제시한 시안은 예시이며 실제 연동 성공 증거가 아니다. 전체 조직·동시 실행 확대는 후속 범위다.
+현재 운영 루트는 control.html의 토론 콘솔이다(E1/E2). R3에서 같은 파일/API/SSE를 단톡방으로 개조한다. 왼쪽 멤버/상태/토글·중앙 말풍선/인용/멘션/미읽음·오른쪽 자료/usage/실행+큐/Wiki다. topic은 focus로 유지하며 로그인/승인/대조 기능을 없애지 않는다. 시안만으로 운영/연동 성공이라 하지 않는다.
 
 | 화면 | 역할 |
 | --- | --- |
@@ -737,6 +749,8 @@ Tailscale이 허용된 데스크톱·노트북·휴대전화·태블릿에서 �
 noVNC는 로그인·OAuth 등록·연결 승인·수동 개입용이다. 일반 대화를 원격 화면 영상으로 대신하지 않는다. OAuth 로그인·모델 발견·실제 응답 완료를 각각 표시하고 미검증 profile이나 기기를 지원 완료로 표시하지 않는다.
 
 관측 시각·출처를 함께 표시하고 상태가 오래됐거나 관측할 수 없으면 미확인으로 남긴다. context 사용량은 측정·추정·알 수 없음을 구분한다. 참여자 카드 수가 동시 실행 수를 의미하지 않으며 초기에는 순차 배정과 대기 이유를 보여준다.
+
+GUI 두 안 비교는 [운영 계약 §2](./company-workflow-plan.md#2-gui-선택--기존-control-개조), 숫자 수락/이관/rollback은 R3에 둔다. 외부 그림을 복사하지 않고 이니셜/자체/사용자 자산을 쓴다. 지도·건물·3D·게임은 제외한다. 새 GUI/상주 운영은 실제 수락 전 UNVERIFIED다.
 
 ### 18.1 Account / Seat 화면
 
@@ -833,7 +847,13 @@ Process Improvement Proposal
 - [ ] Ubuntu profile과 일반 웹 클라이언트 호환성
 - [ ] Tailscale HTTPS·SSE 재연결·noVNC 보조 화면·서버 복구
 
-### 후속 단계
+### 상주 운영의 다음 필수 단계
+
+- [ ] R1~R3: 기존 Store 위 Room/Message·공통 dispatch·topic focus·control.* 단톡방
+- [ ] R4~R7: browser 연결 UX·업무 pickup/보고·기존 Codex/승인·Wiki/MCP scope
+- [ ] R8: 기존 회귀+상주/업무/Wiki/토론 왕복·rollback 수락
+
+### 별도 확장/연결 검증
 
 - [ ] MCP 구조화된 작업·결과 교환과 dot 이벤트 PoC
 - [ ] Muse Connector capability 확인
@@ -841,8 +861,8 @@ Process Improvement Proposal
 - [ ] 기존 Codex 세션 등록·프롬프트 실행·검토·동일 세션 후속 지시
 - [ ] 선택 Git Writer와 sandbox·checks·draft PR
 - [ ] Claude·Gemini와 추가 API provider 확장
-- [ ] 팀별 Preferred/Fallback 및 검증된 다중 Seat
-- [ ] Wiki·코드 자동 Review·조직 개선 제안·Morning Brief
+- [ ] 추가 계정/검증된 동시 Seat 용량 확대. 최소 배정/pickup은 R5
+- [ ] 조직 개선 제안·Morning Brief 고도화. 최소 Wiki/업무 리뷰는 R6/R7
 - [ ] 조건부 자동 병합·운영 고도화·macOS 등 추가 OS·다중 프로젝트
 
 여러 GPT OAuth 계정·DeepSeek·dot/Muse의 순차 참여는 MVP 범위다. 전체 조직과 동시 실행 용량 확대를 분리한다.
@@ -1026,6 +1046,8 @@ ProcessImprovementProposal
 
 ## 25. 다음 설계 항목
 
+현재 구현 순서는 [R1~R8](./resident-implementation-plan.md)이다. 아래는 연결/모듈의 설계 이력이며 이미 구현된 provider/auth/Store/Codex 재작성 지시가 아니다.
+
 1. Ubuntu 호스트·Tailscale HTTPS 포트·웹 클라이언트·원격 Chrome 접속 확인.
 2. autoConnect 프로필 선택·연결 허용과 대안 spike.
 3. BrowserConnection / ConversationBinding / ProviderAdapter 계약.
@@ -1076,6 +1098,16 @@ OAuth·API 공식 출처와 구현 경계는 [참여자 연결 계획](./partici
 ---
 
 ## 27. 변경 이력
+
+### v0.8-R1 — 2026-10-30
+
+- 지정 P 기반 104판정. 상주 방·큐·Wiki에 backend를 재사용하고 topic을 focus로 보존.
+- 후속 HEAD 문구를 근거로 삼지 않고 코드 C 재대조. 새 타입/파일/검사는 제안/NOT_RUN. 아래는 과거 기록이다.
+
+### v0.8 - 2026-10-30
+
+- 단톡방 GUI·답장/멘션·한도 있는 자유 대화·자동 수다 계획과 검토서 추가.
+- 지도·건축 제외, 기존 계정·xhigh·장문·순차 실행·토론 공개 장벽·맥락 보존, 구현/실계정 미검증 상태 명시.
 
 ### v0.6 - 2026-10-29
 
@@ -1136,5 +1168,5 @@ OAuth·API 공식 출처와 구현 경계는 [참여자 연결 계획](./partici
 
 ## 28. 현재 확정된 핵심 문장
 
-> 웹쫀쿠는 주제 하나로 여러 GPT OAuth 계정·dot·Muse·API 모델이 능동적으로 토의·검증·비교하는 웹 대화 시스템이다. Ubuntu가 실행을 유지하고 사용자는 Tailscale이 허용된 어느 기기에서든 웹 브라우저로 참여한다. 합의와 근거 검증을 구분하며 필요할 때 기존 Codex 세션으로 실험·개발을 수행하고 그 결과를 다시 공동 대화로 돌려보낸다.
+> 웹쫀쿠는 단톡방에 상주한 참여자가 자유롭게 논의하고, 일감을 큐에 넣어 수행·보고하며, Wiki를 스스로 갱신해 공유 기억으로 쓰는 개인 작업실이다. 기존 연결·인증·Store·이벤트·MCP·승인·Codex·원격 운영을 재사용하고 주제 토론은 방 안의 focus로 유지한다. 사용자는 관전/중간 참여하고 지도·3D·게임은 없다.
 

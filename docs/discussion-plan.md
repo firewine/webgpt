@@ -1,9 +1,11 @@
 # 웹쫀쿠 능동 토론·상호 검증 계획
 
+> 지정 코드 C=8f81d861b3f170ef2024b90d9eeba56ce34f0f79, 계획 P=8db0f42f499f674c66c3a0df0a4d8e0f25fb216e를 고정한 개정이다. 먼저 [1쪽 요약·기준 차이·근거](./plan-revision-20261030.md), [104항목 판정](./reviews/plan-decision-register-20261030.md), [운영 계약](./company-workflow-plan.md), [8단계 변경·이관·수락·롤백](./resident-implementation-plan.md)을 읽는다. backend 재사용이 기본이며 신규 기능은 제안/NOT_RUN, 실제 계정·DOM·호스트 적합성은 UNVERIFIED다. 과거 PASS 보고를 이번 실행 결과로 승계하지 않는다. 이번 작업은 계획 문서만 수정하며 코드/서비스/commit/push/PR/로그인/모델 호출을 하지 않는다. 개발 시 [디자인 패턴 지침](./development-guidelines.md)의 작은 Adapter/DI·명시 상태 전이·기존 transaction·coordinator/CAS·검사/롤백 기준을 함께 적용한다.
+
 | 항목 | 값 |
 | --- | --- |
-| 상태 | v0.3 — 토론·검증·인계·UI 구현과 fixture PASS, 실계정 검증 NOT_RUN |
-| 개정일 | 2026-10-29 (KST) |
+| 상태 | v0.4-R1 — topic 엔진 보존·상주 Room과 공존 계획, 새 기능 NOT_RUN/실환경 UNVERIFIED |
+| 개정일 | 2026-10-30 (KST) |
 | 상위 계획 | [development-plan.md](./development-plan.md) |
 | 전체 설계 / 운영 | [Living Design](./webjjoku_living_design.md) / [Ubuntu 운영](./ubuntu-operations.md) |
 | 첫 릴리스 | Phase 1~2 대화 MVP-1의 핵심 기능 |
@@ -15,6 +17,8 @@
 
 ## 1. 제품 목표
 
+제품의 상위 수명은 Room이다. 자유 대화→일감 큐→픽업/보고→Wiki가 방 안에서 진행하고 아래 주제 토론은 focus mode로 사용한다. 기존 DiscussionEngine/Task/StructuredReply는 유지한다. 새 Room/WorkTask/Wiki는 제안이며 backend 전면 재작성이나 별도 유료 모델은 전제가 아니다.
+
 사용자가 주제를 한 번 입력하면 선택한 여러 AI 참여자가 각자 답을 만들고, 상대의 주장과 근거를 검토하고, 필요한 검증을 수행한 뒤 결과를 비교하는 **능동적인 공동 대화창**을 만든다. 사용자에게 답변 복사·붙여넣기나 매 발언의 계속 지시를 요구하지 않는다. 사용자는 진행을 보거나 중간에 조건·자료를 추가하고 방향을 바꿀 수 있다.
 
 대상은 개발뿐 아니라 조사, 기술 검토, 설계안 비교, 제품 의사결정 등이다. Codex는 코드·계산·실험이 필요한 경우 연결하는 후속 실행 수단이며 일반 토론의 필수 의존성이 아니다. 모든 주제를 Git 작업으로 바꾸지 않는다.
@@ -22,6 +26,8 @@
 각 참여자는 동등하게 초안을 작성하고 상대안을 비판·수정한다. dot·Muse는 여러 참여자 중 하나씩이며 필수 지시자·심판이 아니다. GPT 계정 A·B는 각각 OAuth로, DeepSeek는 API로, 기존 dot·Muse는 browser adapter로 같은 토론에 들어온다. Core는 차례·맥락·예산·상태를 관리하며 사실의 정답을 자체 추론하는 모델 역할을 맡지 않는다. 초기 구성에 별도 유료 심판 모델을 요구하지 않는다.
 
 ## 2. 한 주제로 시작하는 흐름
+
+아래 flow는 Room 안의 topic focus와 legacy standalone 토론에서 유지한다. Room을 끄거나 새로 만드는 것으로 전환하지 않는다. 공개 snapshot·topicLink·복귀는 [운영 계약 §5](./company-workflow-plan.md#5-topic은-기존-엔진을-유지한-방-안의-기능), 변경 접점은 R2다.
 
 1. 사용자가 주제를 입력한다. 선택적으로 자료·판단 기준·제약·참여자·진행 한도를 지정한다. 기본값이 있으면 추가 설정 없이 시작한다.
 2. Core가 `discussionId`, `topicRevision`, 공통 주제와 자료 snapshot, 비교 기준, 사용할 대화를 고정한다. 기준이 없으면 결론·근거·실현 가능성·불확실성을 공통 비교 항목으로 사용한다. 에이전트는 세부 기준을 제안할 수 있지만 일방적으로 목표를 바꾸지 않는다.
@@ -51,6 +57,14 @@ Core의 공통 Participant/Turn 계약 아래 GPT OAuth·API·browser adapter가
 선택한 참여자들의 OAuth/API 인증 또는 Chrome 연결·대화 바인딩이 준비된 뒤에는 정해진 범위 안에서 토론을 자동 진행한다. 인증 만료, 불확실한 전송, 사용자 판단이 필수인 조건은 차단 이유를 표시한다. 단계마다 형식적인 재승인을 받지 않는다.
 
 2026-10-30 사용자 요청에 따라 모든 토커가 앞선 라운드의 전체 발언을 읽고 독립적으로 재분석·재발언한다. Core는 다른 모든 활성 토커의 주장을 검토 대상으로 배정한다. 동의·반론·질문은 각자가 판단하며 반대를 강제하지 않는다. 같은 라운드의 모든 답변을 확보하기 전에는 다음 라운드로 넘어가지 않고, 먼저 도착한 새 답도 다른 토커에게 미리 공유하지 않는다. 기본 검토 2회, 시작 화면에서 1~8회를 선택하며 요청·시간·문맥 예산이 우선한다. [구현·검증 기록](./implementation/talker-settings-rounds-20261030.md)을 따른다.
+
+### 3.1 자유 대화·자동 수다 (추가 계획)
+
+자유 발화는 상주 방의 기본 운영이다. 사용자는 방 켜기/끄기·관전·중간 발언/멘션·답장을 사용하며 참여자는 공개된 앞선 발언을 받아 이야기하고 일감/Wiki 변경을 제안한다. 공통 provider 슬롯 1개에서 공정 배정하고 pass/형식 보완/업무·리뷰·Wiki 호출을 상위 방 예산에 포함한다.
+
+Providers.complete/Hooks는 불변이다. topic은 parseReply/promptFor를 유지하고 resident는 별도 제안 ResidentReplyV1 JSON validator를 사용한다. 자유 text·빈 claim 배열을 허용하되 raw 원문/구조화 claims·reviews·verifications·상태/action 출처를 보존한다. 완성/권한 검증 전 action 실행은 0이다. 형식 오류·미확정의 처리 차이는 기존 안전 절차와 같다.
+
+방 수명·focus 복귀·off/진행 job의 구분·epoch/미확정·Wiki 공개 범위는 [운영 계약](./company-workflow-plan.md), 구체 변경/수락/롤백은 R2/R5~R7이다. 기본 시간/간격·한도는 U1/U2에서 사용자 결정으로 남긴다. xhigh/모델/기존 browser 맥락을 임의 변경하지 않는다.
 
 ## 4. 검증과 비교의 계약
 
@@ -194,7 +208,15 @@ Discussion은 root workflow이고 각 참여자 발언과 검증 과제는 그 �
 
 데스크톱·노트북의 넓은 화면에는 대화와 비교를 나란히, 휴대전화·태블릿의 좁은 화면에는 대화/비교 탭을 제공한다. 핵심 기능은 화면 크기와 무관하게 같고 키보드·마우스·터치를 지원한다. noVNC는 서버 Chrome 로그인·연결 승인·수동 개입용 보조 화면이다. 기본 공동 대화창을 원격 데스크톱 영상으로 대신하지 않는다.
 
+### 7.1 단톡방 GUI (추가 계획)
+
+control.html/ts/css를 개조한다(A안). 기존 login/connections/discussions/jobs/materials/grants·/api/state·SSE·Host/Origin·noVNC는 재사용한다. 왼쪽 참여자/상태/토글, 중앙 말풍선/인용/멘션/읽지 않은 메시지, 오른쪽 자료/사용량/실행+WorkTask/Wiki 패널로 구성한다. 기존 콘솔의 인증·승인·원본/대조 기능은 상세 drawer로 이동하고 제거하지 않는다.
+
+text와 raw JSON·실제 상태를 분리하고 장문은 화면 접기만 허용한다. 4 viewport·IME·터치/키보드·스크롤·SSE 재연결의 숫자 수락은 R3에 둔다. 지도/3D/게임·외부 캐릭터 그림은 제외한다. 신규 독립 frontend/backend 재생성은 계획하지 않는다.
+
 ## 8. Codex로 검증·실행 확장
+
+기존 아래 경로는 보존한다. 새 방의 WorkTask는 R5/R6에서 같은 CodexExecutor.submit과 결과/승인/대조를 사용하고 WorkJobLink로 연결한다. provider 응답/실행 완료와 산출물 리뷰·업무 done은 다르다. 특정 dot만 모든 역할의 영구 진행자로 두지 않는다. 현재 실제 scope/secret 보강과 호스트 적합성은 별도 gate/UNVERIFIED다.
 
 Phase 4A에서 실제 코드 검사·계산·실험이 필요하면 VerificationTask를 [Codex 세션 실행](./codex-session-plan.md)에 연결한다. 등록 세션, 작업 범위와 기존 권한 안에서 dot이 재현 입력·검사 방법·완료 조건을 포함한 프롬프트를 작성한다.
 
@@ -205,6 +227,8 @@ Phase 4A에서 실제 코드 검사·계산·실험이 필요하면 Verification
 일반 GPT OAuth 참여자나 API 모델이 검증을 제안한 경우 Core가 VerificationTask를 만들고, Phase 4A에서 먼저 검증한 dot → Codex 실행 경로에 배정할 수 있다. 이를 이유로 dot을 모든 토론의 필수 참여자로 강제하지 않는다. 다른 참여자의 직접 실행 도구는 별도 권한·capability 계약을 검증한 뒤 확장한다.
 
 ## 9. 구현 순서와 완료 조건
+
+기존 토론 완료 조건을 모두 유지한다. 제품 전체 완료에는 R8의 상주 방→업무 픽업/보고→Wiki 자동 갱신/다음 발화 인용→topic→같은 방 복귀가 필요하다. 기존 토론 fixture PASS만으로 새 기능 완료라고 하지 않는다. 신규 검사/명령은 이번 작업에서 실행하지 않는다.
 
 - Phase 0: GPT OAuth 다중 계정·DeepSeek API·기존 Chrome dot/Muse의 개별 대화와 Tailscale 접속 경로 검증.
 - Phase 1: 공통 Participant와 OAuth/API/browser adapter, Discussion·Turn·Claim·Evidence·VerificationTask·Comparison 계약, scheduler·예산·복구 fixture.

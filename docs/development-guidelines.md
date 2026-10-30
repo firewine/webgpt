@@ -1,0 +1,52 @@
+# 후속 개발 지침 — 기존 계약을 지키는 디자인 패턴
+
+2026-10-30 추가 사용자 지침을 계획 묶음에 반영한다. 이 문서는 **후속 구현 지침**이며 코드 구현·실행·새 PR 생성/병합·배포를 허용하지 않는다. 계획 문서의 commit/push는 별도 사용자 승인에 따라 [개정 요약의 발행 범위](./plan-revision-20261030.md)를 따른다. 코드 근거 C/계획 P와 범위도 같은 개정 요약, 변경 단위는 [R1~R8](./resident-implementation-plan.md)이다.
+
+## 1. 적용 원칙
+
+패턴은 기존 코드 재사용·중복 방지·상태 일관성·검증/롤백에 이득이 있을 때 사용한다. 패턴 이름을 늘리거나 모든 타입에 interface/abstract class를 만드는 것을 목표로 삼지 않는다. 이미 존재하는 Providers/Store/adapter/실행기/인증을 “더 깔끔한 구조”로 바꾸는 계획은 기각한다. 먼저 실제 중복·변경 이유와 영향을 받는 계약을 적고 가장 작은 함수/모듈 조합으로 해결한다.
+
+기준 코드가 갖춘 경계는 구현 근거와 함께 보존한다. Providers.complete는 transport의 호출 계약(E5), Store.transact는 상태/event/command의 원자적 단위(E10), engine.turn/recover는 전송/대조 절차(E12), CodexExecutor는 별도 실행 수명/권한(E13), Workspace는 이 객체를 결합하는 위치(E11)다. 이들이 어떤 패턴 이름에 “완벽히 부합한다”는 평가를 구현 근거 대신 사용하지 않는다.
+
+## 2. 어떤 곳에 무엇을 쓰는가
+
+| 경계 | 적용 방식·패턴 | 실제 이득·확인할 것 |
+| --- | --- | --- |
+| 기존 backend와 새 상주 운영 | **Composition + Dependency Injection.** runtime에서 기존 객체를 넘기고 새 서비스가 필요한 작은 계약만 사용. 예: Pick<Providers,'complete'> 유지 | provider/auth 교체 없이 fake 주입과 기존 회귀 가능. 전역 singleton/거대 DI container·범용 BaseWorkflow 재작성 불필요 |
+| topic JSON과 resident 발화 | **Adapter.** 별도 ResidentReply validator/projector로 text/actions를 해석하고 기존 topic parseReply는 그대로 | 인터페이스 불변, 자유 text를 위해 claims/evidence를 잃거나 provider raw-text 모드로 바꾸지 않음. R2-F로 검증 |
+| GUI 상태/자동 탐지/preset | **작은 경계 Adapter/Facade.** 기존 API·BrowserBridge를 사용하고 discovery 결과를 기존 probe로 통과시킴 | 새 인증/브라우저 send 경로를 만들지 않음. R3/R4에서 전송0·목표 확인/회귀 검증 |
+| Room/WorkTask/epoch·리뷰·Wiki | **명시적 상태 전이.** 입력/현재 상태/버전/권한을 검사하는 작은 순수 정책 함수와 전이표. 저장/외부 실행은 분리 | 허용하지 않은 done·중복 claim·늦은 결과 적용을 막음. boolean 조합/암묵적 상태/패턴 클래스로 감추지 않음 |
+| 상태·event·중복 command·lease | **Unit of Work 역할을 하는 기존 Store.transact 재사용.** 하나의 수락/claim/편집과 이벤트·command 결과를 한 transaction에 기록 | 외부 호출은 transaction 밖에서 durable intent와 receipt로 연결. entity마다 Repository/ORM/새 DB를 만들어 같은 원자성을 분산시키지 않음 |
+| 여러 scheduler의 실제 호출 | **하나의 Coordinator.** durable lease와 예약 예산을 공통 경계에서 조정하고 기존 engine의 작은 접점만 연결 | loop별 잠금으로 provider 2호출이 생기는 문제 방지. R2-A/B의 최대1·crash 재전송0으로 이득 입증 |
+| 후보 선택·역할/priority·focus | **작은 Strategy/정책 함수.** 후보 선택과 실제 dispatch를 분리, 결정에 근거/대상/버전을 남김 | 속도/역할을 바꿔도 auth·기록·예산·승인 로직이 복제되지 않음. 모델/effort 자동 전환 정책은 새로 넣지 않음 |
+| event→단톡방/상세/미읽음 | **기존 Event/Projection 재사용.** Store commit 뒤 같은 cursor의 SSE로 UI 갱신. 명령 결과와 렌더 상태를 구분 | 새 Event Bus/Observer framework·별도 서버가 필요하지 않음. 재접속 재생은 event ID로 중복 제거 |
+| Wiki 동시 변경 | **Optimistic Concurrency/CAS.** expectedVersion 하나로 검사, 충돌은 명시 보존 | 마지막 작성자 덮어쓰기나 조용한 모델 재시도로 지식 손실을 숨기지 않음. R7-A의 2편집→1성공/1충돌 |
+| 상주 문맥 인계·옛 결과 | **기존 checkpoint/generation + CAS/Fencing.** 서버가 고정한 generation으로 인계 적용과 intent/결과 수락 검사 | 새 daemon/세션 재작성 없이 원문/업무/예산을 잇고 stale 결과의 현재 action 적용을 막음. badge 이름만으로 fencing 완료라 하지 않음 |
+| 바깥 JSON/AI intent와 내부 권한 | **명시 DTO + 검증/명령 경계.** actor/scope는 인증에서, 원문 참조는 실제 데이터에서 확인 | 임의 text/role/wiki를 shell·권한으로 평가하지 않음. 승인·부작용은 완성/검증 뒤 한 번만 수행 |
+
+이 표의 새 서비스/심볼은 제안이다. DI container, 거대한 추상 계층, generic repository, 새로운 message broker·microservice, 전면 CQRS/Event Sourcing은 현재 필요하지 않다. 기존 Store는 state snapshot+이벤트/중복 명령 journal이며 모든 상태를 event만으로 재구성하는 Event Sourcing이라고 가정하지 않는다. 기존 이벤트만 replay하면 모든 Room/Task를 복원할 수 있다는 근거 없는 보장도 하지 않는다.
+
+## 3. 구현 때의 결정 기록
+
+후속 변경 단위마다 다음 5가지를 짧게 남긴다. 기존에 허용한 범위의 routine 수정에 새 승인 절차를 만들지 않는다.
+
+1. 해결할 실제 사용자 흐름/오류와 C의 파일·심볼. 어떤 기존 객체/계약을 그대로 쓰는가.
+2. 패턴/함수 분리 선택과 이득. 추가 abstraction 없이 해결하는 안과 비교하고 더 작게 가능한지 확인.
+3. 유지/변경 interface·state/event·migration·scope. 변경이 불가피한 이유와 최소 파일 범위. 공개 계약을 바꾸면 짧은 ADR/계약 비교를 남기고 기존 승인 경계를 지킴.
+4. R단계의 의미 있는 실패/경쟁/crash/호환 검사. 구현 함수의 사소한 모양을 그대로 반복하는 테스트를 추가하는 것으로 대신하지 않음.
+5. G0와 해당 단계 rollback: 진행 중/미확정·queued job·원문/idempotency를 보존하며 앞 단계로 돌아갈 수 있는가.
+
+체계적인 패턴 적용은 조건문 수·클래스 수를 늘리는 일이 아니다. 예를 들어 Wiki 편집에 CAS 정책 함수와 Store transaction 하나로 충분하면 복잡한 State 패턴 객체군을 만들지 않는다. 반대로 기존 topic/새 room에 비슷한 전송 기록 로직을 복사했다면, 공통 journal/driver 경계를 먼저 검토하되 기존 결과/receipt/state 전이가 달라지지 않는 회귀 증거를 남긴다.
+
+## 4. 단계별 적용과 금지한 우회
+
+- R1: additive state·기존 Unit of Work, 미래 스키마 fail closed. 새 저장소/기존 DB 초기화 금지.
+- R2: 작은 DI/Adapter·공통 Coordinator·명시 전이. 기존 provider/engine 전체 재작성·미확정 lease TTL 해제 금지.
+- 상주 인계는 규칙/참조 pack·generation CAS·공개 범위 검사로 작게 구성하고 상태 알림은 기존 observation의 순수 projection으로 만든다. 새 역할 이름을 추가했다고 별도 모델/서비스/권한을 생성하지 않는다.
+- R3: 기존 DOM helper/renderer와 동일 API/SSE. topic console의 인증·승인·복구 기능 제거 금지. view 모듈화가 별도 backend/세션을 만들면 안 됨.
+- R4: read-only discovery→기존 probe. “프리셋”이라는 이유로 계정/thread/초안 가드 생략 금지.
+- R5/R6: claim/intent/receipt/리뷰의 상태 전이와 WorkJobLink. 분산 transaction을 흉내 내며 외부 호출을 Store transaction 안에 넣거나 재전송으로 원자성을 맞추지 않음.
+- R7: Wiki CAS/출처 projection·scoped intent. reported 자동 게시가 검증/권한 자동 승격이 되면 안 됨.
+- R8: pattern 채택 여부보다 실제 전체 흐름·실패/롤백·기존 계약 회귀로 완료 판정. 실제 검증하지 않은 새 타입/패턴에 “구현 완료” 표시 금지.
+
+이 지침의 수락은 미래 R1~R8 기록에서 ① 계약 유지/변경 표 ② 작은 변경 근거 ③ 해당 경쟁/장애 gate ④ 데이터 보존 rollback이 모두 있는지로 확인한다. 이번에는 지침과 계획을 작성했을 뿐 이 패턴들을 코드에 적용하거나 새 수락 검사를 실행하지 않았다.
