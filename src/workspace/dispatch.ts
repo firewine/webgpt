@@ -1,6 +1,6 @@
 import type { Completion, CompletionInput, Providers } from '../connections/providers.js';
 import type { WorkspaceState, CodexJob } from './model.js';
-import type { Room } from './resident-model.js';
+import type { Room, ResidentTurn } from './resident-model.js';
 import { AppError, now } from './util.js';
 import type { Store } from './store.js';
 
@@ -34,6 +34,7 @@ export function unresolvedProvider(state: WorkspaceState): boolean {
     !!state.resident?.turns.some(t => ['prepared', 'running', 'unconfirmed'].includes(t.status));
 }
 export class DispatchCoordinator {
+  workGuard?: (state: WorkspaceState, turn: ResidentTurn) => boolean;
   constructor(private readonly residentEnabled = true) {}
   async perform(store: Store, provider: Pick<Providers, 'complete'>, input: CompletionInput) {
     const allowed = store.transact((state, emit) => {
@@ -42,6 +43,7 @@ export class DispatchCoordinator {
       if (!turn || turn.status !== 'prepared' || turn.dispatchStartedAt || lease && (lease.state !== 'reserved' || lease.invokedAt)) throw new AppError('dispatch_not_reserved', 409);
       if (input.participant.id !== turn.participantId || input.prompt !== turn.prompt) throw new AppError('dispatch_input_mismatch', 409);
       const room = state.resident?.rooms.find(r => r.id === lease?.roomId);
+      if ('workAttemptId' in turn && turn.workAttemptId && (!this.workGuard || !this.workGuard(state, turn))) return false;
       if (room && (!this.residentEnabled || !room.desiredOn || !room.budgets || Date.parse(room.budgets.deadlineAt) <= Date.now() ||
           lease?.ownerKind === 'resident' && ('epoch' in turn && turn.epoch !== room.epoch || room.contexts?.find(c => c.participantId === turn.participantId)?.generation !== turn.generation))) return false;
       turn.dispatchStartedAt = now();

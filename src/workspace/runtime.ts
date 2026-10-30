@@ -19,6 +19,7 @@ import { ResidentStore } from './resident-store.js';
 import { DispatchCoordinator } from './dispatch.js';
 import { ResidentRunner } from './resident-runner.js';
 import { FakeResidentCompletion } from './resident-fake.js';
+import { WorkQueue } from './work-queue.js';
 
 export class Workspace {
   readonly store: Store; readonly vault: Vault; readonly oauth: OAuthService; readonly browser: BrowserBridge;
@@ -28,9 +29,11 @@ export class Workspace {
   readonly resident: ResidentStore;
   readonly browserDiscovery: BrowserDiscovery;
   readonly dispatch: DispatchCoordinator; readonly residentRunner: ResidentRunner;
+  readonly workQueue: WorkQueue;
   constructor(readonly config: WorkspaceConfig, fakeDelay = 80, options: { residentProvider?: Pick<Providers, 'complete'>; residentClock?: () => number; residentAutoSchedule?: boolean } = {}) {
     this.store = new Store(config.stateDir);
-    try { this.resident = new ResidentStore(this.store, config.residentEnabled); }
+    this.dispatch = new DispatchCoordinator(config.residentEnabled);
+    try { this.resident = new ResidentStore(this.store, config.residentEnabled); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); }
     catch (error) { this.store.close(); throw error; }
     this.vault = new Vault(join(config.stateDir, 'credentials'));
     const accessPath = join(config.stateDir, 'access-token');
@@ -46,7 +49,7 @@ export class Workspace {
     this.browser = new BrowserBridge(this.store, config.chromeCommand);
     this.browserDiscovery = new BrowserDiscovery(this.browser);
     this.providers = new Providers(this.store, this.vault, this.oauth, this.browser, fetch, fakeDelay);
-    this.dispatch = new DispatchCoordinator(config.residentEnabled);
+    this.dispatch.workGuard = (state, turn) => this.workQueue.canDispatch(state, turn);
     this.engine = new DiscussionEngine(this.store, this.providers, config, undefined, this.dispatch);
     this.materials = new LocalMaterials(config.materialRoots, [config.stateDir, config.chromeProfileDir]);
     this.engine.materials = this.materials;
@@ -56,7 +59,7 @@ export class Workspace {
     this.codex.beforeDispatch = (state, job) => this.dispatch.validateToolDispatch(state, job);
     this.residentRunner = new ResidentRunner(this.store, this.resident, this.dispatch,
       options.residentProvider ?? new FakeResidentCompletion(this.providers, fakeDelay), this.engine, config.turnTimeoutMs,
-      { ...(options.residentClock ? { clock: options.residentClock } : {}), ...(options.residentAutoSchedule !== undefined ? { autoSchedule: options.residentAutoSchedule } : {}) });
+      { work: this.workQueue, ...(options.residentClock ? { clock: options.residentClock } : {}), ...(options.residentAutoSchedule !== undefined ? { autoSchedule: options.residentAutoSchedule } : {}) });
     this.resident.dispatchAvailable = true;
     this.codex.onProgress = () => { this.engine.kick(); this.residentRunner.kick(); };
   }

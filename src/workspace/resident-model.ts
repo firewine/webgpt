@@ -1,4 +1,6 @@
 import type { Context, Member, StructuredReply } from './model.js';
+import type { SeatAssignment, WorkTask, WorkAttempt } from './work-model.js';
+export type { SeatAssignment, WorkTask, WorkAttempt, WorkReportV1, WorkReviewV1 } from './work-model.js';
 export type ResidentUsage = { input: number; output: number } | null;
 
 export interface RoomMember { participantId: string; enabled: boolean; blockedReason?: string | null }
@@ -8,7 +10,7 @@ export interface RoomContext { participantId: string; generation: number; histor
 export interface BudgetEntry { requestId: string; kind: 'topic' | 'resident' | 'work'; reservedAt: string; settledAt: string | null; usage: ResidentUsage; error: string | null }
 export interface ResidentReply extends StructuredReply {
   version: 1; action: 'say' | 'pass'; replyTo: string | null; mentions: string[];
-  proposals: { kind: 'work_propose' | 'work_report' | 'wiki_edit'; payload: Record<string, unknown> }[];
+  proposals: { kind: 'work_propose' | 'work_report' | 'work_review' | 'wiki_edit'; payload: Record<string, unknown> }[];
 }
 export interface RoomClaim { id: string; roomId: string; turnId: string; participantId: string; text: string; assumptions: string[]; status: 'reported' }
 export interface Room {
@@ -18,6 +20,7 @@ export interface Room {
   budgets: RoomBudget | null; nextEligibleAt: string | null;
   pacing?: RoomPacing | null; contexts?: RoomContext[]; ledger?: BudgetEntry[]; toolReservations?: string[];
   reason?: string | null; passCount?: number; nextMemberIndex?: number; lastCompletedAt?: string | null;
+  seats?: SeatAssignment[];
   lastMessageSequence: number; createdAt: string; updatedAt: string;
 }
 export interface RoomMessage {
@@ -32,7 +35,10 @@ export interface ResidentTurn {
   participant: Member; prompt: string; promptDigest: string; history: Context['history']; basisSequence: number;
   text: string; receipt: string | null; reply: ResidentReply | null; usage: ResidentUsage;
   startedAt: string; finishedAt: string | null; error: string | null; repairOf: string | null;
-  messageId: string | null; proposalsStatus: 'none' | 'not_run' | 'stale';
+  messageId: string | null; proposalsStatus: 'none' | 'not_run' | 'stale' | 'applied';
+  workAttemptId?: string;
+  workSeatVersion?: number;
+  proposalResults?: { index: number; status: 'applied' | 'not_run'; taskId?: string; reason?: string }[];
   dispatchStartedAt?: string;
 }
 export interface DispatchLease {
@@ -51,7 +57,8 @@ export interface ResidentStateV1 {
   migration: { id: 'resident-v1'; at: string; basisCursor: number };
   rooms: Room[]; messages: RoomMessage[]; turns: ResidentTurn[]; dispatchLeases: DispatchLease[];
   claims?: RoomClaim[];
-  contextCheckpoints: ResidentCheckpoint[]; workItems: unknown[]; workAttempts: unknown[];
+  workSchemaVersion?: 1;
+  contextCheckpoints: ResidentCheckpoint[]; workItems: WorkTask[]; workAttempts: WorkAttempt[];
   wikiPages: unknown[]; wikiVersions: unknown[]; jobLinks: unknown[]; residentGrants: unknown[];
 }
 export interface RoomSummary {

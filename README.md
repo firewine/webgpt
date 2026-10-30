@@ -2,11 +2,13 @@
 
 여러 AI가 팀·역할을 맡아 목표를 논의하고, 업무 큐에서 일감을 가져가 수행·리뷰·재작업·Wiki 기록까지 이어가는 개인용 AI 작업실을 개발합니다. GUI는 단톡방 형태이며 Ubuntu 서버와 허용된 Tailscale 기기의 브라우저를 사용합니다.
 
-**현재 코드와 목표의 차이:** 연결·독립 토론·근거 비교·영속 기록·Codex 기반 위에 상주 방과 단톡방 GUI를 구현했습니다. Company/Team/Role/Seat·실제 Work Queue/pull·산출물 Review/Rework·Wiki 운영은 후속 단계입니다. [개발 페이즈 SSOT](docs/development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)와 [단톡방 실행 증거](docs/implementation/phase3-chatroom-gui-20261030.md)를 확인하세요. 실제 기기 IME·실계정 상주 운영·이번 변경의 배포는 미검증입니다.
+**현재 코드와 목표의 차이:** 기존 연결·독립 토론·근거 비교·영속 기록·Codex 기반 위에 상주 방·단톡방 GUI·업무 역할·열린 작업큐·분석 산출물·독립 리뷰/재작업을 구현했습니다. 큐의 실제 Codex 업무 수행은 페이즈 6, 공유 Wiki는 페이즈 7에서 연결합니다. [개발 페이즈 SSOT](docs/development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)와 [페이즈 5 실행 증거](docs/implementation/phase5-open-work-queue-20261030.md)를 확인하세요. 실제 기기 IME·실계정 상주 운영·이번 변경의 배포는 미검증입니다.
 
 채팅방 디자인은 96397 예시의 참여자 목록·아바타 말풍선·오른쪽 탭 패널에 맞추고, 사용자 요청대로 흑백 테마를 적용했습니다. 밝음·어두움 모두 버튼·말풍선·로고·아바타를 회색 계열로 표시합니다. [변경한 PC/모바일 화면과 검증](docs/implementation/chatroom-design-refinement-20261030.md)을 볼 수 있습니다. 기존 연결·승인·복구와 기능 flag는 유지합니다.
 
 [고정 주제와 종합안](docs/implementation/pinned-topic-conclusions-20261030.md): 주제를 대화 최상단에 두고, 같은 방에서 검토·검증·종합을 진행합니다. 끝난 뒤에도 마지막 주제·종합안·동료 검토와 남은 이견을 확인할 수 있습니다.
+
+[열린 작업큐](docs/implementation/phase5-open-work-queue-20261030.md): 공개 발언에서 일감을 만들고 역할·범위를 직접 배정합니다. 방의 기존 예산/속도로 픽업→분석 산출물→다른 참여자 검토를 이어가며, 재작업/과거 보고를 보존합니다. 모델의 완료 주장만으로 수동 확인·실제 실행 기준을 통과시키지 않습니다.
 
 **v0.2 구현:** 공동 대화 UI, 영속 토의 엔진, GPT 다중 OAuth·DeepSeek·기존 Chrome 대화 어댑터, MCP 도구, Codex 실행·승인·결과 환류, 운영 스크립트. [Ubuntu 로컬 모의 토론](docs/implementation/ubuntu-readiness-20261030.md)과 [systemd·실제 HTTPS·인증 noVNC 입력](docs/implementation/ubuntu-services-20261030.md)을 확인했습니다. 실계정·다른 Tailnet 기기·실제 재부팅·실제 Codex 세션의 완료 판정은 아직 **NOT_RUN**입니다. [구현·검증 기록](docs/implementation/wj-002-015.md)을 함께 확인하세요.
 
@@ -92,7 +94,7 @@ npx playwright install --with-deps chromium
 npm run test:browser
 ```
 
-고정 주제·종합안 보완 기준 Node 검사 135개와 실제 Chromium/MCP 검사 26개가 통과했습니다. Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. browser 검사 중 설치된 Chrome DevTools MCP 검사는 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
+페이즈 5 기준 Node 검사 156개와 실제 Chromium/MCP 검사 29개가 통과했습니다. Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. browser 검사 중 설치된 Chrome DevTools MCP 검사는 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
 
 ```bash
 npm install --no-save --package-lock=false @openai/codex@0.165.0 chrome-devtools-mcp@1.12.0

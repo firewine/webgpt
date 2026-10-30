@@ -78,6 +78,10 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     }
     if (get && path === '/api/state') { json(res, 200, app.snapshot()); return; }
     if (get && path === '/api/rooms') { json(res, 200, { ...app.resident.snapshot(), cursor: app.store.cursor() }); return; }
+    const workPath = /^\/api\/rooms\/([\w-]+)\/work(?:\/([\w-]+)(?:\/(claim|review|cancel|update))?)?$/.exec(path);
+    if (get && workPath && !workPath[3]) {
+      json(res, 200, workPath[2] ? app.workQueue.detail(workPath[1]!, workPath[2]) : app.workQueue.list(workPath[1]!, pageNumber(url, 'after', 0, 0, Number.MAX_SAFE_INTEGER), pageNumber(url, 'limit', 50, 1, 100))); return;
+    }
     const roomPath = /^\/api\/rooms\/([\w-]+)(?:\/(messages|control|turns|handoff|focus|checkpoints)(?:\/([\w-]+))?)?$/.exec(path);
     if (get && roomPath) {
       if (!roomPath[2]) { json(res, 200, app.resident.room(roomPath[1]!)); return; }
@@ -120,6 +124,16 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     if (get && path === '/api/browser/snapshot') { json(res, 200, { text: await app.browser.snapshot(integer(Number(url.searchParams.get('pageId')), 0, 0, 1_000_000)) }); return; }
     if (req.method !== 'POST') throw new AppError('not_found', 404);
     const input = object(await body(req));
+    if (workPath) {
+      const room = workPath[1]!; const task = workPath[2]; const action = workPath[3];
+      if (!task) { json(res, 201, app.workQueue.propose(room, input, command(req))); return; }
+      if (action === 'claim') { json(res, 200, app.workQueue.claim(room, task, input, command(req))); return; }
+      if (action === 'review') { json(res, 200, app.workQueue.review(room, task, input, command(req))); return; }
+      if (action === 'cancel') { json(res, 200, app.workQueue.cancel(room, task, input, command(req))); return; }
+      if (action === 'update') { json(res, 200, app.workQueue.update(room, task, input, command(req))); return; }
+    }
+    const seatPath = /^\/api\/rooms\/([\w-]+)\/seats$/.exec(path);
+    if (seatPath) { json(res, 200, app.workQueue.seat(seatPath[1]!, input, command(req))); return; }
     if (path === '/api/browser/discovery') { json(res, 200, await app.discoverBrowser(input)); return; }
     if (path === '/api/browser/discovery/confirm') { json(res, 201, { id: await app.confirmBrowser(input, command(req)) }); return; }
     const residentReconcile = /^\/api\/rooms\/([\w-]+)\/turns\/([\w-]+)\/reconcile$/.exec(path);

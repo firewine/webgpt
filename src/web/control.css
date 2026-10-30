@@ -140,6 +140,15 @@ pre { background: var(--room-bg); color: var(--ink); }
 .topic-report summary { font-size: 12px; }
 .topic-source { margin-top: 12px; color: var(--muted); }
 .topic-source summary { font-size: 10px; }
+.work-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-top: 9px; }
+.work-card h4 { font-size: 12px; margin: 0 0 5px; overflow-wrap: anywhere; }
+.work-card p { font-size: 10px; margin-bottom: 5px; overflow-wrap: anywhere; }
+.work-card button { margin-bottom: 0; }
+.work-checks { display: grid; gap: 7px; max-height: 200px; overflow: auto; }
+.work-checks label { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; font-weight: 400; margin: 0; overflow-wrap: anywhere; }
+.work-checks input { flex-shrink: 0; margin-top: 4px; }
+#work-detail { overflow-wrap: anywhere; }
+#work-detail > details { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 16px; }
 .topic-caveat { border-left: 2px solid var(--muted); padding-left: 10px; margin: 12px 0; font-size: 12px; overflow-wrap: anywhere; }
 #room-state::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); margin: 0 6px 1px 0; }
 #room-state[data-state=on]::before { background: var(--accent); }
