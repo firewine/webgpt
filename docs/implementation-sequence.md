@@ -2,18 +2,18 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | v0.5 — Ubuntu 서비스·HTTPS·noVNC PASS, 기기·실계정 릴리스 검증 대기 |
+| 상태 | v0.6 — WWG 검토로 실행·자료·기록 완료 조건 보강, 실계정 릴리스 검증 대기 |
 | 작성일 | 2026-10-29 (KST) |
 | 개정일 | 2026-10-30 (KST) |
-| 기준 | [개발 계획서](./development-plan.md)의 v0.7 상태와 PR #1~6 병합 결과 |
-| 기준 main | `07aa852cb9fed29c3cb8be67ac492356d6a45cc9` |
+| 기준 | [개발 계획서](./development-plan.md)의 v0.9 상태와 PR #1~9 병합 결과 |
+| 기준 main | `a6112c673fcae3e955975bd550c85439259696ad` |
 | 제품 범위 | Tailscale 웹 접속, 여러 GPT OAuth 계정·dot·Muse·API 모델의 능동 토론·검증·비교 |
 | 다음 작업 | 다른 Tailnet 기기 확인 → 실계정 연결·혼합 토론 → 실세션 Codex 검증 |
 | PR 처리 | 작업별 브랜치와 검토 가능한 PR로 분리; 병합은 사용자가 수행 |
 
 ## 1. 기준과 실행 원칙
 
-PR #1~6이 main에 병합됐다. 전체 개발 지시로 연결 adapter·영속 Core·토론 UI·MCP·Codex 실행을 통합 구현했다. 사용자 Ubuntu의 실제 4090 앱 로그인·모의 토론·호스트 격리, 이후 승인한 systemd·HTTPS·noVNC 적용을 확인했다. 다른 기기·실계정·실세션 검증은 남아 있다. [통합 구현 기록](./implementation/wj-002-015.md), [Ubuntu 재개 기록](./implementation/ubuntu-readiness-20261030.md), [운영 적용 기록](./implementation/ubuntu-services-20261030.md)을 함께 따른다. 이 문서는 기존 Phase 0~6을 구현 작업으로 나눈 실행 순서다. 인증·대화·운영·Codex의 상세 계약은 각 원문을 따른다.
+PR #1~9가 main에 병합됐다. 연결 adapter·영속 Core·토론 UI·MCP·Codex 실행, Ubuntu 서비스·HTTPS·noVNC, Muse thread·첫 응답 복구, 토커 계정·사고 깊이·라운드 설정을 반영했다. 전체 실계정·실세션 완료 판정은 남아 있다. [통합 구현 기록](./implementation/wj-002-015.md), [Ubuntu 운영](./implementation/ubuntu-services-20261030.md), [Muse 연결·복구](./implementation/muse-thread-binding-20261030.md), [토커 설정](./implementation/talker-settings-rounds-20261030.md)을 함께 따른다. 인증·대화·운영·Codex의 상세 계약은 각 원문을 따른다.
 
 **실환경 검증은 연결 → 혼합 토론 → Codex 환류 순서다.** 실제 계정·Ubuntu 접근이 없는 동안 독립 구현과 fixture 검증을 진행했다. 이제 구현된 UI에서 각 연결의 실응답을 확인하고 N인 토론·근거·비교를 판정한다.
 
@@ -156,6 +156,18 @@ Codex의 실제 job event·도구/검사 결과는 WJ-007/009/010의 활동·증
 WJ-016은 [Git Writer 계획](./git-writer-plan.md)의 별도 sandbox·remote broker·checks·draft PR 조건을 따르는 선택 작업이다. WJ-017의 provider 확대는 이 모듈과 독립적으로 착수할 수 있다. WJ-018의 자동 병합은 현재 사용자 병합 흐름을 바꾸지 않으며 별도 요청·완료 조건이 갖춰진 뒤 다룬다.
 
 ## 7. 작업 기록과 다음 착수
+
+### WWG 참고 검토에서 보강한 완료 조건
+
+[개발 계획 9.3](./development-plan.md#93-wwg-사례에서-추가할-계획)과 [검토서](./reviews/wwg-plan-review-20261030.md)의 WWG-R1~R7은 기존 WJ 작업에 연결한 미구현 제안이다. 새 WJ milestone이나 구현 완료 표시가 아니다.
+
+- 실계정 연결·토론 MVP-1을 먼저 검증한다. 읽기 자료 패키지·capability·로그 UI는 WJ-009/010/013의 독립 후속 보강으로 진행할 수 있다.
+- Codex의 실제 파일 변경을 검증하기 전에는 WWG-R2/R3의 권한 회수·늦은 승인·repo 비밀 경계를 확인한다. 읽기 전용 PoC와 비교하여 실제로 추가 허용되는 범위를 명시한다.
+- 최소 MVP-2에서는 기존 Task/job/활동으로 요청별 근거를 연결한다. WWG-R5의 다중 job 묶음 확대는 그 뒤이며 동시 실행 확대를 앞당기지 않는다.
+- 로그 상세 정리·archive 기능을 켜기 전에는 WWG-R6의 같은 ID 재실행 금지·payload 충돌·active/미확정 보존을 검사한다. 현재 대화 DB와 기록을 정리하거나 자동 삭제하는 작업은 이번 검토에 포함하지 않는다.
+- 여러 파일 쓰기·충돌 동기화는 WWG-R7/WJ-016의 선택 Writer 범위로 둔다. 일반 토론의 필수 권한으로 셸·삭제·자동 승인을 추가하지 않는다.
+
+### 기록과 우선 검증
 
 각 구현 PR에는 해결할 사용자 동작, 포함 범위, 선행 작업, 실제 검사와 결과, 남은 차단 항목을 기록한다. 계획한 산출물과 실제 생성된 commit·PR·배포 주소를 구분한다.
 
