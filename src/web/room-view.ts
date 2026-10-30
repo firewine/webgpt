@@ -52,6 +52,8 @@ export class RoomView {
   private restoreOnShow = true;
   private panelsSignature = '';
   private settingsVersion = 0;
+  private boardTab = ['workspace', 'usage', 'activity'].includes(stored('boardTab') ?? '') ? stored('boardTab')! : 'workspace';
+  private boardClosed = stored('boardClosed') === 'true';
   constructor(private readonly deps: Dependencies) {
     this.on('#room-power', async () => { if (!this.detail) return; await this.control(this.detail.room.desiredOn ? 'off' : 'on'); });
     this.on('#room-wake', () => this.control('wake'));
@@ -64,12 +66,21 @@ export class RoomView {
     this.on('#room-material-manage', () => { this.closeDrawers(); this.deps.startFocus(this.roomId); $<HTMLDetailsElement>('.material-controls').open = true; $('.material-controls').scrollIntoView(); });
     this.on('#room-focus-new', () => { if (this.roomId) { this.closeDrawers(); this.deps.startFocus(this.roomId); } });
     this.on('#room-member-toggle', () => this.drawer('#room-members-dialog', '#room-member-panel', '#room-members-slot'));
-    this.on('#room-panel-toggle', () => this.drawer('#room-panel-dialog', '#room-panel', '#room-panel-slot'));
+    this.on('#room-panel-toggle', () => { if (innerWidth >= 1280) this.setBoardClosed(!this.boardClosed); else this.drawer('#room-panel-dialog', '#room-panel', '#room-panel-slot'); });
+    this.on('#room-panel-close', () => { if ($<HTMLDialogElement>('#room-panel-dialog').open) $<HTMLDialogElement>('#room-panel-dialog').close(); else this.setBoardClosed(true); });
+    const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-board-tab]')];
+    for (const b of tabs) {
+      b.addEventListener('click', () => this.selectBoardTab(b.dataset.boardTab!));
+      b.addEventListener('keydown', e => { const index = tabs.indexOf(b); const next = e.key === 'ArrowRight' ? (index + 1) % tabs.length : e.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : -1;
+        if (next >= 0) { e.preventDefault(); const tab = tabs[next]!; this.selectBoardTab(tab.dataset.boardTab!); tab.focus(); }
+      });
+    }
+    this.selectBoardTab(this.boardTab); this.setBoardClosed(this.boardClosed);
     this.on('#room-mention-add', () => this.addMention($<HTMLSelectElement>('#room-mention-select').value));
     for (const b of document.querySelectorAll<HTMLButtonElement>('[data-close-drawer]')) b.addEventListener('click', () => b.closest('dialog')?.close());
     $('#room-members-dialog').addEventListener('close', () => { $('.sidebar').insertBefore($('#room-member-panel'), $('.sidebar-heading:not(#room-member-panel .sidebar-heading)')); });
-    $('#room-panel-dialog').addEventListener('close', () => $('#view-room').append($('#room-panel')));
-    window.addEventListener('resize', () => { if (innerWidth >= 1100) this.closeDrawers(); });
+    $('#room-panel-dialog').addEventListener('close', () => { $('#view-room').append($('#room-panel')); $('#room-panel-toggle').setAttribute('aria-expanded', String(innerWidth >= 1280 && !this.boardClosed)); });
+    window.addEventListener('resize', () => { if (innerWidth > 900) this.closeDrawers(); });
     $('#room-timeline').addEventListener('scroll', () => { clearTimeout(this.scrollTimer); this.scrollTimer = window.setTimeout(() => { this.rememberPosition(); this.markRead(); }, 100); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) this.markRead(); });
     const input = $<HTMLTextAreaElement>('#room-text');
@@ -84,12 +95,19 @@ export class RoomView {
   }
   private on(id: string, action: () => unknown): void { $(id).addEventListener('click', () => { void Promise.resolve().then(action).catch(this.deps.report); }); }
   private btn(text: string, action: () => unknown, cls = ''): HTMLButtonElement { const b = el('button', text, cls); b.type = 'button'; b.addEventListener('click', () => { b.disabled = true; void Promise.resolve().then(action).catch(this.deps.report).finally(() => { b.disabled = false; }); }); return b; }
-  private themeLabel(): void { const dark = document.documentElement.dataset.theme === 'dark'; $('#theme-toggle').textContent = dark ? '밝은 테마' : '어두운 테마'; $('#theme-toggle').setAttribute('aria-pressed', String(dark)); }
+  private themeLabel(): void { const dark = document.documentElement.dataset.theme === 'dark'; const b = $('#theme-toggle'); b.textContent = dark ? '☀' : '☾'; b.setAttribute('aria-label', dark ? '밝은 테마' : '어두운 테마'); b.title = dark ? '밝은 테마' : '어두운 테마'; b.setAttribute('aria-pressed', String(dark)); }
+  private selectBoardTab(value: string): void {
+    this.boardTab = value; save('boardTab', value);
+    for (const b of document.querySelectorAll<HTMLButtonElement>('[data-board-tab]')) { const active = b.dataset.boardTab === value; b.setAttribute('aria-selected', String(active)); b.tabIndex = active ? 0 : -1; }
+    for (const key of ['workspace', 'usage', 'activity']) $(`#board-${key}`).hidden = key !== value;
+  }
+  private setBoardClosed(closed: boolean): void { this.boardClosed = closed; save('boardClosed', String(closed)); $('#view-room').classList.toggle('board-closed', closed); $('#room-panel-toggle').setAttribute('aria-expanded', String(innerWidth >= 1280 && !closed)); }
   setActive(active: boolean): void {
     const entering = active && !this.active;
     if (!active && this.active) { this.rememberPosition(); this.closeDrawers(); }
     this.active = active; $('#workspace').classList.toggle('room-mode', active);
     $('#room-member-panel').hidden = !active;
+    $(active ? '#room-theme-slot' : '#theme-home').append($('#theme-toggle'));
     if (entering) requestAnimationFrame(() => { if (this.loaded) { this.restorePosition(); this.markRead(); } });
   }
   clear(): void {
@@ -101,7 +119,11 @@ export class RoomView {
   async refresh(snapshot: RoomSnapshot): Promise<void> {
     this.snapshot = snapshot;
     const next = snapshot.resident.rooms.find(r => r.id === this.roomId) ?? snapshot.resident.rooms[0];
-    if (!next) { this.detail = null; $('#room-disabled').hidden = false; $('#room-send').setAttribute('disabled', ''); $('#room-power').setAttribute('disabled', ''); return; }
+    if (!next) {
+      this.detail = null; $('#room-disabled').hidden = false; $('#room-state').textContent = '상주 기능 꺼짐 · 기존 토의와 연결은 보존됩니다';
+      for (const id of ['#room-send', '#room-power', '#room-settings', '#room-focus-new']) $<HTMLButtonElement>(id).disabled = true;
+      this.renderMembers(snapshot, [], []); return;
+    }
     if (this.roomId !== next.id) {
       this.loaded = false; this.messages.clear(); this.originals.clear(); this.rows.clear(); this.noticeIds.clear(); $('#room-messages').replaceChildren(); $('#room-notices').replaceChildren();
       this.roomId = next.id; this.after = Math.max(0, next.lastMessageSequence - 50); this.before = this.after;
@@ -158,12 +180,15 @@ export class RoomView {
     const d = this.detail; if (!d || !this.snapshot) return; const room = d.room;
     $('#room-title').textContent = room.title;
     $('#room-state').textContent = `${label(room.observedStatus)}${room.topicLink ? ' · 주제 토론 중' : ''}${room.reason ? ' · ' + room.reason : ''}`;
+    $('#room-state').dataset.state = room.observedStatus;
     $('#room-power').textContent = room.desiredOn ? '방 끄기' : '방 켜기'; $('#room-power').setAttribute('aria-pressed', String(room.desiredOn));
     $('#room-power').title = '방을 끄면 새 발언을 멈춥니다. 이미 시작한 Codex 실행은 실행 화면에서 별도로 중단합니다.';
     $<HTMLButtonElement>('#room-power').disabled = !d.enabled || !d.dispatchAvailable;
     $('#room-wake').hidden = !room.desiredOn || room.observedStatus === 'on'; $<HTMLButtonElement>('#room-wake').disabled = !d.enabled;
     $('#room-disabled').hidden = d.enabled; $<HTMLButtonElement>('#room-send').disabled = !d.enabled || this.sending || this.uncertain;
     $<HTMLButtonElement>('#room-focus-new').disabled = !d.enabled || !!room.topicLink;
+    $<HTMLButtonElement>('#room-settings').disabled = !d.enabled;
+    $('#room-pacing').textContent = room.pacing ? `발언 간격 ${room.pacing.minIntervalMs / 1000}초\n연속 pass ${room.pacing.sleepAfterPasses}회 후 휴면` : '진행 한도와 대화 속도를 설정하세요.';
     this.renderMessages(); this.renderReply(); this.renderPanels(); this.unread();
     $('#room-more').hidden = !this.before;
     for (const n of d.status.notices) if (!this.noticeIds.has(n.id)) {
@@ -171,6 +196,11 @@ export class RoomView {
     }
   }
   private name(id: string): string { return id === 'owner' ? '나' : this.snapshot?.participants.find(p => p.id === id)?.label ?? (id === 'system' ? '시스템' : id); }
+  private tone(id: string): string { return id === 'owner' ? 'owner' : String(Math.max(0, this.snapshot?.participants.findIndex(p => p.id === id) ?? 0) % 5); }
+  private avatar(id: string): HTMLElement {
+    const p = this.snapshot?.participants.find(p => p.id === id); const initial = id === 'owner' ? '나' : p?.kind === 'fake' ? p.label.match(/[A-Z]$/)?.[0] ?? Array.from(p.label)[0] ?? 'F' : Array.from(this.name(id))[0] ?? '?';
+    const avatar = el('span', initial, 'avatar'); avatar.dataset.tone = this.tone(id); avatar.setAttribute('aria-hidden', 'true'); return avatar;
+  }
   private renderMessages(): void {
     const target = $('#room-messages');
     let previous: HTMLElement | null = null;
@@ -178,8 +208,10 @@ export class RoomView {
       let row = this.rows.get(m.id);
       if (!row) {
         row = el('article', '', 'room-message' + (m.authorId === 'owner' ? ' mine' : '') + (m.sourceKind === 'system' ? ' system' : ''));
-        row.id = 'msg-' + m.id; row.dataset.messageId = m.id; row.dataset.sequence = String(m.sequence);
-        const head = el('header', '', 'message-head'); head.append(el('span', m.authorId === 'owner' ? '나' : this.name(m.authorId).slice(0, 1), 'avatar'), el('strong', this.name(m.authorId)), el('time', date(m.createdAt)), el('span', m.sourceKind === 'topic' ? '주제 토론' : m.sourceKind === 'user' ? '사용자' : '', 'small muted'));
+        row.id = 'msg-' + m.id; row.dataset.messageId = m.id; row.dataset.sequence = String(m.sequence); row.dataset.tone = this.tone(m.authorId);
+        const head = el('header', '', 'message-head'); const avatar = this.avatar(m.authorId); const name = el('strong', this.name(m.authorId));
+        const timestamp = el('time', new Date(m.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })); timestamp.dateTime = m.createdAt; timestamp.title = date(m.createdAt);
+        const model = this.snapshot?.participants.find(p => p.id === m.authorId); head.append(avatar, name, el('span', model?.kind === 'fake' ? '모의' : model?.kind === 'browser' ? '기존 대화' : model?.modelId ?? '', 'message-model'), timestamp, el('span', m.sourceKind === 'topic' ? '주제 토론' : '', 'message-mode'));
         row.append(head);
         if (m.replyTo) { const ref = this.messages.get(m.replyTo); const b = this.btn('↳ ' + (ref ? this.name(ref.authorId) + ' · ' + ref.preview.slice(0, 90) : '인용한 원문 보기'), () => this.jump(m.replyTo!)); b.className = 'message-quote'; b.dataset.replyTo = m.replyTo; row.append(b); }
         const text = el('div', m.preview, 'message-text'); text.dataset.digest = m.digest; row.append(text);
@@ -284,17 +316,7 @@ export class RoomView {
     const d = this.detail!; const s = this.snapshot!; const r = d.room;
     const signature = JSON.stringify([r, d.contexts, d.status.members, s.participants, s.connections, s.jobs, s.materialPackages, this.turns]);
     if (signature === this.panelsSignature) return; this.panelsSignature = signature;
-    const members = $('#room-members'); members.replaceChildren(); const select = $<HTMLSelectElement>('#room-mention-select'); const selected = select.value; select.replaceChildren(el('option', '@ 참여자')); select.options[0]!.value = '';
-    for (const p of s.participants) {
-      const m = r.members.find(m => m.participantId === p.id); const card = el('article', '', 'room-member');
-      card.append(el('span', p.label.slice(0, 1), 'avatar')); const info = el('div', '', 'member-info'); info.append(el('strong', p.label), el('small', p.kind === 'fake' ? '모의 · 외부 호출 없음' : (s.connections.find(c => c.id === p.connectionId)?.label ?? '연결 미확인') + ' · ' + p.modelId));
-      const status = d.status.members.find(c => c.participantId === p.id); info.append(el('small', m?.blockedReason ? '확인 필요 · ' + m.blockedReason : status ? label(status.response.state) : '미참여'));
-      const toggleLabel = el('label', '', 'member-toggle'); const toggle = el('input'); toggle.type = 'checkbox'; toggle.checked = !!m?.enabled; toggle.disabled = !d.enabled; toggle.setAttribute('aria-label', p.label + ' 발언 참여');
-      toggle.addEventListener('change', () => { toggle.disabled = true; void this.control('set_member', { participantId: p.id, enabled: toggle.checked }).catch(this.deps.report).finally(() => { toggle.disabled = !this.detail?.enabled; }); }); toggleLabel.append(toggle);
-      card.append(info, toggleLabel); members.append(card);
-      if (m) { const option = el('option', p.label); option.value = p.id; select.append(option); }
-    }
-    select.value = selected;
+    this.renderMembers(s, r.members, d.status.members);
     const usage = $('#room-usage'); usage.replaceChildren();
     if (!r.budgets) usage.append(el('p', '한도·속도 설정이 필요합니다.', 'small muted'));
     else { const used = r.used; usage.append(el('p', `요청 ${used?.requests ?? 0} / ${r.budgets.maxRequests}`, 'usage-number'), el('p', `보고 토큰 ${(used?.inputTokens ?? 0) + (used?.outputTokens ?? 0)} / ${r.budgets.maxTokens}\n사용량 미제공 ${used?.unknownUsage ?? 0}회 · 도구 ${used?.toolJobs ?? 0} / ${r.budgets.maxToolJobs}\n종료 ${date(r.budgets.deadlineAt)}`, 'small pre-line'));
@@ -328,6 +350,23 @@ export class RoomView {
     }
     if (!records.children.length) records.append(el('p', '미확정 발언이나 인계 기록이 없습니다.', 'small muted'));
   }
+  private renderMembers(s: RoomSnapshot, roomMembers: RoomSummary['members'], statuses: ResidentStatusProjection['members']): void {
+    const members = $('#room-members'); members.replaceChildren(); $('#room-member-count').textContent = String(s.participants.length);
+    const select = $<HTMLSelectElement>('#room-mention-select'); const selected = select.value; select.replaceChildren(el('option', '@ 참여자')); select.options[0]!.value = '';
+    for (const p of s.participants) {
+      const m = roomMembers.find(m => m.participantId === p.id); const card = el('article', '', 'room-member'); card.dataset.tone = this.tone(p.id);
+      const status = statuses.find(c => c.participantId === p.id); const info = el('div', '', 'member-info'); const name = el('div', '', 'member-name');
+      name.append(el('strong', p.label), el('span', p.kind === 'fake' ? '모의' : p.kind === 'openai-oauth' ? 'GPT' : p.kind === 'deepseek' ? 'API' : '웹', 'member-kind')); info.append(name);
+      info.append(el('small', p.kind === 'fake' ? '외부 모델 호출 없음' : (s.connections.find(c => c.id === p.connectionId)?.label ?? '연결 미확인'), 'member-account'));
+      const state = m?.blockedReason ? '확인 필요 · ' + m.blockedReason : status ? label(status.response.state) : '미참여';
+      info.append(el('small', state, 'member-observed')); info.title = `${p.label}\n${p.modelId}\n${p.role}\n${state}`;
+      const toggleLabel = el('label', '', 'member-toggle'); const toggle = el('input'); toggle.type = 'checkbox'; toggle.checked = !!m?.enabled; toggle.disabled = !this.detail?.enabled; toggle.setAttribute('aria-label', p.label + ' 발언 참여');
+      toggle.addEventListener('change', () => { toggle.disabled = true; void this.control('set_member', { participantId: p.id, enabled: toggle.checked }).catch(this.deps.report).finally(() => { toggle.disabled = !this.detail?.enabled; }); }); toggleLabel.append(toggle, el('span', '', 'toggle-track'));
+      card.append(this.avatar(p.id), info, toggleLabel); members.append(card);
+      if (m) { const option = el('option', p.label); option.value = p.id; select.append(option); }
+    }
+    select.value = selected;
+  }
   private async raw(m: Message): Promise<void> {
     const text = await this.original(m);
     const turn = m.sourceKind === 'room' && m.sourceId ? await this.deps.api(this.path('/turns/' + m.sourceId)) : null;
@@ -342,6 +381,7 @@ export class RoomView {
   }
   private async rawTurn(id: string): Promise<void> { this.showRaw(JSON.stringify(await this.deps.api(this.path('/turns/' + id)), null, 2)); }
   private showRaw(text: string): void {
+    this.selectBoardTab('activity'); this.setBoardClosed(false);
     const target = $('#room-raw'); target.replaceChildren(el('h3', '소유자용 원본'), el('pre', text)); (target.closest('details') as HTMLDetailsElement).open = true;
     if (innerWidth < 1280 && !$<HTMLDialogElement>('#room-panel-dialog').open) this.drawer('#room-panel-dialog', '#room-panel', '#room-panel-slot');
     target.scrollIntoView({ block: 'nearest' });
@@ -367,7 +407,7 @@ export class RoomView {
     try { await this.control('configure', { budgets: { maxRequests: Number(v.maxRequests), maxTokens: Number(v.maxTokens), maxToolJobs: Number(v.maxToolJobs), deadlineAt: new Date(v.deadlineAt!).toISOString() }, pacing: { minIntervalMs: Math.round(Number(v.minInterval) * 1000), idleNudgeMs: Math.round(Number(v.idleNudge) * 1000), passBackoffMs: Math.round(Number(v.passBackoff) * 1000), sleepAfterPasses: Number(v.sleepAfterPasses) } }, this.settingsVersion); $<HTMLDialogElement>('#room-settings-dialog').close(); }
     finally { submit.disabled = false; }
   }
-  private drawer(dialogId: string, panel: string, slot: string): void { $(slot).append($(panel)); $(panel).hidden = false; const d = $<HTMLDialogElement>(dialogId); if (!d.open) d.showModal(); }
+  private drawer(dialogId: string, panel: string, slot: string): void { $(slot).append($(panel)); $(panel).hidden = false; const d = $<HTMLDialogElement>(dialogId); if (!d.open) d.showModal(); if (panel === '#room-panel') $('#room-panel-toggle').setAttribute('aria-expanded', 'true'); }
   private closeDrawers(): void { for (const id of ['#room-members-dialog', '#room-panel-dialog', '#room-settings-dialog']) { const d = $<HTMLDialogElement>(id); if (d.open) d.close(); } }
   private navigate(view: 'connections' | 'execution' | 'discussion'): void { this.closeDrawers(); this.deps.openView(view); }
 }

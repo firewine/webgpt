@@ -10,38 +10,53 @@
 </section>
 <div id="workspace" class="shell" hidden>
   <aside class="sidebar">
-    <a class="brand" href="/" aria-label="웹쫀쿠 홈"><span class="brand-mark">W</span><span>웹쫀쿠<small>Discussion workspace</small></span></a>
+    <a class="brand" href="/" aria-label="웹쫀쿠 홈"><span class="brand-mosaic" aria-hidden="true"><i>W</i><i>J</i><i>J</i><i>K</i></span><span>웹쫀쿠<small>함께 생각하는 AI 단톡방</small></span></a>
     <button id="new-discussion" class="primary">+ 새 토의</button>
     <nav aria-label="작업실 메뉴"><button data-view="room" class="nav-button">◌ 채팅방</button><button data-view="discussion" class="nav-button selected">◉ 토의 작업실</button><button data-view="connections" class="nav-button">◎ 참여자와 연결</button><button data-view="execution" class="nav-button">⌘ Codex 실행</button></nav>
-    <section id="room-member-panel" aria-label="방 참여자" hidden><div class="sidebar-heading">함께하는 참여자</div><div id="room-members"></div><button id="room-connections" class="text-button">참여자 연결 관리 ↗</button></section>
+    <section id="room-member-panel" aria-label="방 참여자" hidden>
+      <div class="room-power-row"><button id="room-power" aria-pressed="false">방 켜기</button><button id="room-wake" hidden>깨우기</button></div>
+      <div class="sidebar-heading">멤버 <span id="room-member-count">0</span></div><div id="room-members"></div>
+      <div class="room-owner"><span class="avatar avatar-owner" aria-hidden="true">나</span><div><strong>방장 <span class="owner-tag">나</span></strong><small>관전하거나 대화에 참여하세요</small></div></div>
+      <section class="room-side-settings"><div class="sidebar-heading">방 설정</div><div id="room-pacing" class="small muted">진행 한도와 대화 속도를 설정하세요.</div><button id="room-settings" class="side-setting-button">속도·진행 한도 설정 <span aria-hidden="true">↗</span></button><button id="room-connections" class="side-setting-button">참여자와 연결 관리 <span aria-hidden="true">↗</span></button></section>
+    </section>
     <div class="sidebar-heading">토의 기록 <span id="history-count">0</span></div><div id="history" class="history"></div>
     <footer><span id="connection-status" class="network">연결 중</span><button id="logout" class="text-button">로그아웃</button></footer>
   </aside>
   <main>
-    <header class="topbar"><div><span class="status-dot"></span> PRIVATE WORKSPACE</div><div class="inline"><span id="mode-label">영구 기록 · 자동 저장</span><button id="theme-toggle" class="text-button" aria-pressed="false">어두운 테마</button></div></header>
+    <header class="topbar"><div><span class="status-dot"></span> 나의 AI 작업실</div><div class="inline"><span id="mode-label">대화와 실행 기록 자동 저장</span><span id="theme-home"><button id="theme-toggle" class="text-button" aria-pressed="false">어두운 테마</button></span></div></header>
     <section id="view-room" class="room-view" aria-label="상주 채팅방" hidden>
       <div class="chat-column">
-        <header class="room-heading"><div><p class="eyebrow">WEBJJOKU / CHAT ROOM</p><h1 id="room-title">상주 작업실</h1><p id="room-state" class="small muted" role="status"></p></div><div class="room-actions"><button id="room-power" aria-pressed="false">방 켜기</button><button id="room-wake" hidden>깨우기</button><button id="room-member-toggle" aria-haspopup="dialog">참여자</button><button id="room-panel-toggle" aria-haspopup="dialog">자료·상태</button></div></header>
-        <p id="room-disabled" class="room-banner" hidden>상주 기능이 꺼져 있습니다. 토의 작업실에서 기존 토의와 기록을 사용할 수 있습니다.</p>
+        <header class="room-heading"><button id="room-member-toggle" class="room-icon-button" aria-haspopup="dialog" aria-label="참여자와 방 설정" title="참여자와 방 설정"><span aria-hidden="true">☰</span></button><div class="room-heading-text"><h1 id="room-title">상주 작업실</h1><p id="room-state" class="small muted" role="status">상태 확인 중</p></div><div class="room-actions"><span id="room-theme-slot"></span><button id="room-panel-toggle" class="room-icon-button" aria-controls="room-panel" aria-expanded="true" aria-label="자료·상태 패널" title="자료·상태 패널"><span aria-hidden="true">◫</span></button></div></header>
+        <p id="room-disabled" class="room-banner" hidden>상주 기능이 꺼져 있습니다. 기존 토의와 기록은 토의 작업실에서 이어갈 수 있습니다.</p>
         <div id="room-timeline" class="room-timeline" tabindex="0" role="region" aria-label="방 대화 이력"><button id="room-more" hidden>이력 더 읽기</button><div id="room-messages"></div><div id="room-notices" aria-label="운영 알림"></div></div>
         <div class="unread-row"><button id="room-unread" hidden>읽지 않은 메시지</button><button id="room-latest">최근 메시지로 ↓</button></div>
         <form id="room-message-form" class="room-composer">
           <div id="room-reply" class="reply-target" hidden></div><div id="room-mentions" class="mention-chips"></div>
-          <label class="sr-only" for="room-text">방에 메시지 보내기</label><textarea id="room-text" name="text" rows="2" maxlength="20000" placeholder="대화에 참여하세요. @로 참여자를 부를 수 있어요." required></textarea>
+          <label class="sr-only" for="room-text">방에 메시지 보내기</label><textarea id="room-text" name="text" rows="1" maxlength="20000" placeholder="메시지 보내기 · @로 멤버 부르기" required></textarea>
           <div id="room-suggestions" role="group" aria-label="멘션할 참여자" hidden></div>
           <div class="composer-tools"><div class="inline"><label class="sr-only" for="room-mention-select">멘션 대상</label><select id="room-mention-select"><option value="">@ 참여자</option></select><button id="room-mention-add" type="button">멘션</button></div><span class="small muted">Enter 전송 · Shift+Enter 줄바꿈</span><button id="room-send" class="primary" type="submit">보내기 ↑</button></div>
           <p id="room-send-state" class="small muted" role="status"></p>
         </form>
       </div>
       <aside id="room-panel" class="room-panel" aria-label="방 자료와 실행 상태">
-        <div class="panel-heading"><h2>작업실 보드</h2><button id="room-settings" class="text-button">방 설정</button></div>
-        <section class="board-section"><h3>진행 한도</h3><div id="room-usage"></div></section>
-        <section class="board-section"><h3>주제 토론</h3><div id="room-focus"></div><button id="room-focus-new">이 방에서 주제 토론</button></section>
-        <details class="board-section"><summary>연결·응답·실행 관측</summary><div id="room-status"></div></details>
-        <details class="board-section"><summary>참고 자료</summary><div id="room-materials"></div><button id="room-material-manage">자료 준비하기 ↗</button></details>
-        <details class="board-section" open><summary>실행·승인</summary><div id="room-jobs"></div><button id="room-execution">Codex 실행 열기 ↗</button></details>
-        <details class="board-section"><summary>원본과 복구</summary><div id="room-records"></div><div id="room-raw"></div></details>
-        <p class="small muted">열린 작업큐와 공유 Wiki는 준비 중입니다. 업무·Wiki 제안은 아직 실행되지 않습니다.</p>
+        <div class="board-header"><div class="board-tabs" role="tablist" aria-label="작업실 보드"><button id="board-tab-workspace" role="tab" aria-selected="true" aria-controls="board-workspace" data-board-tab="workspace">작업실</button><button id="board-tab-usage" role="tab" aria-selected="false" aria-controls="board-usage" data-board-tab="usage" tabindex="-1">사용량</button><button id="board-tab-activity" role="tab" aria-selected="false" aria-controls="board-activity" data-board-tab="activity" tabindex="-1">실행·상태</button></div><button id="room-panel-close" class="room-icon-button" aria-label="보조 패널 닫기" title="보조 패널 닫기">×</button></div>
+        <div id="board-workspace" class="board-page" role="tabpanel" aria-labelledby="board-tab-workspace">
+          <div class="board-intro"><span aria-hidden="true">▤</span><h2>함께 쓰는 작업실</h2><p>대화에 필요한 자료와 주제 토론을 모아 봅니다.</p></div>
+          <details class="board-section" open><summary>참고 자료</summary><div id="room-materials"></div><button id="room-material-manage">자료 준비하기 ↗</button></details>
+          <section class="board-section"><h3>주제 토론</h3><div id="room-focus"></div><button id="room-focus-new">이 방에서 주제 토론</button></section>
+          <div class="board-coming"><span aria-hidden="true">◇</span><strong>공유 기억과 작업큐</strong><p>아직 연결되지 않았습니다. 지금은 대화 원문과 주제별 검토 기록을 보존합니다.</p></div>
+        </div>
+        <div id="board-usage" class="board-page" role="tabpanel" aria-labelledby="board-tab-usage" hidden>
+          <div class="board-intro"><span aria-hidden="true">◴</span><h2>사용량과 진행 한도</h2><p>실제로 보고된 사용량을 기준으로 표시합니다.</p></div>
+          <section class="board-section"><h3>진행 한도</h3><div id="room-usage"></div></section>
+          <p class="small muted">사용량 미제공은 별도로 표시합니다. 한도 설정은 왼쪽 방 설정에서 변경할 수 있습니다.</p>
+        </div>
+        <div id="board-activity" class="board-page" role="tabpanel" aria-labelledby="board-tab-activity" hidden>
+          <div class="board-intro"><span aria-hidden="true">⌘</span><h2>실행과 관측 기록</h2><p>진행 중인 실행, 승인과 원래 응답을 확인합니다.</p></div>
+          <details class="board-section"><summary>연결·응답·실행 관측</summary><div id="room-status"></div></details>
+          <details class="board-section" open><summary>실행·승인</summary><div id="room-jobs"></div><button id="room-execution">Codex 실행 열기 ↗</button></details>
+          <details class="board-section"><summary>원본과 복구</summary><div id="room-records"></div><div id="room-raw"></div></details>
+        </div>
       </aside>
     </section>
     <section id="view-discussion" class="view">
