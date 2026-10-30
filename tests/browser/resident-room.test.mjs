@@ -24,7 +24,7 @@ function seed(f, texts, options = {}) {
     }
   }); return { ids, events: f.app.store.events(eventsBefore) };
 }
-async function panel(page) { if (await page.locator('#room-panel-toggle').isVisible()) await page.locator('#room-panel-toggle').click(); }
+async function panel(page, tab = 'workspace') { if (!await page.locator('#room-panel').isVisible()) await page.locator('#room-panel-toggle').click(); await page.locator(`[data-board-tab=${tab}]`).click(); }
 async function members(page) { if (await page.locator('#room-member-toggle').isVisible()) await page.locator('#room-member-toggle').click(); }
 async function closeDrawer(page) { const d = page.locator('.room-drawer[open]'); if (await d.count()) await d.getByRole('button', { name: '닫기', exact: true }).click(); }
 
@@ -40,7 +40,7 @@ test('R3-A/D: four viewports expose room, participant toggles, reference board, 
     assert.equal(await page.locator('#room-text').isVisible(), true); assert.equal(await page.locator('#room-mention-add').isVisible(), true);
     await members(page); await page.getByRole('checkbox', { name: '모의 참여자 A 발언 참여' }).setChecked(width !== 768);
     await until(() => f.app.store.read().resident.rooms[0].members[0].enabled === (width !== 768)); await closeDrawer(page);
-    await panel(page); assert.equal(await page.locator('#room-usage').isVisible(), true);
+    await panel(page, 'usage'); assert.equal(await page.locator('#room-usage').isVisible(), true); await page.locator('[data-board-tab=activity]').click();
     await page.locator('#room-jobs button').click(); await page.getByRole('button', { name: '이번 요청 승인', exact: true }).waitFor();
     assert.equal(await page.getByRole('button', { name: '거절', exact: true }).isVisible(), true);
     await page.locator('#history button').first().click(); await page.getByRole('button', { name: '원본과 복구', exact: true }).click(); assert.match(await page.locator('#discussion-content').textContent(), /체크포인트 적용/);
@@ -124,9 +124,9 @@ test('R3 room settings require explicit values and preserve ledger; focus and un
     s.resident.turns.push({ id: 'uncertain-fixture', roomId: r.id, participantId: p.id, participant: p, status: 'unconfirmed', generation: r.contexts?.find(c => c.participantId === p.id)?.generation ?? 1, epoch: r.epoch, prompt: 'fixture', promptDigest: digest('fixture'), history: [], basisSequence: r.lastMessageSequence, text: '', receipt: 'original-receipt', reply: null, usage: null, startedAt: new Date().toISOString(), finishedAt: null, error: 'fixture_unconfirmed', repairOf: null, messageId: null, proposalsStatus: 'none' });
     emit({ type: 'resident.recovery_blocked', discussionId: null, data: { roomId: r.id, turnId: 'uncertain-fixture' } });
   });
-  await page.locator('#room-panel summary').filter({ hasText: '원본과 복구' }).click(); await page.getByRole('button', { name: '미전송 확인', exact: true }).click(); await page.getByRole('button', { name: '대조 결과 적용', exact: true }).click();
+  await panel(page, 'activity'); await page.locator('#room-panel summary').filter({ hasText: '원본과 복구' }).click(); await page.getByRole('button', { name: '미전송 확인', exact: true }).click(); await page.getByRole('button', { name: '대조 결과 적용', exact: true }).click();
   await until(() => f.app.store.read().resident.turns.find(t => t.id === 'uncertain-fixture').status === 'failed');
-  await page.locator('#room-panel summary').filter({ hasText: '참고 자료' }).click(); await page.locator('#room-material-manage').click();
+  await page.locator('[data-board-tab=workspace]').click(); await page.locator('#room-material-manage').click();
   assert.equal(await page.locator('.material-controls').isVisible(), true); assert.equal(await page.locator('.material-controls').evaluate(n => n.open), true); assert.deepEqual(errors, []);
 });
 
@@ -139,7 +139,7 @@ test('R3-F: four observation fixtures retain original times and show waiting, to
     s.resident.turns.push({ id: 'stale-observation', roomId: r.id, participantId: 'old', generation: 1, epoch: r.epoch, status: 'stale', startedAt: at, finishedAt: at, participant: s.participants[3], text: 'PRIVATE RAW', prompt: 'PRIVATE PROMPT', error: null });
   });
   const before = f.app.store.cursor(); const browser = await launch(t); const { page, errors } = await open(browser, f, { width: 1440, height: 1000 }, 4);
-  await page.locator('#room-panel summary').filter({ hasText: '연결·응답·실행 관측' }).click();
+  await panel(page, 'activity'); await page.locator('#room-panel summary').filter({ hasText: '연결·응답·실행 관측' }).click();
   const cards = page.locator('#room-status .status-card'); assert.equal(await cards.count(), 4);
   assert.match(await cards.nth(0).textContent(), /응답 대기/); assert.match(await cards.nth(1).textContent(), /도구 · 진행 중/); assert.match(await cards.nth(2).textContent(), /observation_stopped/); assert.match(await cards.nth(3).textContent(), /이전 세대/);
   const expected = await page.evaluate(value => new Date(value).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }), at);
