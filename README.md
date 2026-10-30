@@ -2,7 +2,7 @@
 
 주제 하나를 여러 AI가 독립적으로 제안하고, 서로 검토하고, 근거를 확인한 뒤 결과를 비교하는 개인용 웹 작업실입니다. Ubuntu 서버에서 실행하고 허용된 Tailscale 기기의 브라우저로 접속합니다.
 
-**v0.2 구현:** 공동 대화 UI, 영속 토의 엔진, GPT 다중 OAuth·DeepSeek·기존 Chrome 대화 어댑터, MCP 도구, Codex 실행·승인·결과 환류, 운영 스크립트. 실제 사용자 계정·Ubuntu·Tailnet에서의 MVP 판정은 아직 **NOT_RUN**입니다. [구현·검증 기록](docs/implementation/wj-002-015.md)을 함께 확인하세요.
+**v0.2 구현:** 공동 대화 UI, 영속 토의 엔진, GPT 다중 OAuth·DeepSeek·기존 Chrome 대화 어댑터, MCP 도구, Codex 실행·승인·결과 환류, 운영 스크립트. [실제 Ubuntu의 로컬 로그인·모의 토론](docs/implementation/ubuntu-readiness-20261030.md)은 확인했습니다. 실계정·Tailnet HTTPS·실제 Codex 세션의 MVP 판정은 아직 **NOT_RUN**입니다. [구현·검증 기록](docs/implementation/wj-002-015.md)을 함께 확인하세요.
 
 ## 바로 실행
 
