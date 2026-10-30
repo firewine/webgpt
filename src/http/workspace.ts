@@ -9,7 +9,7 @@ import { Access } from './access.js';
 import { McpEndpoint } from './mcp.js';
 
 const ROOT = new URL('../../client/web/', import.meta.url);
-const FILES = [['/', 'control.html', 'text/html'], ['/control.js', 'control.js', 'text/javascript'], ['/control.css', 'control.css', 'text/css']] as const;
+const FILES = [['/', 'control.html', 'text/html'], ['/control.js', 'control.js', 'text/javascript'], ['/room-view.js', 'room-view.js', 'text/javascript'], ['/control.css', 'control.css', 'text/css']] as const;
 export async function createWorkspaceServer(app: Workspace, log: Logger) {
   const access = new Access(app); const mcp = new McpEndpoint(app);
   const assets = new Map(await Promise.all(FILES.map(async ([path, file, type]) => [path as string, { data: await readFile(new URL(file, ROOT)), type }] as const)));

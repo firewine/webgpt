@@ -2,7 +2,7 @@
 
 여러 AI가 팀·역할을 맡아 목표를 논의하고, 업무 큐에서 일감을 가져가 수행·리뷰·재작업·Wiki 기록까지 이어가는 개인용 AI 작업실을 개발합니다. GUI는 단톡방 형태이며 Ubuntu 서버와 허용된 Tailscale 기기의 브라우저를 사용합니다.
 
-**현재 코드와 목표의 차이:** v0.2는 연결·독립 토론·근거 비교·영속 기록·Codex 실행 기반까지입니다. Company/Team/Role/Seat·실제 Work Queue/pull·산출물 Review/Rework·Wiki 운영과 새 단톡방 GUI는 미구현입니다. [회사 업무 계약과 다음 구현](docs/company-workflow-plan.md)을 기준으로 이 핵심을 보강합니다.
+**현재 코드와 목표의 차이:** 연결·독립 토론·근거 비교·영속 기록·Codex 기반 위에 상주 방과 단톡방 GUI를 구현했습니다. Company/Team/Role/Seat·실제 Work Queue/pull·산출물 Review/Rework·Wiki 운영은 후속 단계입니다. [개발 페이즈 SSOT](docs/development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)와 [단톡방 실행 증거](docs/implementation/phase3-chatroom-gui-20261030.md)를 확인하세요. 실제 기기 IME·실계정 상주 운영·이번 변경의 배포는 미검증입니다.
 
 **v0.2 구현:** 공동 대화 UI, 영속 토의 엔진, GPT 다중 OAuth·DeepSeek·기존 Chrome 대화 어댑터, MCP 도구, Codex 실행·승인·결과 환류, 운영 스크립트. [Ubuntu 로컬 모의 토론](docs/implementation/ubuntu-readiness-20261030.md)과 [systemd·실제 HTTPS·인증 noVNC 입력](docs/implementation/ubuntu-services-20261030.md)을 확인했습니다. 실계정·다른 Tailnet 기기·실제 재부팅·실제 Codex 세션의 완료 판정은 아직 **NOT_RUN**입니다. [구현·검증 기록](docs/implementation/wj-002-015.md)을 함께 확인하세요.
 
@@ -25,6 +25,10 @@ npm start
 `참여자와 연결`에서 실제 계정을 등록하고 모델과 역할을 선택합니다. 로그인 성공, 모델 사용 권한, 실제 응답 완료는 별도로 확인합니다. GPT는 공식 OAuth로 인증한 public Responses 경로를 사용하며, 기존 ChatGPT 대화나 dot의 기억을 OAuth로 가져오지 않습니다. 기존 dot·Muse 맥락은 별도의 Chrome 연결에서 유지합니다.
 
 ## 사용 흐름
+
+상주 기능은 `WJ_RESIDENT_ENABLED=false`가 기본값입니다. 활성화한 환경에서는 채팅방의 참여자 목록·말풍선·답장/멘션·미읽음 이동·자료/상태 패널을 사용합니다. 방 설정에서 예산과 속도를 직접 지정하고 참여할 멤버를 선택한 뒤 방을 켭니다. 처음부터 자동으로 켜거나 예산을 채우지 않습니다. 꺼짐은 새 발언을 막으며 이미 시작한 Codex 작업은 실행 화면에서 따로 중단합니다. [상주 방 GUI 사용·복구](docs/implementation/phase3-chatroom-gui-20261030.md#3-사용과-복구)를 확인하세요.
+
+주제 토론은 채팅방 안의 한 기능이며, 기존 독립 토의도 토의 작업실에서 계속 열 수 있습니다.
 
 1. 주제, 비교 기준, 참고 자료, 참여자 2~8명과 진행 한도를 선택합니다.
 2. 독립 초안을 모은 뒤 상대 주장 ID를 기준으로 검토합니다. 라운드가 끝나기 전에 같은 라운드의 답변을 다른 참여자에게 보여주지 않습니다.
@@ -82,7 +86,7 @@ npx playwright install --with-deps chromium
 npm run test:browser
 ```
 
-현재 Node 검사 46개와 실제 Chromium 검사 8개를 검증했습니다. Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. browser 검사 중 설치된 Chrome DevTools MCP 검사는 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
+페이즈 3 기준 Node 검사 118개와 실제 Chromium/MCP 검사 15개가 통과했습니다. Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. browser 검사 중 설치된 Chrome DevTools MCP 검사는 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
 
 ```bash
 npm install --no-save --package-lock=false @openai/codex@0.165.0 chrome-devtools-mcp@1.12.0

@@ -1,12 +1,15 @@
 import type { Connection, Member, Discussion, ExecutionBinding, CodexJob, DurableEvent, Phase, MaterialPackage } from '../workspace/model.js';
+import { RoomView } from './room-view.js';
+import type { RoomSnapshot } from './room-view.js';
 type Snapshot = { cursor: number; connections: Connection[]; participants: Member[]; discussions: Pick<Discussion, 'id' | 'topic' | 'status' | 'phase' | 'revision' | 'createdAt' | 'updatedAt'>[];
   bindings: ExecutionBinding[]; jobs: CodexJob[]; browserPaused: boolean; grants: { id: string; participantId: string; discussionId: string; revoked: boolean; tools: string[] }[];
   capabilities: { sourceFetch: boolean; browserConfigured: boolean; noVncConfigured: boolean; codexConfigured: boolean };
-  materialPackages: { id: string; label: string; createdAt: string; files: Omit<MaterialPackage['files'][number], 'text' | 'identity'>[] }[]; materialRoots: string[] };
-type View = 'discussion' | 'connections' | 'execution';
+  materialPackages: { id: string; label: string; createdAt: string; files: Omit<MaterialPackage['files'][number], 'text' | 'identity'>[] }[]; materialRoots: string[]; resident: RoomSnapshot['resident'] };
+type View = 'room' | 'discussion' | 'connections' | 'execution';
 const $ = <T extends HTMLElement = HTMLElement>(selector: string): T => document.querySelector<T>(selector)!;
 let state: Snapshot | null = null; let current: Discussion | null = null; let selected = localStorage.getItem('wj.discussion') ?? '';
 let tab = 'timeline'; let view: View = 'discussion'; let stream: EventSource | null = null;
+let viewChosen = false; let focusRoomId: string | null = null;
 const effortOptions = [{ value: 'low', label: 'Low · 낮음' }, { value: 'medium', label: 'Medium · 보통' }, { value: 'high', label: 'High · 높음' }, { value: 'xhigh', label: 'Extra high · 매우 높음' }];
 function effortLabel(value: string): string { return effortOptions.find(o => o.value === value)?.label ?? value; }
 let cursor = 0; let refreshing = false; let again = false; let timer = 0; let choiceSignature = ''; let noticeTimer = 0;
@@ -29,6 +32,7 @@ const errors: Record<string, string> = { authentication_required: '접속 키를
   checkpoint_requires_selection: '체크포인트가 허용 크기를 넘었습니다. 기존 문맥은 보존됩니다. 원본을 내려받아 확인해 주세요.', session_busy: 'Codex 세션에 실행 중인 작업이 있습니다.',
   rpc_disconnected: '도구 연결이 끊겼습니다. 실행 결과를 확인한 후 다시 진행해 주세요.', rpc_unconfirmed: '도구 응답이 미확인입니다. 자동으로 재전송하지 않았습니다.',
   request_unconfirmed: '요청 결과를 확인하지 못했습니다. 기록을 새로 확인해 주세요. 자동으로 재전송하지 않았습니다.', procedure_completed: '토의 절차가 완료되었습니다.', budget_exhausted: '설정한 진행 한도에 도달했습니다.',
+  room_settings_required: '방 설정에서 진행 한도와 대화 속도를 직접 지정해 주세요.', room_members_required: '발언에 참여할 멤버를 선택해 주세요.', room_version_conflict: '다른 방 설정이 반영됐습니다. 갱신된 상태를 확인하고 다시 적용해 주세요.', room_configuration_requires_off: '방을 끄고 진행 중·미확정 응답을 대조한 뒤 설정을 바꿀 수 있습니다.', resident_disabled: '상주 기능이 꺼져 있습니다.', room_requests_exhausted: '방의 누적 요청 한도에 도달했습니다.', room_tokens_exhausted: '방의 보고 토큰 한도에 도달했습니다.', room_deadline_exhausted: '방의 종료 시각에 도달했습니다.', resident_account_change_requires_new_participant: '기존 상주 이력이 있는 토커의 계정을 바꿀 때는 새 참여자로 등록해 주세요.',
   participant_excluded: '일부 참여자를 제외한 결과입니다.', user_cancelled: '사용자가 토의를 취소했습니다.', partial_unstructured_reply: '일부 응답의 형식을 확인하지 못했습니다.' };
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, text = '', className = ''): HTMLElementTagNameMap[K] { const n = document.createElement(tag); n.textContent = text; n.className = className; return n; }
 function button(text: string, action: () => Promise<unknown> | unknown, className = ''): HTMLButtonElement {
@@ -37,21 +41,22 @@ function button(text: string, action: () => Promise<unknown> | unknown, classNam
 function badge(value: string): HTMLElement { return node('span', states[value] ?? value, `badge ${['failed', 'error'].includes(value) ? 'error' : ['blocked', 'unconfirmed', 'auth_required', 'not_run', 'partial', 'blocked_approval', 'reconciling'].includes(value) ? 'warning' : ''}`); }
 function announce(text: string, error = false): void { clearTimeout(noticeTimer); const n = $('#notice'); n.textContent = text; n.className = `notice${error ? ' error' : ''}`; n.hidden = false; noticeTimer = window.setTimeout(() => { n.hidden = true; }, error ? 15000 : 6500); }
 function report(error: unknown): void { const key = error instanceof Error ? error.message : 'request_failed'; announce(errors[key] ?? `처리하지 못했습니다: ${key}`, true); }
-async function api<T>(path: string, body?: unknown, requestId = crypto.randomUUID()): Promise<T> {
+async function api<T>(path: string, body?: unknown, requestId: string = crypto.randomUUID()): Promise<T> {
   let response: Response;
   try { response = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': requestId }, body: JSON.stringify(body) }); }
   catch { throw new Error('request_unconfirmed'); }
-  const result = await response.json() as T & { error?: { code: string } };
+  const result = await response.json().catch(() => { throw new Error('request_unconfirmed'); }) as T & { error?: { code: string } };
   if (!response.ok) { if (response.status === 401) lock(); throw new Error(result.error?.code ?? 'request_failed'); }
   return result;
 }
-function lock(): void { stream?.close(); stream = null; $('#login').hidden = false; $('#workspace').hidden = true; }
+function lock(): void { stream?.close(); stream = null; roomView.clear(); $('#login').hidden = false; $('#workspace').hidden = true; }
 function form(id: string, handler: (data: Record<string, string>, form: HTMLFormElement) => Promise<unknown>): void {
   $(id).addEventListener('submit', event => { event.preventDefault(); const el = event.currentTarget as HTMLFormElement; const submit = el.querySelector<HTMLButtonElement>('button[type=submit], button:not([type])'); if (submit) submit.disabled = true;
     const data = Object.fromEntries(new FormData(el).entries()) as Record<string, string>;
     void handler(data, el).catch(report).finally(() => { if (submit) submit.disabled = false; }); });
 }
-function showView(next: View): void { view = next; for (const id of ['discussion', 'connections', 'execution']) $(`#view-${id}`).hidden = id !== next;
+function showView(next: View): void { viewChosen = true; view = next; for (const id of ['room', 'discussion', 'connections', 'execution']) $(`#view-${id}`).hidden = id !== next;
+  roomView.setActive(next === 'room'); localStorage.setItem('wj.room.view', next);
   for (const el of document.querySelectorAll<HTMLElement>('[data-view]')) el.classList.toggle('selected', el.dataset.view === next); }
 function connect(): void {
   stream?.close(); stream = new EventSource(`/api/events?after=${cursor}`);
@@ -65,9 +70,10 @@ async function refresh(): Promise<void> {
   if (refreshing) { again = true; return; } refreshing = true;
   try {
     state = await api<Snapshot>('/api/state'); cursor = Math.max(cursor, state.cursor);
+    if (!viewChosen) { const saved = localStorage.getItem('wj.room.view'); view = saved && ['room', 'discussion', 'connections', 'execution'].includes(saved) ? saved as View : state.resident.enabled ? 'room' : 'discussion'; }
     if (selected && state.discussions.some(d => d.id === selected)) current = (await api<{ discussion: Discussion }>(`/api/discussions/${selected}`)).discussion;
     else { selected = ''; current = null; }
-    $('#login').hidden = true; $('#workspace').hidden = false; render(); if (!stream) connect();
+    $('#login').hidden = true; $('#workspace').hidden = false; render(); await roomView.refresh(state); if (!stream) connect();
   } finally { refreshing = false; if (again) { again = false; scheduleRefresh(); } }
 }
 function details(title: string, value: string, key = title): HTMLDetailsElement { const d = node('details'); d.dataset.key = key; d.append(node('summary', title), node('pre', value)); return d; }
@@ -95,6 +101,10 @@ function render(): void {
   $('#composer').hidden = !!current; $('#discussion-detail').hidden = !current;
   if (current) renderDiscussion(); renderConnections(); renderJobs(); renderMaterials(); showView(view);
 }
+const roomView = new RoomView({ api, refresh, report, openView: showView,
+  openDiscussion: async id => { selected = id; localStorage.setItem('wj.discussion', id); showView('discussion'); await refresh(); },
+  startFocus: roomId => { focusRoomId = roomId; selected = ''; current = null; showView('discussion'); render(); $('#discussion-mode').hidden = false; $('#discussion-mode').textContent = '이 채팅방 안에서 주제 토론을 시작합니다. 마치면 같은 방으로 돌아갑니다.'; $('#topic').focus(); },
+});
 function renderMaterials(): void {
   if (!state) return;
   $('#material-roots').textContent = state.materialRoots.length ? '허용 경로: ' + state.materialRoots.join(', ') : '읽기 허용 경로가 없습니다. 서버의 WJ_MATERIAL_ROOTS에 공유할 파일·폴더를 지정하면 사용할 수 있습니다.';
@@ -259,8 +269,8 @@ $('#action-cancel').addEventListener('click', () => $<HTMLDialogElement>('#actio
 form('#login-form', async (values, el) => { await api('/api/login', { token: values.token }); el.reset(); await refresh(); });
 form('#discussion-form', async values => { const participantIds = [...document.querySelectorAll<HTMLInputElement>('#participant-picker input:checked')].map(i => i.value);
   const materialPackageIds = [...document.querySelectorAll<HTMLInputElement>('#material-picker input:checked')].map(i => i.value);
-  const result = await api<{ id: string }>('/api/discussions', { topic: values.topic, criteria: values.criteria, materials: values.materials, materialPackageIds, participantIds, executionBindingId: values.executionBindingId || null,
-    limits: { maxRequests: Number(values.maxRequests), maxRounds: Number(values.maxRounds), maxActiveMs: Number(values.maxMinutes) * 60_000 } }); selected = result.id; localStorage.setItem('wj.discussion', selected); await refresh(); });
+  const result = await api<{ id?: string; discussionId?: string }>(focusRoomId ? `/api/rooms/${focusRoomId}/focus` : '/api/discussions', { topic: values.topic, criteria: values.criteria, materials: values.materials, materialPackageIds, participantIds, executionBindingId: values.executionBindingId || null,
+    limits: { maxRequests: Number(values.maxRequests), maxRounds: Number(values.maxRounds), maxActiveMs: Number(values.maxMinutes) * 60_000 } }); selected = (result.id ?? result.discussionId)!; focusRoomId = null; $('#discussion-mode').hidden = true; localStorage.setItem('wj.discussion', selected); await refresh(); });
 form('#oauth-form', async values => { showOAuth(await api('/api/connections/oauth', values)); await refresh(); });
 form('#deepseek-form', async (values, el) => { try { await api('/api/connections/deepseek', values); await refresh(); } finally { (el.elements.namedItem('key') as HTMLInputElement).value = ''; } });
 function clearParticipantEdit(): void { $('#participant-form').querySelector('[name=participantId]')?.remove(); $<HTMLFormElement>('#participant-form').reset(); $('#participant-save').textContent = '참여자 등록'; $('#participant-edit-cancel').hidden = true; updateModels(); }
@@ -281,7 +291,7 @@ form('#grant-form', async values => { const tools = ['task_get', 'context_get', 
 $('#participant-connection').addEventListener('change', updateModels);
 for (const el of document.querySelectorAll<HTMLElement>('[data-view]')) el.addEventListener('click', () => showView(el.dataset.view as View));
 for (const el of document.querySelectorAll<HTMLElement>('[data-tab]')) el.addEventListener('click', () => { tab = el.dataset.tab!; renderDiscussion(); });
-$('#new-discussion').addEventListener('click', () => { selected = ''; current = null; localStorage.removeItem('wj.discussion'); showView('discussion'); render(); $('#topic').focus(); });
+$('#new-discussion').addEventListener('click', () => { focusRoomId = null; $('#discussion-mode').hidden = true; selected = ''; current = null; localStorage.removeItem('wj.discussion'); showView('discussion'); render(); $('#topic').focus(); });
 function click(id: string, action: () => Promise<unknown>): void { $(id).addEventListener('click', () => { void action().catch(report); }); }
 const prepareButton = button('파일 읽고 자료 저장', async () => {
   const paths = $<HTMLTextAreaElement>('#material-paths').value.split('\n').map(p => p.trim()).filter(Boolean);

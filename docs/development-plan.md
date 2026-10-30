@@ -2,13 +2,13 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
-2026-10-30 사용자 지시에 따라 **이 표를 페이즈 범위·순서·진행 상태의 SSOT**로 사용한다. 아래 설계/검토 문서의 과거 “계획 문서만” 제한은 당시 작업 이력이며, 현재 승인 범위는 이 표의 **페이즈 2 구현·검증**이다. 제품 목표·기존 backend/데이터·승인/미확정 대조는 유지한다. 세부 수락 gate·롤백은 [단계별 계약](./resident-implementation-plan.md)을 참조한다. 계획 변경이 필요하면 **현재 단계와 남은 모든 페이즈의 영향·총변경량을 먼저 검토해 사용자 승인을 받은 뒤** 이 SSOT와 관련 계획서를 함께 변경한다. 구현 결과에 맞춰 계획을 사후 정당화하지 않는다. 구체적인 변경 승인 절차는 [개발 지침](./development-guidelines.md#5-계획-변경-사전-승인과-후속-페이즈-영향-검토)을 따른다.
+2026-10-30 사용자 지시에 따라 **이 표를 페이즈 범위·순서·진행 상태의 SSOT**로 사용한다. 아래 설계/검토 문서의 과거 “계획 문서만” 제한은 당시 작업 이력이며, 현재 승인 범위는 이 표의 **페이즈 3 구현·검증**이다(PR #14 사용자 병합 후 다음 페이즈 승인). 제품 목표·기존 backend/데이터·승인/미확정 대조는 유지한다. 세부 수락 gate·롤백은 [단계별 계약](./resident-implementation-plan.md)을 참조한다. 계획 변경이 필요하면 **현재 단계와 남은 모든 페이즈의 영향·총변경량을 먼저 검토해 사용자 승인을 받은 뒤** 이 SSOT와 관련 계획서를 함께 변경한다. 구현 결과에 맞춰 계획을 사후 정당화하지 않는다. 구체적인 변경 승인 절차는 [개발 지침](./development-guidelines.md#5-계획-변경-사전-승인과-후속-페이즈-영향-검토)을 따른다.
 
 | 페이즈 | R단계 | 개발 범위 | 완료 판정 | 상태 |
 | --- | --- | --- | --- | --- |
 | 1. 방 데이터 기반 | R1 | optional resident state·기존 DB 이관·방/메시지 조회·설정 제어 API·기능 flag | 기존 데이터/원문/event cursor/명령 보존, 중복 이관/명령 방지·인증·꺼짐 복구 | **완료 / PR #13 병합** ([증거](./implementation/phase1-resident-foundation-20261030.md)) |
-| 2. 상주 실행 | R2 | 공통 dispatch·방 on/off·발화/JSON·예산/휴면·topic focus·문맥 인계 | provider 최대1·미확정 재전송0·초안 공개/세대 대조·인계/복구 | **구현·fixture 검증 완료 / 병합 대기** ([증거](./implementation/phase2-resident-runtime-20261030.md)) |
-| 3. 단톡방 GUI | R3 | 기존 control.*의 멤버·말풍선·답장/멘션·미읽음·보조 패널·상태 알림 | 4 viewport·IME/접근성·장문·재접속·기존 승인/복구 UI 보존 | 대기 |
+| 2. 상주 실행 | R2 | 공통 dispatch·방 on/off·발화/JSON·예산/휴면·topic focus·문맥 인계 | provider 최대1·미확정 재전송0·초안 공개/세대 대조·인계/복구 | **완료 / PR #14 병합** ([증거](./implementation/phase2-resident-runtime-20261030.md)) |
+| 3. 단톡방 GUI | R3 | 기존 control.*의 멤버·말풍선·답장/멘션·미읽음·보조 패널·상태 알림 | 4 viewport·IME/접근성·장문·재접속·기존 승인/복구 UI 보존 | **구현·자동 fixture 검증 완료 / 병합 대기 · 실제 기기 IME·터치는 UNVERIFIED** ([증거](./implementation/phase3-chatroom-gui-20261030.md)) |
 | 4. 연결 편의성 | R4 | browser discovery/preset→기존 probe·advanced fallback | 사용자 CSS 입력 최소화·identity/thread/draft 불일치 전송0 | 대기 |
 | 5. 역할·열린 작업큐 | R5 | 일감 제안·완료 조건/의존성·역할/가용 자원·pickup·보고/리뷰/재작업 | 동시 claim1·불완전/권한 밖 ready0·자기 승인/근거 없는 done0 | 대기 |
 | 6. 실제 업무 수행 | R6 | 기존 Codex·scope 재검사·실행 근거/방 보고·독립 리뷰 | 중복 실행0·늦은 승인/결과 대조·실파일 안전 gate·업무 리뷰 | 대기 |
@@ -17,13 +17,13 @@
 
 페이즈마다 작업 브랜치·검토 가능한 PR, 사용자 병합을 유지한다. 큰 단계는 2를 dispatch/발화/인계, 6을 안전 경계/실행 연결, 7을 Wiki/인용·MCP로 나눌 수 있다. 다음 단계가 아직 없으면 성공처럼 응답하지 않는다. 실계정·서비스 반영은 별도 검증 범위로 두고 독립 fixture 개발을 계속한다. U1/U2/U3는 [사용자 결정 목록](./resident-implementation-plan.md#11-사용자-결정-필요)을 유지한다. 디자인 패턴은 [개발 지침](./development-guidelines.md)의 작은 Adapter/DI·명시 상태 전이·기존 transaction·검사/롤백 기준을 따른다.
 
-본문의 Phase 0~4A/4B는 이전 릴리스 범위 구분이다. 현재 구현 순서·상태는 위 페이즈 1~8로만 관리한다. 페이즈 2는 Node 115개·실제 Chrome fixture 9개 PASS이며, 운영 DB 이관·서비스 반영·실계정 호출은 NOT_RUN이다. 방 on에는 소유자가 명시한 예산/속도와 멤버 선택이 필요하며 미정 U1/U2 기본값을 만들지 않는다. 단톡방 GUI는 페이즈 3이다.
+본문의 Phase 0~4A/4B는 이전 릴리스 범위 구분이다. 현재 구현 순서·상태는 위 페이즈 1~8로만 관리한다. 페이즈 3는 Node 118개·실제 Chrome/MCP fixture 15개 PASS이며, 운영 DB 이관·서비스 반영·실계정 호출은 NOT_RUN이다. 방 on에는 소유자가 명시한 예산/속도와 멤버 선택이 필요하며 미정 U1/U2 기본값을 만들지 않는다. 실제 기기의 한국어 IME·가상 키보드·터치 검사는 R3-E의 미확인 부분으로 남는다. 자동 검사 PASS로 이 조건을 낮추거나 완료로 바꾸지 않는다.
 
 > 계획 개정의 고정 근거는 C=8f81d861b3f170ef2024b90d9eeba56ce34f0f79, P=8db0f42f499f674c66c3a0df0a4d8e0f25fb216e다. [1쪽 요약·기준 차이·근거](./plan-revision-20261030.md), [104항목 판정](./reviews/plan-decision-register-20261030.md), [운영 계약](./company-workflow-plan.md), [8단계 변경·이관·수락·롤백](./resident-implementation-plan.md)은 설계 근거로 유지한다. 구현은 병합 main 05684f83d229acc86769ce8675f632bb21743dd6에서 시작했으며 runtime은 C와 동일했다. 신규 기능의 실제 상태는 위 SSOT와 단계별 실행 증거로 판정하고, 실계정·DOM·호스트 적합성은 별도 검증 전까지 UNVERIFIED다.
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | v0.11-R2 — 상주 실행 fixture PASS, 후속 GUI·큐·Wiki는 계획 단계. 진행 상태는 맨 위 SSOT 참조 |
+| 상태 | v0.12-R3 — 상주 방·단톡방 GUI 자동 fixture PASS, 실제 기기·실계정 UNVERIFIED, 후속 큐·Wiki는 계획 단계. 진행 상태는 맨 위 SSOT 참조 |
 | 최초 작성일 | 2026-08-15 |
 | 개정일 | 2026-10-30 (KST) |
 | 저장소 | [firewine/webgpt](https://github.com/firewine/webgpt) |

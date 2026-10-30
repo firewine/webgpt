@@ -3,6 +3,7 @@ import type { ResidentStateV1, Room, RoomMessage, RoomSummary } from './resident
 import type { Store } from './store.js';
 import { AppError, digest, id, integer, now, object, string, strings } from './util.js';
 import { budgetReason, usageFor, unresolvedProvider, validBudget, validPacing } from './dispatch.js';
+import { projectResidentStatus } from './resident-status.js';
 
 const MIGRATION = 'resident:migration:v1';
 const COLLECTIONS = ['rooms', 'messages', 'turns', 'dispatchLeases', 'contextCheckpoints', 'workItems', 'workAttempts', 'wikiPages', 'wikiVersions', 'jobLinks', 'residentGrants'] as const;
@@ -63,7 +64,12 @@ export class ResidentStore {
     return { enabled: this.enabled, schemaVersion: state?.schemaVersion ?? null, dispatchAvailable: this.enabled && this.dispatchAvailable,
       rooms: (state?.rooms ?? []).map(summary) };
   }
-  room(roomId: string) { const room = findRoom(this.required(), roomId); return { room: summary(room), contexts: (room.contexts ?? []).map(c => ({ participantId: c.participantId, generation: c.generation, checkpointId: c.checkpointId })), dispatchAvailable: this.enabled && this.dispatchAvailable, enabled: this.enabled, cursor: this.store.cursor() }; }
+  room(roomId: string) {
+    const room = findRoom(this.required(), roomId); const cursor = this.store.cursor();
+    return { room: summary(room), contexts: (room.contexts ?? []).map(c => ({ participantId: c.participantId, generation: c.generation, checkpointId: c.checkpointId })),
+      status: projectResidentStatus(this.store.read(), roomId, this.store.events(Math.max(0, cursor - 250), 250)),
+      dispatchAvailable: this.enabled && this.dispatchAvailable, enabled: this.enabled, cursor };
+  }
   messages(roomId: string, after: number, limit: number) {
     integer(after, 0, 0, Number.MAX_SAFE_INTEGER); integer(limit, 50, 1, 100);
     const state = this.required(); const room = findRoom(state, roomId);
