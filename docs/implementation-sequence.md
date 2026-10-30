@@ -2,13 +2,13 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | v0.7 — 단톡방 GUI·자율 수다 후속 계획 추가, 실계정 릴리스 검증 대기 |
+| 상태 | v0.8 — 실제 Work Queue·역할/Seat·Review·Wiki를 다음 필수 구현으로 정정, 단톡방 GUI 유지 |
 | 작성일 | 2026-10-29 (KST) |
 | 개정일 | 2026-10-30 (KST) |
-| 기준 | [개발 계획서](./development-plan.md)의 v0.11 상태와 PR #1~11 병합 결과 |
+| 기준 | [개발 계획서](./development-plan.md)의 v0.12 상태와 PR #1~11 병합 결과 |
 | 기준 main | `8f81d861b3f170ef2024b90d9eeba56ce34f0f79` |
-| 제품 범위 | Tailscale 웹 접속, 여러 GPT OAuth 계정·dot·Muse·API 모델의 능동 토론·검증·비교 |
-| 다음 작업 | 귀가 후 GPT 인증·실계정 토론, 독립 진행할 단톡방 GUI·자율 수다 → 실세션 Codex 검증 |
+| 제품 범위 | Tailscale 웹의 회사형 AI 업무 운영·토론·실행·Review/Wiki, 단톡방 GUI |
+| 다음 작업 | ORG-01/02 업무 모델·큐/Seat → ORG-03/04 업무 수행/리뷰 → Wiki·단톡방 업무 관제. GPT 인증은 귀가 후 병행 |
 | PR 처리 | 작업별 브랜치와 검토 가능한 PR로 분리; 병합은 사용자가 수행 |
 
 ## 1. 기준과 실행 원칙
@@ -16,6 +16,8 @@
 PR #1~11이 main에 병합됐다. 연결 adapter·영속 Core·토론 UI·MCP·Codex 실행, Ubuntu 서비스·HTTPS·noVNC, Muse thread·첫 응답 복구, 토커 계정·사고 깊이·라운드 설정과 로컬 자료·권한 조회를 반영했다. 전체 실계정·실세션 완료 판정은 남아 있다. [통합 구현 기록](./implementation/wj-002-015.md), [Ubuntu 운영](./implementation/ubuntu-services-20261030.md), [Muse 연결·복구](./implementation/muse-thread-binding-20261030.md), [토커 설정](./implementation/talker-settings-rounds-20261030.md), [로컬 자료·권한 조회](./implementation/local-materials-capabilities-20261030.md)를 함께 따른다. 인증·대화·운영·Codex의 상세 계약은 각 원문을 따른다.
 
 **실환경 검증은 연결 → 혼합 토론 → Codex 환류 순서다.** 실제 계정·Ubuntu 접근이 없는 동안 독립 구현과 fixture 검증을 진행했다. 이제 구현된 UI에서 각 연결의 실응답을 확인하고 N인 토론·근거·비교를 판정한다.
+
+**구현 우선순위 정정:** 위 문장은 기존 연결/토론 기능의 실계정 검사 순서다. 전체 제품의 일하는 방식은 [회사 업무 계약](./company-workflow-plan.md)의 목표→역할별 논의→Work Queue→작업자 claim/수행→독립 리뷰/재작업→Wiki다. Company/Team/Role/Seat·회사 업무 큐·결과물 리뷰·Wiki는 현재 미구현이며 다음 필수 개발이다. 실제 계정 로그인을 기다리는 동안에도 ORG-01/02부터 구현할 수 있다. 기존 토론 Task·claim review·checkpoint를 이 기능으로 세지 않는다.
 
 2026-10-30 다음 단계 승인으로 [상시 운영·HTTPS·원격 Chrome](./implementation/ubuntu-services-20261030.md)을 적용했다. 서버에서의 HTTPS·noVNC 입력·서비스 재시작은 PASS이며, 다른 기기·실제 호스트 재부팅·계정·Codex turn은 이 결과로 완료 판정하지 않는다.
 
@@ -27,6 +29,8 @@ PR #1~11이 main에 병합됐다. 연결 adapter·영속 Core·토론 UI·MCP·C
 - 구현 후 변경 범위에 맞는 계약·상태·통합 검증을 수행하고 결과를 남긴다. 매 작업마다 전체 실계정 회귀를 반복하지 않는다.
 
 ## 2. 구현 작업과 선행 조건
+
+아래 WJ-001~018은 기존 연결·토론·실행 모듈의 번호와 이력을 유지한다. 누락된 회사 업무 운영의 다음 실제 구현은 ORG-01~07이며 각 WJ 모듈을 확장한다. “WJ-007/008 구현”만으로 WorkTask/Seat/Review/Wiki가 이미 있다는 뜻이 아니다. 기본 역할·팀 배정은 WJ-017의 병렬 용량 확대까지 미루지 않는다.
 
 WJ-001은 PR #3 병합 상태다. WJ-002~011 및 WJ-014~015는 코드와 자동 검사가 준비됐고, WJ-013은 scoped 도구·stdio 전달기가 구현됐다. MCP Events/Muse Connector는 미구현·비활성이다. WJ-012 및 계정·운영 서버·실세션에 의존하는 완료 판정은 NOT_RUN이며 WJ-016~018은 후속 선택 범위다. 아래 표는 원래 의존성과 실제 완료 기준을 유지한다. 상세 코드 상태는 [구현 기록](./implementation/wj-002-015.md)을 따른다.
 
@@ -167,6 +171,18 @@ WJ-016은 [Git Writer 계획](./git-writer-plan.md)의 별도 sandbox·remote br
 - 로그 상세 정리·archive 기능을 켜기 전에는 WWG-R6의 같은 ID 재실행 금지·payload 충돌·active/미확정 보존을 검사한다. 현재 대화 DB와 기록을 정리하거나 자동 삭제하는 작업은 이번 검토에 포함하지 않는다.
 - 여러 파일 쓰기·충돌 동기화는 WWG-R7/WJ-016의 선택 Writer 범위로 둔다. 일반 토론의 필수 권한으로 셸·삭제·자동 승인을 추가하지 않는다.
 
+### 회사 업무 운영의 우선 구현
+
+상태와 상세 수용 기준은 [회사 업무 계약 7장](./company-workflow-plan.md#7-다음-구현과-완료-판정)에 둔다.
+
+1. ORG-01: Company/Team/Role/Policy·Project/Goal·실제 WorkTask/Dependency/상태를 기존 DB와 토론을 보존하며 추가한다.
+2. ORG-02: Seat와 원자적 ready 업무 claim/pull·역할/계정/권한/한도 배정·공통 dispatch·미확정 대조를 구현한다.
+3. ORG-03/04: 계획/논의에서 실행 가능한 일감을 큐에 넣고, 작업자가 실제 수행·결과 제출→다른 역할 리뷰→반려/재작업/완료까지 진행한다. Codex 실파일 변경 전 R2/R3 검증은 유지한다.
+4. ORG-05/06: 출처·버전·검토를 가진 Wiki와 결정의 재사용, 이전 단톡방 GUI의 업무 큐·역할·인계·산출물·리뷰 표시를 연결한다. GUI 자체 작업은 이 실제 데이터 계약과 함께 진행할 수 있다.
+5. ORG-07: 실제 계정/세션에서 목표부터 일감·수행·리뷰·Wiki·다음 업무까지 사용자 중계 없이 확인한다. 모의 결과를 실운영 완료로 세지 않는다.
+
+역할·일감·배정·완료 게이트를 먼저 동작시키며 조직도 그림이나 자유 수다만으로 완료 판정하지 않는다. 특정 dot/Muse를 영구 CEO나 코더로 고정하지 않는다. 추가 provider·대규모 병렬 실행·별도 Git Writer·자동 병합은 별도 범위다.
+
 ### 단톡방 GUI·자율 수다의 추가 순서
 
 [개발 계획 9.4](./development-plan.md#94-ai-단톡방-gui와-자율-수다)와 [검토서](./reviews/chatroom-ui-review-20261030.md)의 CHAT-01~05는 사용자 추가 요청이며 미구현이다. 지도·건축·게임 월드는 포함하지 않는다.
@@ -177,7 +193,7 @@ WJ-016은 [Git Writer 계획](./git-writer-plan.md)의 별도 sandbox·remote br
 4. CHAT-04 / WJ-008/009/011: 모드 전환, 수다에서 선택한 공개 자료로 새 주제 토론, 독립 초안/라운드 공개 장벽·dot/Muse 원래 맥락·private 이력·미확정 대조를 회귀 검사한다.
 5. CHAT-05 / WJ-012: 계정 인증 뒤 실제 여러 참여자의 자율 수다·중간 참여·후속 토론·종료·기기 재접속을 확인한다. fixture나 단톡방 형태만 보고 실계정 PASS로 표시하지 않는다.
 
-GUI와 offline scheduler는 GPT 인증을 기다리지 않고 진행할 수 있다. 실제 혼합 토론을 꾸미기·장기 기억·이미지 생성 완료 뒤로 미루지 않는다. R2/R3의 실제 Codex 파일 변경 선행 조건과 사용자 PR 병합 정책은 그대로다.
+단톡방 GUI는 ORG-06의 실제 업무·리뷰·Wiki 데이터를 보여 주며 형태는 이전 사용자 요청을 유지한다. CHAT-03/04의 자유 수다는 회사 업무 최소 루프 뒤의 부가 기능으로 둔다. GUI와 조직/업무 scheduler fixture는 GPT 인증을 기다리지 않고 진행할 수 있다. 실제 혼합 토론과 업무 운영을 꾸미기·이미지 생성 완료 뒤로 미루지 않는다. R2/R3의 실제 Codex 파일 변경 선행 조건과 사용자 PR 병합 정책은 그대로다.
 
 ### 기록과 우선 검증
 
@@ -185,6 +201,6 @@ GUI와 offline scheduler는 GPT 인증을 기다리지 않고 진행할 수 있�
 
 실행 증거에는 작업 ID, commit, 환경·버전, 사용한 참여자/계정의 비밀이 아닌 참조, 실제 입력·관측 결과·종료 상태, PASS/FAIL/NOT_RUN/BLOCKED와 이유를 남긴다. credential·로그인 화면·개인 대화 전체를 공개 저장소에 넣지 않는다. 공개 문서에는 필요한 요약과 보호된 증거 참조만 기록한다.
 
-다음 실환경 범위는 **WJ-003~006 연결·혼합 토론 검증**이며 GPT 인증은 사용자가 귀가 후 진행한다. [운영 절차](./operations-runbook.md)에 따라 GPT 2계정·DeepSeek·dot·Muse를 검증한 뒤 WJ-012와 실세션 WJ-015를 판정한다. 이미 적용한 Ubuntu 서비스·HTTPS·기존 대화는 보존하고, 인증과 독립적인 CHAT-01~04의 UI·계약·fixture를 먼저 개발할 수 있다.
+다음 실제 코딩 범위는 **ORG-01/02의 업무 모델·큐·Seat·배정**이다. 계정 인증과 독립적으로 진행하고 기존 Ubuntu 서비스·HTTPS·데이터·Chrome 대화를 보존한다. 실환경 연결 검사 WJ-003~006은 사용자가 귀가 후 GPT 인증을 진행할 때 병행하고 WJ-012/015와 ORG-07의 완료를 구분한다. 새 GUI는 이 업무 데이터와 연동하며 단순 자동 수다 구현이 먼저가 아니다.
 
 이번 [FlowDesk 사례 적용](./development-plan.md#92-flowdesk-사례에서-반영할-아이디어)은 기존 번호·선행 조건·초기 순차 실행을 유지하면서 WJ-007 이후의 인계·검증·UI 완료 기준을 보강한다. WJ-006은 확보 가능한 관측을, WJ-014는 실제 실행기 증거를 담당한다. 이번 통합 구현도 root 1개·활성 provider turn 1개 원칙을 유지한다. 후속 동시 실행 확대는 여전히 별도 범위다.

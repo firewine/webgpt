@@ -1,19 +1,20 @@
 # 웹쫀쿠 Living Design Document
 
 - 문서 상태: Living Design Document
-- 버전: v0.8
+- 버전: v0.9
 - 최초 기준일: 2026-08-14
 - 개정일: 2026-10-30 (KST)
 - 문서 형식: Markdown
 - 원칙: 이후의 아이디어, 설계 결정, 구현 메모는 이 문서에 누적 업데이트한다.
 - 현재 릴리스 순서·완료 조건: [개발 계획서](./development-plan.md)
 - 핵심 대화: [능동 토론 계획](./discussion-plan.md)
+- 핵심 업무 운영·현재 구현 차이: [회사 업무 계약](./company-workflow-plan.md)
 - 참여자·OAuth·API: [연결 계획](./participant-connections.md)
 - 우선 코드 실행: [Codex 세션 실행 계획](./codex-session-plan.md)
 - 서버·웹 클라이언트: [Ubuntu 운영 계획](./ubuntu-operations.md)
 - 선택 코드 실행 모듈: [Git Writer PRD](./prd.md) / [상세 계획](./git-writer-plan.md)
 
-> 현재 핵심은 주제를 주면 여러 AI가 자동으로 토의·검증·비교하는 공동 대화다. 여러 GPT OAuth 계정·dot·Muse·DeepSeek API를 참여자로 연결한다. Ubuntu가 실행하고 Tailscale이 허용된 기기의 웹 브라우저로 접속한다. 태블릿은 예시다. 연결 adapter·영속 Core·능동 토론 UI·scoped MCP·Codex 환류를 통합 구현했고 자동 검사를 통과했다. [구현 기록](./implementation/wj-002-015.md)과 [운영 절차](./operations-runbook.md)를 기준으로 실제 계정·운영 서버를 검증한다. 실계정 MVP는 NOT_RUN이며 MCP Events/Connector·조직·팀·Wiki는 후속 범위다.
+> 핵심 목표는 여러 AI가 팀·역할을 맡아 목표를 논의하고, Work Queue의 일감을 가능한 작업자가 가져가 수행하며, 다른 역할의 리뷰·재작업과 Wiki 기록까지 이어가는 AI 작업실이다. GUI는 사용자가 지정한 단톡방 형태를 사용한다. 현재 구현은 연결·토론·영속 기록·Codex 기반까지이며 Company/Team/Role/Seat·실제 업무 큐·결과물 리뷰·Wiki 운영은 미구현이다. 조직·업무·Wiki를 장기 선택 기능으로 미뤘던 분류를 2026-10-30 정정한다. [현재 차이와 우선 구현](./company-workflow-plan.md)을 기준으로 개발하며 기존 자동 검사 PASS를 회사 운영 완료로 표시하지 않는다.
 
 ---
 
@@ -21,13 +22,13 @@
 
 ### 1.1 웹쫀쿠란?
 
-웹쫀쿠는 **여러 AI 참여자가 하나의 주제에 대해 토의하고, 근거를 검증하고, 각자의 결과를 비교하는 웹 대화 시스템**이다. 사용자가 주제를 한 번 주면 Core가 후속 질문·반론·확인·수정을 이어간다. dot과 Muse는 각각 한 참여자이며 일반 GPT 여러 계정과 API 모델도 동등하게 참여한다.
+웹쫀쿠는 **여러 AI가 팀·역할·계정·맥락을 구분해 실제 업무를 맡고, 작업큐·검토·공유 지식으로 협업하는 개인용 AI 작업실**이다. 사용자는 목표/프로젝트를 주고 단톡방 GUI에서 보고 개입한다. 기획·설계·조사·개발·리뷰·QA·기록 역할은 계정과 분리하며 가능한 Seat가 준비된 업무를 가져간다. dot·Muse·일반 GPT 여러 OAuth 계정·API 모델은 이 역할에 배정되는 참여자다.
 
 핵심 목표는 다음과 같다.
 
-> 주제 입력 → 참여자별 독립 초안 → 상호 질문·반론 → 근거 확인 → 수정·결과 비교 → 합의점과 미해결 쟁점. 일반 GPT는 OAuth, DeepSeek 등은 API, 기존 dot·Muse는 실제 agent 대화에 연결한다. 필요한 코드·계산·실험은 후속 Codex 실행으로 검증할 수 있다.
+> 목표/프로젝트 → 역할별 계획·조사·논의 → 완료 조건을 가진 일감 등록 → Work Queue/Seat 배정 → 실제 수행·결과 제출 → 다른 역할의 Review/Rework → Done → Wiki/결정 기록 → 다음 업무. 판단이 필요한 곳에 독립 초안·상호 검토·장문 재분석을 사용하고, 실제 코드·계산·실험은 허용된 Codex 세션으로 연결한다.
 
-사용자는 Tailscale에 연결된 허용 기기에서 동일한 공동 대화를 보고 개입한다. 개발·조사·기술 검토·설계안 비교를 모두 지원하며 **AI Software Company Control Room**은 이 대화 시스템 위에 확장할 장기 운영 형태다.
+사용자는 Tailscale에 연결된 허용 기기에서 같은 프로젝트·대화·업무·결과를 본다. 개발·조사·기술 검토·설계안 비교를 지원하며 **AI Software Company Control Room**이 운영 목표다. 단일 주제 토론도 사용할 수 있고 자유 수다는 부가 모드로 제공하되 대화량보다 결과물과 검토·지식의 축적을 우선한다. 지도·건축·3D 월드는 제외한다.
 
 ### 1.2 핵심 원칙
 
@@ -64,7 +65,7 @@
 
 ### 2.1 동시 실행 한도
 
-대화 MVP-1은 **root workflow 1개와 활성 provider turn 1개**로 시작하되 여러 GPT 계정·dot·Muse·API 참여자의 순차 토론을 포함한다. 다중 참여와 동시 실행을 구분한다. Phase 5는 동시 발언·여러 workflow의 검증된 확대이며 계정·credential별 한도를 지킨다.
+현재 대화 MVP-1 코드는 **root workflow 1개와 활성 provider turn 1개**다. 회사 운영 계층의 첫 구현도 검증된 자원 한도를 유지할 수 있지만, 준비된 업무를 큐에서 가져오는 운영 모델을 다중 동시 실행 확대와 함께 후순위로 미루지 않는다. 역할/업무 배정과 동시 실행 수는 다른 계약이다. 실제 계정·credential별 용량을 검증한 뒤 동시성을 늘린다.
 
 일반 ChatGPT와 dot이 같은 계정을 사용하면 동시 실행 한도도 공유한다. “기존 5개 + dot + Muse = 7개 Seat”로 자동 산정하지 않는다. 실제 연결된 독립 계정·provider의 검증 결과로 실행 용량을 정한다.
 
@@ -186,7 +187,7 @@ teams:
 
 ### 4.1 초기 추천 배치
 
-아래 표는 8월의 계정 구성을 이용한 후속 조직 확장 예시다. 현재 PoC의 배정이나 확정된 모델 성능 비교가 아니다.
+아래 표는 8월 계정 구성의 배정 예시이며 현재 가용성·모델 성능 비교가 아니다. 팀별 역할·계정 선택 자체는 핵심 업무 운영 범위로 구현하며 특정 계정을 표와 같이 고정하지 않는다.
 
 | Team | Primary | Secondary | 이유 |
 |---|---|---|---|
@@ -301,7 +302,7 @@ mode 선택·첨부·새 대화·원격 중단·MCP·이벤트는 capability다.
 
 MCP가 가능한 Provider에서는 단순 화면 scraping보다 **웹쫀쿠 자체를 Remote MCP Server로 제공하는 방식**을 우선한다.
 
-아래는 장기 도구 후보이다. 상위 Phase 3의 최소 범위는 task_get, context_get, result_submit이며 필요한 경우 task_claim을 추가한다. 일반 MCP 도구 연결만으로 외부에서 웹 대화를 시작할 수 있다고 가정하지 않는다. dot의 이벤트 구독은 별도 capability로 검증한다.
+아래는 설계 도구 후보이며 현재 구현된 discussion 범위의 task_get/context_get/result_submit과 회사 업무 도구를 구분한다. 회사 업무 claim·제출·리뷰·Wiki를 기존 토론용 grant에 몰래 추가하지 않고 project/role/task scope를 정의한다. 핵심 Work Queue는 공식 Events를 기다리지 않고 Core/API와 adapter부터 구현하며 MCP는 지원되는 provider의 호출 통로다. 일반 도구 연결만으로 외부에서 웹 대화를 시작할 수 있다고 가정하지 않는다.
 
 웹 LLM이 인증된 웹쫀쿠 MCP에 접속하고 해당 권한을 가진 경우 다음 Tool을 사용할 수 있도록 설계한다.
 
@@ -521,6 +522,8 @@ cancelled
 
 Task Queue는 웹쫀쿠의 실제 운영 중심이다.
 
+구현 주의: 현재 코드의 `Task`는 토론 안의 발언/검증 과제이며 이 절의 회사 업무 큐는 아니다. 회사 업무 `WorkTask`·pull/claim·Seat·결과물 Review/Rework는 별도 구현이 필요하다. [업무 계약 3~5장](./company-workflow-plan.md#3-현재-구현과-부족한-부분)의 코드 대조와 원자적 배정·복구 기준을 따른다. 기존 토론 Task의 PASS를 이 절의 완료로 세지 않는다.
+
 ```text
 Task
 - id
@@ -562,7 +565,7 @@ Task
 
 ## 14. 능동 토론·검증·비교
 
-Discussion은 MVP-1의 핵심 root workflow다. 사용자가 주제를 한 번 입력하면 선택한 N명의 참여자가 독립 초안·상호 검토·근거 확인·수정·비교·종합을 진행한다. 특정 dot·Muse가 필수 진행자나 심판이 아니며 여러 GPT OAuth 계정과 API 모델도 같은 계약으로 참여한다.
+Discussion은 현재 MVP-1 코드의 root workflow이며 목표 운영에서는 계획·판단·쟁점 확인을 수행하는 하위 업무 또는 독립 사용 흐름이다. 사용자가 주제를 한 번 입력하면 선택한 N명이 독립 초안·상호 검토·근거 확인·수정·비교·종합을 진행한다. 모든 회사 업무마다 전원이 정해진 라운드를 반복해야 하는 것은 아니다. 특정 dot·Muse를 필수 진행자/심판으로 고정하지 않는다.
 
 | 단계 | 계약 |
 | --- | --- |
@@ -670,6 +673,8 @@ Control Room은 Event를 사람이 읽기 좋은 메시지로 렌더링하고 SS
 
 에이전트가 매번 전체 대화를 읽지 않도록 프로젝트 지식을 문서화한다.
 
+Wiki는 핵심 운영 범위이며 현재 미구현이다. 로컬 참고 파일 snapshot이나 토론 checkpoint와 구분한다. 처음에는 앱 private 저장소의 버전·출처·검토 이력으로 구현할 수 있으며 프로젝트 파일 쓰기 권한을 자동 요구하지 않는다. 검증/보고/미실행과 대체 이력을 보존하고 현재 담당자·차단·진행 상태는 실시간 업무 큐를 기준으로 읽는다. 상세 계약은 [회사 업무 계획](./company-workflow-plan.md#5-수행리뷰wiki-계약)을 따른다.
+
 ```text
 /wiki
   project-overview.md
@@ -726,7 +731,7 @@ worktrees/
 
 ## 18. UI - Control Room
 
-대화 MVP-1의 첫 화면은 주제 입력과 공동 대화창이다. 선택한 GPT OAuth 계정·dot·Muse·API 참여자의 발언, 질문·반론, 실제 근거, 결론 수정을 연결해서 보여준다. 제시한 시안은 예시이며 실제 연동 성공 증거가 아니다. 전체 조직·동시 실행 확대는 후속 범위다.
+현재 대화 MVP-1의 화면은 주제 입력과 공동 대화창이다. 다음 필수 관제는 선택한 참여자의 실제 팀/역할·Seat·업무 큐·인계·수행·리뷰·Wiki를 이전에 지정한 단톡방 GUI에 연결한다. 기존 토론·근거·비교도 그 안에서 사용한다. 제시한 시안은 예시이며 실제 업무 운영·연동 성공 증거가 아니다. 동시 실행 용량 확대는 별도 검증 범위다.
 
 | 화면 | 역할 |
 | --- | --- |
@@ -841,19 +846,26 @@ Process Improvement Proposal
 - [ ] Ubuntu profile과 일반 웹 클라이언트 호환성
 - [ ] Tailscale HTTPS·SSE 재연결·noVNC 보조 화면·서버 복구
 
-### 후속 단계
+### 다음 필수 구현 — 회사 업무 운영
 
+- [ ] Company/Team/Role/Policy·Project/Goal·WorkTask·의존성·완료 기준 (ORG-01)
+- [ ] Seat·ready 업무 pull/claim·공통 자원 배정·영속 복구 (ORG-02)
+- [ ] 논의에서 실제 일감 생성·작업자 수행·도움 요청·독립 Review/Rework/Done (ORG-03/04)
+- [ ] 검토·출처·버전이 있는 Wiki/Decision과 다음 업무 context 재사용 (ORG-05)
+- [ ] 단톡방 GUI의 실제 업무 관제와 실계정/실세션 업무 왕복 (ORG-06/07)
+
+### 별도 연결·용량·운영 확장
 - [ ] MCP 구조화된 작업·결과 교환과 dot 이벤트 PoC
 - [ ] Muse Connector capability 확인
 - [ ] Secure MCP Tunnel과 dot의 실제 도구 호출
 - [ ] 기존 Codex 세션 등록·프롬프트 실행·검토·동일 세션 후속 지시
 - [ ] 선택 Git Writer와 sandbox·checks·draft PR
 - [ ] Claude·Gemini와 추가 API provider 확장
-- [ ] 팀별 Preferred/Fallback 및 검증된 다중 Seat
-- [ ] Wiki·코드 자동 Review·조직 개선 제안·Morning Brief
+- [ ] 추가 provider·실측 용량에 따른 다중 Seat 동시 실행 확대
+- [ ] 조직 개선 제안·Morning Brief 고도화
 - [ ] 조건부 자동 병합·운영 고도화·macOS 등 추가 OS·다중 프로젝트
 
-여러 GPT OAuth 계정·DeepSeek·dot/Muse의 순차 참여는 MVP 범위다. 전체 조직과 동시 실행 용량 확대를 분리한다.
+여러 GPT OAuth 계정·DeepSeek·dot/Muse의 순차 참여와 현재 토론 기능은 기반이다. 조직·업무 큐·Wiki의 실제 운영은 다음 필수 구현이며 계정 수/병렬 용량 확대·선택 Git Writer·자동 병합과 구분한다.
 
 ---
 
@@ -1034,6 +1046,8 @@ ProcessImprovementProposal
 
 ## 25. 다음 설계 항목
 
+2026-10-30 우선순위 정정: 아래 과거 PoC 목록과 별개로 다음 구현은 [ORG-01~07](./company-workflow-plan.md#7-다음-구현과-완료-판정)의 업무 모델·큐·배정·수행/리뷰·Wiki·단톡방 업무 관제다. GPT 인증을 기다리는 동안에도 조직·큐 계약과 fixture를 구현한다.
+
 1. Ubuntu 호스트·Tailscale HTTPS 포트·웹 클라이언트·원격 Chrome 접속 확인.
 2. autoConnect 프로필 선택·연결 허용과 대안 spike.
 3. BrowserConnection / ConversationBinding / ProviderAdapter 계약.
@@ -1084,6 +1098,11 @@ OAuth·API 공식 출처와 구현 경계는 [참여자 연결 계획](./partici
 ---
 
 ## 27. 변경 이력
+
+### v0.9 - 2026-10-30
+
+- 사용자 정정에 따라 회사 업무 운영을 핵심으로 복원. 주제 토론·자유 수다·단톡방 GUI의 역할을 구분.
+- 현재 Task·role 문자열·claim review·checkpoint와 실제 WorkTask·Team/Role/Seat·산출물 리뷰·Wiki의 차이를 명시. ORG-01~07을 다음 필수 구현으로 지정.
 
 ### v0.8 - 2026-10-30
 
@@ -1149,5 +1168,5 @@ OAuth·API 공식 출처와 구현 경계는 [참여자 연결 계획](./partici
 
 ## 28. 현재 확정된 핵심 문장
 
-> 웹쫀쿠는 주제 하나로 여러 GPT OAuth 계정·dot·Muse·API 모델이 능동적으로 토의·검증·비교하는 웹 대화 시스템이다. Ubuntu가 실행을 유지하고 사용자는 Tailscale이 허용된 어느 기기에서든 웹 브라우저로 참여한다. 합의와 근거 검증을 구분하며 필요할 때 기존 Codex 세션으로 실험·개발을 수행하고 그 결과를 다시 공동 대화로 돌려보낸다.
+> 웹쫀쿠는 목표를 받은 여러 AI가 팀·역할에 따라 계획·논의하고, 실행 가능한 일감을 Work Queue에 넣고, 가능한 작업자가 가져가 수행하며, 다른 역할의 리뷰·재작업과 Wiki 기록까지 이어가는 AI 작업실이다. 사용자는 Ubuntu 서버의 이 업무 흐름을 Tailscale 웹의 단톡방 GUI로 보고 개입한다. 독립 토론·근거 확인·Codex 실행은 업무 과정에 연결하고 실제 결과·미실행·이견·권한을 보존한다. 자유 수다는 부가 기능이며 지도·건물 만들기는 포함하지 않는다.
 

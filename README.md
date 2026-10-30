@@ -1,6 +1,8 @@
 # 웹쫀쿠 (Webjjoku)
 
-주제 하나를 여러 AI가 독립적으로 제안하고, 서로 검토하고, 근거를 확인한 뒤 결과를 비교하는 개인용 웹 작업실입니다. Ubuntu 서버에서 실행하고 허용된 Tailscale 기기의 브라우저로 접속합니다.
+여러 AI가 팀·역할을 맡아 목표를 논의하고, 업무 큐에서 일감을 가져가 수행·리뷰·재작업·Wiki 기록까지 이어가는 개인용 AI 작업실을 개발합니다. GUI는 단톡방 형태이며 Ubuntu 서버와 허용된 Tailscale 기기의 브라우저를 사용합니다.
+
+**현재 코드와 목표의 차이:** v0.2는 연결·독립 토론·근거 비교·영속 기록·Codex 실행 기반까지입니다. Company/Team/Role/Seat·실제 Work Queue/pull·산출물 Review/Rework·Wiki 운영과 새 단톡방 GUI는 미구현입니다. [회사 업무 계약과 다음 구현](docs/company-workflow-plan.md)을 기준으로 이 핵심을 보강합니다.
 
 **v0.2 구현:** 공동 대화 UI, 영속 토의 엔진, GPT 다중 OAuth·DeepSeek·기존 Chrome 대화 어댑터, MCP 도구, Codex 실행·승인·결과 환류, 운영 스크립트. [Ubuntu 로컬 모의 토론](docs/implementation/ubuntu-readiness-20261030.md)과 [systemd·실제 HTTPS·인증 noVNC 입력](docs/implementation/ubuntu-services-20261030.md)을 확인했습니다. 실계정·다른 Tailnet 기기·실제 재부팅·실제 Codex 세션의 완료 판정은 아직 **NOT_RUN**입니다. [구현·검증 기록](docs/implementation/wj-002-015.md)을 함께 확인하세요.
 

@@ -2,11 +2,12 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | v0.11 — 단톡방 GUI·자율 수다 계획 추가, 로컬 자료·권한 조회 구현, 실계정 검증 대기 |
+| 상태 | v0.12 — 회사 업무 큐·역할 배정·리뷰·Wiki를 핵심으로 정정, 단톡방 GUI 유지. 업무 운영은 미구현 |
 | 최초 작성일 | 2026-08-15 |
 | 개정일 | 2026-10-30 (KST) |
 | 저장소 | [firewine/webgpt](https://github.com/firewine/webgpt) |
 | 전체 제품 설계 | [webjjoku_living_design.md](./webjjoku_living_design.md) |
+| 핵심 업무·현재 코드 차이 | [company-workflow-plan.md](./company-workflow-plan.md) |
 | 구현 작업·선행 조건 | [implementation-sequence.md](./implementation-sequence.md) |
 | 핵심 대화 흐름 | [discussion-plan.md](./discussion-plan.md) |
 | 참여자·OAuth·API | [participant-connections.md](./participant-connections.md) |
@@ -14,14 +15,16 @@
 | Codex 세션 실행 | [codex-session-plan.md](./codex-session-plan.md) |
 | Git Writer 요구사항 / 상세 계획 | [prd.md](./prd.md) / [git-writer-plan.md](./git-writer-plan.md) |
 | 접속 기준 | Tailscale이 설치·연결되고 접근이 허용된 기기의 웹 브라우저; 태블릿은 예시 |
-| 개발 순서 | 접속·연결 PoC → 영속 Core·참여자 → 능동 토론 웹 UI → 공식 도구 연동 → Codex 검증·실행 → 선택 Git Writer·동시 실행 확대 |
+| 개발 순서 | 기존 연결 기반 → Company/Role·WorkTask·Seat·큐 → 수행·독립 리뷰·Wiki → 단톡방 업무 관제. 계정 검증 병행, Git Writer·동시 용량 확대는 별도 |
 
 ## 1. 제품과 문서의 범위
 
-웹쫀쿠는 **사용자가 주제를 주면 여러 AI 참여자가 서로 토의하고 근거를 검증하며 결과를 비교하는 공동 대화 시스템**이다. dot·Muse는 각각 하나의 참여자이고, 여러 GPT 계정과 DeepSeek 같은 API 모델도 같은 토론에 참여한다. Core가 발언 순서·맥락·검증 과제·종료 조건을 관리하며 사용자는 중간에 질문·자료·조건을 추가할 수 있다.
+웹쫀쿠는 **여러 AI가 팀·역할을 맡아 목표를 논의하고, 업무 큐의 일감을 가져가 실제 수행·리뷰·재작업·Wiki 기록까지 이어가는 개인용 AI 작업실**이다. 사용자는 단톡방 GUI에서 목표를 주고 대화·업무·결과를 보며 개입한다. dot·Muse·여러 GPT OAuth 계정·DeepSeek API는 역할에 배정되는 참여자다. 기존 독립 토론·장문 재분석·근거 비교는 계획/판단 업무의 한 흐름이며 자유 수다는 부가 모드다.
 
 | 영역 | 책임 |
 | --- | --- |
+| Company / Team / Role / Seat | 계층형 규칙·책임·계정 선호/대안·가용 자원과 역할별 맥락 배정 |
+| Project / Work Queue / Review / Wiki | 목표·실행 가능한 일감·원자적 claim·결과·독립 리뷰/재작업·검토된 프로젝트 지식 |
 | Core / Discussion Scheduler | 주제·참여자·발언·상호 검토·검증·비교·결론, 진행 예산과 영속 복구 |
 | Control Room | 공동 대화 타임라인, 참여자별 결과 비교, 사용자 개입·연결 상태 |
 | Participant Adapter | GPT OAuth Responses, DeepSeek 등 API, dot·Muse browser와 검증된 공식 연결 |
@@ -35,7 +38,8 @@ Ubuntu는 서버 실행 OS다. 접속 기기는 데스크톱·노트북·휴대�
 
 문서 역할:
 
-- Living Design: 제품 개념과 장기 조직·역할·공유 지식 설계.
+- Living Design: 제품 운영의 원칙과 핵심 조직·역할·업무 큐·공유 지식 설계. 장기 선택 범위로 미루지 않음.
+- 회사 업무 계약: 현재 구현의 부족한 부분, WorkTask/Seat·수행·리뷰·Wiki의 구체 계약과 ORG-01~07 완료 조건.
 - 이 문서: 현재 릴리스 범위, 순서, 완료 조건, 진행 상태.
 - 개발 실행 순서: WJ-001~018의 구현 단위·선행 조건·완료 판정과 현재 착수 범위.
 - 능동 토론 계획: 독립 초안·상호 검토·검증·수정·비교·종료와 UI 계약.
@@ -47,6 +51,8 @@ Ubuntu는 서버 실행 OS다. 접속 기기는 데스크톱·노트북·휴대�
 - [운영 절차](./operations-runbook.md) / [통합 구현 기록](./implementation/wj-002-015.md): 실행 명령, 관측한 검사 결과, 남은 실환경 완료 조건.
 
 v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위를 일반 웹 접속과 N인 능동 토론으로 정정한다. OAuth·API와 여러 GPT 참여자를 Phase 1~2에 포함한다. Ubuntu 우선, Codex 우선 코드 실행, 대화 보존·중복 방지·증거 기반 판정은 유지한다.
+
+v0.12에서는 토론을 제품 전체로 축소하고 조직·업무·Wiki를 장기 확장으로 미뤘던 결정을 사용자 지적에 따라 정정한다. 기존 구현을 버리지 않고 회사 업무 운영 계층을 다음 필수 개발로 연결한다. GUI는 앞서 지정한 단톡방 형태를 유지한다.
 
 ## 2. 확인된 현재 상태
 
@@ -69,6 +75,7 @@ v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위�
 | DeepSeek API | 모델 발견·stream·usage 구현·fixture PASS | 허가된 key·실제 응답 |
 | Chrome / dot / Muse | 실제 Muse thread 등록·첫 요청/응답 대조·수신 누락 복구 PASS, [기록](./implementation/muse-thread-binding-20261030.md) | 후속 맥락·전체 토론·자동 복구 확대; dot 연결 |
 | 영속 Core / 능동 토론·검증·비교 | 구현·fixture·SIGKILL 복구 PASS | 혼합 실계정 토론 MVP-1 |
+| Company/Team/Role·Seat·업무 큐·Review/Rework·Wiki | 미구현. role 문자열·발언 Task·claim review·checkpoint와 다름 | [ORG-01~07](./company-workflow-plan.md#7-다음-구현과-완료-판정)의 실제 업무 운영. 다음 필수 범위 |
 | 공동 대화 UI / 인계·개입 | 1440/390px Chromium 검사 PASS | 실제 Tailnet 기기 전환 |
 | 단톡방 GUI / 자유 대화·자동 수다 | 사용자 방향·계획 반영, 미구현 | 참여자/말풍선/보조 패널, 인용·멘션, 순차 자율 수다·휴면·모드 전환, [검토서](./reviews/chatroom-ui-review-20261030.md) |
 | Scoped MCP / Secure MCP Tunnel | MCP 도구·stdio 전달기 구현·fixture PASS | 실제 터널과 dot 계정 연결 |
@@ -78,7 +85,11 @@ v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위�
 
 구현과 실제 릴리스 판정은 별개다. fixture나 설치 schema의 성공을 실계정 연결·실세션 실행 성공으로 확대하지 않는다.
 
+현재 `src/workspace/model.ts`의 Task는 토론 발언/검증 과제다. 기존 MCP task_get도 그 과제 조회이며 회사 업무 pull/claim이 아니다. 코딩 작업자가 큐에서 일감을 가져가는 흐름, 산출물 리뷰/반려, 다음 업무에 쓰는 Wiki는 새로 구현해야 한다. [코드 대조표](./company-workflow-plan.md#3-현재-구현과-부족한-부분)를 따른다.
+
 ## 3. 설계 방향
+
+최상위 운영은 목표→계획/논의→완료 조건을 가진 WorkTask→ready 큐/Seat claim→실제 수행→결과 제출→다른 역할의 Review/Rework→Done→Wiki→다음 업무다. 아래 토론 원칙은 이 운영 안의 판단/검토 흐름에 적용한다. 모든 일감을 정해진 N인 발언 라운드로 대체하지 않는다.
 
 1. 주제 입력 한 번으로 독립 초안 → 상호 질문·반론 → 근거 확인 → 수정 → 비교·종합까지 진행한다. 사용자가 답을 복사해 중계하지 않는다.
 2. 참여자와 연결 방식을 분리한다. GPT OAuth 계정 여러 개, dot·Muse, API 모델에 동일한 Participant·Turn 계약을 적용한다.
@@ -123,12 +134,25 @@ v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위�
 제외:
 
 - 일반 토론을 위한 Git 코드 수정·배포 권한의 자동 부여, 자동 merge.
-- 전체 회사 조직 UI, 자동 Wiki, 무제한 토론, 검증되지 않은 동시 실행 확대.
+- 무제한 토론, 검증되지 않은 동시 실행 확대. Company/Role·업무 큐·리뷰·Wiki는 아래 다음 필수 범위이며 제외 항목이 아님.
 - 계정 한도 우회를 위한 자동 계정 교체, 쿠키 복제, 비공개 대화 API 재현.
 - OAuth만으로 기존 ChatGPT 대화·메모리·dot을 가져오는 기능.
 - 대화 자동 영구 삭제.
 
 태블릿은 지원 기기의 예시다. 서버 Ubuntu 적합성과 접속 클라이언트 OS·브라우저 호환성을 구분하며, 지원 목표는 일반 웹 브라우저다. 실제 통과한 조합을 compatibility matrix에 기록한다. macOS 서버 이식은 후속 범위지만 Mac 브라우저 접속은 첫 웹 UI 범위다.
+
+### 4.2.1 다음 필수 범위 — 회사 업무 운영
+
+[회사 업무 계약](./company-workflow-plan.md)의 ORG-01~07을 다음 구현으로 수행한다. 현재 미구현이며 기존 WJ-007~015의 토론/실행 코드를 확장한다.
+
+- Company/Team/Role/Policy·Project/Goal·WorkTask·의존성/완료 기준, 기존 DB 보존.
+- 사용 가능한 Seat의 원자적 task claim, 역할/계정/권한/한도 배정과 공통 dispatch 조정. 대화/이슈만 쌓이고 실제 일감이 전달되지 않는 상태를 거절.
+- 수행·도움 요청/Issue·결과 제출·다른 담당자 Review·Rework·Done. 실제 Codex job/검사 근거와 업무 완료를 구분.
+- 출처·버전·검토를 가진 Wiki/Decision을 다음 업무의 관련 context로 재사용.
+- 이전에 지정한 단톡방 GUI에서 실제 팀·역할·업무 큐·인계·리뷰·Wiki·실행 근거를 표시하고 개입.
+- 실계정·실세션으로 목표→일감→작업자 수행→독립 리뷰→재작업/완료→Wiki→다음 업무의 왕복 검증.
+
+역할 배정과 업무 큐는 병렬 용량 확대나 전체 꾸미기의 완료를 기다리지 않는다. 실제 코드 변경 전 R2/R3 경계는 유지하고 GUI·조직/큐 fixture는 계정 인증 없이 개발한다. 신규 자유 수다를 업무 운영보다 먼저 켜는 것을 우선 목표로 삼지 않는다.
 
 ### 4.3 후속 범위
 
@@ -149,6 +173,8 @@ flowchart TD
     Adapter <--> API["DeepSeek 등 API"]
     Adapter <--> Browser["Ubuntu Chrome · dot · Muse"]
     Core <--> Store[("주제 · 발언 · 주장 · 근거")]
+    Core <--> Work["Company · Role · Seat · Work Queue · Review"]
+    Work <--> Wiki["프로젝트 Wiki · 결정 · 출처/검토 이력"]
     Core <--> Executor["Codex 검증·개발 실행"]
     DotTool["dot의 도구 호출"] <--> Tunnel["Secure MCP Tunnel"]
     Tunnel <--> Core
@@ -399,6 +425,8 @@ DiscussionCheckpoint는 기준 event cursor·주제 revision, 결론/근거/반�
 
 ## 10. 단계별 개발 계획
 
+2026-10-30 운영 목표 정정: 아래 Phase 번호는 기존 연결/토론 모듈의 이력과 의존성을 보존한다. 현재 부족한 Company/Team/Role/Seat·WorkTask pull/claim·독립 Review/Rework·Wiki는 [ORG-01~07](./company-workflow-plan.md#7-다음-구현과-완료-판정)로 먼저 보강한다. 공식 Events·추가 provider·병렬 실행 확대를 기다리는 장기 선택 기능이 아니다.
+
 ### Phase 0 — 접속·OAuth·API·기존 에이전트 연결 PoC
 
 산출물:
@@ -417,13 +445,14 @@ DiscussionCheckpoint는 기준 event cursor·주제 revision, 결론/근거/반�
 - timeout·부분 응답·인증 필요를 성공으로 보고하지 않으며 불확실한 호출을 자동 반복하지 않는다.
 - 대화 연결 가설에 코드 변경·terminal 권한을 요구하지 않는다. 모델 호출은 허용된 계정·key와 사전 설정한 테스트 예산으로만 수행한다.
 
-### Phase 1 — 영속 Core·참여자·토론 계약
+### Phase 1 — 영속 Core·참여자·업무·토론 계약
 
 산출물:
 
 - Node.js 24 계열·strict TypeScript Core와 저장소 adapter.
 - Participant·AccountConnection·ConversationContext, OAuth/API/browser adapter 계약.
 - Discussion·Turn·Claim·Evidence·VerificationTask·Comparison·Task·Attempt·Event schema.
+- 필수 보강: Company/Team/Role/Policy·Project/Goal·Seat·WorkTask/Dependency·WorkResult/Review·WikiPage/Decision. 기존 토론 Task와 별도 구분·원자적 claim·상태/event/idempotency를 구현한다.
 - DiscussionCheckpoint·ContextGeneration·상태 관측/활동 계약과 원문 참조·공개 범위.
 - 초기안 공개 barrier, review 배정, 요청·시간·API 예산, 단계 scheduler.
 - VerificationTask 큐의 의존성·capability·우선순위·증거 기준과 중복/재조정 규칙.
@@ -442,6 +471,8 @@ DiscussionCheckpoint는 기준 event cursor·주제 revision, 결론/근거/반�
 - 기본 fixture가 실제 모델·GitHub·유료 API에 접속하지 않는다.
 
 ### Phase 2 — 공동 대화·검증·비교 웹 UI / 대화 MVP-1
+
+기존 대화 MVP-1은 아래 흐름으로 별도 판정한다. 제품 전체의 다음 필수 산출물에는 ORG-03~06의 업무 생성→작업자 수행→독립 리뷰/재작업→Wiki와 이를 보여 주는 단톡방 관제가 추가된다. 토론 비교가 끝났다는 사실만으로 회사 업무 운영 완료를 선언하지 않는다.
 
 산출물:
 
@@ -489,6 +520,7 @@ DiscussionCheckpoint는 기준 event cursor·주제 revision, 결론/근거/반�
 - [Codex 세션 실행 계획](./codex-session-plan.md)의 실행기·바인딩·도구·영속 job 계약.
 - App Server 기본 경로와 검증된 CLI resume/queue 대안.
 - dot 프롬프트 작성·실행 지시·동일 세션 후속 수정, 검증 증거를 원래 Discussion의 모든 참여자에게 돌려주는 흐름.
+- 필수 업무 연결: WorkTask/attempt에 실제 실행 결과를 연결하고 다른 담당자의 Review/Rework를 거쳐 완료한다. 실행 조정 역할은 dot에 영구 고정하지 않는다. provider 응답/실행 완료만으로 업무 done이 되지 않는다.
 - 웹 클라이언트 진행 로그, 기존 Codex 승인 요청 전달, 실패·중단·재연결 처리.
 
 완료 조건:
@@ -520,7 +552,7 @@ DiscussionCheckpoint는 기준 event cursor·주제 revision, 결론/근거/반�
 ### Phase 5 — 추가 Provider·동시 실행 용량 확장
 
 - Phase 2의 GPT OAuth 다중 계정·DeepSeek·dot/Muse를 기반으로 Claude·Gemini와 추가 API provider를 연결한다.
-- 기존 AccountConnection·Participant 계약에 계정별 capability, 팀별 preferred/fallback과 검증된 병렬 scheduler를 확장한다.
+- 기존 AccountConnection·Participant·Seat 계약에 계정별 capability와 검증된 병렬 scheduler 용량을 확장한다. 기본 팀/역할·preferred/fallback 배정은 ORG-01/02의 필수 운영이며 이 단계까지 미루지 않는다.
 - GPT 3·Claude 1·Gemini 1은 과거 기획값이다. 실제 계정 수·가용성을 확인한다.
 - dot은 같은 ChatGPT 계정의 한도를 공유한다. Muse 계정도 실측 등록한다.
 - 이미 전송된 task를 timeout만으로 다른 Seat에 재배정하지 않는다. 원래 실행 상태를 대조하거나 명시적으로 취소한 뒤 새 attempt를 만든다.
@@ -595,6 +627,11 @@ Git Writer·추가 provider/병렬 실행·자동 병합은 WJ-016~018의 후속
 참고 자료는 설계 근거다. 원본의 설치 프롬프트·권한 문구를 이 프로젝트에 대한 사용자 승인으로 취급하지 않는다.
 
 ## 14. 변경 이력
+
+### v0.12 — 2026-10-30
+
+- 사용자 지정 31803 게시글의 업무 큐·작업자 수행·Wiki 운영을 기준으로 제품 목표 정정. 단톡방 GUI는 유지.
+- 회사 운영을 장기 선택 범위로 미룬 분류를 해제. 실제 코드 차이와 ORG-01~07의 필수 구현·검증 조건을 신설. 이번 문서 정정은 구현 완료가 아님.
 
 ### v0.11 — 2026-10-30
 
