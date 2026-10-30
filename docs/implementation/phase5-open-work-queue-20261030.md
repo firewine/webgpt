@@ -94,6 +94,14 @@ node --test --test-reporter=spec tests/browser/*.test.mjs
 
 기존 계획 대비 추가 페이즈나 이월·수락 완화는 없었다. 신규 model/policy/queue 모듈과 기존 runtime/driver/HTTP/UI의 최소 접점, 전용 실패·경쟁·crash 검사를 추가했다. 범위를 바꿔야 하는 사항이 생기면 해당 변경에 의존한 작업 전에 후속 영향과 총변경량을 보고하고 승인을 받는다.
 
-변경량은 source15개(신규3개)·검사/fixture5개·문서5개·합성 캡처3개다. provider/연결·기존 Store/DiscussionEngine·CodexExecutor·인증/MCP·운영 스크립트·dependency diff0, 문서 로컬 링크/앵커99개 오류0, 기존 사용자 파일35개 hash 변화0과 git diff --check 오류0을 확인했다.
+변경량은 source15개(신규3개)·검사/fixture5개·문서5개·합성 캡처3개·CI 설정1개다. provider/연결·기존 Store/DiscussionEngine·CodexExecutor·인증/MCP·운영 스크립트·dependency diff0, 문서 로컬 링크/앵커 오류0, 기존 사용자 파일35개 hash 변화0과 git diff --check 오류0을 확인했다.
 
 롤백은 기존 G0부터 수행한다. 방 off·주제 새 dispatch 중단 후 진행/미확정 provider와 job을 원래 ID로 대조하고, claimed/running/unconfirmed 업무를 무조건 ready로 돌리지 않는다. resident flag off에서 큐를 읽기 전용으로 두고 이전 버전으로 내릴 때 WorkTask/Attempt/보고·검토·명령 결과·소스 메시지를 삭제하지 않는다. 기존 토의/단독 Codex·계정·프로필은 원래 경로를 유지한다. DB 초기화/대화 삭제/인증 교체로 복구하지 않는다.
+
+## 6. CI 캐시 복원 장애 보완
+
+커밋 `d799c36`의 [Check 실행](https://github.com/firewine/webgpt/actions/runs/41065481319)은 setup-node의 npm 캐시 복원에서 `Egress is over the account limit`을 기록한 뒤 작업의 10분 시간 제한을 초과해 cancelled로 종료됐다. Node 자체는 runner의 도구 캐시에서 발견됐지만 `npm ci`와 모든 검사는 SKIP이었다. 이 실행을 테스트 실패나 PASS 증거로 세지 않는다.
+
+[check.yml](../../.github/workflows/check.yml)에서 `cache: npm`을 제거하고 `package-manager-cache: false`를 명시했다. 고정된 setup-node 리비전의 [공식 입력 계약](https://github.com/actions/setup-node/blob/a0853c24544627f65ddf259abe73b1d18a591444/action.yml)에 따라 package.json의 packageManager가 켜는 자동 캐시도 차단한다. 캐시 저장소를 지우거나 한도를 늘리지 않고 기존 lockfile의 `npm ci`로 설치한다.
+
+Node 24·고정 action SHA·권한·10분 제한·Node/Codex 계약/browser 검사 항목은 그대로다. 이 보완의 실제 수락은 해당 커밋을 포함하는 PR Check가 환경 준비를 지나 기존 검사를 전부 실행·통과하는지로 확인한다. R5 수락·R6~R8 의존 계약·운영 데이터/서비스 변경은 없다. 복귀는 이 CI 설정 변경만 되돌리며 앱 state를 이관하거나 초기화하지 않는다.
