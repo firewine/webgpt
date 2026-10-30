@@ -1,0 +1,11 @@
+import { writeSync } from 'node:fs';
+import { executionFixture } from '../work-execution-fixture.mjs';
+const stage = process.argv[2];
+const f = await executionFixture({ after() {} }, { mode: stage === 'approval' ? 'approval' : 'normal' });
+const taskId = f.proposeCode();
+f.q.claim(f.roomId, taskId, { participantId: 'fake-a', expectedVersion: f.task(taskId).version }, 'crash-work-claim');
+const stop = () => { writeSync(1, JSON.stringify({ directory: f.directory, cwd: f.cwd, roomId: f.roomId, taskId, stage }) + '\n'); process.kill(process.pid, 'SIGSTOP'); };
+if (stage === 'before_intent') stop();
+const events = { intent: 'resident.work_execution_intent', submit: 'codex.queued', link: 'resident.work_execution_linked', approval: 'codex.approval_required', completed: 'codex.finished' };
+f.app.store.subscribe(e => { if (e.type === events[stage]) stop(); }); f.bridge.tick();
+setInterval(() => {}, 1000);

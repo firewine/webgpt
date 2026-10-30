@@ -1,6 +1,6 @@
 import type { Context, Member, StructuredReply } from './model.js';
-import type { SeatAssignment, WorkTask, WorkAttempt } from './work-model.js';
-export type { SeatAssignment, WorkTask, WorkAttempt, WorkReportV1, WorkReviewV1 } from './work-model.js';
+import type { SeatAssignment, WorkTask, WorkAttempt, WorkJobLink } from './work-model.js';
+export type { SeatAssignment, WorkTask, WorkAttempt, WorkReportV1, WorkReviewV1, WorkJobLink } from './work-model.js';
 export type ResidentUsage = { input: number; output: number } | null;
 
 export interface RoomMember { participantId: string; enabled: boolean; blockedReason?: string | null }
@@ -58,8 +58,9 @@ export interface ResidentStateV1 {
   rooms: Room[]; messages: RoomMessage[]; turns: ResidentTurn[]; dispatchLeases: DispatchLease[];
   claims?: RoomClaim[];
   workSchemaVersion?: 1;
+  workExecutionSchemaVersion?: 1;
   contextCheckpoints: ResidentCheckpoint[]; workItems: WorkTask[]; workAttempts: WorkAttempt[];
-  wikiPages: unknown[]; wikiVersions: unknown[]; jobLinks: unknown[]; residentGrants: unknown[];
+  wikiPages: unknown[]; wikiVersions: unknown[]; jobLinks: WorkJobLink[]; residentGrants: unknown[];
 }
 export interface RoomSummary {
   id: string; title: string; version: number; epoch: number; desiredOn: boolean;

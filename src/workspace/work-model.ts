@@ -35,10 +35,27 @@ export interface WorkReportV1 {
   version: 1; id: string; taskId: string; taskVersion: number; attemptId: string; authorId: string;
   summary: string; text: string; digest: string;
   acceptance: WorkAcceptance[];
-  outputs: { ref: string; digest: string; kind: 'text' }[]; checks: WorkCheck[]; blockers: string[];
+  outputs: { ref: string; digest: string; kind: 'text' | 'command' | 'file_change' }[]; checks: WorkCheck[]; blockers: string[];
   sourceMessageIds: string[]; executionRef: string | null; createdAt: string;
+  execution?: WorkExecutionEvidence;
 }
 export interface WorkReviewV1 {
   version: 1; id: string; reportDigest: string; taskVersion: number; reviewerId: string;
   decision: 'accept' | 'rework' | 'blocked'; reason: string; checks: WorkCheck[]; createdAt: string;
+}
+export interface WorkExecutionEvidence {
+  jobId: string; bindingId: string; threadId: string; turnId: string | null;
+  status: string; observedAt: string; promptDigest: string;
+  commands: { activityId: string; command: string | null; status: string; exitCode: number | null; output: string | null; observedAt: string }[];
+  fileChanges: { activityId: string; status: string; text: string; observedAt: string }[];
+}
+export interface WorkJobLink {
+  version: 1; id: string; roomId: string; taskId: string; attemptId: string; participantId: string;
+  scope: { taskVersion: number; seatVersion: number; contextGeneration: number; epoch: number; authorizedScopeRef: string; inputDigest: string; deadlineAt: string };
+  binding: import('./model.js').ExecutionBinding;
+  input: { bindingId: string; prompt: string; requestId: string; discussionId: null; taskId: null; revision: null; maxDurationMs: number };
+  intentDigest: string; codexJobId: string | null; status: 'intent' | 'linked' | 'reported' | 'blocked' | 'not_sent';
+  reported: boolean; error: string | null; createdAt: string;
+  resultScopeReason: string | null;
+  result: { report: WorkReportV1; scopeReason: string | null; capturedAt: string } | null;
 }

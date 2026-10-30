@@ -6,12 +6,15 @@ import { AppError, code, digest, id, integer, now, object, string } from './util
 import { DispatchCoordinator, budgetReason, unresolvedProvider } from './dispatch.js';
 import { roomContext } from './resident-context.js';
 import { WORK_POLICIES, WORK_LIVE, acceptance, artifactChecks, checkReferences, onlyWork, readyReason, seatAllows, slotAvailable, taskWorker, uniqueWork, validateWorkState, workRoom } from './work-policy.js';
+import type { ExecutionReadiness } from './work-policy.js';
 
 type Emit = Parameters<Parameters<Store['transact']>[0]>[1];
 const mutable = ['title', 'description', 'sourceMessageIds', 'acceptance', 'kind', 'priority', 'requiredRole', 'allowedParticipantIds', 'dependencies', 'authorizedScopeRef'];
-const refreshable = ['work_source_required', 'work_acceptance_required', 'work_assignment_required', 'work_execution_phase_pending', 'work_dependency_pending', 'work_scope_not_authorized', 'room_settings_required', 'budget_exhausted'];
+const refreshable = ['work_source_required', 'work_acceptance_required', 'work_assignment_required', 'work_execution_phase_pending', 'work_dependency_pending', 'work_scope_not_authorized', 'room_settings_required', 'budget_exhausted', 'work_execution_binding_required', 'execution_binding_not_ready', 'work_write_safety_unverified', 'room_tool_budget_exhausted'];
 
 export class WorkQueue {
+  executionReadiness?: ExecutionReadiness;
+  private ready(s: WorkspaceState, r: Room, t: WorkTask, clock = Date.now()) { return readyReason(s, r, t, clock, this.executionReadiness); }
   constructor(private readonly store: Store, readonly enabled: boolean, private readonly dispatch: DispatchCoordinator) {
     validateWorkState(store.read());
     if (enabled && store.read().resident?.workSchemaVersion === undefined) store.transact(state => { state.resident!.workSchemaVersion = 1; return { version: 1 }; }, { id: 'resident:work:migration:v1', input: { version: 1 } });
@@ -26,11 +29,14 @@ export class WorkQueue {
     integer(after, 0, 0, Number.MAX_SAFE_INTEGER); integer(limit, 50, 1, 100);
     const all = s.resident!.workItems.filter(t => t.roomId === roomId); const page = all.slice(after, after + limit);
     return { items: page.map(({ reports, reviews, ...t }) => ({ ...t, reportCount: reports.length, reviewCount: reviews.length })),
-      seats: room.seats ?? [], policies: WORK_POLICIES, nextAfter: after + page.length, hasMore: after + page.length < all.length, cursor: this.store.cursor(), enabled: this.enabled };
+      seats: room.seats ?? [], policies: WORK_POLICIES,
+      executions: s.resident!.jobLinks.filter(l => l.roomId === roomId && page.some(t => t.id === l.taskId)).map(l => ({ taskId: l.taskId, attemptId: l.attemptId, codexJobId: l.codexJobId, status: s.jobs.find(j => j.id === l.codexJobId)?.status ?? l.status, reported: l.reported, error: l.error })),
+      nextAfter: after + page.length, hasMore: after + page.length < all.length, cursor: this.store.cursor(), enabled: this.enabled };
   }
   detail(roomId: string, taskId: string) {
     const s = this.store.read(); validateWorkState(s); workRoom(s, roomId); const task = this.task(s, roomId, taskId);
-    return { task, attempts: s.resident!.workAttempts.filter(a => a.taskId === taskId && a.roomId === roomId), cursor: this.store.cursor() };
+    return { task, attempts: s.resident!.workAttempts.filter(a => a.taskId === taskId && a.roomId === roomId),
+      executions: s.resident!.jobLinks.filter(l => l.taskId === taskId && l.roomId === roomId).map(link => ({ link, job: s.jobs.find(j => j.id === link.codexJobId) ?? null })), cursor: this.store.cursor() };
   }
   seat(roomId: string, input: unknown, requestId: string) {
     const b = object(input); onlyWork(b, ['participantId', 'expectedVersion', 'role', 'enabled', 'kinds', 'scopeRefs']);
@@ -67,7 +73,7 @@ export class WorkQueue {
     if (old) { if (old.proposalDigest !== hash) throw new AppError('idempotency_conflict', 409); return old; }
     const t: WorkTask = { id: id('work'), roomId: r.id, proposalKey: key, proposalDigest: hash, proposedBy: actor, ...fields,
       version: 1, status: 'backlog', reason: null, claimantId: null, currentAttemptId: null, currentReportId: null, reports: [], reviews: [], createdAt: now(), updatedAt: now() };
-    checkReferences(s, r, t); const reason = readyReason(s, r, t); t.reason = reason; t.status = reason ? 'backlog' : 'ready';
+    checkReferences(s, r, t); const reason = this.ready(s, r, t); t.reason = reason; t.status = reason ? 'backlog' : 'ready';
     s.resident!.workItems.push(t); this.changed(r, emit, 'proposed', { taskId: t.id, status: t.status, reason }); return t;
   }
   update(roomId: string, taskId: string, input: unknown, requestId: string) {
@@ -123,13 +129,13 @@ export class WorkQueue {
   refresh(s: WorkspaceState, r: Room, emit: Emit): void {
     for (const t of s.resident!.workItems.filter(t => t.roomId === r.id)) {
       if (!['backlog', 'ready', 'rework'].includes(t.status) && !(t.status === 'blocked' && refreshable.includes(t.reason ?? ''))) continue;
-      const reason = readyReason(s, r, t); const status = reason ? 'backlog' : 'ready';
+      const reason = this.ready(s, r, t); const status = reason ? 'backlog' : 'ready';
       if (t.reason !== reason || t.status !== status) { t.status = status; t.reason = reason; t.version++; t.updatedAt = now(); this.changed(r, emit, 'ready_checked', { taskId: t.id, status, reason }); }
     }
   }
   private claimState(s: WorkspaceState, r: Room, t: WorkTask, pid: string, purpose: WorkAttempt['purpose'], emit: Emit): WorkAttempt {
     if (!r.desiredOn || budgetReason(r) || r.topicLink) throw new AppError('work_room_not_ready', 409);
-    if (purpose === 'work' && (t.status !== 'ready' || readyReason(s, r, t)) || purpose === 'review' && t.status !== 'review') throw new AppError('work_not_ready', 409);
+    if (purpose === 'work' && (t.status !== 'ready' || this.ready(s, r, t)) || purpose === 'review' && t.status !== 'review') throw new AppError('work_not_ready', 409);
     const seat = taskWorker(s, r, t, pid, purpose === 'work' ? 'claim' : 'review');
     if (!seat || !slotAvailable(s, pid)) throw new AppError('work_slot_or_scope_unavailable', 409);
     const context = roomContext(r, pid); if (purpose === 'work') { t.status = 'claimed'; t.claimantId = pid; t.version++; t.updatedAt = now(); }
@@ -150,14 +156,44 @@ export class WorkQueue {
     const seat = taskWorker(s, r, t, a.participantId, a.purpose === 'work' ? 'claim' : 'review');
     return !!seat && seat.version === a.seatVersion && a.providerTurnId === turn.id && a.inputDigest === digest(JSON.stringify(a.input)) && a.providerPromptDigest === turn.promptDigest && digest(turn.prompt) === a.providerPromptDigest && (a.purpose !== 'review' || t.reports.find(report => report.id === t.currentReportId)?.digest === a.reportDigest);
   }
+  claimExecution(s: WorkspaceState, r: Room, emit: Emit, clock: number): WorkAttempt | null {
+    if (!this.enabled || !r.desiredOn || r.observedStatus !== 'on' || r.topicLink || budgetReason(r, clock) || unresolvedProvider(s) || s.resident!.dispatchLeases.some(l => l.state !== 'released') || s.jobs.some(j => j.status === 'reconciling')) return null;
+    this.refresh(s, r, emit);
+    const existing = s.resident!.workAttempts.find(a => a.roomId === r.id && a.purpose === 'work' && a.input.kind === 'codex' && a.status === 'claimed' && !s.resident!.jobLinks.some(l => l.attemptId === a.id));
+    if (existing) return existing;
+    const tasks = s.resident!.workItems.filter(t => t.roomId === r.id && t.kind === 'codex' && t.status === 'ready').sort((a, b) => b.priority - a.priority || a.updatedAt.localeCompare(b.updatedAt));
+    for (const t of tasks) { const pid = t.allowedParticipantIds.find(pid => taskWorker(s, r, t, pid, 'claim') && slotAvailable(s, pid)); if (pid) return this.claimState(s, r, t, pid, 'work', emit); }
+    return null;
+  }
+  finishExecution(s: WorkspaceState, a: WorkAttempt, report: WorkReportV1, scopeReason: string | null, emit: Emit): void {
+    if (a.reported) return;
+    const r = workRoom(s, a.roomId); const t = this.task(s, a.roomId, a.taskId);
+    a.finishedAt = now(); a.reported = true; a.status = scopeReason ? 'stale' : 'completed'; a.error = scopeReason;
+    if (scopeReason) {
+      if (!['done', 'cancelled'].includes(t.status)) { t.status = 'blocked'; t.reason = scopeReason; }
+      this.message(s, r, report.id, a.participantId, `${a.input.title} · 실행 결과 보관\n현재 권한·버전과 일치하지 않아 결과를 업무에 반영하지 않았습니다. 원래 실행 기록을 대조해 주세요.`, emit);
+    } else {
+      t.reports.push(report); t.currentReportId = report.id; t.status = 'review'; t.reason = null; t.version++; t.updatedAt = now();
+      this.message(s, r, report.id, a.participantId, `${a.input.title} · 실행 산출물 보고\n${report.text}`, emit);
+    }
+    this.changed(r, emit, 'execution_reported', { taskId: t.id, attemptId: a.id, reportId: report.id, scopeReason });
+  }
+  finishUnsent(s: WorkspaceState, attemptId: string, linkId: string, reason: string, emit: Emit): void {
+    const a = s.resident!.workAttempts.find(a => a.id === attemptId)!; if (a.reported) return;
+    const r = workRoom(s, a.roomId); const t = this.task(s, a.roomId, a.taskId);
+    a.status = 'failed'; a.reported = true; a.finishedAt = now(); a.error = reason;
+    if (!['done', 'cancelled'].includes(t.status)) { t.status = 'blocked'; t.reason = reason; }
+    this.message(s, r, linkId, a.participantId, `${a.input.title} · 실행 미전송\n실행 전 조건이 바뀌어 job을 만들지 않았습니다. 원래 입력을 보존했습니다.`, emit);
+    this.changed(r, emit, 'execution_not_sent', { taskId: t.id, attemptId, linkId, reason });
+  }
   prepareTurn(s: WorkspaceState, r: Room, emit: Emit, clock: number): ResidentTurn | null {
     if (!this.enabled || !r.desiredOn || r.topicLink || budgetReason(r, clock) || unresolvedProvider(s) || s.resident!.dispatchLeases.some(l => l.state !== 'released')) return null;
     this.refresh(s, r, emit);
-    let a = s.resident!.workAttempts.find(a => a.roomId === r.id && a.status === 'claimed' && !a.providerTurnId);
+    let a = s.resident!.workAttempts.find(a => a.roomId === r.id && a.status === 'claimed' && !a.providerTurnId && (a.input.kind !== 'codex' || a.purpose === 'review'));
     if (!a) {
       const ordered = s.resident!.workItems.filter(t => t.roomId === r.id).sort((a, b) => b.priority - a.priority || a.updatedAt.localeCompare(b.updatedAt) || a.createdAt.localeCompare(b.createdAt));
       for (const t of ordered) {
-        const purpose = t.status === 'review' ? 'review' : t.status === 'ready' ? 'work' : null; if (!purpose) continue;
+        const purpose = t.status === 'review' ? 'review' : t.status === 'ready' && t.kind !== 'codex' ? 'work' : null; if (!purpose) continue;
         if (purpose === 'review' && s.resident!.workAttempts.some(a => a.taskId === t.id && a.purpose === 'review' && a.reportDigest === t.reports.find(p => p.id === t.currentReportId)?.digest)) continue;
         const author = t.reports.find(report => report.id === t.currentReportId)?.authorId;
         const pid = r.members.map(m => m.participantId).find(pid => (purpose !== 'review' || pid !== author) && taskWorker(s, r, t, pid, purpose === 'work' ? 'claim' : 'review') && slotAvailable(s, pid));

@@ -43,11 +43,12 @@ export function slotAvailable(state: WorkspaceState, pid: string, ignoreAttempt?
   return !state.resident!.workAttempts.some(a => a.id !== ignoreAttempt && WORK_LIVE.includes(a.status) &&
     (a.participantId === pid || (state.participants.find(p => p.id === a.participantId)?.connectionId ?? a.participantId) === account));
 }
-export function readyReason(state: WorkspaceState, room: Room, task: WorkTask, clock = Date.now()): string | null {
+export type ExecutionReadiness = (state: WorkspaceState, task: WorkTask) => string | null;
+export function readyReason(state: WorkspaceState, room: Room, task: WorkTask, clock = Date.now(), execution?: ExecutionReadiness): string | null {
   if (!task.sourceMessageIds.length) return 'work_source_required';
   if (!task.acceptance.length) return 'work_acceptance_required';
   if (!task.allowedParticipantIds.length || !task.authorizedScopeRef) return 'work_assignment_required';
-  if (task.kind === 'codex') return 'work_execution_phase_pending';
+  if (task.kind === 'codex') { const reason = execution ? execution(state, task) : 'work_execution_phase_pending'; if (reason) return reason; }
   const reason = budgetReason(room, clock); if (reason) return reason;
   if (task.dependencies.some(id => !state.resident!.workItems.some(t => t.id === id && t.roomId === room.id && t.status === 'done'))) return 'work_dependency_pending';
   if (!task.allowedParticipantIds.some(pid => taskWorker(state, room, task, pid, 'claim'))) return 'work_scope_not_authorized';

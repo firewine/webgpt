@@ -9,6 +9,7 @@ import { roomContext, rotateResidentContext } from './resident-context.js';
 import { parseResidentReply, promptForRoom, publicRoomData } from './resident-prompts.js';
 import { AppError, code, digest, id, now, object, string } from './util.js';
 import type { WorkQueue } from './work-queue.js';
+import type { WorkExecutionBridge } from './work-execution.js';
 
 type Emit = Parameters<Parameters<Store['transact']>[0]>[1];
 const LIVE = ['prepared', 'running', 'unconfirmed'];
@@ -22,7 +23,7 @@ export class ResidentRunner {
   private readonly clock: () => number;
   constructor(private readonly store: Store, private readonly resident: ResidentStore, private readonly dispatch: DispatchCoordinator,
     private readonly provider: Pick<Providers, 'complete'>, private readonly engine: DiscussionEngine, private readonly timeoutMs: number,
-    private readonly options: { clock?: () => number; autoSchedule?: boolean; work?: WorkQueue } = {}) { this.clock = options.clock ?? Date.now; }
+    private readonly options: { clock?: () => number; autoSchedule?: boolean; work?: WorkQueue; execution?: WorkExecutionBridge } = {}) { this.clock = options.clock ?? Date.now; }
 
   recover(): void {
     if (!this.store.read().resident) return;
@@ -84,6 +85,7 @@ export class ResidentRunner {
     this.timer = setTimeout(() => { this.timer = null; this.kick(); }, Math.max(1, Math.min(2_147_483_647, Math.min(...times) - this.clock()))); this.timer.unref();
   }
   private async evaluate(): Promise<void> {
+    this.options.execution?.tick();
     if (!this.resident.enabled) return;
     this.projectFocus();
     const captured = this.store.transact((state, emit) => {

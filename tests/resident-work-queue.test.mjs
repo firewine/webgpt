@@ -54,7 +54,7 @@ test('R5-E/F: self review, invented execution, and model assertions cannot promo
   await f.step(); await f.step(); let task = f.task(id); assert.equal(task.status, 'blocked'); assert.equal(task.reason, 'work_acceptance_not_observed');
   assert.equal(task.reviews[0].reviewerId, 'fake-b'); assert.equal(task.reviews[0].checks[0].outcome, 'reported');
   const reviewed = f.q.review(f.roomId, id, { expectedVersion: task.version, reportDigest: task.reports[0].digest, decision: 'accept', reason: '소유자가 실제 산출물과 수용 기준을 직접 확인함', confirmedAcceptanceIds: ['manual'] }, key()); assert.equal(reviewed.status, 'done');
-  const codeTask = f.propose({ title: '코드 실행 요청', kind: 'codex' }); assert.notEqual(f.task(codeTask).status, 'ready'); assert.equal(f.task(codeTask).reason, 'work_execution_phase_pending'); assert.equal(f.app.store.read().jobs.length, 0);
+  const codeTask = f.propose({ title: '코드 실행 요청', kind: 'codex' }); assert.notEqual(f.task(codeTask).status, 'ready'); assert.equal(f.task(codeTask).reason, 'work_execution_binding_required'); assert.equal(f.app.store.read().jobs.length, 0);
   const execution = f.propose({ title: '실행 근거가 필요한 분석 보고', acceptance: [{ id: 'execution', text: '실제 실행 검사', check: { kind: 'execution' } }] });
   await f.step(); await f.step(); assert.notEqual(f.task(execution).status, 'done'); assert.equal(f.task(execution).reports[0].checks[0].outcome, 'not_run');
 });

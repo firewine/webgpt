@@ -2,7 +2,7 @@
 
 여러 AI가 팀·역할을 맡아 목표를 논의하고, 업무 큐에서 일감을 가져가 수행·리뷰·재작업·Wiki 기록까지 이어가는 개인용 AI 작업실을 개발합니다. GUI는 단톡방 형태이며 Ubuntu 서버와 허용된 Tailscale 기기의 브라우저를 사용합니다.
 
-**현재 코드와 목표의 차이:** 기존 연결·독립 토론·근거 비교·영속 기록·Codex 기반 위에 상주 방·단톡방 GUI·업무 역할·열린 작업큐·분석 산출물·독립 리뷰/재작업을 구현했습니다. 큐의 실제 Codex 업무 수행은 페이즈 6, 공유 Wiki는 페이즈 7에서 연결합니다. [개발 페이즈 SSOT](docs/development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)와 [페이즈 5 실행 증거](docs/implementation/phase5-open-work-queue-20261030.md)를 확인하세요. 실제 기기 IME·실계정 상주 운영·이번 변경의 배포는 미검증입니다.
+**현재 코드와 목표의 차이:** 기존 연결·독립 토론·근거 비교·영속 기록·Codex 기반 위에 상주 방·단톡방 GUI·업무 역할·열린 작업큐·분석 산출물·독립 리뷰/재작업을 구현했습니다. 큐에 기존 Codex의 읽기 전용 실행·승인·원래 실행 대조·명령 근거 보고를 연결했습니다. 실제 쓰기는 안전 gate 미검증으로 차단하며 공유 Wiki는 페이즈 7에서 연결합니다. [개발 페이즈 SSOT](docs/development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)와 [페이즈 6 실행 증거](docs/implementation/phase6-work-execution-20261030.md)를 확인하세요. 실제 기기 IME·실계정 상주 운영·이번 변경의 배포는 미검증입니다.
 
 채팅방 디자인은 96397 예시의 참여자 목록·아바타 말풍선·오른쪽 탭 패널에 맞추고, 사용자 요청대로 흑백 테마를 적용했습니다. 밝음·어두움 모두 버튼·말풍선·로고·아바타를 회색 계열로 표시합니다. [변경한 PC/모바일 화면과 검증](docs/implementation/chatroom-design-refinement-20261030.md)을 볼 수 있습니다. 기존 연결·승인·복구와 기능 flag는 유지합니다.
 
@@ -94,7 +94,7 @@ npx playwright install --with-deps chromium
 npm run test:browser
 ```
 
-페이즈 5 기준 Node 검사 156개와 실제 Chromium/MCP 검사 29개가 통과했습니다. Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. browser 검사 중 설치된 Chrome DevTools MCP 검사는 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
+페이즈 6 기준 Node 검사 190개와 실제 Chromium/MCP 검사 32개가 통과했습니다. Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. browser 검사 중 설치된 Chrome DevTools MCP 검사는 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
 
 ```bash
 npm install --no-save --package-lock=false @openai/codex@0.165.0 chrome-devtools-mcp@1.12.0
