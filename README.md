@@ -6,6 +6,8 @@
 
 채팅방 디자인은 96397 예시의 참여자 목록·아바타 말풍선·오른쪽 탭 패널에 맞추고, 사용자 요청대로 흑백 테마를 적용했습니다. 밝음·어두움 모두 버튼·말풍선·로고·아바타를 회색 계열로 표시합니다. [변경한 PC/모바일 화면과 검증](docs/implementation/chatroom-design-refinement-20261030.md)을 볼 수 있습니다. 기존 연결·승인·복구와 기능 flag는 유지합니다.
 
+[고정 주제와 종합안](docs/implementation/pinned-topic-conclusions-20261030.md): 주제를 대화 최상단에 두고, 같은 방에서 검토·검증·종합을 진행합니다. 끝난 뒤에도 마지막 주제·종합안·동료 검토와 남은 이견을 확인할 수 있습니다.
+
 **v0.2 구현:** 공동 대화 UI, 영속 토의 엔진, GPT 다중 OAuth·DeepSeek·기존 Chrome 대화 어댑터, MCP 도구, Codex 실행·승인·결과 환류, 운영 스크립트. [Ubuntu 로컬 모의 토론](docs/implementation/ubuntu-readiness-20261030.md)과 [systemd·실제 HTTPS·인증 noVNC 입력](docs/implementation/ubuntu-services-20261030.md)을 확인했습니다. 실계정·다른 Tailnet 기기·실제 재부팅·실제 Codex 세션의 완료 판정은 아직 **NOT_RUN**입니다. [구현·검증 기록](docs/implementation/wj-002-015.md)을 함께 확인하세요.
 
 ## 바로 실행
@@ -90,7 +92,7 @@ npx playwright install --with-deps chromium
 npm run test:browser
 ```
 
-GUI 보완 기준 Node 검사 132개와 실제 Chromium/MCP 검사 24개가 통과했습니다. Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. browser 검사 중 설치된 Chrome DevTools MCP 검사는 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
+고정 주제·종합안 보완 기준 Node 검사 135개와 실제 Chromium/MCP 검사 26개가 통과했습니다. Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. browser 검사 중 설치된 Chrome DevTools MCP 검사는 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
 
 ```bash
 npm install --no-save --package-lock=false @openai/codex@0.165.0 chrome-devtools-mcp@1.12.0

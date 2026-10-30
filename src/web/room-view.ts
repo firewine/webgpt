@@ -6,6 +6,7 @@ type Message = Omit<RoomMessage, 'text'> & { preview: string; truncated: boolean
 type Turn = Pick<ResidentTurn, 'id' | 'participantId' | 'status' | 'generation' | 'epoch' | 'startedAt' | 'finishedAt' | 'error' | 'messageId' | 'proposalsStatus'>;
 type RoomDetail = { room: RoomSummary; enabled: boolean; dispatchAvailable: boolean; contexts: { participantId: string; generation: number; checkpointId: string | null }[]; status: ResidentStatusProjection };
 export type RoomSnapshot = {
+  cursor: number;
   participants: Member[]; connections: Connection[]; jobs: CodexJob[];
   discussions: Pick<Discussion, 'id' | 'topic' | 'status' | 'phase' | 'revision' | 'createdAt' | 'updatedAt'>[];
   materialPackages: { id: string; label: string; files: Omit<MaterialPackage['files'][number], 'text' | 'identity'>[] }[];
@@ -22,8 +23,27 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, text = '', cls = ''):
 function stored(key: string): string | null { try { return localStorage.getItem('wj.room.' + key); } catch { return null; } }
 function save(key: string, value: string): void { try { localStorage.setItem('wj.room.' + key, value); } catch { /* Display still works without browser storage. */ } }
 function date(value: string | null): string { return value ? new Date(value).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '관측 없음'; }
-const labels: Record<string, string> = { off: '꺼짐', on: '상주 중', sleeping: '휴면', blocked: '확인 필요', budget_exhausted: '진행 한도 소진', unknown: '미관측', not_run: '미실행', not_applicable: '해당 없음', unconfirmed: '응답 미확인', stale: '이전 세대', prepared: '전송 준비', running: '진행 중', completed: '완료', failed: '실패', fixture: '모의', connected: '연결됨', auth_required: '로그인 필요', queued: '실행 대기', blocked_approval: '승인 대기', reconciling: '대조 필요', interrupted: '중단', waiting: '응답 대기', ready: '준비됨' };
+const labels: Record<string, string> = { off: '꺼짐', on: '상주 중', sleeping: '휴면', blocked: '확인 필요', budget_exhausted: '진행 한도 소진', unknown: '미관측', not_run: '미실행', not_applicable: '해당 없음', unconfirmed: '응답 미확인', stale: '이전 세대', prepared: '전송 준비', running: '진행 중', paused: '일시정지', completed: '완료', partial: '부분 완료', cancelled: '취소', failed: '실패', fixture: '모의', connected: '연결됨', auth_required: '로그인 필요', queued: '실행 대기', blocked_approval: '승인 대기', reconciling: '대조 필요', interrupted: '중단', waiting: '응답 대기', ready: '준비됨' };
 const label = (value: string): string => labels[value] ?? value;
+const topicPhases: Record<Discussion['phase'], string> = { independent: '독립 초기안', cross_review: '상호 검토', verification: '근거 검증', revision: '수정안', synthesis: '종합안 작성', summary_review: '종합안 동료 검토' };
+const topicReasons: Record<string, string> = { procedure_completed: '예정된 토론 절차 완료', budget_exhausted: '진행 한도에 도달함', user_cancelled: '사용자가 토론을 취소함', participant_excluded: '일부 참여자가 제외됨', partial_unstructured_reply: '일부 응답의 형식을 확인하지 못함', restart_requires_reconciliation: '재시작 전 응답의 대조가 필요함' };
+
+// Match the existing focus publication boundary. A completed speaker alone does
+// not publish an unfinished round, a retry, or a previous topic revision.
+export function publishedTopicResults(d: Discussion): Discussion['turns'] {
+  const results: Discussion['turns'] = [];
+  for (const phase of ['synthesis', 'summary_review'] as const) {
+    const rounds = new Set(d.turns.filter(t => t.revision === d.revision && t.phase === phase).map(t => t.round));
+    for (const round of rounds) {
+      const tasks = d.tasks.filter(t => t.revision === d.revision && t.phase === phase && t.round === round);
+      const members = [...new Set(tasks.map(t => t.participantId))];
+      if (!members.length || tasks.some(t => ['pending', 'running', 'unconfirmed'].includes(t.status))) continue;
+      const turns = members.map(pid => d.turns.findLast(t => t.revision === d.revision && t.phase === phase && t.round === round && t.participantId === pid && t.status === 'completed' && t.reply));
+      if (turns.every(t => !!t)) results.push(...turns.filter((t): t is Discussion['turns'][number] => !!t));
+    }
+  }
+  return results;
+}
 
 // One client for the existing owner API/SSE lifecycle. This view never dispatches
 // on render/reconnect, probes capabilities, or owns a second EventSource.
@@ -52,6 +72,9 @@ export class RoomView {
   private restoreOnShow = true;
   private panelsSignature = '';
   private settingsVersion = 0;
+  private topic: Discussion | null = null;
+  private topicKey = '';
+  private topicUnavailable = false;
   private boardTab = ['workspace', 'usage', 'activity'].includes(stored('boardTab') ?? '') ? stored('boardTab')! : 'workspace';
   private boardClosed = stored('boardClosed') === 'true';
   constructor(private readonly deps: Dependencies) {
@@ -65,6 +88,9 @@ export class RoomView {
     this.on('#room-execution', () => this.navigate('execution'));
     this.on('#room-material-manage', () => { this.closeDrawers(); this.deps.startFocus(this.roomId); $<HTMLDetailsElement>('.material-controls').open = true; $('.material-controls').scrollIntoView(); });
     this.on('#room-focus-new', () => { if (this.roomId) { this.closeDrawers(); this.deps.startFocus(this.roomId); } });
+    this.on('#room-topic-open', () => this.openTopic());
+    this.on('#room-topic-result', () => { if (this.topic) { this.renderTopicResults(); $<HTMLDialogElement>('#room-result-dialog').showModal(); } });
+    this.on('#room-result-evidence', () => this.openTopic());
     this.on('#room-member-toggle', () => this.drawer('#room-members-dialog', '#room-member-panel', '#room-members-slot'));
     this.on('#room-panel-toggle', () => { if (innerWidth >= 1280) this.setBoardClosed(!this.boardClosed); else this.drawer('#room-panel-dialog', '#room-panel', '#room-panel-slot'); });
     this.on('#room-panel-close', () => { if ($<HTMLDialogElement>('#room-panel-dialog').open) $<HTMLDialogElement>('#room-panel-dialog').close(); else this.setBoardClosed(true); });
@@ -114,6 +140,7 @@ export class RoomView {
     this.closeDrawers(); this.detail = null; this.snapshot = null; this.roomId = ''; this.messages.clear(); this.originals.clear(); this.rows.clear(); this.noticeIds.clear(); this.turns = [];
     $('#room-messages').replaceChildren(); $('#room-notices').replaceChildren(); $('#room-text').textContent = ''; $<HTMLTextAreaElement>('#room-text').value = '';
     $('#room-raw').replaceChildren(); $('#room-members').replaceChildren(); $('#room-status').replaceChildren(); $('#room-records').replaceChildren();
+    this.topic = null; this.topicKey = ''; this.topicUnavailable = false; $('#room-result-content').replaceChildren(); delete $('#room-result-content').dataset.signature; this.renderTopic();
     this.replyTo = null; this.mentions.clear(); this.uncertain = false; this.sending = false; this.panelsSignature = ''; this.restoreOnShow = true; this.loaded = false; this.renderReply();
   }
   async refresh(snapshot: RoomSnapshot): Promise<void> {
@@ -122,9 +149,10 @@ export class RoomView {
     if (!next) {
       this.detail = null; $('#room-disabled').hidden = false; $('#room-state').textContent = '상주 기능 꺼짐 · 기존 토의와 연결은 보존됩니다';
       for (const id of ['#room-send', '#room-power', '#room-settings', '#room-focus-new']) $<HTMLButtonElement>(id).disabled = true;
-      this.renderMembers(snapshot, [], []); return;
+      this.topic = null; this.topicKey = ''; this.topicUnavailable = false; this.renderTopic(); this.renderMembers(snapshot, [], []); return;
     }
     if (this.roomId !== next.id) {
+      this.topic = null; this.topicKey = '';
       this.loaded = false; this.messages.clear(); this.originals.clear(); this.rows.clear(); this.noticeIds.clear(); $('#room-messages').replaceChildren(); $('#room-notices').replaceChildren();
       this.roomId = next.id; this.after = Math.max(0, next.lastMessageSequence - 50); this.before = this.after;
       this.read = Math.min(next.lastMessageSequence, Math.max(0, Number(stored(this.roomId + '.read')) || 0)); this.openingRead = this.read;
@@ -152,10 +180,66 @@ export class RoomView {
       turns.push(...page.turns); offset += page.turns.length; if (!page.hasMore || !page.turns.length) break;
     }
     this.turns = turns;
+    await this.loadTopic();
     this.render(); this.loaded = true; this.applyPosition(anchor);
     if (this.active) { if (this.restoreOnShow) this.restorePosition(); requestAnimationFrame(() => this.markRead()); }
   }
   private path(suffix = ''): string { return '/api/rooms/' + this.roomId + suffix; }
+  private async loadTopic(): Promise<void> {
+    const room = this.detail!.room; const s = this.snapshot!;
+    const id = room.topicLink ?? room.legacyDiscussionIds.at(-1);
+    const meta = s.discussions.find(d => d.id === id);
+    if (!meta) { this.topic = null; this.topicKey = ''; this.topicUnavailable = !!room.topicLink; return; }
+    const key = JSON.stringify([room.id, meta, room.topicLink ? s.cursor : null]);
+    if (key === this.topicKey) return;
+    try {
+      const { discussion } = await this.deps.api<{ discussion: Discussion }>('/api/discussions/' + meta.id);
+      if (this.roomId !== room.id) return;
+      // Migrated legacy IDs may belong to standalone discussions. They are not
+      // the current room's goal and must never be pinned as one.
+      this.topic = discussion.roomId === room.id ? discussion : null;
+      this.topicUnavailable = !!room.topicLink && !this.topic; this.topicKey = key;
+    } catch (error) { this.topic = null; this.topicKey = ''; this.topicUnavailable = true; this.deps.report(error); }
+  }
+  private openTopic(): Promise<void> | undefined { if (!this.topic) return; const id = this.topic.id; this.closeDrawers(); return this.deps.openDiscussion(id); }
+  private renderTopic(): void {
+    const d = this.topic; const active = !!d && this.detail?.room.topicLink === d.id;
+    const start = $<HTMLButtonElement>('#room-focus-new'); start.disabled = !this.detail?.enabled || !this.detail.room.desiredOn || !!this.detail.room.topicLink;
+    start.textContent = d ? '새 주제 정하기' : '주제 정하고 토론 시작';
+    $('#room-topic-title').textContent = d?.topic ?? (this.topicUnavailable ? '주제 연결을 확인해 주세요.' : '어떤 주제를 함께 검토할까요?');
+    $('#room-topic-state').textContent = d ? `${active ? '현재 주제' : '마지막 주제'} · ${d.status === 'completed' ? '토론 절차 완료' : label(d.status)}` : '주제 없음';
+    $('#room-topic-progress').textContent = d ? `${topicPhases[d.phase]} · ${d.round}회 · 요청 ${d.used.requests}/${d.limits.maxRequests}${active ? ' · 조건 변경은 진행·조건 제어에서 적용하세요.' : ' · 같은 방에서 주제와 결과를 보존합니다.'}` : this.topicUnavailable ? '연결된 토론 원문을 확인하기 전에는 다른 주제나 결과를 표시하지 않습니다.' : !this.detail?.room.desiredOn ? '방을 켠 뒤 주제를 정하면, 아래에서 검토·검증·종합을 이어갑니다.' : '지금은 자유 대화입니다. 주제를 정하면 이곳에 고정하고 아래에서 함께 검토합니다.';
+    $('#room-topic-basis').hidden = !d;
+    $('#room-topic-original').textContent = d ? `${d.topic}\n\n판단 기준\n${d.criteria}` : '';
+    $('#room-topic-open').hidden = !d; $('#room-topic-open').textContent = active ? '진행·조건 제어 ↗' : '전체 비교·근거 ↗';
+    $('#room-topic-result').hidden = !d;
+    const synthesis = d && publishedTopicResults(d).findLast(t => t.phase === 'synthesis');
+    $('#room-topic-summary').hidden = !synthesis;
+    $('#room-topic-summary').textContent = synthesis ? '종합안 미리보기 · ' + synthesis.reply!.text : '';
+    if (d) {
+      const results = publishedTopicResults(d); const terminal = ['completed', 'partial', 'cancelled'].includes(d.status);
+      $('#room-topic-result').textContent = results.length ? `종합안·남은 이견 ${terminal ? '보기' : '· 검토 중'}` : terminal ? '결과·미완료 사유' : '종합안 대기';
+      $<HTMLButtonElement>('#room-topic-result').disabled = !terminal && !results.length;
+    }
+    if ($<HTMLDialogElement>('#room-result-dialog').open) this.renderTopicResults();
+  }
+  private renderTopicResults(): void {
+    const d = this.topic; const target = $('#room-result-content');
+    if (!d) { target.replaceChildren(el('p', '확인된 주제 결과가 없습니다.')); return; }
+    const signature = JSON.stringify([this.topicKey, d.status]); if (target.dataset.signature === signature) return; target.dataset.signature = signature;
+    target.replaceChildren(el('h3', d.topic), el('p', `${d.status === 'completed' ? '토론 절차 완료' : label(d.status)} · 주제 조건 ${d.revision}판${d.reason ? ' · ' + (topicReasons[d.reason] ?? '상세 사유는 전체 비교·근거에서 확인하세요.') : ''}`, 'small muted'));
+    const results = publishedTopicResults(d);
+    if (!results.length) target.append(el('p', '현재 조건에서 공개가 확정된 종합안은 없습니다. 미완료·차단·취소는 목표 달성으로 표시하지 않습니다.', 'small'));
+    for (const t of results) {
+      const report = el('details', '', 'topic-report'); report.open = t.phase === 'synthesis'; report.append(el('summary', `${t.phase === 'synthesis' ? '종합안' : '동료 검토'} · ${d.members.find(p => p.id === t.participantId)?.label ?? t.participantId} · 참여자 보고`), el('div', t.reply!.text, 'reply'));
+      for (const review of t.reply!.reviews.filter(r => r.stance !== 'support')) report.append(el('p', `${review.stance === 'challenge' ? '이견' : '미확인'} · ${d.claims.find(c => c.id === review.claimId && c.revision === d.revision)?.text ?? review.claimId}\n${review.reason}`, 'topic-caveat pre-line'));
+      for (const note of t.reply!.uncertainty) report.append(el('p', '남은 불확실성 · ' + note, 'topic-caveat'));
+      const source = el('details', '', 'topic-source'); source.append(el('summary', '원문 참조와 수신 시각'), el('p', `${t.id}\n${date(t.finishedAt)}`, 'small muted pre-line'));
+      report.append(source); target.append(report);
+    }
+    const evidence = d.evidence.filter(e => e.revision === d.revision);
+    target.append(el('p', `출처 관측 ${evidence.filter(e => e.status === 'observed').length} · 참여자 보고 ${evidence.filter(e => e.status === 'reported').length} · 미실행 ${evidence.filter(e => e.status === 'not_run').length} · 실패 ${evidence.filter(e => e.status === 'failed').length}\n출처를 읽었다는 기록만으로 주장의 검증 성공을 뜻하지 않습니다.`, 'small muted pre-line'));
+  }
   private async control(action: string, more: Record<string, unknown> = {}, expectedVersion = this.detail?.room.version): Promise<void> {
     if (!this.detail) return;
     try { await this.deps.api(this.path('/control'), { action, expectedVersion, ...more }); }
@@ -186,10 +270,9 @@ export class RoomView {
     $<HTMLButtonElement>('#room-power').disabled = !d.enabled || !d.dispatchAvailable;
     $('#room-wake').hidden = !room.desiredOn || room.observedStatus === 'on'; $<HTMLButtonElement>('#room-wake').disabled = !d.enabled;
     $('#room-disabled').hidden = d.enabled; $<HTMLButtonElement>('#room-send').disabled = !d.enabled || this.sending || this.uncertain;
-    $<HTMLButtonElement>('#room-focus-new').disabled = !d.enabled || !!room.topicLink;
     $<HTMLButtonElement>('#room-settings').disabled = !d.enabled;
     $('#room-pacing').textContent = room.pacing ? `발언 간격 ${room.pacing.minIntervalMs / 1000}초\n연속 pass ${room.pacing.sleepAfterPasses}회 후 휴면` : '진행 한도와 대화 속도를 설정하세요.';
-    this.renderMessages(); this.renderReply(); this.renderPanels(); this.unread();
+    this.renderTopic(); this.renderMessages(); this.renderReply(); this.renderPanels(); this.unread();
     $('#room-more').hidden = !this.before;
     for (const n of d.status.notices) if (!this.noticeIds.has(n.id)) {
       this.noticeIds.add(n.id); const p = el('p', '', 'system-message'); p.dataset.noticeId = n.id; p.append(el('span', n.text), el('time', date(n.at))); $('#room-notices').append(p);
@@ -314,7 +397,7 @@ export class RoomView {
   }
   private renderPanels(): void {
     const d = this.detail!; const s = this.snapshot!; const r = d.room;
-    const signature = JSON.stringify([r, d.contexts, d.status.members, s.participants, s.connections, s.jobs, s.materialPackages, this.turns]);
+    const signature = JSON.stringify([r, d.contexts, d.status.members, s.participants, s.connections, s.jobs, s.materialPackages, this.turns, this.topicKey]);
     if (signature === this.panelsSignature) return; this.panelsSignature = signature;
     this.renderMembers(s, r.members, d.status.members);
     const usage = $('#room-usage'); usage.replaceChildren();
@@ -324,7 +407,7 @@ export class RoomView {
     }
     const focus = $('#room-focus'); focus.replaceChildren(); const topic = s.discussions.find(t => t.id === r.topicLink);
     if (topic) focus.append(el('p', topic.topic), this.btn('토론·비교·검증 열기', () => { this.closeDrawers(); return this.deps.openDiscussion(topic.id); }));
-    else focus.append(el('p', '자유 대화 · 주제 토론을 마치면 같은 방으로 돌아옵니다.', 'small muted'));
+    else focus.append(el('p', this.topic ? '자유 대화로 복귀 · 마지막 주제와 결과는 대화 상단에 보존합니다.' : '자유 대화 · 상단에서 주제를 정하면 검토·검증·종합을 이어갑니다.', 'small muted'));
     const statuses = $('#room-status'); statuses.replaceChildren();
     for (const c of d.status.members) { const card = el('section', '', 'status-card'); card.append(el('h3', this.name(c.participantId) + ` · 문맥 ${c.generation}${c.previousGeneration ? ' · 이전 세대 응답' : ''}`));
       const sources: Record<string, string> = { connection: '등록한 연결', resident_turn: '발언 기록', unobserved: '확인된 관측 없음', work_queue_pending: '작업큐 준비 중', codex_job: 'Codex 실행 기록', fake: '모의 관측', browser: 'Chrome 관측', 'openai-oauth': 'GPT 응답', deepseek: 'DeepSeek 응답' };
@@ -408,7 +491,7 @@ export class RoomView {
     finally { submit.disabled = false; }
   }
   private drawer(dialogId: string, panel: string, slot: string): void { $(slot).append($(panel)); $(panel).hidden = false; const d = $<HTMLDialogElement>(dialogId); if (!d.open) d.showModal(); if (panel === '#room-panel') $('#room-panel-toggle').setAttribute('aria-expanded', 'true'); }
-  private closeDrawers(): void { for (const id of ['#room-members-dialog', '#room-panel-dialog', '#room-settings-dialog']) { const d = $<HTMLDialogElement>(id); if (d.open) d.close(); } }
+  private closeDrawers(): void { for (const id of ['#room-members-dialog', '#room-panel-dialog', '#room-settings-dialog', '#room-result-dialog']) { const d = $<HTMLDialogElement>(id); if (d.open) d.close(); } }
   private navigate(view: 'connections' | 'execution' | 'discussion'): void { this.closeDrawers(); this.deps.openView(view); }
 }
 function localDate(value: string): string { const d = new Date(value); return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); }

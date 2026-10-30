@@ -120,6 +120,27 @@ pre { background: var(--room-bg); color: var(--ink); }
 .room-heading-text { flex: 1; overflow-wrap: anywhere; }
 .room-heading h1 { font-size: 15px; font-weight: 650; margin: 0 0 3px; letter-spacing: -.2px; }
 .room-heading #room-state { font-size: 10px; color: var(--muted); margin: 0; }
+.room-topic { flex: 0 0 auto; padding: 12px 20px; background: var(--paper); border-bottom: 1px solid var(--line); }
+.topic-heading { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.topic-kicker { font-size: 10px; font-weight: 750; color: var(--ink); }
+.topic-heading #room-topic-state { font-size: 10px; }
+.topic-heading #room-focus-new { margin-left: auto; font-size: 10px; padding: 5px 8px; }
+.room-topic h2 { font-size: 15px; line-height: 1.6; margin: 6px 0 3px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#room-topic-progress { font-size: 10px; line-height: 1.7; margin: 0; }
+.topic-summary { font-size: 11px; line-height: 1.7; border-left: 2px solid var(--accent); padding-left: 8px; margin: 7px 0 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#room-topic-basis { font-size: 10px; margin-top: 5px; }
+#room-topic-original { max-height: 14dvh; overflow-y: auto; overflow-wrap: anywhere; font-size: 12px; line-height: 1.8; padding: 8px 0; }
+.topic-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.topic-actions button { font-size: 10px; margin-top: 6px; padding: 5px 8px; }
+.room-result-dialog { max-width: 780px; }
+.room-result-dialog > .panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+.room-result-dialog h2 { font-size: 17px; margin: 0; }
+.room-result-dialog h3 { overflow-wrap: anywhere; }
+.topic-report { border-top: 1px solid var(--line); margin: 16px 0; padding-top: 12px; }
+.topic-report summary { font-size: 12px; }
+.topic-source { margin-top: 12px; color: var(--muted); }
+.topic-source summary { font-size: 10px; }
+.topic-caveat { border-left: 2px solid var(--muted); padding-left: 10px; margin: 12px 0; font-size: 12px; overflow-wrap: anywhere; }
 #room-state::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); margin: 0 6px 1px 0; }
 #room-state[data-state=on]::before { background: var(--accent); }
 #room-state[data-state=blocked]::before, #room-state[data-state=budget_exhausted]::before { background: var(--muted); }
@@ -225,6 +246,8 @@ dialog { max-height: calc(100dvh - 20px); overflow-y: auto; background: var(--pa
   .room-mode .sidebar footer .network, .room-mode .sidebar footer button { font-size: 9px; }
   .room-mode > main { flex: 1; }
   .room-heading { min-height: 57px; padding: 0 12px; }
+  .room-topic { padding: 10px 14px; }
+  .room-topic h2 { font-size: 14px; }
   .room-timeline { padding: 18px 14px 10px; }
   .room-composer { margin: 8px 10px max(10px, env(safe-area-inset-bottom)); }
 }

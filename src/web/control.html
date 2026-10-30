@@ -28,6 +28,14 @@
       <div class="chat-column">
         <header class="room-heading"><button id="room-member-toggle" class="room-icon-button" aria-haspopup="dialog" aria-label="참여자와 방 설정" title="참여자와 방 설정"><span aria-hidden="true">☰</span></button><div class="room-heading-text"><h1 id="room-title">상주 작업실</h1><p id="room-state" class="small muted" role="status">상태 확인 중</p></div><div class="room-actions"><span id="room-theme-slot"></span><button id="room-panel-toggle" class="room-icon-button" aria-controls="room-panel" aria-expanded="true" aria-label="자료·상태 패널" title="자료·상태 패널"><span aria-hidden="true">◫</span></button></div></header>
         <p id="room-disabled" class="room-banner" hidden>상주 기능이 꺼져 있습니다. 기존 토의와 기록은 토의 작업실에서 이어갈 수 있습니다.</p>
+        <section id="room-topic" class="room-topic" aria-label="고정 주제">
+          <div class="topic-heading"><span class="topic-kicker">고정 주제</span><span id="room-topic-state" class="small muted">주제 없음</span><button id="room-focus-new" type="button">주제 정하고 토론 시작</button></div>
+          <h2 id="room-topic-title">어떤 주제를 함께 검토할까요?</h2>
+          <p id="room-topic-progress" class="small muted" role="status">주제를 정하면 이곳에 고정하고, 아래에서 검토·검증·종합을 이어갑니다.</p>
+          <p id="room-topic-summary" class="topic-summary" hidden></p>
+          <details id="room-topic-basis" hidden><summary>주제·판단 기준 원문</summary><div id="room-topic-original" class="pre-line"></div></details>
+          <div class="topic-actions"><button id="room-topic-result" type="button" hidden>종합안·남은 이견</button><button id="room-topic-open" type="button" hidden>진행·조건 제어 ↗</button></div>
+        </section>
         <div id="room-timeline" class="room-timeline" tabindex="0" role="region" aria-label="방 대화 이력"><button id="room-more" hidden>이력 더 읽기</button><div id="room-messages"></div><div id="room-notices" aria-label="운영 알림"></div></div>
         <div class="unread-row"><button id="room-unread" hidden>읽지 않은 메시지</button><button id="room-latest">최근 메시지로 ↓</button></div>
         <form id="room-message-form" class="room-composer">
@@ -43,7 +51,7 @@
         <div id="board-workspace" class="board-page" role="tabpanel" aria-labelledby="board-tab-workspace">
           <div class="board-intro"><span aria-hidden="true">▤</span><h2>함께 쓰는 작업실</h2><p>대화에 필요한 자료와 주제 토론을 모아 봅니다.</p></div>
           <details class="board-section" open><summary>참고 자료</summary><div id="room-materials"></div><button id="room-material-manage">자료 준비하기 ↗</button></details>
-          <section class="board-section"><h3>주제 토론</h3><div id="room-focus"></div><button id="room-focus-new">이 방에서 주제 토론</button></section>
+          <section class="board-section"><h3>주제 토론</h3><div id="room-focus"></div></section>
           <div class="board-coming"><span aria-hidden="true">◇</span><strong>공유 기억과 작업큐</strong><p>아직 연결되지 않았습니다. 지금은 대화 원문과 주제별 검토 기록을 보존합니다.</p></div>
         </div>
         <div id="board-usage" class="board-page" role="tabpanel" aria-labelledby="board-tab-usage" hidden>
@@ -110,6 +118,7 @@
     </section>
   </main>
 </div>
+<dialog id="room-result-dialog" class="room-result-dialog" aria-labelledby="room-result-title"><div class="panel-heading"><h2 id="room-result-title">주제의 종합안과 남은 이견</h2><button type="button" data-close-drawer>닫기</button></div><p class="small muted">종합안과 동료 검토는 참여자의 보고입니다. 합의·사실 검증·실제 실행 여부를 구분해 확인하세요.</p><div id="room-result-content"></div><button id="room-result-evidence" type="button">전체 비교·근거 열기 ↗</button></dialog>
 <dialog id="action-dialog"><form id="action-form"><h2 id="action-title"></h2><div id="action-fields"></div><div class="toolbar"><button id="action-cancel" type="button">닫기</button><button class="primary" type="submit">적용</button></div></form></dialog>
 <dialog id="room-members-dialog" class="room-drawer" aria-labelledby="room-members-dialog-title"><div class="panel-heading"><h2 id="room-members-dialog-title">방 참여자</h2><button type="button" data-close-drawer>닫기</button></div><div id="room-members-slot"></div></dialog>
 <dialog id="room-panel-dialog" class="room-drawer" aria-labelledby="room-panel-dialog-title"><div class="panel-heading"><h2 id="room-panel-dialog-title">자료와 상태</h2><button type="button" data-close-drawer>닫기</button></div><div id="room-panel-slot"></div></dialog>
