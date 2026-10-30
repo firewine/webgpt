@@ -2,7 +2,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | v0.7 — Ubuntu 서비스·HTTPS·noVNC·모의 토론 PASS, 기기·실계정·실세션 검증 대기 |
+| 상태 | v0.8 — 토커 계정·사고 깊이·전체 발언 라운드 구현 PASS, 실계정·실세션 검증 대기 |
 | 최초 작성일 | 2026-08-15 |
 | 개정일 | 2026-10-30 (KST) |
 | 저장소 | [firewine/webgpt](https://github.com/firewine/webgpt) |
@@ -59,6 +59,7 @@ v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위�
 - 다음 단계 승인 후 systemd 앱·desktop·linger·HTTPS 8443을 적용했고 실제 HTTPS 로그인·SSE·noVNC 키 입력·서비스 재시작과 복구를 확인했다. nvm PATH·systemd 경로 파싱·Wayland 상속·noVNC 경로 오류를 고쳤으며 Node 검사 40개와 브라우저 검사 4개가 통과했다. [운영 적용 기록](./implementation/ubuntu-services-20261030.md)을 따른다.
 - OAuth/DeepSeek 응답·dot 역할·Codex 실행 검사는 fixture다. 실제 계정 호출, 다른 Tailnet 기기 접속, 호스트 재부팅, 사용자 Codex 세션 실행은 하지 않았다. WJ-012/MVP-1 및 실세션 MVP-2는 NOT_RUN이다.
 - 외부 계정·호스트에 의존하는 검증은 [운영 절차](./operations-runbook.md)의 순서로 수행한다. MCP Events와 Muse Connector는 별도 capability 검증 전까지 비활성이며 browser 완료 관측을 기본 경로로 쓴다.
+- 2026-10-30 계정별 OAuth 로그인 공간·토커 설정·기본 Extra high와 사후 변경, 긴 전체 발언의 전원 재분석·라운드 공개 경계를 보강했다. Node 46개·Chrome/MCP 검사 8개와 실제 HTTPS 설정 UI가 통과했다. [구현 기록](./implementation/talker-settings-rounds-20261030.md)에 미검증인 실계정·모델 지원 범위를 분리했다.
 
 | 항목 | 현재 판정 | 남은 증거 |
 | --- | --- | --- |

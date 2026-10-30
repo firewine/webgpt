@@ -27,7 +27,9 @@ export class OAuthService {
     this.locks.set(key, current);
     try { return await current; } finally { if (this.locks.get(key) === current) this.locks.delete(key); }
   }
-  async begin(label: string, existingId?: string): Promise<{ attemptId: string; connectionId: string; authorizationUrl: string }> {
+  async begin(label: string, existingId?: string, expectedEmail?: string): Promise<{ attemptId: string; connectionId: string; authorizationUrl: string }> {
+    const expected = expectedEmail?.trim().toLowerCase();
+    if (expected && (!expected.includes('@') || expected.length > 254)) throw new AppError('invalid_account_email');
     await this.listen();
     for (const [key, a] of this.attempts) if (a.expiresAt <= Date.now()) this.attempts.delete(key);
     if (this.attempts.size >= 8) throw new AppError('too_many_signins', 429);
@@ -40,9 +42,10 @@ export class OAuthService {
       nonce: randomBytes(32).toString('base64url'), verifier: randomBytes(48).toString('base64url'),
       redirect: `http://127.0.0.1:${this.port}/auth/callback`, clientId: existing?.clientId ?? null, expiresAt: Date.now() + 600_000 };
     if (!existing) this.store.transact((s, emit) => {
-      s.connections.push({ id: connectionId, kind: 'openai-oauth', label: string(label, 80), status: 'auth_required', models: [] });
+      s.connections.push({ id: connectionId, kind: 'openai-oauth', label: string(label, 80), status: 'auth_required', models: [], ...(expected ? { expectedEmail: expected } : {}) });
       emit({ type: 'connection.added', discussionId: null, data: { connectionId } });
     });
+    if (existing && expected) this.store.transact(s => { s.connections.find(c => c.id === connectionId)!.expectedEmail = expected; });
     this.attempts.set(attempt.state, attempt);
     const url = new URL(`${ISSUER}/api/accounts/authorize`);
     const params: Record<string, string> = { client_id: attempt.clientId ?? 'dynamic_agent_client', ext_agent_host_id: state.hostId,
@@ -86,6 +89,7 @@ export class OAuthService {
           code: string(params.get('code'), 8192), code_verifier: a.verifier, redirect_uri: a.redirect, resource: RESOURCE });
         const identity = await this.identity(string(value.id_token, 32000), clientId, a.nonce);
         const current = this.store.read().connections.find(c => c.id === a.connectionId)!;
+        if (current.expectedEmail && identity.email?.toLowerCase() !== current.expectedEmail) throw new AppError('oauth_account_mismatch');
         if (current.subject && current.subject !== identity.sub) throw new AppError('oauth_account_mismatch');
         const scopes = string(value.scope, 4000).split(/\s+/);
         const tokens = this.tokens(value, clientId, identity.sub, scopes);

@@ -73,6 +73,10 @@ Chrome/VNC/CDP를 Tailnet에 직접 열지 않는다. 예제 VNC는 인증된 ga
 
 두 번째 계정은 별도로 등록한다. 같은 계정을 두 번 등록한 것을 두 계정 검증으로 세지 않는다. PKCE/state/nonce/issuer/audience/subject와 발급 client ID를 검증하며 refresh는 연결별로 직렬화한다. plan usage 권한이 없거나 모델 목록이 없으면 실제 응답 성공으로 표시하지 않는다. 개인 계정의 적격성이나 preview 허용을 앱이 대신 보장할 수 없다.
 
+dot과 웹 GPT를 다른 계정으로 쓸 때는 GPT 계정 추가에서 별칭과 선택 이메일을 지정하고 `별도 로그인 창 열기`를 사용한다. 연결별 격리 context에서 열려 기존 dot 쿠키를 사용하지 않는다. 지정 이메일과 검증된 identity가 다르면 연결을 거절한다. 실제 계정 차이는 사용자가 선택한 identity로 확인하며 이름만 다르게 붙여 두 계정으로 세지 않는다.
+
+OAuth GPT 사고 깊이는 기본 Extra high이며 Low/Medium/High로 변경할 수 있다. 등록한 토커 설정 변경은 새 토의부터 적용한다. 현재 토의는 일시정지·응답 확정 뒤 토커 카드의 사고 깊이 변경으로 이후 발언만 바꾼다. 모델이 요청값을 지원하지 않으면 오류를 확인하고 직접 조절한다. 기존 browser dot·Muse는 원래 서비스의 모델·사고 깊이를 따른다. [설정과 재검토 기록](implementation/talker-settings-rounds-20261030.md)을 참조한다.
+
 ### DeepSeek
 
 연결 UI에 허가된 API 키를 입력하면 서버 vault에 저장하고 모델 목록을 조회한다. 입력란은 요청 뒤 비운다. 응답의 실제 usage를 사용하며 `[DONE]`만 있거나 stream이 중간 종료된 경우 완료로 간주하지 않는다. 만료된 키는 해당 연결의 `API 키 갱신`에서 교체한다.

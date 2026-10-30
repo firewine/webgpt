@@ -95,4 +95,8 @@ test('copy-excluded labels preserve receipt matching and recover an existing rep
   await page.locator('#actual-request').evaluate(e => e.after(e.cloneNode(true)));
   await assert.rejects(bridge.complete({ ...input, signal: AbortSignal.timeout(1000) }), /browser_receipt_ambiguous/);
   assert.equal(await page.evaluate(() => window.sends), 0);
+  await page.locator('#actual-request').nth(1).evaluate(e => e.remove());
+  await page.locator('.assistant').first().evaluate(e => { e.textContent = 'Long response '.repeat(8000); });
+  await assert.rejects(bridge.complete({ ...input, signal: AbortSignal.timeout(1000) }), /response_too_large/);
+  assert.equal(await page.evaluate(() => window.sends), 0);
 });

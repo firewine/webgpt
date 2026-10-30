@@ -4,6 +4,7 @@ import type { Store } from './store.js';
 import type { Checkpoint, Discussion, DiscussionTurn, Evidence, Phase, Task, WorkspaceState } from './model.js';
 import { AppError, code, digest, id, integer, now, object, string, strings } from './util.js';
 import { parseReply, promptFor } from './prompts.js';
+import { reasoningEffort } from './settings.js';
 
 interface Executor { submit(input: { bindingId: string; prompt: string; requestId: string; discussionId: string; taskId: string; revision: number; maxDurationMs?: number }): string; kick?(): void }
 export class DiscussionEngine {
@@ -53,7 +54,7 @@ export class DiscussionEngine {
           observedAt: now(), lastProgressAt: null, source: p.kind, reason: null } })),
         phase: 'independent', round: 1, status: 'running', reason: null, createdAt: now(), updatedAt: now(),
         limits: { maxRequests: integer(limits.maxRequests, 7 * n, 3 * n, 200), maxActiveMs: integer(limits.maxActiveMs, 3_600_000, 5000, 7_200_000),
-          maxRounds: integer(limits.maxRounds, 2, 1, 2), maxVerificationTasks: integer(limits.maxVerificationTasks, n, 0, 16),
+          maxRounds: integer(limits.maxRounds, 2, 1, 8), maxVerificationTasks: integer(limits.maxVerificationTasks, n, 0, 16),
           maxTokens: integer(limits.maxTokens, 100_000, 1000, 1_000_000), maxToolJobs: integer(limits.maxToolJobs, 2, 0, 8) },
         used: { requests: 0, activeMs: 0, inputTokens: 0, outputTokens: 0, unknownUsage: 0, toolJobs: 0 },
         tasks: [], turns: [], claims: [], evidence: [], checkpoints: [], interventions: [],
@@ -82,6 +83,11 @@ export class DiscussionEngine {
         if (state.discussions.some(x => x.id !== d.id && ['running', 'paused', 'blocked'].includes(x.status))) throw new AppError('root_workflow_busy', 409);
         for (const task of d.tasks) if (task.status === 'failed' && task.reason !== 'format_invalid' && task.revision === d.revision) { task.status = 'pending'; task.reason = null; }
         d.status = 'running'; d.reason = null;
+      } else if (action === 'configure_participant') {
+        if (!['paused', 'blocked'].includes(d.status) || d.turns.some(t => ['prepared', 'running', 'unconfirmed'].includes(t.status))) throw new AppError('participant_settings_require_pause', 409);
+        const member = d.members.find(p => p.id === body.participantId);
+        if (!member || member.kind !== 'openai-oauth') throw new AppError('reasoning_requires_oauth', 409);
+        member.reasoningEffort = reasoningEffort(body.reasoningEffort);
       } else if (action === 'revise') {
         if (['completed', 'partial', 'cancelled'].includes(d.status)) throw new AppError('discussion_finished', 409);
         d.revision++; d.interventions.push({ revision: d.revision, text: string(body.text, 5000), createdAt: now() });
@@ -239,6 +245,7 @@ export class DiscussionEngine {
       const turn: DiscussionTurn = { id: id('turn'), taskId, participantId: participant.id, revision: d.revision, generation: context.generation,
         phase: task.phase, round: task.round, status: 'prepared', prompt, promptDigest: digest(prompt), text: '', reply: null,
         startedAt: now(), finishedAt: null, receipt: null, error: null, usage: null,
+        ...(participant.kind === 'openai-oauth' ? { reasoningEffort: reasoningEffort(participant.reasoningEffort) } : {}),
         evidenceIds: d.evidence.filter(e => e.revision === d.revision && (task.phase !== 'independent' || e.kind === 'user_material')).map(e => e.id) };
       d.used.requests++; task.status = 'running'; task.turnId = turn.id; d.turns.push(turn); d.updatedAt = now();
       context.observation = { ...context.observation, response: 'prepared', work: 'running', observedAt: now(), reason: null };
@@ -340,8 +347,7 @@ export class DiscussionEngine {
       const task = taskFor(d, member.id, phase, round);
       task.dependencyIds = dependencies;
       if (phase === 'cross_review') {
-        const next = members[(members.findIndex(p => p.id === member.id) + 1) % members.length]!;
-        task.claimIds = d.claims.filter(c => c.revision === d.revision && c.participantId === next.id).map(c => c.id);
+        task.claimIds = d.claims.filter(c => c.revision === d.revision && c.participantId !== member.id && members.some(m => m.id === c.participantId)).map(c => c.id);
       }
       d.tasks.push(task);
     }

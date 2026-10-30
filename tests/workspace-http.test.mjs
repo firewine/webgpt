@@ -57,3 +57,23 @@ test('noVNC HTTP and WebSocket require owner policy and manual lease; upstream g
   assert.equal(await upgrade({ Origin: f.url }), 403); assert.equal(await upgrade({ Origin: 'https://evil.example', Authorization: `Bearer ${ownerKey}` }), 403);
   assert.equal(await upgrade({ Origin: f.url, Authorization: `Bearer ${ownerKey}`, Cookie: 'private-cookie' }), 101); assert.equal(upstreamHeaders.authorization, undefined); assert.equal(upstreamHeaders.cookie, undefined);
 });
+test('talker settings default to xhigh, remain editable, and do not move existing discussion history across accounts', async t => {
+  const f = await workspace(t);
+  f.app.store.transact(s => { for (const id of ['web-a', 'web-b']) s.connections.push({ id, kind: 'openai-oauth', label: id, status: 'connected', models: [{ id: 'fixture-model', label: 'Fixture' }] }); });
+  const settings = { connectionId: 'web-a', modelId: 'fixture-model', label: 'Web GPT', role: '' };
+  const created = await f.api('/api/participants', settings); assert.equal(created.status, 201); const { id } = await created.json();
+  assert.equal(f.app.store.read().participants.find(p => p.id === id).reasoningEffort, 'xhigh');
+  const did = f.app.engine.create({ ...topic, participantIds: ['fake-a', id] }, 'settings-snapshot');
+  f.app.engine.control(did, { action: 'pause', expectedRevision: 1 }, 'settings-pause');
+  assert.equal((await f.api('/api/participants/' + id, { ...settings, connectionId: 'web-b', reasoningEffort: 'high' })).status, 200);
+  let state = f.app.store.read(); assert.equal(state.participants.find(p => p.id === id).connectionId, 'web-b');
+  assert.equal(state.discussions[0].members.find(p => p.id === id).connectionId, 'web-a');
+  assert.equal((await f.api('/api/discussions/' + did + '/control', { action: 'configure_participant', expectedRevision: 1, participantId: id, reasoningEffort: 'medium' })).status, 200);
+  state = f.app.store.read(); assert.equal(state.discussions[0].members.find(p => p.id === id).reasoningEffort, 'medium'); assert.equal(state.participants.find(p => p.id === id).reasoningEffort, 'high');
+  assert.equal((await f.api('/api/participants/' + id, { ...settings, reasoningEffort: 'invented' })).status, 400);
+  f.app.store.transact(s => { s.connections.push({ id: 'dot', kind: 'browser', label: 'Existing dot account', status: 'connected', models: [{ id: 'fixture-model', label: 'Fixture' }] }); });
+  assert.equal((await f.api('/api/participants', { ...settings, connectionId: 'dot', reasoningEffort: 'xhigh' })).status, 409);
+  f.app.store.transact(s => { s.discussions[0].status = 'running'; });
+  assert.equal((await f.api('/api/discussions/' + did + '/control', { action: 'configure_participant', expectedRevision: 1, participantId: id, reasoningEffort: 'low' })).status, 409);
+  f.app.store.transact(s => { s.discussions[0].status = 'paused'; });
+});

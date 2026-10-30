@@ -108,10 +108,14 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     if (path === '/api/discussions') { json(res, 201, { id: app.engine.create(input, command(req)) }); return; }
     if (discussionPath?.[2]) { app.engine.control(discussionPath[1]!, input, command(req)); json(res, 200, { ok: true }); return; }
     if (path === '/api/connections/oauth') {
-      const result = await app.oauth.begin(string(input.label, 80), input.connectionId ? string(input.connectionId) : undefined);
+      const result = await app.oauth.begin(string(input.label, 80), input.connectionId ? string(input.connectionId) : undefined, input.expectedEmail ? string(input.expectedEmail, 254) : undefined);
       json(res, 200, result); return;
     }
-    if (path === '/api/browser/open-auth') { await app.browser.openAuthorization(string(input.url, 12_000)); json(res, 200, { ok: true }); return; }
+    if (path === '/api/browser/open-auth') {
+      const connectionId = string(input.connectionId, 100);
+      if (!app.store.read().connections.some(c => c.id === connectionId && c.kind === 'openai-oauth')) throw new AppError('connection_not_found', 404);
+      await app.browser.openAuthorization(string(input.url, 12_000), connectionId); json(res, 200, { ok: true }); return;
+    }
     if (path === '/api/connections/deepseek') { json(res, 201, { id: await app.addDeepSeek(input) }); return; }
     if (path === '/api/connections/browser') { json(res, 201, { id: await app.addBrowser(input) }); return; }
     const connectionPath = /^\/api\/connections\/([\w-]+)\/(models|logout|credential)$/.exec(path);
@@ -122,6 +126,8 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
       json(res, 200, { ok: true }); return;
     }
     if (path === '/api/participants') { json(res, 201, { id: app.participant(input) }); return; }
+    const participantPath = /^\/api\/participants\/([\w-]+)$/.exec(path);
+    if (participantPath) { json(res, 200, { id: app.participant(input, participantPath[1]) }); return; }
     if (path === '/api/browser/control') { if (typeof input.paused !== 'boolean') throw new AppError('invalid_input'); app.browserControl(input.paused); json(res, 200, { ok: true }); return; }
     if (path === '/api/bindings') { json(res, 201, { id: await app.codex.register(input) }); return; }
     if (path === '/api/jobs') { json(res, 201, { id: app.codex.submit({ bindingId: string(input.bindingId), prompt: string(input.prompt, 30_000), requestId: command(req) }) }); return; }

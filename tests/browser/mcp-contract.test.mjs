@@ -4,6 +4,8 @@ import { chromium } from 'playwright';
 import { BrowserBridge } from '../../dist/server/connections/browser.js';
 import { storage } from '../workspace-helpers.mjs';
 import { unusedPort } from '../helpers.mjs';
+import { createServer } from 'node:http';
+import { once } from 'node:events';
 test('installed Chrome DevTools MCP: real JSON-RPC, page IDs, observation and one correlated DOM send', { timeout: 30000, skip: !process.env.WJ_TEST_CHROME_MCP }, async t => {
   const { store } = await storage(t); const port = await unusedPort();
   const browser = await chromium.launch({ headless: true, args: [`--remote-debugging-port=${port}`], ...(process.env.WJ_TEST_CHROMIUM_EXECUTABLE ? { executablePath: process.env.WJ_TEST_CHROMIUM_EXECUTABLE } : {}) }); t.after(() => browser.close());
@@ -16,4 +18,32 @@ test('installed Chrome DevTools MCP: real JSON-RPC, page IDs, observation and on
   await bridge.probe(binding); store.transact(s => s.connections.push({ id: 'browser-mcp', kind: 'browser', label: 'MCP fixture', models: [], status: 'connected', browser: binding }));
   const result = await bridge.complete({ requestId: 'mcp-turn', participant: { id: 'p', kind: 'browser', connectionId: 'browser-mcp', label: 'fixture', modelId: 'existing-agent', role: '' }, prompt: '테스트 질문', history: [], signal: AbortSignal.timeout(10000), hooks: { dispatched() {}, receipt() {}, delta() {} } });
   assert.equal(result.text, 'Chrome MCP fixture 관측'); assert.equal(await page.evaluate(() => window.sends), 1); t.diagnostic('Chrome DevTools MCP 1.12.0 protocol + actual Chromium fixture PASS; no dot/Muse account was used.');
+});
+test('installed Chrome MCP keeps dot and separate web OAuth login contexts cookie-isolated', { timeout: 30000, skip: !process.env.WJ_TEST_CHROME_MCP }, async t => {
+  const { store } = await storage(t); const port = await unusedPort();
+  const server = createServer((_req, res) => { res.setHeader('Content-Type', 'text/html'); res.end('<title>Local account isolation fixture</title>Fixture'); }); server.listen(0, '127.0.0.1'); await once(server, 'listening'); t.after(() => server.close());
+  const origin = 'http://127.0.0.1:' + server.address().port;
+  const browser = await chromium.launch({ headless: true, args: ['--remote-debugging-port=' + port], ...(process.env.WJ_TEST_CHROMIUM_EXECUTABLE ? { executablePath: process.env.WJ_TEST_CHROMIUM_EXECUTABLE } : {}) }); t.after(() => browser.close());
+  const dot = await browser.newPage(); await dot.goto(origin); await dot.evaluate(() => { document.cookie = 'identity=dot; path=/'; });
+  const bridge = new BrowserBridge(store, [process.env.WJ_TEST_CHROME_MCP, '--browserUrl=http://127.0.0.1:' + port, '--no-usage-statistics']); t.after(() => bridge.close());
+  const evaluate = async (url, fn) => {
+    const line = (await bridge.pages()).split(String.fromCharCode(10)).find(s => s.includes(url)); assert.ok(line);
+    const pageId = Number(line.split(':')[0].replace(/[^0-9]/g, ''));
+    const r = await bridge.tool('evaluate_script', { pageId, function: fn, waitForStableDom: false, dialogAction: 'dismiss' });
+    if (r.structuredContent) return r.structuredContent.result ?? r.structuredContent;
+    const text = r.content.filter(c => c.type === 'text').map(c => c.text).join(''); return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+  };
+  await bridge.tool('new_page', { url: origin + '/web-a', isolatedContext: 'webjjoku-oauth-connection-a' });
+  assert.equal((await evaluate(origin + '/web-a', '() => ({ cookie: document.cookie })')).cookie, '');
+  await evaluate(origin + '/web-a', '() => { document.cookie = "identity=web-a; path=/"; return { cookie: document.cookie }; }');
+  await bridge.tool('new_page', { url: origin + '/web-b', isolatedContext: 'webjjoku-oauth-connection-b' });
+  assert.equal((await evaluate(origin + '/web-b', '() => ({ cookie: document.cookie })')).cookie, '');
+  assert.equal((await evaluate(origin + '/web-a', '() => ({ cookie: document.cookie })')).cookie, 'identity=web-a');
+  assert.equal(await dot.evaluate(() => document.cookie), 'identity=dot');
+  const calls = []; const gate = new BrowserBridge(store, null); gate.connect = async () => { gate.isolatedLogin = true; }; gate.tool = async (_name, args) => { calls.push(args); return {}; };
+  await gate.openAuthorization('https://auth.openai.com/api/accounts/authorize?state=fixture', 'connection-a');
+  await gate.openAuthorization('https://auth.openai.com/api/accounts/authorize?state=fixture', 'connection-b');
+  assert.equal(calls[0].isolatedContext, 'webjjoku-oauth-connection-a'); assert.notEqual(calls[0].isolatedContext, calls[1].isolatedContext);
+  gate.connect = async () => { gate.isolatedLogin = false; };
+  await assert.rejects(gate.openAuthorization('https://auth.openai.com/api/accounts/authorize', 'connection-c'), /isolated_login_unavailable/); assert.equal(calls.length, 2);
 });

@@ -11,6 +11,7 @@ import { Providers } from '../connections/providers.js';
 import { BrowserBridge, validateBinding } from '../connections/browser.js';
 import { DiscussionEngine, findDiscussion } from './engine.js';
 import { CodexExecutor } from '../execution/codex.js';
+import { reasoningEffort } from './settings.js';
 
 export class Workspace {
   readonly store: Store; readonly vault: Vault; readonly oauth: OAuthService; readonly browser: BrowserBridge;
@@ -97,16 +98,21 @@ export class Workspace {
       emit({ type: 'connection.added', discussionId: null, data: { connectionId } });
     }); return connectionId;
   }
-  participant(input: unknown): string {
-    const body = object(input); const participantId = id('participant');
+  participant(input: unknown, existingId?: string): string {
+    const body = object(input); const participantId = existingId ?? id('participant');
     this.store.transact((s, emit) => {
+      const existing = existingId ? s.participants.find(p => p.id === existingId) : undefined;
+      if (existingId && !existing) throw new AppError('participant_not_found', 404);
       const connection = s.connections.find(c => c.id === body.connectionId && c.status === 'connected');
       if (!connection) throw new AppError('connection_not_ready', 409);
+      if (body.reasoningEffort !== undefined && connection.kind !== 'openai-oauth') throw new AppError('reasoning_requires_oauth', 409);
       const modelId = string(body.modelId, 200); if (!connection.models.some(m => m.id === modelId)) throw new AppError('model_not_available', 409);
-      if (connection.kind === 'browser' && s.participants.some(p => p.connectionId === connection.id)) throw new AppError('browser_participant_already_exists', 409);
+      if (connection.kind === 'browser' && s.participants.some(p => p.id !== participantId && p.connectionId === connection.id)) throw new AppError('browser_participant_already_exists', 409);
       const member: Member = { id: participantId, label: string(body.label, 80), kind: connection.kind, connectionId: connection.id,
-        modelId, role: string(body.role ?? '', 500, true) };
-      s.participants.push(member); emit({ type: 'participant.added', discussionId: null, data: { participantId } });
+        modelId, role: string(body.role ?? '', 500, true),
+        ...(connection.kind === 'openai-oauth' ? { reasoningEffort: reasoningEffort(body.reasoningEffort, existing?.reasoningEffort) } : {}) };
+      if (existing) s.participants[s.participants.indexOf(existing)] = member; else s.participants.push(member);
+      emit({ type: existing ? 'participant.updated' : 'participant.added', discussionId: null, data: { participantId } });
     }); return participantId;
   }
   assertConnectionIdle(connectionId: string): void {
