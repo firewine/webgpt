@@ -23,6 +23,21 @@ test('SSE replay uses durable cursors and closing a client never cancels a discu
   const d = (await (await f.api(`/api/discussions/${start.id}`)).json()).discussion; assert.equal(d.turns.length, 12);
   assert.equal((await f.api('/api/events?after=999999')).status, 409);
 });
+test('browser connection saves its side-chat guard and rejects changing the registered thread', async t => {
+  const f = await workspace(t); let probed;
+  f.app.browser.probe = async binding => { probed = binding; };
+  const binding = { pageId: 7, url: 'https://muse.ai/', accountLabel: 'fixture account', agentLabel: 'fixture agent', identitySelector: '#identity', identityText: 'fixture', inputSelector: '#input', sendSelector: '#send', userSelector: '.user', assistantSelector: '.assistant', busySelector: '#busy', readySelector: '#ready', sendAppearsAfterInput: true,
+    thread: { selector: '[data-thread]', attribute: 'data-thread', jsonKey: 'thread_id', value: 'thread-a' } };
+  const response = await f.api('/api/connections/browser', { label: 'side chat', binding }); assert.equal(response.status, 201);
+  const { id } = await response.json(); assert.deepEqual(probed.thread, binding.thread); assert.equal(probed.sendAppearsAfterInput, true);
+  const state = await (await f.api('/api/state')).json(); const saved = state.connections.find(c => c.id === id);
+  assert.deepEqual(saved.browser.thread, binding.thread);
+  assert.equal((await f.api('/api/connections/browser', { connectionId: id, label: 'same chat', binding: { ...binding, pageId: 8 } })).status, 201);
+  assert.equal((await f.api('/api/connections/browser', { connectionId: id, label: 'different chat', binding: { ...binding, thread: { ...binding.thread, value: 'thread-b' } } })).status, 409);
+  const { thread, ...withoutThread } = binding;
+  assert.equal((await f.api('/api/connections/browser', { connectionId: id, label: 'remove guard', binding: withoutThread })).status, 409);
+  assert.equal((await f.api('/api/connections/browser', { label: 'invalid', binding: { ...binding, sendAppearsAfterInput: 'true' } })).status, 400);
+});
 test('MCP bearer grants are independent of owner keys and cannot cross participant scope', async t => {
   const f = await workspace(t); f.app.engine.create(topic, 'mcp-topic'); f.app.engine.control(f.app.store.read().discussions[0].id, { action: 'pause', expectedRevision: 1 }, 'pause-mcp');
   const d = f.app.store.read().discussions[0]; const grant = await (await f.api('/api/grants', { discussionId: d.id, participantId: 'fake-a', tools: ['task_get', 'context_get', 'result_submit'] })).json();

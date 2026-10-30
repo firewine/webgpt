@@ -162,12 +162,15 @@ function renderRecords(target: HTMLElement, d: Discussion): void {
 function renderConnections(): void {
   if (!state) return; const target = $('#connections-list'); target.replaceChildren();
   for (const c of state.connections) { const card = node('article', '', 'connection-card'); card.append(node('h3', c.label), badge(c.status), node('p', `${c.kind}${c.email ? ` · ${c.email}` : ''}`, 'muted'), node('p', `${c.models.length}개 모델${c.error ? ` · ${c.error}` : ''}`, 'small'));
+    if (c.browser?.thread) card.append(node('p', `연결된 대화 ID: ${c.browser.thread.value}`, 'small muted'));
     const row = node('div', '', 'toolbar'); row.append(button('모델 확인', async () => { await api(`/api/connections/${c.id}/models`, {}); await refresh(); }));
     if (c.kind === 'openai-oauth') row.append(button('다시 로그인', async () => { showOAuth(await api('/api/connections/oauth', { label: c.label, connectionId: c.id })); }), button('이 계정 로그아웃', async () => { const result = await api<{ revoked: boolean }>(`/api/connections/${c.id}/logout`, {}); announce(result.revoked ? '계정 연결을 해제했습니다.' : '로컬 인증 정보를 지웠습니다. 원격 폐기 여부는 확인하지 못했습니다.'); await refresh(); }));
     if (c.kind === 'deepseek') row.append(button('API 키 갱신', () => modal('DeepSeek API 키 갱신', [{ name: 'key', label: '새 API 키', secret: true }], async values => { await api(`/api/connections/${c.id}/credential`, values); await refresh(); })));
-    if (c.kind === 'browser' && c.browser) row.append(button('페이지·선택자 갱신', () => { const form = $<HTMLFormElement>('#browser-form'); const owner = form.closest('details')!; owner.open = true;
+    if (c.kind === 'browser' && c.browser) { const browserBinding = c.browser; row.append(button('페이지·선택자 갱신', () => { const form = $<HTMLFormElement>('#browser-form'); const owner = form.closest('details')!; owner.open = true;
       let hidden = form.elements.namedItem('connectionId') as HTMLInputElement | null; if (!hidden) { hidden = node('input'); hidden.type = 'hidden'; hidden.name = 'connectionId'; form.append(hidden); } hidden.value = c.id;
-      for (const [key, value] of Object.entries({ label: c.label, ...c.browser })) { const input = form.elements.namedItem(key) as HTMLInputElement | null; if (input) input.value = String(value); } owner.scrollIntoView({ behavior: 'smooth' }); }));
+      for (const [key, value] of Object.entries({ label: c.label, ...browserBinding, threadSelector: browserBinding.thread?.selector ?? '', threadAttribute: browserBinding.thread?.attribute ?? '', threadValue: browserBinding.thread?.value ?? '', threadJsonKey: browserBinding.thread?.jsonKey ?? '', sendAppearsAfterInput: !!browserBinding.sendAppearsAfterInput })) {
+        const input = form.elements.namedItem(key) as HTMLInputElement | null; if (input) { if (input.type === 'checkbox') input.checked = value === true; else input.value = String(value); }
+      } owner.scrollIntoView({ behavior: 'smooth' }); })); }
     card.append(row); target.append(card); }
   if (!state.connections.length) target.append(node('p', '등록된 실제 계정이 없습니다. 모의 참여자로 전체 흐름을 먼저 확인할 수 있습니다.', 'small muted'));
   $('#browser-state').textContent = `${state.capabilities.browserConfigured ? 'Chrome 명령 설정됨' : 'Chrome 명령 미설정'} · ${state.browserPaused ? '수동 조작 중 · 자동 입력 잠김' : '자동 입력 가능'} · ${state.capabilities.noVncConfigured ? '화면 연결 설정됨' : '화면 연결 미설정'}`;
@@ -206,7 +209,14 @@ form('#discussion-form', async values => { const participantIds = [...document.q
 form('#oauth-form', async values => { showOAuth(await api('/api/connections/oauth', values)); await refresh(); });
 form('#deepseek-form', async (values, el) => { try { await api('/api/connections/deepseek', values); await refresh(); } finally { (el.elements.namedItem('key') as HTMLInputElement).value = ''; } });
 form('#participant-form', async values => { await api('/api/participants', values); announce('참여자를 등록했습니다.'); await refresh(); });
-form('#browser-form', async (values, form) => { const { label, connectionId, ...binding } = values; await api('/api/connections/browser', { label, connectionId, binding: { ...binding, pageId: Number(binding.pageId) } }); form.querySelector('[name=connectionId]')?.remove(); await refresh(); });
+form('#browser-form', async (values, form) => {
+  const { label, connectionId, threadSelector, threadAttribute, threadValue, threadJsonKey, sendAppearsAfterInput, ...binding } = values;
+  const hasThread = [threadSelector, threadAttribute, threadValue, threadJsonKey].some(Boolean);
+  if (hasThread && (!threadSelector || !threadAttribute || !threadValue)) throw new Error('대화 ID·확인 선택자·속성을 모두 입력하세요.');
+  await api('/api/connections/browser', { label, connectionId, binding: { ...binding, pageId: Number(binding.pageId), sendAppearsAfterInput: sendAppearsAfterInput === 'on',
+    ...(hasThread ? { thread: { selector: threadSelector, attribute: threadAttribute, value: threadValue, ...(threadJsonKey ? { jsonKey: threadJsonKey } : {}) } } : {}) } });
+  form.querySelector('[name=connectionId]')?.remove(); await refresh();
+});
 form('#binding-form', async values => { await api('/api/bindings', { ...values, allowWrite: values.allowWrite === 'on' }); await refresh(); });
 form('#job-form', async values => { await api('/api/jobs', values); await refresh(); });
 form('#grant-form', async values => { const tools = ['task_get', 'context_get', 'result_submit', ...(values.codex === 'on' ? ['codex_send', 'codex_status', 'codex_result', 'codex_cancel'] : [])];

@@ -6,6 +6,8 @@ export interface BrowserBinding {
   pageId: number; url: string; accountLabel: string; agentLabel: string;
   identitySelector: string; identityText: string; inputSelector: string; sendSelector: string;
   userSelector: string; assistantSelector: string; busySelector: string; readySelector: string;
+  thread?: { selector: string; attribute: string; value: string; jsonKey?: string };
+  sendAppearsAfterInput?: boolean;
 }
 export interface Connection {
   id: string; kind: Exclude<ProviderKind, 'fake'>; label: string;

@@ -48,8 +48,8 @@ export class BrowserBridge {
   }
   async probe(binding: BrowserBinding): Promise<void> {
     validateBinding(binding); const state = await this.inspect(binding);
-    if (state.identity !== true || state.url !== cleanUrl(binding.url)) throw new AppError('browser_target_mismatch', 409);
-    if (state.inputFound !== true || state.sendFound !== true) throw new AppError('browser_selectors_invalid', 409);
+    if (state.identity !== true || state.thread !== true || state.url !== cleanUrl(binding.url)) throw new AppError('browser_target_mismatch', 409);
+    if (state.inputFound !== true || state.sendFound !== true && !binding.sendAppearsAfterInput) throw new AppError('browser_selectors_invalid', 409);
     if (state.ready !== true || state.busy === true) throw new AppError('browser_not_ready', 409);
   }
   async complete(input: CompletionInput): Promise<Completion> {
@@ -59,7 +59,7 @@ export class BrowserBridge {
     const b = c.browser; validateBinding(b);
     const marker = `[웹쫀쿠:${input.requestId}]`;
     const before = await this.inspect(b, marker);
-    if (before.identity !== true || before.url !== cleanUrl(b.url)) throw new AppError('browser_target_mismatch', 409);
+    if (before.identity !== true || before.thread !== true || before.url !== cleanUrl(b.url)) throw new AppError('browser_target_mismatch', 409);
     if (typeof before.matchCount === 'number' && before.matchCount > 1) throw new AppError('browser_receipt_ambiguous', 409, true);
     if (before.matched !== true) {
       if (before.draft || before.busy || before.ready !== true) throw new AppError('browser_requires_intervention', 409);
@@ -73,7 +73,7 @@ export class BrowserBridge {
     let receipt: string | null = null; let last = ''; let stable = 0;
     while (!input.signal.aborted) {
       const view = await this.inspect(b, marker);
-      if (view.identity !== true || view.url !== cleanUrl(b.url)) throw new AppError('browser_target_changed', 409, true);
+      if (view.identity !== true || view.thread !== true || view.url !== cleanUrl(b.url)) throw new AppError('browser_target_changed', 409, true);
       if (view.matched === true && !receipt) { receipt = `${cleanUrl(b.url)}#${input.requestId}`; input.hooks.receipt(receipt); }
       const text = typeof view.answer === 'string' ? view.answer : '';
       if (text && text !== last) {
@@ -92,6 +92,11 @@ export function validateBinding(b: BrowserBinding): void {
   if (url.protocol !== 'https:' || url.username || url.password || !(url.hostname === 'chatgpt.com' || url.hostname === 'muse.ai' || url.hostname.endsWith('.muse.ai'))) throw new AppError('browser_origin_not_allowed');
   if (!Number.isInteger(b.pageId) || b.pageId < 0) throw new AppError('invalid_page_id');
   for (const key of ['identitySelector', 'identityText', 'inputSelector', 'sendSelector', 'userSelector', 'assistantSelector', 'busySelector', 'readySelector', 'accountLabel', 'agentLabel'] as const) string(b[key], 500);
+  if (b.thread) {
+    string(b.thread.selector, 500); string(b.thread.attribute, 100); string(b.thread.value, 500);
+    if (b.thread.jsonKey !== undefined) string(b.thread.jsonKey, 100);
+  }
+  if (b.sendAppearsAfterInput !== undefined && typeof b.sendAppearsAfterInput !== 'boolean') throw new AppError('invalid_input');
 }
 function cleanUrl(value: string): string { const url = new URL(value); url.hash = ''; return url.href; }
 function toolText(result: Record<string, unknown>): string { return (Array.isArray(result.content) ? result.content : []).map(object).filter(c => c.type === 'text').map(c => String(c.text)).join('\n'); }
@@ -105,25 +110,34 @@ function toolObject(result: Record<string, unknown>): Record<string, unknown> {
 }
 export function observationScript(b: BrowserBinding, marker: string): string {
   return `() => { const b=${JSON.stringify(b)}, marker=${JSON.stringify(marker)};
+    ${threadGuardScript()}
     const visible=e=>!!e&&e.getClientRects().length>0;
     const input=document.querySelector(b.inputSelector), send=document.querySelector(b.sendSelector);
     const identity=document.querySelector(b.identitySelector);
     const users=[...document.querySelectorAll(b.userSelector)];
-    const match=marker?users.filter(e=>(e.textContent||'').trim().startsWith(marker)):[];
+    const messageText=e=>{const copy=e.cloneNode(true);copy.querySelectorAll('[data-copy-exclude]').forEach(node=>node.remove());return copy.textContent||'';};
+    const match=marker?users.filter(e=>messageText(e).trim().startsWith(marker)):[];
     const user=match.length===1?match[0]:null;
-    const answers=user?[...document.querySelectorAll(b.assistantSelector)].filter(e=>(user.compareDocumentPosition(e)&Node.DOCUMENT_POSITION_FOLLOWING)!==0):[];
+    const nextUser=user?users[users.indexOf(user)+1]:null;
+    const answers=user?[...document.querySelectorAll(b.assistantSelector)].filter(e=>(user.compareDocumentPosition(e)&Node.DOCUMENT_POSITION_FOLLOWING)!==0&&(!nextUser||(e.compareDocumentPosition(nextUser)&Node.DOCUMENT_POSITION_FOLLOWING)!==0)):[];
     const u=new URL(location.href);u.hash='';
-    return {url:u.href,identity:!!identity&&(identity.textContent||'').includes(b.identityText),
+    return {url:u.href,identity:!!identity&&(identity.textContent||'').includes(b.identityText),thread:threadMatches(),
       inputFound:visible(input),sendFound:visible(send),draft:input?('value' in input?input.value:input.textContent):'',
-      ready:visible(document.querySelector(b.readySelector)),busy:visible(document.querySelector(b.busySelector)),
-      matched:!!user,matchCount:match.length,answer:answers.length===1?(answers[0].textContent||'').slice(0,100000):''}; }`;
+      ready:visible(document.querySelector(b.readySelector)),busy:[...document.querySelectorAll(b.busySelector)].some(visible),
+      matched:!!user,matchCount:match.length,answer:answers.map(messageText).join('\\n\\n').slice(0,100000)}; }`;
+}
+function threadGuardScript(): string {
+  return `const threadMatches=()=>{if(!b.thread)return true;const nodes=[...document.querySelectorAll(b.thread.selector)].filter(e=>e.getClientRects().length>0);
+    return nodes.length>0&&nodes.every(e=>{let value=e.getAttribute(b.thread.attribute);if(b.thread.jsonKey){try{value=JSON.parse(value||'null')?.[b.thread.jsonKey];}catch{return false;}}return value===b.thread.value;});};`;
 }
 export function sendScript(b: BrowserBinding, prompt: string): string {
   return `async () => {const b=${JSON.stringify(b)}, text=${JSON.stringify(prompt)};
+    ${threadGuardScript()}
     const u=new URL(location.href);u.hash='';if(u.href!==${JSON.stringify(cleanUrl(b.url))})return {sent:false};
-    const identity=document.querySelector(b.identitySelector),input=document.querySelector(b.inputSelector),button=document.querySelector(b.sendSelector);
+    const identity=document.querySelector(b.identitySelector),input=document.querySelector(b.inputSelector);
+    let button=document.querySelector(b.sendSelector);
     const visible=e=>!!e&&e.getClientRects().length>0;
-    if(!identity||!(identity.textContent||'').includes(b.identityText)||!visible(input)||!visible(button)||visible(document.querySelector(b.busySelector))||!visible(document.querySelector(b.readySelector)))return {sent:false};
+    if(!identity||!(identity.textContent||'').includes(b.identityText)||!threadMatches()||!visible(input)||(!visible(button)&&!b.sendAppearsAfterInput)||[...document.querySelectorAll(b.busySelector)].some(visible)||!visible(document.querySelector(b.readySelector)))return {sent:false};
     if(('value' in input?input.value:input.textContent).trim())return {sent:false};
     if(input instanceof HTMLTextAreaElement||input instanceof HTMLInputElement){
       const proto=input instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
@@ -131,6 +145,7 @@ export function sendScript(b: BrowserBinding, prompt: string): string {
     }else if(input.isContentEditable){input.replaceChildren(document.createTextNode(text));}else return {sent:false};
     input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:text}));
     await new Promise(resolve=>setTimeout(resolve,150));
+    button=document.querySelector(b.sendSelector);
     const current=new URL(location.href);current.hash='';
-    if(current.href!==u.href||!(document.querySelector(b.identitySelector)?.textContent||'').includes(b.identityText)||!input.isConnected||!button.isConnected||('value' in input?input.value:input.textContent)!==text||button.disabled||visible(document.querySelector(b.busySelector)))return {sent:false};button.click();return {sent:true};}`;
+    if(current.href!==u.href||!(document.querySelector(b.identitySelector)?.textContent||'').includes(b.identityText)||!threadMatches()||!input.isConnected||!visible(button)||!button.isConnected||('value' in input?input.value:input.textContent)!==text||button.disabled||button.getAttribute('aria-disabled')==='true'||!visible(document.querySelector(b.readySelector))||[...document.querySelectorAll(b.busySelector)].some(visible))return {sent:false};button.click();return {sent:true};}`;
 }

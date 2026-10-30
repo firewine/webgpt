@@ -75,8 +75,18 @@ export class Workspace {
     const binding: BrowserBinding = { pageId: Number(raw.pageId), url: string(raw.url, 2000), accountLabel: string(raw.accountLabel, 100), agentLabel: string(raw.agentLabel, 100),
       identitySelector: string(raw.identitySelector, 500), identityText: string(raw.identityText, 500), inputSelector: string(raw.inputSelector, 500), sendSelector: string(raw.sendSelector, 500),
       userSelector: string(raw.userSelector, 500), assistantSelector: string(raw.assistantSelector, 500), busySelector: string(raw.busySelector, 500), readySelector: string(raw.readySelector, 500) };
+    if (raw.thread !== undefined) {
+      const thread = object(raw.thread);
+      binding.thread = { selector: string(thread.selector, 500), attribute: string(thread.attribute, 100), value: string(thread.value, 500),
+        ...(thread.jsonKey !== undefined ? { jsonKey: string(thread.jsonKey, 100) } : {}) };
+    }
+    if (raw.sendAppearsAfterInput !== undefined) {
+      if (typeof raw.sendAppearsAfterInput !== 'boolean') throw new AppError('invalid_input');
+      binding.sendAppearsAfterInput = raw.sendAppearsAfterInput;
+    }
     validateBinding(binding);
     if (existing?.browser && ['url', 'accountLabel', 'agentLabel', 'identityText'].some(key => existing.browser![key as keyof BrowserBinding] !== binding[key as keyof BrowserBinding])) throw new AppError('browser_identity_change_not_allowed', 409);
+    if (existing?.browser && existing.browser.thread?.value !== binding.thread?.value) throw new AppError('browser_identity_change_not_allowed', 409);
     await this.browser.probe(binding);
     const connectionId = existing?.id ?? id('connection');
     this.store.transact((s, emit) => {
