@@ -13,10 +13,20 @@ async function provider(t, kind, request) { const { store, vault } = await stora
 }
 test('OAuth public Responses contract uses owned history and requires actual completed event', async t => {
   const f = await provider(t, 'openai-oauth', async (url, options) => { assert.equal(url, 'https://api.openai.com/v1/responses'); assert.equal(options.headers.Authorization, 'Bearer fixture-oauth-token'); const body = JSON.parse(options.body);
-    assert.equal(body.store, false); assert.equal(body.stream, true); assert.equal(body.input.length, 3); assert.equal(body.input[0].content, '내 이전 질문');
+    assert.equal(body.store, false); assert.equal(body.stream, true); assert.equal(body.input.length, 3); assert.equal(body.input[0].content, '내 이전 질문'); assert.equal(body.reasoning.effort, 'xhigh');
     for (const unsupported of ['temperature', 'max_output_tokens', 'previous_response_id', 'conversation']) assert.equal(unsupported in body, false);
     return stream([{ type: 'response.created', response: { id: 'resp-observed' } }, { type: 'response.output_text.delta', delta: '한글 응답' }, { type: 'response.completed', response: { id: 'resp-observed', status: 'completed', usage: { input_tokens: 11, output_tokens: 7 } } }]); });
   const result = await f.providers.complete(f.input); assert.equal(result.text, '한글 응답'); assert.deepEqual(result.usage, { input: 11, output: 7 }); assert.equal(f.seen.deltas.join(''), '한글 응답');
+});
+test('OAuth reasoning effort is configurable and unsupported effort never downgrades or retries', async t => {
+  const seen = []; const f = await provider(t, 'openai-oauth', async (_url, options) => {
+    seen.push(JSON.parse(options.body).reasoning.effort);
+    return Response.json({ error: { code: 'unsupported_value', param: 'reasoning.effort', message: 'fixture private provider detail' } }, { status: 400 });
+  });
+  await assert.rejects(f.providers.complete({ ...f.input, participant: { ...f.input.participant, reasoningEffort: 'high' } }), e => e.code === 'reasoning_effort_not_supported');
+  assert.deepEqual(seen, ['high']);
+  await assert.rejects(f.providers.complete({ ...f.input, participant: { ...f.input.participant, reasoningEffort: 'invented' } }), /invalid_reasoning_effort/);
+  assert.deepEqual(seen, ['high']);
 });
 test('DeepSeek requires stop and DONE, and reports real usage; early EOF remains uncertain', async t => {
   const f = await provider(t, 'deepseek', async (url, options) => { assert.equal(url, 'https://api.deepseek.com/chat/completions'); const body = JSON.parse(options.body); assert.equal(body.messages[0].role, 'system'); assert.equal(body.stream_options.include_usage, true);

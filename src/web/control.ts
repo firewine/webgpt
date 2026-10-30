@@ -6,12 +6,15 @@ type View = 'discussion' | 'connections' | 'execution';
 const $ = <T extends HTMLElement = HTMLElement>(selector: string): T => document.querySelector<T>(selector)!;
 let state: Snapshot | null = null; let current: Discussion | null = null; let selected = localStorage.getItem('wj.discussion') ?? '';
 let tab = 'timeline'; let view: View = 'discussion'; let stream: EventSource | null = null;
+const effortOptions = [{ value: 'low', label: 'Low · 낮음' }, { value: 'medium', label: 'Medium · 보통' }, { value: 'high', label: 'High · 높음' }, { value: 'xhigh', label: 'Extra high · 매우 높음' }];
+function effortLabel(value: string): string { return effortOptions.find(o => o.value === value)?.label ?? value; }
 let cursor = 0; let refreshing = false; let again = false; let timer = 0; let choiceSignature = ''; let noticeTimer = 0;
 const phases: Record<Phase, string> = { independent: '초기안', cross_review: '상호 검토', verification: '검증', revision: '수정안', synthesis: '종합', summary_review: '종합안 검토' };
 const states: Record<string, string> = { running: '진행 중', paused: '일시정지', blocked: '확인 필요', completed: '완료', partial: '부분 완료', cancelled: '취소',
   prepared: '전송 준비', pending: '대기', failed: '실패', unconfirmed: '결과 미확인', stale: '이전 조건의 응답', connected: '연결됨', auth_required: '로그인 필요', unverified: '미확인', error: '연결 오류',
   observed: '자료 관측됨', reported: '참여자 보고', not_run: '미실행', queued: '실행 대기', blocked_approval: '승인 대기', reconciling: '실행 확인 필요', interrupted: '중단됨', ready: '준비됨', fixture: '모의', not_applicable: '해당 없음', waiting: '대기' };
 const errors: Record<string, string> = { authentication_required: '접속 키를 확인해 주세요.', root_workflow_busy: '진행 중인 토의를 먼저 완료하거나 취소해 주세요.', two_participants_required: '참여자를 2명 이상 선택해 주세요.',
+  invalid_reasoning_effort: '지원하는 사고 깊이 값을 선택해 주세요.', reasoning_effort_not_supported: '선택한 모델이 이 사고 깊이를 지원하지 않습니다. 설정을 바꾼 뒤 이어가세요.', reasoning_requires_oauth: '사고 깊이 요청 설정은 OAuth GPT 토커에 적용됩니다. 기존 dot·Muse는 해당 서비스에서 설정하세요.', participant_settings_require_pause: '일시정지 후 현재 응답이 확정되면 사고 깊이를 바꿀 수 있습니다.', oauth_account_mismatch: '선택한 로그인 계정이 지정한 계정과 다릅니다. 웹 GPT용 계정으로 로그인해 주세요.', isolated_login_unavailable: '현재 Chrome 도구가 분리된 로그인 공간을 지원하지 않습니다. 도구 설정을 확인해 주세요.',
   connection_not_ready: '먼저 연결과 모델 목록을 확인해 주세요.', browser_not_configured: '서버의 Chrome 연결 명령을 설정해 주세요.', browser_manual_control: 'Chrome 수동 조작을 마친 뒤 자동 입력을 재개해 주세요.',
   browser_turn_active: '진행 중인 Chrome 응답이 끝난 뒤 수동 조작을 시작할 수 있습니다.', browser_target_mismatch: '대화 주소 또는 계정 식별 문구가 일치하지 않습니다.',
   browser_selectors_invalid: '실제 입력란과 전송 버튼 선택자를 확인해 주세요.', browser_not_ready: 'Chrome 대화가 응답 가능한 상태인지 확인해 주세요.',
@@ -88,7 +91,10 @@ function render(): void {
   $('#composer').hidden = !!current; $('#discussion-detail').hidden = !current;
   if (current) renderDiscussion(); renderConnections(); renderJobs(); showView(view);
 }
-function updateModels(): void { const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); selectOptions($('#participant-model'), c?.models ?? []); }
+function updateModels(): void { const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); selectOptions($('#participant-model'), c?.models ?? []);
+  $<HTMLSelectElement>('#participant-effort').disabled = c?.kind !== 'openai-oauth';
+  $('#participant-effort-note').textContent = c?.kind === 'browser' ? '기존 dot·Muse의 모델과 사고 깊이는 원래 서비스에서 조절합니다.' : c?.kind === 'openai-oauth' ? '기본 Extra high. 모델이 지원하지 않는 값은 오류로 표시합니다.' : '이 연결에는 GPT 사고 깊이 요청 설정을 사용하지 않습니다.';
+}
 function control(body: Record<string, unknown>): Promise<unknown> { if (!current) return Promise.resolve(); return api(`/api/discussions/${current.id}/control`, { expectedRevision: current.revision, ...body }).then(refresh); }
 function renderDiscussion(): void {
   if (!current) return; const d = current;
@@ -105,6 +111,11 @@ function renderDiscussion(): void {
   const members = $('#member-status'); members.replaceChildren();
   for (const p of d.members) { const context = d.contexts.find(c => c.participantId === p.id)!; const card = node('article', '', 'member-card'); const head = node('div', '', 'inline'); head.append(node('span', p.kind === 'fake' ? 'F' : p.kind === 'openai-oauth' ? 'G' : p.kind === 'deepseek' ? 'D' : p.label.slice(0, 1), 'avatar'), node('span', p.label, 'name'));
     card.append(head, node('div', `${d.excludedIds.includes(p.id) ? '참여 제외 · ' : ''}${p.modelId} · 문맥 ${context.generation}`, 'small muted'));
+    if (p.kind === 'openai-oauth') {
+      card.append(node('p', '사고 깊이 · ' + effortLabel(p.reasoningEffort ?? 'xhigh'), 'small muted'));
+      card.append(button('사고 깊이 변경', () => { if (!['paused', 'blocked'].includes(d.status)) { announce('토의를 일시정지하고 현재 발언이 끝난 뒤 변경하세요.', true); return; }
+        modal('이 토의의 사고 깊이', [{ name: 'reasoningEffort', label: '사고 깊이', options: effortOptions, value: p.reasoningEffort ?? 'xhigh' }], values => control({ action: 'configure_participant', participantId: p.id, ...values }), '완료된 발언은 보존하고 이후 발언부터 적용합니다.'); }));
+    }
     const job = state?.jobs.filter(j => j.discussionId === d.id && d.tasks.some(t => t.id === j.taskId && t.participantId === p.id)).at(-1); const toolState = job?.status ?? context.observation.tool;
     card.append(node('div', `연결 ${states[context.observation.connection] ?? context.observation.connection} / 응답 ${states[context.observation.response] ?? context.observation.response}\n도구 ${states[toolState] ?? toolState} / 업무 ${states[d.status] ?? d.status}`, 'observations')); members.append(card); }
   for (const el of document.querySelectorAll<HTMLElement>('[data-tab]')) el.classList.toggle('selected', el.dataset.tab === tab);
@@ -121,7 +132,7 @@ function renderTimeline(target: HTMLElement, d: Discussion): void {
     card.append(head, node('div', (t.reply?.text ?? t.text) || '응답을 기다리고 있습니다…', 'reply'));
     if (t.reply?.uncertainty.length) card.append(node('div', t.reply.uncertainty.join('\n'), 'uncertainty'));
     if (t.reply?.reviews.length) { const reviews = node('div'); for (const r of t.reply.reviews) reviews.append(node('p', `${r.stance === 'challenge' ? '반론' : r.stance === 'support' ? '지지' : '미확인'} · ${d.claims.find(c => c.id === r.claimId)?.text ?? r.claimId}\n${r.reason}`, 'small')); card.append(reviews); }
-    card.append(node('footer', `revision ${t.revision} · 문맥 ${t.generation} · ${time(t.startedAt)}${t.error ? ` · ${t.error}` : ''}`));
+    card.append(node('footer', `revision ${t.revision} · 문맥 ${t.generation} · ${time(t.startedAt)}${t.reasoningEffort ? ' · 요청 사고 깊이 ' + effortLabel(t.reasoningEffort) : ''}${t.error ? ` · ${t.error}` : ''}`));
     card.append(details('원본 응답과 수신 기록', JSON.stringify({ turnId: t.id, receipt: t.receipt, usage: t.usage, evidenceIds: t.evidenceIds, promptDigest: t.promptDigest, raw: t.text }, null, 2), t.id)); target.append(card);
   }
 }
@@ -164,7 +175,7 @@ function renderConnections(): void {
   for (const c of state.connections) { const card = node('article', '', 'connection-card'); card.append(node('h3', c.label), badge(c.status), node('p', `${c.kind}${c.email ? ` · ${c.email}` : ''}`, 'muted'), node('p', `${c.models.length}개 모델${c.error ? ` · ${c.error}` : ''}`, 'small'));
     if (c.browser?.thread) card.append(node('p', `연결된 대화 ID: ${c.browser.thread.value}`, 'small muted'));
     const row = node('div', '', 'toolbar'); row.append(button('모델 확인', async () => { await api(`/api/connections/${c.id}/models`, {}); await refresh(); }));
-    if (c.kind === 'openai-oauth') row.append(button('다시 로그인', async () => { showOAuth(await api('/api/connections/oauth', { label: c.label, connectionId: c.id })); }), button('이 계정 로그아웃', async () => { const result = await api<{ revoked: boolean }>(`/api/connections/${c.id}/logout`, {}); announce(result.revoked ? '계정 연결을 해제했습니다.' : '로컬 인증 정보를 지웠습니다. 원격 폐기 여부는 확인하지 못했습니다.'); await refresh(); }));
+    if (c.kind === 'openai-oauth') row.append(button('다시 로그인', async () => { showOAuth(await api('/api/connections/oauth', { label: c.label, connectionId: c.id, expectedEmail: c.expectedEmail })); }), button('이 계정 로그아웃', async () => { const result = await api<{ revoked: boolean }>(`/api/connections/${c.id}/logout`, {}); announce(result.revoked ? '계정 연결을 해제했습니다.' : '로컬 인증 정보를 지웠습니다. 원격 폐기 여부는 확인하지 못했습니다.'); await refresh(); }));
     if (c.kind === 'deepseek') row.append(button('API 키 갱신', () => modal('DeepSeek API 키 갱신', [{ name: 'key', label: '새 API 키', secret: true }], async values => { await api(`/api/connections/${c.id}/credential`, values); await refresh(); })));
     if (c.kind === 'browser' && c.browser) { const browserBinding = c.browser; row.append(button('페이지·선택자 갱신', () => { const form = $<HTMLFormElement>('#browser-form'); const owner = form.closest('details')!; owner.open = true;
       let hidden = form.elements.namedItem('connectionId') as HTMLInputElement | null; if (!hidden) { hidden = node('input'); hidden.type = 'hidden'; hidden.name = 'connectionId'; form.append(hidden); } hidden.value = c.id;
@@ -173,12 +184,24 @@ function renderConnections(): void {
       } owner.scrollIntoView({ behavior: 'smooth' }); })); }
     card.append(row); target.append(card); }
   if (!state.connections.length) target.append(node('p', '등록된 실제 계정이 없습니다. 모의 참여자로 전체 흐름을 먼저 확인할 수 있습니다.', 'small muted'));
+  const participants = $('#participants-list'); participants.replaceChildren();
+  for (const p of state.participants.filter(p => p.kind !== 'fake')) {
+    const connection = state.connections.find(c => c.id === p.connectionId); const card = node('article', '', 'connection-card');
+    card.append(node('h3', p.label), node('p', '계정 · ' + (connection?.email ?? connection?.browser?.accountLabel ?? connection?.label ?? '연결 확인 필요'), 'small muted'), node('p', p.modelId + (p.kind === 'openai-oauth' ? ' · ' + effortLabel(p.reasoningEffort ?? 'xhigh') : ''), 'small'));
+    card.append(button('토커 설정 변경', () => { if (connection?.status !== 'connected') { announce('먼저 해당 계정을 로그인하고 모델을 확인해 주세요.', true); return; }
+      const form = $<HTMLFormElement>('#participant-form'); let hidden = form.elements.namedItem('participantId') as HTMLInputElement | null;
+      if (!hidden) { hidden = node('input'); hidden.type = 'hidden'; hidden.name = 'participantId'; form.append(hidden); } hidden.value = p.id;
+      $<HTMLSelectElement>('#participant-connection').value = p.connectionId!; updateModels(); $<HTMLSelectElement>('#participant-model').value = p.modelId;
+      (form.elements.namedItem('label') as HTMLInputElement).value = p.label; (form.elements.namedItem('role') as HTMLInputElement).value = p.role;
+      $<HTMLSelectElement>('#participant-effort').value = p.reasoningEffort ?? 'xhigh'; $('#participant-save').textContent = '토커 설정 저장'; $('#participant-edit-cancel').hidden = false; form.scrollIntoView({ behavior: 'smooth' });
+    })); participants.append(card);
+  }
   $('#browser-state').textContent = `${state.capabilities.browserConfigured ? 'Chrome 명령 설정됨' : 'Chrome 명령 미설정'} · ${state.browserPaused ? '수동 조작 중 · 자동 입력 잠김' : '자동 입력 가능'} · ${state.capabilities.noVncConfigured ? '화면 연결 설정됨' : '화면 연결 미설정'}`;
   const grants = $('#grants-list'); grants.replaceChildren(); for (const grant of state.grants) { const row = node('div', '', 'toolbar'); row.append(node('span', `${grant.participantId} · ${grant.revoked ? '폐기됨' : grant.tools.join(', ')}`, 'small')); if (!grant.revoked) row.append(button('폐기', async () => { await api('/api/grants/revoke', { id: grant.id }); await refresh(); })); grants.append(row); }
 }
 function showOAuth(result: { authorizationUrl: string; connectionId: string }): void {
   const target = $('#oauth-result'); target.replaceChildren(node('p', 'Ubuntu 서버의 Chrome에서 아래 승인 주소를 여세요. 다른 기기에서 열면 loopback 콜백이 서버로 돌아오지 않습니다.', 'small'));
-  target.append(button('서버 Chrome에서 승인 화면 열기', async () => { await api('/api/browser/open-auth', { url: result.authorizationUrl }); announce('서버 Chrome에서 로그인을 완료한 뒤 모델 확인을 눌러 주세요.'); }), details('서버에서 열 승인 주소', result.authorizationUrl), button('로그인 완료 · 모델 확인', async () => { await api(`/api/connections/${result.connectionId}/models`, {}); await refresh(); }));
+  target.append(button('별도 로그인 창 열기', async () => { await api('/api/browser/open-auth', { url: result.authorizationUrl, connectionId: result.connectionId }); announce('dot과 분리된 Chrome 로그인 창에서 웹 GPT용 계정으로 로그인한 뒤 모델 확인을 누르세요.'); }), details('서버에서 열 승인 주소', result.authorizationUrl), button('로그인 완료 · 모델 확인', async () => { await api(`/api/connections/${result.connectionId}/models`, {}); await refresh(); }));
 }
 function renderJobs(): void {
   if (!state) return; const bindings = $('#bindings-list'); bindings.replaceChildren();
@@ -193,11 +216,12 @@ function renderJobs(): void {
       for (const activity of job.activities) card.append(details(`${activity.type} · ${activity.status}`, activity.text, `${job.id}:${activity.id}`)); if (job.error) card.append(node('p', job.error, 'small muted')); target.append(card); }
   });
 }
-type Field = { name: string; label: string; multiline?: boolean; required?: boolean; secret?: boolean };
+type Field = { name: string; label: string; multiline?: boolean; required?: boolean; secret?: boolean; options?: { value: string; label: string }[]; value?: string };
 let modalAction: ((values: Record<string, string>) => Promise<unknown>) | null = null;
 function modal(title: string, fields: Field[], action: (values: Record<string, string>) => Promise<unknown>, note?: string): void {
   $('#action-title').textContent = title; const target = $('#action-fields'); target.replaceChildren(); if (note) target.append(node('p', note, 'small muted'));
-  for (const field of fields) { const label = node('label', field.label); const input = field.multiline ? node('textarea') : node('input'); input.name = field.name; input.required = field.required !== false; if (input instanceof HTMLTextAreaElement) input.rows = 6; else if (field.secret) { input.type = 'password'; input.autocomplete = 'off'; } label.append(input); target.append(label); }
+  for (const field of fields) { const label = node('label', field.label); const input = field.options ? node('select') : field.multiline ? node('textarea') : node('input'); input.name = field.name; input.required = field.required !== false; if (input instanceof HTMLTextAreaElement) input.rows = 6; else if (input instanceof HTMLInputElement && field.secret) { input.type = 'password'; input.autocomplete = 'off'; }
+    if (input instanceof HTMLSelectElement && field.options) selectOptions(input, field.options.map(o => ({ id: o.value, label: o.label }))); if (field.value !== undefined) input.value = field.value; label.append(input); target.append(label); }
   modalAction = action; $<HTMLDialogElement>('#action-dialog').showModal();
 }
 form('#action-form', async values => { await modalAction?.(values); $<HTMLDialogElement>('#action-dialog').close(); $('#action-fields').replaceChildren(); });
@@ -208,7 +232,9 @@ form('#discussion-form', async values => { const participantIds = [...document.q
     limits: { maxRequests: Number(values.maxRequests), maxRounds: Number(values.maxRounds), maxActiveMs: Number(values.maxMinutes) * 60_000 } }); selected = result.id; localStorage.setItem('wj.discussion', selected); await refresh(); });
 form('#oauth-form', async values => { showOAuth(await api('/api/connections/oauth', values)); await refresh(); });
 form('#deepseek-form', async (values, el) => { try { await api('/api/connections/deepseek', values); await refresh(); } finally { (el.elements.namedItem('key') as HTMLInputElement).value = ''; } });
-form('#participant-form', async values => { await api('/api/participants', values); announce('참여자를 등록했습니다.'); await refresh(); });
+function clearParticipantEdit(): void { $('#participant-form').querySelector('[name=participantId]')?.remove(); $<HTMLFormElement>('#participant-form').reset(); $('#participant-save').textContent = '참여자 등록'; $('#participant-edit-cancel').hidden = true; updateModels(); }
+form('#participant-form', async values => { const { participantId, ...settings } = values; await api(participantId ? '/api/participants/' + participantId : '/api/participants', settings); clearParticipantEdit(); announce(participantId ? '설정을 저장했습니다. 새 토의부터 적용합니다.' : '참여자를 등록했습니다.'); await refresh(); });
+$('#participant-edit-cancel').addEventListener('click', clearParticipantEdit);
 form('#browser-form', async (values, form) => {
   const { label, connectionId, threadSelector, threadAttribute, threadValue, threadJsonKey, sendAppearsAfterInput, ...binding } = values;
   const hasThread = [threadSelector, threadAttribute, threadValue, threadJsonKey].some(Boolean);

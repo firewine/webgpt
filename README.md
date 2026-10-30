@@ -28,6 +28,8 @@ npm start
 4. 모든 참여자가 같은 근거를 보고 수정안을 작성합니다. 종합안은 한 참여자가 만들고 나머지가 검토합니다. 초기안·수정안·이견·근거를 나란히 확인합니다.
 5. 조건 보완, 일시정지, 이어가기, 취소와 체크포인트를 사용할 수 있습니다. 탭을 닫아도 서버 작업과 기록은 유지됩니다.
 
+dot 계정과 웹 GPT OAuth 계정은 분리된 로그인 창에서 선택합니다. OAuth GPT 사고 깊이는 기본 Extra high이며 토커 설정에서 나중에 바꿀 수 있습니다. 모든 토커는 이전 라운드의 긴 전체 답변을 읽고 각자 재분석해 다시 발언합니다. 기본 검토 2회이며 예산 안에서 1~8회를 선택합니다. [구현과 검증 범위](docs/implementation/talker-settings-rounds-20261030.md)를 확인하세요.
+
 현재 한 작업실에서 활성 토의 1개, provider 발언 1개를 순차 실행합니다. 요청 수·활성 시간·보고된 토큰·검증 과제·Codex 실행 수를 제한합니다. 사용량을 제공하지 않은 연결은 미확인 횟수로 표시하며 가격을 임의 추정하지 않습니다.
 
 일시정지는 다음 전송을 막고 현재 응답을 기록합니다. 토의 취소가 이미 전송된 원격 작업의 취소를 뜻하지는 않습니다. Codex 중단은 실행 화면에서 요청하고 실제 종료 event를 기다립니다. 불확실한 전송과 재시작 중이던 실행은 자동 재전송하지 않습니다.
@@ -76,7 +78,7 @@ npx playwright install --with-deps chromium
 npm run test:browser
 ```
 
-현재 Node 검사 41개와 실제 Chromium 검사 6개를 검증했습니다. Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. browser 검사 중 설치된 Chrome DevTools MCP 검사는 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
+현재 Node 검사 46개와 실제 Chromium 검사 8개를 검증했습니다. Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. browser 검사 중 설치된 Chrome DevTools MCP 검사는 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
 
 ```bash
 npm install --no-save --package-lock=false @openai/codex@0.165.0 chrome-devtools-mcp@1.12.0

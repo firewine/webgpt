@@ -26,6 +26,8 @@
 
 여러 GPT 계정·DeepSeek 혼합 참여는 Phase 1~2 MVP 범위로 올린다. Phase 5는 추가 provider와 **동시 실행 용량** 확장이다. 여러 참여자의 순차 토론을 Phase 5까지 미루지 않는다.
 
+2026-10-30 사용자 요청으로 dot의 기존 Chrome 계정과 웹 GPT OAuth 로그인을 연결별 별도 context로 분리했다. OAuth GPT 토커의 사고 깊이는 기본 Extra high이며 계정·모델과 함께 사후 조절할 수 있다. [구현·검증 기록](./implementation/talker-settings-rounds-20261030.md)은 실제 쿠키 격리·설정·request fixture와 아직 미검증인 별도 실계정 로그인·추론을 구분한다.
+
 ## 2. GPT: OAuth로 연결하고 웹쫀쿠에서 대화
 
 2026-10-29 확인한 [Sign in with ChatGPT 안내](https://developers.openai.com/siwc/quickstart)와 [ChatGPT plan usage](https://developers.openai.com/siwc/token-sharing-open-source)는 대상 앱·계정의 허가 범위에서 OAuth 인증으로 Responses 요청을 수행하는 경로를 제공한다. 웹쫀쿠의 일반 GPT 참여자는 이 경로를 우선 구현한다. 별도의 OpenAI API key 입력이나 일반 ChatGPT DOM 자동화를 기본 경로로 요구하지 않는다.

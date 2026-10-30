@@ -16,6 +16,49 @@ test('full discussion enforces draft/review barriers and preserves NOT_RUN evide
   for (const turn of roundOne) { const data = JSON.parse(turn.prompt.split('\n\n').find(s => s.startsWith('{"topic":'))); assert.ok(data.sharedReplies.every(s => s.phase === 'independent')); assert.ok(turn.reply.reviews.length); }
   assert.ok(d.evidence.every(e => e.status === 'not_run')); assert.ok(d.turns.every(t => t.reply.uncertainty.length)); assert.ok(d.tasks.filter(t => t.phase !== 'independent').every(t => t.dependencyIds.length));
   assert.ok(d.contexts[0].history.every(h => h.role !== 'assistant' || !h.content.includes('모의 참여자 B:')));
+  for (const turn of d.turns.filter(t => ['verification', 'revision', 'summary_review'].includes(t.phase))) { const data = JSON.parse(turn.prompt.split('\n\n').find(s => s.startsWith('{"topic":'))); assert.ok(data.sharedReplies.every(r => r.phase !== turn.phase)); }
+});
+test('three talkers receive full long replies from the previous closed rounds and review every other talker', async t => {
+  const { store } = await storage(t); store.transact(s => { s.participants.push({ id: 'fake-c', label: 'Talker C', kind: 'fake', connectionId: null, modelId: 'fixture', role: '' }); });
+  const inputs = []; const longText = '긴 발언 본문 ' + '장'.repeat(16020); let id; let engine;
+  engine = create(t, store, async input => {
+    const data = JSON.parse(input.prompt.split('\n\n').find(s => s.startsWith('{"topic":')));
+    const phase = input.prompt.includes('· independent ·') ? 'independent' : 'cross_review';
+    inputs.push({ id: input.participant.id, phase, data });
+    const answer = JSON.parse(response(input.prompt, input.participant)); answer.verifications = [];
+    if (phase === 'independent') answer.text = longText + input.participant.id;
+    if (phase === 'cross_review' && inputs.filter(i => i.phase === 'cross_review').length === 6) engine.control(id, { action: 'pause', expectedRevision: 1 }, 'long-round-pause');
+    return { text: JSON.stringify(answer), receipt: 'long-fixture', usage: null };
+  });
+  id = engine.create({ ...topic, participantIds: ['fake-a', 'fake-b', 'fake-c'], limits: { maxRequests: 60, maxRounds: 3, maxVerificationTasks: 0 } }, 'long-rounds');
+  const d = await until(() => { const d = store.read().discussions[0]; return d.status === 'paused' && d.turns.every(t => t.status === 'completed') && d; });
+  const reviews = inputs.filter(i => i.phase === 'cross_review'); assert.equal(reviews.length, 6);
+  for (const input of reviews) {
+    const initial = input.data.sharedReplies.filter(r => r.phase === 'independent'); assert.equal(initial.length, 3);
+    assert.ok(initial.every(r => r.text.startsWith(longText) && r.text.length > 16000));
+    assert.equal(input.data.assignedClaimIds.length, 2);
+  }
+  assert.ok(reviews.slice(0, 3).every(i => i.data.sharedReplies.length === 3));
+  assert.ok(reviews.slice(3).every(i => i.data.sharedReplies.length === 6));
+  assert.ok(d.turns.filter(t => t.phase === 'cross_review').every(t => t.reply.reviews.length === 2));
+});
+test('reasoning changes apply after a confirmed turn boundary and preserve the effort of past turns', async t => {
+  const { store } = await storage(t); store.transact(s => { s.connections.push({ id: 'web', kind: 'openai-oauth', label: 'Web account', status: 'connected', models: [{ id: 'fixture', label: 'Fixture' }] }); s.participants.push({ id: 'gpt', label: 'Web GPT', kind: 'openai-oauth', connectionId: 'web', modelId: 'fixture', role: '', reasoningEffort: 'xhigh' }); });
+  let release; let did; let engine;
+  engine = create(t, store, async input => {
+    input.hooks.dispatched();
+    if (input.participant.id === 'gpt' && input.prompt.includes('· independent ·')) await new Promise(r => { release = r; });
+    if (input.participant.id === 'gpt' && input.prompt.includes('· cross_review ·')) engine.control(did, { action: 'pause', expectedRevision: 1 }, 'reasoning-second-pause');
+    return { text: response(input.prompt, input.participant), receipt: 'reasoning-fixture', usage: null };
+  });
+  did = engine.create({ ...topic, participantIds: ['fake-a', 'gpt'] }, 'reasoning-boundary'); await until(() => release);
+  engine.control(did, { action: 'pause', expectedRevision: 1 }, 'reasoning-pause');
+  assert.throws(() => engine.control(did, { action: 'configure_participant', expectedRevision: 1, participantId: 'gpt', reasoningEffort: 'low' }, 'reasoning-too-early'), /participant_settings_require_pause/);
+  release(); await until(() => store.read().discussions[0].turns.every(t => t.status === 'completed'));
+  engine.control(did, { action: 'configure_participant', expectedRevision: 1, participantId: 'gpt', reasoningEffort: 'high' }, 'reasoning-change');
+  engine.control(did, { action: 'resume', expectedRevision: 1 }, 'reasoning-resume');
+  const d = await until(() => { const d = store.read().discussions[0]; return d.status === 'paused' && d.turns.filter(t => t.participantId === 'gpt').length === 2 && d.turns.every(t => t.status === 'completed') && d; });
+  assert.deepEqual(d.turns.filter(t => t.participantId === 'gpt').map(t => t.reasoningEffort), ['xhigh', 'high']);
 });
 test('source observation is shared equally with revised answers, without turning retrieval into truth', async t => {
   const { store } = await storage(t); let retrieved = 0;

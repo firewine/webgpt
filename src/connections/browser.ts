@@ -9,6 +9,7 @@ export class BrowserBridge {
   private rpc: RpcProcess | null = null;
   private connecting: Promise<void> | null = null;
   private ready = false;
+  private isolatedLogin = false;
   constructor(private readonly store: Store, private readonly command: string[] | null) {}
   private async connect(): Promise<void> {
     if (this.ready) return;
@@ -21,6 +22,8 @@ export class BrowserBridge {
       this.rpc!.notify('notifications/initialized');
       const result = object(await this.rpc!.request('tools/list'));
       const available = Array.isArray(result.tools) ? result.tools.map(object) : [];
+      const newPage = available.find(t => t.name === 'new_page');
+      this.isolatedLogin = !!newPage && !!object(object(newPage.inputSchema).properties).isolatedContext;
       if (!['list_pages', 'evaluate_script', 'new_page', 'take_snapshot'].every(name => available.some(t => t.name === name))) throw new AppError('browser_capability_unavailable', 409);
       for (const name of ['evaluate_script', 'take_snapshot']) {
         const schema = object(available.find(t => t.name === name)!.inputSchema); const properties = object(schema.properties);
@@ -37,10 +40,13 @@ export class BrowserBridge {
   }
   async pages(): Promise<string> { return toolText(await this.tool('list_pages', {})); }
   async snapshot(pageId: number): Promise<string> { return toolText(await this.tool('take_snapshot', { pageId })).slice(0, 60_000); }
-  async openAuthorization(url: string): Promise<void> {
+  async openAuthorization(url: string, connectionId: string): Promise<void> {
     const target = new URL(url);
     if (target.origin !== 'https://auth.openai.com' || target.pathname !== '/api/accounts/authorize') throw new AppError('invalid_authorization_url');
-    await this.tool('new_page', { url: target.href });
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(connectionId)) throw new AppError('invalid_connection');
+    await this.connect();
+    if (!this.isolatedLogin) throw new AppError('isolated_login_unavailable', 409);
+    await this.tool('new_page', { url: target.href, isolatedContext: 'webjjoku-oauth-' + connectionId });
   }
   async inspect(binding: BrowserBinding, marker = ''): Promise<Record<string, unknown>> {
     const result = await this.tool('evaluate_script', { pageId: binding.pageId, function: observationScript(binding, marker), waitForStableDom: false, dialogAction: 'dismiss' });
@@ -76,6 +82,7 @@ export class BrowserBridge {
       if (view.identity !== true || view.thread !== true || view.url !== cleanUrl(b.url)) throw new AppError('browser_target_changed', 409, true);
       if (view.matched === true && !receipt) { receipt = `${cleanUrl(b.url)}#${input.requestId}`; input.hooks.receipt(receipt); }
       const text = typeof view.answer === 'string' ? view.answer : '';
+      if (text.length > 100_000) throw new AppError('response_too_large', 502, true);
       if (text && text !== last) {
         if (text.startsWith(last)) input.hooks.delta(text.slice(last.length));
         last = text; stable = 0;
@@ -124,7 +131,7 @@ export function observationScript(b: BrowserBinding, marker: string): string {
     return {url:u.href,identity:!!identity&&(identity.textContent||'').includes(b.identityText),thread:threadMatches(),
       inputFound:visible(input),sendFound:visible(send),draft:input?('value' in input?input.value:input.textContent):'',
       ready:visible(document.querySelector(b.readySelector)),busy:[...document.querySelectorAll(b.busySelector)].some(visible),
-      matched:!!user,matchCount:match.length,answer:answers.map(messageText).join('\\n\\n').slice(0,100000)}; }`;
+      matched:!!user,matchCount:match.length,answer:answers.map(messageText).join('\\n\\n').slice(0,100001)}; }`;
 }
 function threadGuardScript(): string {
   return `const threadMatches=()=>{if(!b.thread)return true;const nodes=[...document.querySelectorAll(b.thread.selector)].filter(e=>e.getClientRects().length>0);

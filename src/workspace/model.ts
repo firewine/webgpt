@@ -1,4 +1,5 @@
 export type ProviderKind = 'fake' | 'openai-oauth' | 'deepseek' | 'browser';
+export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
 export type Phase = 'independent' | 'cross_review' | 'verification' | 'revision' | 'synthesis' | 'summary_review';
 export type RunStatus = 'running' | 'paused' | 'blocked' | 'completed' | 'partial' | 'cancelled';
 export interface ModelChoice { id: string; label: string }
@@ -12,11 +13,12 @@ export interface BrowserBinding {
 export interface Connection {
   id: string; kind: Exclude<ProviderKind, 'fake'>; label: string;
   status: 'connected' | 'auth_required' | 'unverified' | 'error';
-  models: ModelChoice[]; clientId?: string; subject?: string; email?: string;
+  models: ModelChoice[]; clientId?: string; subject?: string; email?: string; expectedEmail?: string;
   browser?: BrowserBinding; lastCheckedAt?: string; error?: string;
 }
 export interface Member {
   id: string; label: string; kind: ProviderKind; connectionId: string | null; modelId: string; role: string;
+  reasoningEffort?: ReasoningEffort;
 }
 export interface Observation {
   connection: string; response: string; tool: string; work: string;
@@ -52,6 +54,7 @@ export interface DiscussionTurn {
   prompt: string; promptDigest: string; text: string; reply: StructuredReply | null;
   startedAt: string; finishedAt: string | null; receipt: string | null; error: string | null;
   usage: { input: number; output: number } | null; evidenceIds: string[];
+  reasoningEffort?: ReasoningEffort;
 }
 export interface Checkpoint {
   id: string; participantId: string; revision: number; generation: number; basisCursor: number;

@@ -7,7 +7,7 @@ export function parseReply(text: string, discussion: Discussion, task?: Task): S
     const value = object(JSON.parse(raw) as unknown);
     const known = new Set(discussion.claims.filter(c => c.revision === discussion.revision).map(c => c.id));
     const claims = list(value.claims, 8).map(c => ({ text: string(c.text, 2000), assumptions: strings(c.assumptions ?? [], 8) }));
-    const reviews = list(value.reviews, 20).map(r => {
+    const reviews = list(value.reviews, 64).map(r => {
       const claimId = string(r.claimId); if (!known.has(claimId)) throw new Error('unknown claim');
       const stance = string(r.stance);
       if (!['support', 'challenge', 'uncertain'].includes(stance)) throw new Error('invalid stance');
@@ -21,7 +21,7 @@ export function parseReply(text: string, discussion: Discussion, task?: Task): S
     });
     if (task?.phase === 'independent' && !claims.length) throw new Error('claims required');
     if (task?.phase === 'cross_review' && task.claimIds.some(id => !reviews.some(r => r.claimId === id))) throw new Error('assigned reviews missing');
-    return { text: string(value.text, 16_000), claims, reviews, verifications, uncertainty: strings(value.uncertainty ?? [], 20) };
+    return { text: string(value.text, 100_000), claims, reviews, verifications, uncertainty: strings(value.uncertainty ?? [], 20) };
   } catch { return null; }
 }
 function list(value: unknown, limit: number): Record<string, unknown>[] {
@@ -31,7 +31,7 @@ function list(value: unknown, limit: number): Record<string, unknown>[] {
 }
 const directions: Record<Phase, string> = {
   independent: '다른 참여자의 이번 초안은 보지 않은 상태입니다. 자신의 결론·가정·근거·미확인 사항을 작성하고 claims를 한 개 이상 포함하세요. 아직 없는 claim ID를 참조하지 마세요.',
-  cross_review: '공개된 초기안과 지정된 상대 주장을 검토하세요. assignedClaimIds의 모든 ID를 reviews에 넣고 질문·반론·지지 이유를 쓰세요. 중요한 검증 과제를 제안할 수 있습니다.',
+  cross_review: '직전 라운드까지 모든 참여자의 전체 발언을 읽고, 각자의 근거·가정·반론을 독립적으로 재분석하세요. assignedClaimIds의 모든 ID를 reviews에 넣고 지지·반론·질문과 자신의 입장이 바뀐 이유를 공개 답변으로 작성하세요. 다른 참여자의 긴 발언을 단순 요약하는 데 그치지 마세요. 중요한 검증 과제를 제안할 수 있습니다.',
   verification: '배정된 쟁점을 제공된 관측 자료로 검토하세요. 원문을 받지 못한 URL·실행하지 않은 테스트는 미확인입니다. 단순 동의를 검증 성공으로 표현하지 마세요.',
   revision: '동일한 검증 자료를 반영해 초기안을 수정하거나 유지하고 그 이유를 적으세요. 반론·불충분한 근거·조건을 보존하세요.',
   synthesis: '각 최종안을 같은 기준으로 비교하고 합의점·이견·검증 상태·조건부 권고·남은 질문을 정리하세요. 근거 없는 점수나 확신 퍼센트를 만들지 마세요.',
@@ -40,8 +40,9 @@ const directions: Record<Phase, string> = {
 export function promptFor(d: Discussion, task: Task): string {
   const participant = d.members.find(m => m.id === task.participantId)!;
   const current = d.turns.filter(t => t.revision === d.revision && t.status === 'completed');
+  const phases: Phase[] = ['independent', 'cross_review', 'verification', 'revision', 'synthesis', 'summary_review'];
   const shared = task.phase === 'independent' ? [] : current.filter(t =>
-    t.phase === 'independent' || (task.phase !== 'cross_review' || t.round < task.round) && ['cross_review', 'verification', 'revision', 'synthesis'].includes(t.phase),
+    phases.indexOf(t.phase) < phases.indexOf(task.phase) || t.phase === 'cross_review' && task.phase === 'cross_review' && t.round < task.round,
   ).map(t => ({ turnId: t.id, participantId: t.participantId, phase: t.phase, round: t.round, text: t.reply?.text ?? t.text,
     reviews: t.reply?.reviews ?? [], verificationProposals: t.reply?.verifications ?? [], uncertainty: t.reply?.uncertainty ?? ['형식 미확인'] }));
   const claims = task.phase === 'independent' ? [] : d.claims.filter(c => c.revision === d.revision && current.some(t => t.id === c.turnId && shared.some(v => v.turnId === t.id)));

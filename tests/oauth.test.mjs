@@ -22,8 +22,8 @@ async function fixture(t) {
     return Response.json({ access_token: `secret-${code.subject}`, refresh_token: `refresh-${code.subject}`, id_token: token, expires_in: code.expires ?? 3600, token_type: 'Bearer', scope: code.scope ?? scope });
   };
   const service = new OAuthService(store, vault, await unusedPort(), request); t.after(() => service.close());
-  async function signin(subject, extra = {}, connectionId) {
-    const begin = await service.begin(subject, connectionId); const url = new URL(begin.authorizationUrl); const code = `code-${subject}-${codes.size}`;
+  async function signin(subject, extra = {}, connectionId, expectedEmail) {
+    const begin = await service.begin(subject, connectionId, expectedEmail); const url = new URL(begin.authorizationUrl); const code = `code-${subject}-${codes.size}`;
     codes.set(code, { subject, nonce: url.searchParams.get('nonce'), challenge: url.searchParams.get('code_challenge'), redirect: url.searchParams.get('redirect_uri'), ...extra });
     const params = new URLSearchParams({ state: url.searchParams.get('state'), code, client_id: connectionId ? store.read().connections.find(c => c.id === connectionId).clientId : `issued-${subject}` });
     return { begin, url, params };
@@ -53,4 +53,12 @@ test('transient model discovery state does not destroy a valid OAuth session', a
   const f = await fixture(t); const good = await f.signin('recoverable'); await f.service.finish(good.params);
   f.store.transact(s => { s.connections[0].status = 'error'; s.connections[0].error = 'model_discovery_failed'; });
   assert.equal(await f.service.access(good.begin.connectionId), 'secret-recoverable');
+});
+test('expected web GPT account rejects accidental dot account before storing credentials', async t => {
+  const f = await fixture(t); const wrong = await f.signin('dot-account', {}, undefined, 'web-account@example.test');
+  await assert.rejects(f.service.finish(wrong.params), /oauth_account_mismatch/);
+  assert.equal(f.vault.get(wrong.begin.connectionId), null);
+  const right = await f.signin('web-account', {}, undefined, 'WEB-ACCOUNT@EXAMPLE.TEST'); await f.service.finish(right.params);
+  assert.equal(await f.service.access(right.begin.connectionId), 'secret-web-account');
+  assert.equal(f.store.read().connections.find(c => c.id === right.begin.connectionId).expectedEmail, 'web-account@example.test');
 });
