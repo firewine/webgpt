@@ -15,6 +15,9 @@ import { reasoningEffort } from './settings.js';
 import { LocalMaterials, materialMetadata } from './materials.js';
 import { inspectCapabilities } from './capabilities.js';
 import { ResidentStore } from './resident-store.js';
+import { DispatchCoordinator } from './dispatch.js';
+import { ResidentRunner } from './resident-runner.js';
+import { FakeResidentCompletion } from './resident-fake.js';
 
 export class Workspace {
   readonly store: Store; readonly vault: Vault; readonly oauth: OAuthService; readonly browser: BrowserBridge;
@@ -22,7 +25,8 @@ export class Workspace {
   readonly accessHash: string;
   readonly materials: LocalMaterials;
   readonly resident: ResidentStore;
-  constructor(readonly config: WorkspaceConfig, fakeDelay = 80) {
+  readonly dispatch: DispatchCoordinator; readonly residentRunner: ResidentRunner;
+  constructor(readonly config: WorkspaceConfig, fakeDelay = 80, options: { residentProvider?: Pick<Providers, 'complete'>; residentClock?: () => number; residentAutoSchedule?: boolean } = {}) {
     this.store = new Store(config.stateDir);
     try { this.resident = new ResidentStore(this.store, config.residentEnabled); }
     catch (error) { this.store.close(); throw error; }
@@ -39,14 +43,21 @@ export class Workspace {
     this.oauth = new OAuthService(this.store, this.vault, config.oauthPort);
     this.browser = new BrowserBridge(this.store, config.chromeCommand);
     this.providers = new Providers(this.store, this.vault, this.oauth, this.browser, fetch, fakeDelay);
-    this.engine = new DiscussionEngine(this.store, this.providers, config);
+    this.dispatch = new DispatchCoordinator(config.residentEnabled);
+    this.engine = new DiscussionEngine(this.store, this.providers, config, undefined, this.dispatch);
     this.materials = new LocalMaterials(config.materialRoots, [config.stateDir, config.chromeProfileDir]);
     this.engine.materials = this.materials;
     mkdirSync(config.chromeProfileDir, { recursive: true, mode: 0o700 });
     this.codex = new CodexExecutor(this.store, config.codexCommand, config.workspaceRoots, [config.stateDir, config.chromeProfileDir]);
-    this.engine.executor = this.codex; this.codex.onProgress = () => this.engine.kick();
+    this.engine.executor = this.codex;
+    this.codex.beforeDispatch = (state, job) => this.dispatch.validateToolDispatch(state, job);
+    this.residentRunner = new ResidentRunner(this.store, this.resident, this.dispatch,
+      options.residentProvider ?? new FakeResidentCompletion(this.providers, fakeDelay), this.engine, config.turnTimeoutMs,
+      { ...(options.residentClock ? { clock: options.residentClock } : {}), ...(options.residentAutoSchedule !== undefined ? { autoSchedule: options.residentAutoSchedule } : {}) });
+    this.resident.dispatchAvailable = true;
+    this.codex.onProgress = () => { this.engine.kick(); this.residentRunner.kick(); };
   }
-  start(): void { this.codex.recover(); this.engine.recover(); }
+  start(): void { this.residentRunner.recover(); this.codex.recover(); this.engine.recover(); this.residentRunner.start(); }
   snapshot() {
     const state = this.store.read();
     return { cursor: this.store.cursor(), connections: state.connections, participants: state.participants,
@@ -121,6 +132,8 @@ export class Workspace {
     this.store.transact((s, emit) => {
       const existing = existingId ? s.participants.find(p => p.id === existingId) : undefined;
       if (existingId && !existing) throw new AppError('participant_not_found', 404);
+      if (existing && body.connectionId !== existing.connectionId && (s.resident?.rooms.some(r => r.contexts?.some(c => c.participantId === existing.id && c.history.length > 0)) ||
+          s.resident?.turns.some(t => t.participantId === existing.id && ['prepared', 'running', 'unconfirmed'].includes(t.status)))) throw new AppError('resident_account_change_requires_new_participant', 409);
       const connection = s.connections.find(c => c.id === body.connectionId && c.status === 'connected');
       if (!connection) throw new AppError('connection_not_ready', 409);
       if (body.reasoningEffort !== undefined && connection.kind !== 'openai-oauth') throw new AppError('reasoning_requires_oauth', 409);
@@ -134,9 +147,13 @@ export class Workspace {
     }); return participantId;
   }
   assertConnectionIdle(connectionId: string): void {
-    if (this.store.read().discussions.some(d => ['running', 'paused', 'blocked'].includes(d.status) && d.members.some(p => p.connectionId === connectionId))) throw new AppError('connection_in_use', 409);
+    const state = this.store.read();
+    if (state.resident?.rooms.some(r => r.desiredOn && r.members.some(m => m.enabled && state.participants.some(p => p.id === m.participantId && p.connectionId === connectionId))) ||
+        state.resident?.turns.some(t => ['prepared', 'running', 'unconfirmed'].includes(t.status) && t.participant?.connectionId === connectionId) ||
+        state.discussions.some(d => ['running', 'paused', 'blocked'].includes(d.status) && d.members.some(p => p.connectionId === connectionId))) throw new AppError('connection_in_use', 409);
   }
   assertNoActiveTurn(connectionId: string): void {
+    if (this.store.read().resident?.turns.some(t => ['prepared', 'running', 'unconfirmed'].includes(t.status) && t.participant?.connectionId === connectionId)) throw new AppError('reconciliation_required', 409);
     if (this.store.read().discussions.some(d => d.turns.some(t => ['prepared', 'running', 'unconfirmed'].includes(t.status) && d.members.some(p => p.id === t.participantId && p.connectionId === connectionId)))) throw new AppError('reconciliation_required', 409);
   }
   async replaceKey(connectionId: string, key: string): Promise<void> {
@@ -146,10 +163,11 @@ export class Workspace {
   }
   browserControl(paused: boolean): void {
     this.store.transact((s, emit) => {
+      if (paused && s.resident?.turns.some(t => ['prepared', 'running'].includes(t.status) && t.participant?.kind === 'browser')) throw new AppError('browser_turn_active', 409);
       if (paused && s.discussions.some(d => d.turns.some(t => ['prepared', 'running'].includes(t.status) && d.members.some(p => p.id === t.participantId && p.kind === 'browser')))) throw new AppError('browser_turn_active', 409);
       if (s.browserPaused === paused) return;
       s.browserPaused = paused; emit({ type: 'browser.manual_control', discussionId: null, data: { paused } });
     });
   }
-  async close(): Promise<void> { const stopping = this.engine.close(); this.codex.close(); this.browser.close(); this.oauth.close(); await stopping; this.store.close(); }
+  async close(): Promise<void> { const stopping = Promise.all([this.engine.close(), this.residentRunner.close()]); this.codex.close(); this.browser.close(); this.oauth.close(); await stopping; this.store.close(); }
 }

@@ -1,4 +1,4 @@
-import type { Providers, Completion } from '../connections/providers.js';
+import type { Providers } from '../connections/providers.js';
 import { fetchSource } from '../connections/sources.js';
 import type { Store } from './store.js';
 import type { Checkpoint, Discussion, DiscussionTurn, Evidence, Phase, Task, WorkspaceState } from './model.js';
@@ -6,6 +6,7 @@ import { AppError, code, digest, id, integer, now, object, string, strings } fro
 import { parseReply, promptFor } from './prompts.js';
 import { reasoningEffort } from './settings.js';
 import type { LocalMaterials } from './materials.js';
+import { DispatchCoordinator, budgetReason } from './dispatch.js';
 
 interface Executor { submit(input: { bindingId: string; prompt: string; requestId: string; discussionId: string; taskId: string; revision: number; maxDurationMs?: number }): string; kick?(): void }
 export class DiscussionEngine {
@@ -16,7 +17,8 @@ export class DiscussionEngine {
   executor: Executor | null = null;
   materials: LocalMaterials | null = null;
   constructor(private readonly store: Store, private readonly providers: Pick<Providers, 'complete'>,
-    private readonly options: { sourceFetch: boolean; turnTimeoutMs: number }, private readonly sourceReader = fetchSource) {}
+    private readonly options: { sourceFetch: boolean; turnTimeoutMs: number }, private readonly sourceReader = fetchSource,
+    readonly dispatch = new DispatchCoordinator()) {}
 
   recover(): void {
     this.store.transact((state, emit) => {
@@ -35,12 +37,14 @@ export class DiscussionEngine {
     });
     this.kick();
   }
-  create(input: unknown, requestId: string): string {
+  create(input: unknown, requestId: string, roomId?: string): string {
     const body = object(input); const participantIds = [...new Set(strings(body.participantIds, 8))];
     if (participantIds.length < 2) throw new AppError('two_participants_required');
     const n = participantIds.length; const limits = body.limits ? object(body.limits) : {};
     const result = this.store.transact((state, emit) => {
-      if (state.discussions.some(d => ['running', 'paused', 'blocked'].includes(d.status)) || unresolved(state) || state.jobs.some(j => j.discussionId && ['running', 'blocked_approval', 'reconciling'].includes(j.status))) throw new AppError('root_workflow_busy', 409);
+      if (state.discussions.some(d => ['running', 'paused', 'blocked'].includes(d.status)) || unresolved(state) ||
+          state.resident?.turns.some(t => ['prepared', 'running', 'unconfirmed'].includes(t.status)) ||
+          state.jobs.some(j => j.discussionId && ['running', 'blocked_approval', 'reconciling'].includes(j.status))) throw new AppError('root_workflow_busy', 409);
       const members = participantIds.map(pid => {
         const member = state.participants.find(p => p.id === pid); if (!member) throw new AppError('participant_not_found', 404);
         if (member.kind !== 'fake') {
@@ -81,9 +85,19 @@ export class DiscussionEngine {
       }
       d.tasks = members.map(p => taskFor(d, p.id, 'independent', 1));
       if (d.tasks.some(t => promptFor(d, t).length > 180_000)) throw new AppError('material_context_budget_exceeded', 413);
+      if (roomId) {
+        const room = state.resident?.rooms.find(r => r.id === roomId);
+        if (!room || !room.desiredOn || room.topicLink || budgetReason(room)) throw new AppError('room_focus_not_ready', 409);
+        const publicText = state.resident!.messages.filter(m => m.roomId === roomId && m.visibility === 'room_public').map(m => ({ id: m.id, authorId: m.authorId, text: m.text }));
+        const material = JSON.stringify({ roomPublicMessages: publicText });
+        d.roomMaterial = { text: material, digest: digest(material) };
+        if (d.tasks.some(t => promptFor(d, t).length > 180_000)) throw new AppError('focus_material_requires_selection', 409);
+        d.roomId = roomId; room.topicLink = d.id; room.epoch++; room.version++; room.updatedAt = now();
+        emit({ type: 'resident.focus_changed', discussionId: null, data: { roomId, discussionId: d.id } });
+      }
       state.discussions.push(d);
       emit({ type: 'discussion.created', discussionId: d.id, data: { participantIds, revision: d.revision } }); return d.id;
-    }, { id: requestId, input: { action: 'create', body } });
+    }, { id: requestId, input: { action: 'create', body, ...(roomId ? { roomId } : {}) } });
     this.kick(); return result;
   }
   control(discussionId: string, input: unknown, requestId: string): void {
@@ -137,6 +151,7 @@ export class DiscussionEngine {
           task.status = resolution === 'not_sent' && task.revision === d.revision && d.status !== 'cancelled' ? 'pending' : 'cancelled';
           task.reason = turn.error;
         } else throw new AppError('invalid_resolution');
+        this.dispatch.settle(state, turn.id, turn.usage, turn.error, false);
         // Reconciliation records evidence. Resume remains an explicit, idempotent action.
       } else if (action === 'handoff') {
         const pid = string(body.participantId); const context = d.contexts.find(c => c.participantId === pid);
@@ -221,8 +236,9 @@ export class DiscussionEngine {
       if (task.phase === 'verification' && !d.evidence.some(e => e.taskId === task.id)) {
         const delegated = task.method === 'codex' && !task.jobId && d.executionBindingId && d.members.some(p => p.id === task.participantId && p.kind === 'browser')
           && state.grants.some(g => !g.revoked && g.discussionId === d.id && g.participantId === task.participantId && g.tools.includes('codex_send'));
-        if (delegated) { await this.turn(d.id, task.id); continue; }
+        if (delegated) { if (!await this.turn(d.id, task.id)) return; continue; }
         if (task.method === 'codex' && !task.jobId && d.executionBindingId && this.executor && d.used.toolJobs < d.limits.maxToolJobs) {
+          this.store.transact(s => this.dispatch.reserveTool(s, d.id, task.id));
           const jobId = this.executor.submit({ bindingId: d.executionBindingId, requestId: task.id, discussionId: d.id, taskId: task.id, revision: d.revision, maxDurationMs: Math.max(1, d.limits.maxActiveMs - d.used.activeMs),
             prompt: `토론 검증 과제입니다. 등록된 작업 공간과 기존 권한 안에서 수행하고 실제 입력·검사·출력·실패·미실행 항목을 기록하세요.\n주제: ${d.topic}\n조건: ${d.criteria}\n검증할 것: ${task.question}\n관련 주장: ${JSON.stringify(d.claims.filter(c => task.claimIds.includes(c.id)))}` });
           this.store.transact((s, emit) => { const current = findDiscussion(s, d.id); const currentTask = current.tasks.find(t => t.id === task.id)!;
@@ -233,7 +249,7 @@ export class DiscussionEngine {
         }
         await this.verify(d.id, task.id); if (this.stopping) return;
       }
-      await this.turn(d.id, task.id);
+      if (!await this.turn(d.id, task.id)) return;
     }
   }
   private async verify(discussionId: string, taskId: string): Promise<void> {
@@ -248,7 +264,7 @@ export class DiscussionEngine {
     this.store.transact((s, emit) => { const current = findDiscussion(s, discussionId); current.evidence.push(evidence); current.used.activeMs += Date.now() - started;
       emit({ type: 'evidence.added', discussionId, data: { evidenceId: evidence.id, taskId, status: evidence.status } }); });
   }
-  private async turn(discussionId: string, taskId: string): Promise<void> {
+  private async turn(discussionId: string, taskId: string): Promise<boolean> {
     const captured = this.store.transact((state, emit) => {
       const d = findDiscussion(state, discussionId); const task = d.tasks.find(t => t.id === taskId)!;
       if (d.status !== 'running' || task.revision !== d.revision || task.status !== 'pending') return null;
@@ -266,29 +282,34 @@ export class DiscussionEngine {
         startedAt: now(), finishedAt: null, receipt: null, error: null, usage: null,
         ...(participant.kind === 'openai-oauth' ? { reasoningEffort: reasoningEffort(participant.reasoningEffort) } : {}),
         evidenceIds: d.evidence.filter(e => e.revision === d.revision && (task.phase !== 'independent' || e.kind === 'user_material')).map(e => e.id) };
+      const denied = this.dispatch.reserve(state, { requestId: turn.id, kind: 'topic', participantId: participant.id, generation: turn.generation, roomId: d.roomId ?? null });
+      if (denied) {
+        if (denied === 'budget_exhausted' || denied === 'room_settings_required') {
+          d.status = 'partial'; d.reason = 'room_' + denied;
+          emit({ type: 'discussion.phase', discussionId, data: { phase: d.phase, status: d.status, reason: d.reason } });
+        }
+        return null;
+      }
       d.used.requests++; task.status = 'running'; task.turnId = turn.id; d.turns.push(turn); d.updatedAt = now();
       context.observation = { ...context.observation, response: 'prepared', work: 'running', observedAt: now(), reason: null };
       emit({ type: 'turn.prepared', discussionId, data: { turnId: turn.id, participantId: participant.id, phase: task.phase } });
-      return { turn, participant, history: structuredClone(context.history), remaining: d.limits.maxActiveMs - d.used.activeMs };
+      const room = state.resident?.rooms.find(r => r.id === d.roomId);
+      return { turn, participant, history: structuredClone(context.history), remaining: Math.min(d.limits.maxActiveMs - d.used.activeMs, room?.budgets ? Date.parse(room.budgets.deadlineAt) - Date.now() : Infinity) };
     });
-    if (!captured) return;
+    if (!captured) return false;
     const start = Date.now(); this.abort = new AbortController();
     const signal = AbortSignal.any([this.abort.signal, AbortSignal.timeout(Math.max(1, Math.min(this.options.turnTimeoutMs, captured.remaining)))]);
-    let dispatched = false;
     const update = (action: (turn: DiscussionTurn) => void, type: string, data: unknown) => this.store.transact((state, emit) => {
       const d = findDiscussion(state, discussionId); const turn = d.turns.find(t => t.id === captured.turn.id)!; action(turn);
       const context = d.contexts.find(c => c.participantId === turn.participantId)!;
       if (context.generation === turn.generation) { context.observation.observedAt = now(); context.observation.lastProgressAt = now(); context.observation.response = turn.status; }
       emit({ type, discussionId, data });
     });
-    let result: Completion | null = null; let failure: unknown = null;
-    try {
-      result = await this.providers.complete({ requestId: captured.turn.id, participant: captured.participant, prompt: captured.turn.prompt, history: captured.history, signal,
-        hooks: { dispatched: () => { dispatched = true; update(t => { t.status = 'running'; }, 'turn.dispatched', { turnId: captured.turn.id }); },
+    const { result, failure, uncertain } = await this.dispatch.perform(this.store, this.providers, { requestId: captured.turn.id, participant: captured.participant, prompt: captured.turn.prompt, history: captured.history, signal,
+        hooks: { dispatched: () => { update(t => { t.status = 'running'; }, 'turn.dispatched', { turnId: captured.turn.id }); },
           receipt: receipt => update(t => { t.receipt = receipt; }, 'turn.receipt', { turnId: captured.turn.id }),
           delta: delta => update(t => { if (t.text.length + delta.length > 100_000) throw new AppError('response_too_large', 502, true); t.text += delta; },
             'turn.delta', { turnId: captured.turn.id, delta }) } });
-    } catch (error) { failure = error; }
     this.abort = null;
     this.store.transact((state, emit) => {
       const d = findDiscussion(state, discussionId); const task = d.tasks.find(t => t.id === taskId)!;
@@ -313,13 +334,14 @@ export class DiscussionEngine {
           }
         }
       } else {
-        const uncertain = dispatched && (!(failure instanceof AppError) || failure.uncertain);
         turn.status = uncertain ? 'unconfirmed' : 'failed'; turn.error = code(failure); task.status = uncertain ? 'unconfirmed' : 'failed'; task.reason = turn.error;
         if (d.status !== 'cancelled') { d.status = 'blocked'; d.reason = turn.error; }
       }
       if (context.generation === turn.generation) context.observation = { ...context.observation, response: turn.status, work: d.status, observedAt: now(), reason: turn.error };
+      this.dispatch.settle(state, turn.id, turn.usage, turn.error, turn.status === 'unconfirmed');
       emit({ type: 'turn.finished', discussionId, data: { turnId: turn.id, status: turn.status, error: turn.error } });
     });
+    return true;
   }
   private applyReply(d: Discussion, turn: DiscussionTurn): void {
     const context = d.contexts.find(c => c.participantId === turn.participantId)!;

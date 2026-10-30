@@ -1,8 +1,8 @@
 # 상주 운영 단계별 변경·이관·수락·롤백
 
-> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-30 페이즈 1 구현/검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
+> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-30 페이즈 2 구현/검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
 
-설계 근거 C와 계획 P는 [개정 요약](./plan-revision-20261030.md)으로 고정한다. 구현 순서·상태는 맨 위 링크의 SSOT를 따른다. R1은 아래 계약으로 구현하고 [실행 증거](./implementation/phase1-resident-foundation-20261030.md)를 남겼다. R2~R8의 새 타입·파일·심볼·endpoint·검사는 아직 **제안**이다. 기존 파일/심볼의 E 근거표는 C 기준이며 실계정/DOM/운영 호스트 적합성은 UNVERIFIED다.
+설계 근거 C와 계획 P는 [개정 요약](./plan-revision-20261030.md)으로 고정한다. 구현 순서·상태는 맨 위 링크의 SSOT를 따른다. R1/R2는 아래 계약으로 구현하고 [R1 증거](./implementation/phase1-resident-foundation-20261030.md)·[R2 증거](./implementation/phase2-resident-runtime-20261030.md)를 남겼다. R3~R8의 새 타입·파일·심볼·endpoint·검사는 아직 **제안**이다. 기존 파일/심볼의 E 근거표는 C 기준이며 실계정/DOM/운영 호스트 적합성은 UNVERIFIED다.
 
 ## 1. 공통 변경·검증 원칙
 
@@ -42,6 +42,8 @@ quiescent 증거: 관련 prepared/running/unconfirmed turn=0, 실행/승인/reco
 
 **대상:** 기존 `engine.ts::DiscussionEngine.turn/recover/control/create/loop`, `runtime.ts::Workspace.start/close`, `model.ts::Context/DiscussionTurn`. 제안 `dispatch.ts::DispatchCoordinator/performCompletion/classifyFailure`, `resident-runner.ts::ResidentRunner`, `resident-prompts.ts::parseResidentReply/promptForRoom`, `resident-fake.ts::FakeResidentCompletion`, `resident-context.ts::prepareCheckpoint/rotateResidentContext`. 실제 `Providers.complete`·`BrowserBridge.complete`는 변경하지 않는다.
 
+**구현 대응:** 위 신규 모듈을 실제 추가했다. provider 전송은 `DispatchCoordinator.perform`의 전송 전 ID/lease 점유와 private `performCompletion`을 통과한다. Room 설정/메시지 저장은 기존 ResidentStore, topic은 기존 Engine을 사용한다. `CodexExecutor.beforeDispatch` 한 접점을 추가한 이유는 대기 job의 실제 전송 때 off/flag/deadline/예약 한도를 다시 확인하기 위해서다. submit/승인/격리 계약은 유지했다. 이는 R6의 새 업무 scope/늦은 승인/결과 검사를 대신하지 않는다. 세부 API·데이터·수락 결과는 [R2 실행 기록](./implementation/phase2-resident-runtime-20261030.md)에 있다.
+
 **최소 backend 변경 사유(E3/E12):** 기존 engine.active는 그 엔진만의 메모리 잠금이라 별도 Room loop와 병행하면 2호출이 가능하다. 기존 turn의 전송 전 Store transaction에 공통 lease/budget 예약을 넣고, 기존 `turn`의 provider invocation/Hooks 구간만 제안 performCompletion으로 얇게 추출한다. 기존 prepare/update/최종 state·event·receipt·format_retry·불확실 분류 결과는 동일하게 유지한다. 새로운 조건을 기존 advance/schedule/parseReply로 섞지 않는다. coordinator만 provider 호출권을 부여한다.
 
 lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반복하지 않도록, private turn의 waiting 결과와 두 호출 지점의 return/wakeup 접점도 최소 변경 범위에 포함한다. lease 해제/기존 진행 callback에서만 다시 kick하며 명시 대기 없이 while/microtask를 반복하지 않는다. 이는 private 제어 흐름 보강이고 public create/control·Providers 인터페이스·저장되는 legacy turn 결과는 유지한다.
@@ -52,18 +54,18 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 
 **32669 보완:** 기존 topic handoff API는 그대로이며 resident만 원문 참조·규칙/목표·pending 업무·Wiki version·예산 snapshot·basisCursor를 갖는 ResidentCheckpoint를 추가한다. 인계는 예상 epoch/generation의 CAS이고 현재 actor의 미확정/진행/미보고 업무·job 또는 topic focus가 있으면 보류한다. browser 원래 대화는 자동 교체하지 않는다. generation이 바뀐 뒤 옛 actor의 결과/action은 stale로 보존하며 신규 실행에 재사용하지 않는다. checkpoint snapshot으로 최신 예산/상태를 되돌리지 않는다. 추가 모델 호출 없는 참조 묶음이 기본이다.
 
-| 수락 ID | 숫자·증거 | 방법(후속 실행) |
+| 수락 ID | 숫자·증거 | 방법·실행 결과(R2 fixture) |
 | --- | --- | --- |
-| R2-A | Room/topic/work 후보 100개 경쟁→전체 provider 최대 동시 1, 중복 requestId dispatch 0 | 제안 `node --test tests/resident-dispatch.test.mjs` 카운터/log |
-| R2-B | prepared 전/후·dispatched 후·receipt 후·delta 중·final commit 전 6지점 crash→재전송 0 | 기존 restart fixture+제안 crash test의 receipt/journal 대조 |
-| R2-C | fixture maxRequests=6 소진 뒤 추가 호출 0, pass/보완 포함 6 이하, unknown usage를 0원으로 표시 0 | 제안 fake clock/provider 로그 |
-| R2-D | off/sleep/budget_exhausted 뒤 100 tick→호출 0; 재시작 missed timer 100개→추가 후보 평가 최대 1 | 제안 `tests/resident-room.test.mjs` |
-| R2-E | 3참여자 topic 2라운드에서 기존 공개 장벽 유지, focus 종료→같은 roomId 복귀 1회 | 기존 engine 검사+제안 mode fixture |
-| R2-F | raw stream 100조각/잘못된 구조/없는 replyTo→검증 전 action 0; 확정 text/claims/원문 digest 보존 | 제안 resident-replies 검사 |
-| R2-G | 인증/429 한도/미지원 effort/DOM 불일치 4종에서 100 tick 동안 같은 요청 재시도 0·차단 이유 유지 | 기존 provider/browser 실패 fixture+제안 room scheduler 로그 |
-| R2-H | 2소비자/100인계 요청과 transaction 전·pack 조립 후·CAS 후 commit 전·commit 후 응답 전 4crash 지점→세대 증가/적용 각1·중복 provider/job0·예산 초기화0 | 제안 `tests/resident-context.test.mjs`의 command/event/원문 digest 비교 |
-| R2-I | 이전 generation의 say/work_report/wiki_edit 3종→현재 상태/action 적용0·기존 attempt 원문 보존 | 제안 resident context/intent fixture |
-| R2-J | 미확정 turn·진행/미보고 work/job·topic focus·browser 4경계에서 자동 세대/창 교체0·원래 ID 대조 유지 | 기존 engine handoff 회귀+제안 resident 인계 검사 |
+| R2-A | Room/topic/work 후보 100개 경쟁→전체 provider 최대 동시 1, 중복 requestId dispatch 0 | PASS · `tests/resident-dispatch.test.mjs` (work는 예약 후보만, 실제 큐는 R5) |
+| R2-B | prepared 전/후·dispatched 후·receipt 후·delta 중·final commit 전 6지점 crash→재전송 0 | PASS · `tests/resident-restart.test.mjs`의 실제 SIGKILL/journal/원래 ID 대조 |
+| R2-C | fixture maxRequests=6 소진 뒤 추가 호출 0, pass/보완 포함 6 이하, unknown usage를 0원으로 표시 0 | PASS · `tests/resident-room.test.mjs`와 runtime-http 자동 loop |
+| R2-D | off/sleep/budget_exhausted 뒤 100 tick→호출 0; missed timer 100개→추가 후보 평가 최대 1 | PASS · room/restart fixture, 놓친 timer를 호출 횟수로 변환하지 않음 |
+| R2-E | 3참여자 topic 2라운드에서 기존 공개 장벽 유지, focus 종료→같은 roomId 복귀 1회 | PASS · dispatch fixture+기존 engine 회귀 |
+| R2-F | raw stream 100조각/잘못된 구조/없는 replyTo→검증 전 action 0; 확정 text/claims/원문 digest 보존 | PASS · `tests/resident-replies.test.mjs` |
+| R2-G | 인증/429 한도/미지원 effort/DOM 불일치 4종에서 100 tick 동안 같은 요청 재시도 0·차단 이유 유지 | PASS · room fixture+기존 providers/browser 회귀 |
+| R2-H | 2소비자/100인계 요청과 4crash 지점→세대 증가/적용 각1·중복 provider/job0·예산 초기화0 | PASS · context/restart fixture·실제 SIGKILL 4지점·SQLite rollback |
+| R2-I | 이전 generation의 say/work_report/wiki_edit 3종→현재 상태/action 적용0·기존 attempt 원문 보존 | PASS · replies fixture. 업무/Wiki는 아직 미실행 제안 |
+| R2-J | 미확정 turn·진행/미보고 work/job·topic focus·browser 경계에서 자동 세대/창 교체0 | PASS · context fixture+기존 engine handoff 회귀 |
 
 **롤백:** G0 후 flag off, 기존 토론 driver 경로로 복귀한다. 연결된 topic은 기존 pause 상태로 두고 예전 running으로 자동 복원하지 않는다. resident ledger/turn/lease·원문은 보존하며 미확정이면 rollback blocked다. 기존 driver 회귀에 차이가 있으면 R2 수락 실패이며 다음 단계로 가지 않는다.
 

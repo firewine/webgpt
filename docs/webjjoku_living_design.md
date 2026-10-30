@@ -1,8 +1,8 @@
 # 웹쫀쿠 Living Design Document
 
-> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-30 페이즈 1 구현/검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
+> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 현재 승인 범위와 결과는 위 SSOT를 따른다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
 
-> 지정 코드 C=8f81d861b3f170ef2024b90d9eeba56ce34f0f79, 계획 P의 v0.8 기반 개정이다. 현재 HEAD의 후속 회사 우선/수다 후순위 문구는 승계하지 않았다. 먼저 [1쪽 요약·기준 차이·근거](./plan-revision-20261030.md), [104판정](./reviews/plan-decision-register-20261030.md), [운영 계약](./company-workflow-plan.md), [R1~R8](./resident-implementation-plan.md)을 읽는다. 기존 backend 재사용, 신규는 제안/NOT_RUN, 실제 계정·DOM·호스트는 UNVERIFIED다. 이번은 계획 문서만 수정한다. 개발 시 [디자인 패턴 지침](./development-guidelines.md)의 작은 Adapter/DI·명시 상태 전이·기존 transaction·coordinator/CAS·검사/롤백 기준을 함께 적용한다.
+> 지정 코드 C=8f81d861b3f170ef2024b90d9eeba56ce34f0f79, 계획 P의 v0.8 기반 개정이다. 계획 개정 당시 HEAD의 후속 회사 우선/수다 후순위 문구는 승계하지 않았다. 먼저 [1쪽 요약·기준 차이·근거](./plan-revision-20261030.md), [104판정](./reviews/plan-decision-register-20261030.md), [운영 계약](./company-workflow-plan.md), [R1~R8](./resident-implementation-plan.md)을 읽는다. 기존 backend 재사용, 실제 구현 상태는 위 SSOT, 실계정·DOM·호스트는 별도 검증 전 UNVERIFIED다. 원 계획 개정은 문서 작업이었다. 개발 시 [디자인 패턴 지침](./development-guidelines.md)의 작은 Adapter/DI·명시 상태 전이·기존 transaction·coordinator/CAS·검사/롤백 기준을 함께 적용한다.
 
 - 문서 상태: Living Design Document
 - 버전: v0.8-R1 (지정 계획 기반 개정)
@@ -17,7 +17,7 @@
 - 서버·웹 클라이언트: [Ubuntu 운영 계획](./ubuntu-operations.md)
 - 선택 코드 실행 모듈: [Git Writer PRD](./prd.md) / [상세 계획](./git-writer-plan.md)
 
-> 목표는 상주 단톡방+작업큐+Wiki다. 참여자는 자유 논의·일감 적재·픽업/수행·보고와 Wiki 갱신을 이어간다. 사용자는 방을 켜고 관전/중간 참여한다. 기존 topic 엔진은 방 안의 focus로 남긴다. 연결·인증·Store/이벤트·MCP·Codex/승인·원격 운영은 재사용한다. 현재 Room/WorkTask/Wiki는 없으며 제안/NOT_RUN이다. 과거 모듈 검사 보고는 이 새 기능의 완료 증거가 아니다.
+> 목표는 상주 단톡방+작업큐+Wiki다. 참여자는 자유 논의·일감 적재·픽업/수행·보고와 Wiki 갱신을 이어간다. 사용자는 방을 켜고 관전/중간 참여한다. 기존 topic 엔진은 방 안의 focus로 남긴다. 연결·인증·Store/이벤트·MCP·Codex/승인·원격 운영은 재사용한다. C에는 Room/WorkTask/Wiki 구현이 없었으며 현재 단계별 구현 상태는 SSOT로 판정한다. 과거 모듈 검사 보고는 이 새 기능의 완료 증거가 아니다.
 
 ---
 

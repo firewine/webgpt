@@ -1,8 +1,8 @@
 # 상주 방·작업큐·위키 운영 계약 — 개정 설계
 
-> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-30 페이즈 1 구현/검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
+> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 현재 승인 범위와 결과는 위 SSOT를 따른다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
 
-이 파일은 지정 계획 P에 없고 현재 HEAD에만 있던 문서의 개정 산출물이다. 이전 내용을 기준으로 승계하지 않는다. [기준·판정표·제출 경계](./plan-revision-20261030.md)와 [R1~R8 변경/이관/수락/롤백](./resident-implementation-plan.md)이 우선한다. 코드 근거 C=`8f81d861b3f170ef2024b90d9eeba56ce34f0f79`. 아래 새 타입·파일·심볼·endpoint는 모두 **제안/미구현**이다. 현재 연결·추론·DOM·새 기능의 실제 적합성은 **UNVERIFIED**다.
+이 파일은 지정 계획 P에 없고 현재 HEAD에만 있던 문서의 개정 산출물이다. 이전 내용을 기준으로 승계하지 않는다. [기준·판정표·제출 경계](./plan-revision-20261030.md)와 [R1~R8 변경/이관/수락/롤백](./resident-implementation-plan.md)이 우선한다. 코드 근거 C=`8f81d861b3f170ef2024b90d9eeba56ce34f0f79`. 아래 새 타입·운영 계약은 설계 기준이며 실제 구현 상태는 단계별 증거와 SSOT로 판정한다. 현재 연결·추론·DOM·새 기능의 실제 적합성은 **UNVERIFIED**다.
 
 ## 1. 최종 형태와 기존 기반
 
@@ -154,4 +154,4 @@ expectedVersion CAS: 같은 head의 편집 2건은 정확히 1건만 채택, 다
 
 owner 키/세션·provider credential·MCP grant는 구분한다. 기존 /mcp 도구/토론 grant 의미는 불변, R7의 resident 도구는 room/project/participant·tools·version 범위를 추가한다. Core/owner API가 운영을 수행하므로 Events/Connector는 선행 조건이 아니다. 금융 계산은 범위 밖이다.
 
-사용자 결정 필요 U1~U3와 그 전의 fail-closed 동작은 [단계별 계획](./resident-implementation-plan.md#11-사용자-결정-필요)에 둔다. fixture 숫자는 product 기본값 승인이 아니다. 신규 기능은 아직 NOT_RUN이며 R1~R8의 gate가 모두 채워져야 최종 도달로 판정한다. 실계정/DOM 적합성은 검증 전까지 UNVERIFIED다.
+사용자 결정 필요 U1~U3와 그 전의 fail-closed 동작은 [단계별 계획](./resident-implementation-plan.md#11-사용자-결정-필요)에 둔다. fixture 숫자는 product 기본값 승인이 아니다. 최종 도달은 R1~R8의 gate가 모두 채워져야 판정하며 단계별 결과는 SSOT를 따른다. 실계정/DOM 적합성은 검증 전까지 UNVERIFIED다.
