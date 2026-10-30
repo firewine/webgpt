@@ -1,0 +1,147 @@
+import type { WorkspaceState } from './model.js';
+import type { ResidentStateV1, Room, RoomMessage, RoomSummary } from './resident-model.js';
+import type { Store } from './store.js';
+import { AppError, digest, id, integer, now, object, string, strings } from './util.js';
+
+const MIGRATION = 'resident:migration:v1';
+const COLLECTIONS = ['rooms', 'messages', 'turns', 'dispatchLeases', 'contextCheckpoints', 'workItems', 'workAttempts', 'wikiPages', 'wikiVersions', 'jobLinks', 'residentGrants'] as const;
+
+export function readResident(state: WorkspaceState): ResidentStateV1 | null {
+  const raw: unknown = state.resident;
+  if (raw === undefined) return null;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AppError('resident_state_invalid', 503);
+  const value = raw as Record<string, unknown>;
+  if (value.schemaVersion !== 1) throw new AppError('unsupported_resident_schema', 503);
+  if (COLLECTIONS.some(key => !Array.isArray(value[key]))) throw new AppError('resident_state_invalid', 503);
+  const resident = raw as ResidentStateV1;
+  if (!resident.migration || resident.migration.id !== 'resident-v1' || !isText(resident.migration.at) || !isCount(resident.migration.basisCursor) ||
+      resident.rooms.some(room => !room || !isText(room.id) || !isText(room.title) || !isCount(room.version, 1) || !isCount(room.epoch, 1) ||
+        typeof room.desiredOn !== 'boolean' || !['off', 'on', 'sleeping', 'blocked', 'budget_exhausted'].includes(room.observedStatus) ||
+        !Array.isArray(room.members) || room.members.some(m => !m || !isText(m.participantId) || typeof m.enabled !== 'boolean') ||
+        !Array.isArray(room.legacyDiscussionIds) || !room.legacyDiscussionIds.every(isText) ||
+        !(room.topicLink === null || isText(room.topicLink)) || !isCount(room.lastMessageSequence) || !isText(room.createdAt) || !isText(room.updatedAt)) ||
+      resident.messages.some(m => !m || !isText(m.id) || !isText(m.roomId) || !isCount(m.sequence, 1) || typeof m.text !== 'string' ||
+        !['user', 'room', 'topic', 'work', 'wiki', 'system'].includes(m.sourceKind) || !(m.sourceId === null || isText(m.sourceId)) ||
+        !isText(m.authorId) || !(m.replyTo === null || isText(m.replyTo)) || !Array.isArray(m.mentions) || !m.mentions.every(isText) ||
+        !['room_public', 'owner_only', 'topic_round'].includes(m.visibility) || !isText(m.createdAt))) throw new AppError('resident_state_invalid', 503);
+  return raw as ResidentStateV1;
+}
+
+export function migrateResident(store: Store): void {
+  if (readResident(store.read())) return;
+  const basisCursor = store.cursor();
+  store.transact(state => {
+    const at = now();
+    const room: Room = { id: id('room'), title: '상주 작업실', version: 1, epoch: 1,
+      desiredOn: false, observedStatus: 'off', members: state.participants.map(p => ({ participantId: p.id, enabled: false })),
+      legacyDiscussionIds: state.discussions.map(d => d.id), topicLink: null, budgets: null, nextEligibleAt: null,
+      lastMessageSequence: 0, createdAt: at, updatedAt: at };
+    state.resident = { schemaVersion: 1, migration: { id: 'resident-v1', at, basisCursor }, rooms: [room],
+      messages: [], turns: [], dispatchLeases: [], contextCheckpoints: [], workItems: [], workAttempts: [],
+      wikiPages: [], wikiVersions: [], jobLinks: [], residentGrants: [] };
+    // The migration receipt is durable, but no legacy cursor or user activity is
+    // replayed. User commands below always commit state, event and receipt together.
+    return { roomId: room.id };
+  }, { id: MIGRATION, input: { action: 'resident.migrate', schemaVersion: 1 } });
+  if (!readResident(store.read())) throw new AppError('resident_migration_state_missing', 503);
+}
+
+export class ResidentStore {
+  constructor(private readonly store: Store, readonly enabled: boolean) {
+    // Refuse unknown schema before any new lifecycle/connection can start.
+    readResident(store.read());
+    if (enabled) migrateResident(store);
+  }
+  snapshot() {
+    const state = readResident(this.store.read());
+    return { enabled: this.enabled, schemaVersion: state?.schemaVersion ?? null, dispatchAvailable: false,
+      rooms: (state?.rooms ?? []).map(summary) };
+  }
+  room(roomId: string) { return { room: summary(findRoom(this.required(), roomId)), dispatchAvailable: false, enabled: this.enabled, cursor: this.store.cursor() }; }
+  messages(roomId: string, after: number, limit: number) {
+    integer(after, 0, 0, Number.MAX_SAFE_INTEGER); integer(limit, 50, 1, 100);
+    const state = this.required(); const room = findRoom(state, roomId);
+    if (after > room.lastMessageSequence) throw new AppError('invalid_cursor', 409);
+    const page = state.messages.filter(m => m.roomId === roomId && m.visibility === 'room_public' && m.sequence > after)
+      .sort((a, b) => a.sequence - b.sequence).slice(0, limit + 1);
+    const messages = page.slice(0, limit).map(m => ({ ...messageMetadata(m), preview: m.text.slice(0, 500), truncated: m.text.length > 500, textLength: m.text.length, digest: digest(m.text) }));
+    return { roomId, messages, after, nextAfter: messages.at(-1)?.sequence ?? after, hasMore: page.length > limit, cursor: this.store.cursor() };
+  }
+  message(roomId: string, messageId: string) {
+    const state = this.required(); findRoom(state, roomId);
+    const message = state.messages.find(m => m.id === messageId && m.roomId === roomId && m.visibility === 'room_public');
+    if (!message) throw new AppError('room_message_not_found', 404);
+    return { message: { ...messageMetadata(message), text: message.text }, digest: digest(message.text), cursor: this.store.cursor() };
+  }
+  control(roomId: string, input: unknown, requestId: string) {
+    const body = object(input); const action = string(body.action, 40); const key = string(requestId, 200);
+    const fields = action === 'rename' ? ['title'] : action === 'set_member' ? ['participantId', 'enabled'] : [];
+    only(body, ['action', 'expectedVersion', ...fields]);
+    readResident(this.store.read());
+    return this.store.transact((state, emit) => {
+      this.assertEnabled(); const resident = readResident(state); if (!resident) throw new AppError('resident_not_initialized', 409);
+      const room = findRoom(resident, roomId);
+      if (integer(body.expectedVersion, -1, 1, Number.MAX_SAFE_INTEGER) !== room.version) throw new AppError('room_version_conflict', 409);
+      let changed = false;
+      if (action === 'rename') { const title = string(body.title, 100); changed = title !== room.title; room.title = title; }
+      else if (action === 'set_member') {
+        const pid = string(body.participantId, 200);
+        if (typeof body.enabled !== 'boolean') throw new AppError('invalid_input');
+        if (!state.participants.some(p => p.id === pid)) throw new AppError('participant_not_found', 404);
+        const member = room.members.find(m => m.participantId === pid);
+        if (member) { changed = member.enabled !== body.enabled; member.enabled = body.enabled; }
+        else { room.members.push({ participantId: pid, enabled: body.enabled }); changed = true; }
+      } else if (action === 'off') {
+        changed = room.desiredOn || room.observedStatus !== 'off';
+        if (changed) room.epoch++;
+        room.desiredOn = false; room.observedStatus = 'off'; room.nextEligibleAt = null;
+      } else if (action === 'on') throw new AppError('resident_dispatch_not_available', 409);
+      else throw new AppError('unknown_room_control');
+      if (changed) {
+        room.version++; room.updatedAt = now();
+        emit({ type: 'resident.room_changed', discussionId: null, data: { roomId, action, version: room.version } });
+      }
+      return { roomId, version: room.version, changed };
+    }, { id: 'resident:command:' + key, input: { roomId, operation: 'control', body } });
+  }
+  postMessage(roomId: string, input: unknown, requestId: string) {
+    const body = object(input); only(body, ['text', 'replyTo', 'mentions']); const key = string(requestId, 200);
+    if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 20_000) throw new AppError('invalid_room_message');
+    const text = body.text; const replyTo = body.replyTo === undefined || body.replyTo === null ? null : string(body.replyTo, 200);
+    const mentions = [...new Set(strings(body.mentions ?? [], 8))];
+    readResident(this.store.read());
+    return this.store.transact((state, emit) => {
+      this.assertEnabled(); const resident = readResident(state); if (!resident) throw new AppError('resident_not_initialized', 409);
+      const room = findRoom(resident, roomId);
+      if (replyTo && !resident.messages.some(m => m.id === replyTo && m.roomId === roomId && m.visibility === 'room_public')) throw new AppError('reply_not_in_room', 403);
+      if (mentions.some(pid => !room.members.some(m => m.participantId === pid) || !state.participants.some(p => p.id === pid))) throw new AppError('mention_not_in_room', 403);
+      const message: RoomMessage = { id: id('message'), roomId, sequence: ++room.lastMessageSequence,
+        sourceKind: 'user', sourceId: null, authorId: 'owner', text, replyTo, mentions,
+        visibility: 'room_public', createdAt: now() };
+      resident.messages.push(message); room.updatedAt = message.createdAt;
+      emit({ type: 'resident.message_created', discussionId: null, data: { roomId, messageId: message.id, sequence: message.sequence } });
+      return { roomId, messageId: message.id, sequence: message.sequence };
+    }, { id: 'resident:command:' + key, input: { roomId, operation: 'message', body } });
+  }
+  private assertEnabled(): void { if (!this.enabled) throw new AppError('resident_disabled', 409); }
+  private required(): ResidentStateV1 { const state = readResident(this.store.read()); if (!state) throw new AppError('resident_not_initialized', 404); return state; }
+}
+
+function findRoom(state: ResidentStateV1, roomId: string): Room {
+  const room = state.rooms.find(r => r.id === roomId); if (!room) throw new AppError('room_not_found', 404); return room;
+}
+function summary(room: Room): RoomSummary {
+  return { id: room.id, title: room.title, version: room.version, epoch: room.epoch, desiredOn: room.desiredOn,
+    observedStatus: room.observedStatus, members: room.members.map(m => ({ participantId: m.participantId, enabled: m.enabled })),
+    legacyDiscussionIds: [...room.legacyDiscussionIds], topicLink: room.topicLink, lastMessageSequence: room.lastMessageSequence,
+    createdAt: room.createdAt, updatedAt: room.updatedAt };
+}
+function only(body: Record<string, unknown>, allowed: string[]): void {
+  if (Object.keys(body).some(key => !allowed.includes(key))) throw new AppError('invalid_room_fields');
+}
+function isText(value: unknown): value is string { return typeof value === 'string' && value.length > 0; }
+function isCount(value: unknown, min = 0): boolean { return typeof value === 'number' && Number.isSafeInteger(value) && value >= min; }
+function messageMetadata(m: RoomMessage): Omit<RoomMessage, 'text'> {
+  return { id: m.id, roomId: m.roomId, sequence: m.sequence, sourceKind: m.sourceKind, sourceId: m.sourceId,
+    authorId: m.authorId, replyTo: m.replyTo, mentions: [...m.mentions], visibility: m.visibility, createdAt: m.createdAt };
+}

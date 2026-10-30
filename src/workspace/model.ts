@@ -1,3 +1,5 @@
+import type { ResidentStateV1 } from './resident-model.js';
+
 export type ProviderKind = 'fake' | 'openai-oauth' | 'deepseek' | 'browser';
 export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
 export type Phase = 'independent' | 'cross_review' | 'verification' | 'revision' | 'synthesis' | 'summary_review';
@@ -101,6 +103,7 @@ export interface WorkspaceState {
   grants: { id: string; hash: string; discussionId: string; participantId: string; tools: string[]; revoked: boolean }[];
   browserPaused: boolean;
   materialPackages?: MaterialPackage[];
+  resident?: ResidentStateV1;
 }
 export interface DurableEvent { id: number; type: string; discussionId: string | null; at: string; data: unknown }
 export function initialState(hostId: string): WorkspaceState {
