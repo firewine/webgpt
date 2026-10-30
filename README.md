@@ -4,7 +4,7 @@
 
 **현재 코드와 목표의 차이:** 연결·독립 토론·근거 비교·영속 기록·Codex 기반 위에 상주 방과 단톡방 GUI를 구현했습니다. Company/Team/Role/Seat·실제 Work Queue/pull·산출물 Review/Rework·Wiki 운영은 후속 단계입니다. [개발 페이즈 SSOT](docs/development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)와 [단톡방 실행 증거](docs/implementation/phase3-chatroom-gui-20261030.md)를 확인하세요. 실제 기기 IME·실계정 상주 운영·이번 변경의 배포는 미검증입니다.
 
-채팅방 디자인은 96397 예시의 참여자 목록·아바타 말풍선·회색 대화 배경·오른쪽 탭 패널에 맞춰 보완했습니다. [변경한 PC/모바일 화면과 검증](docs/implementation/chatroom-design-refinement-20261030.md)을 볼 수 있습니다. 기존 연결·승인·복구와 기능 flag는 유지합니다.
+채팅방 디자인은 96397 예시의 참여자 목록·아바타 말풍선·오른쪽 탭 패널에 맞추고, 사용자 요청대로 흑백 테마를 적용했습니다. 밝음·어두움 모두 버튼·말풍선·로고·아바타를 회색 계열로 표시합니다. [변경한 PC/모바일 화면과 검증](docs/implementation/chatroom-design-refinement-20261030.md)을 볼 수 있습니다. 기존 연결·승인·복구와 기능 flag는 유지합니다.
 
 **v0.2 구현:** 공동 대화 UI, 영속 토의 엔진, GPT 다중 OAuth·DeepSeek·기존 Chrome 대화 어댑터, MCP 도구, Codex 실행·승인·결과 환류, 운영 스크립트. [Ubuntu 로컬 모의 토론](docs/implementation/ubuntu-readiness-20261030.md)과 [systemd·실제 HTTPS·인증 noVNC 입력](docs/implementation/ubuntu-services-20261030.md)을 확인했습니다. 실계정·다른 Tailnet 기기·실제 재부팅·실제 Codex 세션의 완료 판정은 아직 **NOT_RUN**입니다. [구현·검증 기록](docs/implementation/wj-002-015.md)을 함께 확인하세요.
 
