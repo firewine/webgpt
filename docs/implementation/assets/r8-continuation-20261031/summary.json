@@ -1,0 +1,383 @@
+{
+  "date": "2026-10-31",
+  "sourceCommit": "2f3ca34e454f07c294c7e6eaa87cf052b7c79475",
+  "result": "PARTIAL",
+  "scope": "Previously approved GPT2+Coral API-topic subset only; original R8-D remains NOT_RUN.",
+  "approval": {
+    "additionalRequests": 18,
+    "newWallMs": 1200000,
+    "originalLimitsPreserved": true,
+    "deepseekOutputTokens": 16384,
+    "reasoning": "max",
+    "noChromeOrCodex": true
+  },
+  "discussionId": "discussion_b6a5b215-6964-405d-a40f-988d0d4e584e",
+  "startedAt": "2026-10-31T08:59:16.899Z",
+  "observedAt": "2026-10-31T09:07:44.200Z",
+  "newWindowElapsedMs": 308500,
+  "actualRequests": 12,
+  "additionalRequests": 6,
+  "recordedUsage": {
+    "input": 94025,
+    "output": 28988,
+    "newInput": 82805,
+    "newOutput": 17846,
+    "legacyFailedUsage": "UNKNOWN: not retained before deployment",
+    "storedUnknownUsage": 0
+  },
+  "phaseResults": {
+    "independent": {
+      "completed": 3,
+      "failed": 0,
+      "unstructured": 0
+    },
+    "cross_review": {
+      "completed": 6,
+      "failed": 1,
+      "unstructured": 0
+    },
+    "verification": {
+      "completed": 2,
+      "failed": 0,
+      "unstructured": 0
+    },
+    "revision": {
+      "completed": 0,
+      "failed": 0,
+      "unstructured": 0
+    },
+    "synthesis": {
+      "completed": 0,
+      "failed": 0,
+      "unstructured": 0
+    },
+    "summary_review": {
+      "completed": 0,
+      "failed": 0,
+      "unstructured": 0
+    }
+  },
+  "reviewStances": {
+    "support": 16,
+    "challenge": 10,
+    "uncertain": 0
+  },
+  "checks": {
+    "sameDiscussion": true,
+    "noNewDiscussion": true,
+    "originalSixTurnsPreserved": true,
+    "otherDiscussionsPreserved": true,
+    "globalParticipantsPreserved": true,
+    "onlyTargetTopicOutputChanged": true,
+    "residentPreserved": true,
+    "browserManualLockPreserved": true,
+    "jobsPreserved": true,
+    "bindingsPreserved": true,
+    "originalLimitsPreserved": true,
+    "withinApprovedRequests": true,
+    "withinEngineActiveTime": true,
+    "intervalEvidenceComplete": true,
+    "maxConcurrentProviderCalls": 1,
+    "atMostOneDispatchPerTurn": true,
+    "draftAndRoundVisibilityBarrier": true,
+    "newDeepseekUses16384Max": true,
+    "explicitResumeCommandStored": true,
+    "failedTaskNewAttempts": 1,
+    "retryPromptDigestMatchesOriginal": true
+  },
+  "turns": [
+    {
+      "slot": 1,
+      "participant": "GPT-A",
+      "phase": "independent",
+      "round": 1,
+      "status": "completed",
+      "error": null,
+      "providerFinishReason": null,
+      "requestedReasoning": "xhigh",
+      "requestedOutputTokens": null,
+      "receiptPresent": true,
+      "receiptDigest": "a767256a0305ba7e637063cc80d60c49d2cdfebd85ed951fe8e0219b34a39ba4",
+      "promptDigest": "01c3a30de8ec5d6f94b5c73a605a9239e4f308b839da60c844aaa2920aac7b04",
+      "textDigest": "1d301de4a8e47ae55b6735843815464eba515ffecdb485a72c5044f5965aae75",
+      "textLength": 939,
+      "usage": {
+        "input": 812,
+        "output": 1516
+      },
+      "claims": 2,
+      "reviews": 0
+    },
+    {
+      "slot": 2,
+      "participant": "GPT-B",
+      "phase": "independent",
+      "round": 1,
+      "status": "completed",
+      "error": null,
+      "providerFinishReason": null,
+      "requestedReasoning": "xhigh",
+      "requestedOutputTokens": null,
+      "receiptPresent": true,
+      "receiptDigest": "73de3b3cc3523cde4ad89ed75116eac90cbf9f74c7803912631f8194350dd0be",
+      "promptDigest": "2ba677688fe37341d21180460746afa3c03b5a39a67724786382369a9fff0a14",
+      "textDigest": "7a825572202d71cb5811d3882cd69b49e9f821068f9b9390ea592573f6164df0",
+      "textLength": 970,
+      "usage": {
+        "input": 812,
+        "output": 1547
+      },
+      "claims": 2,
+      "reviews": 0
+    },
+    {
+      "slot": 3,
+      "participant": "DeepSeek-Coral",
+      "phase": "independent",
+      "round": 1,
+      "status": "completed",
+      "error": null,
+      "providerFinishReason": null,
+      "requestedReasoning": "max",
+      "requestedOutputTokens": null,
+      "receiptPresent": true,
+      "receiptDigest": "af5b20a51b3b9b490a033b863c90ba5ae47376642379631a51aaca71c765fdde",
+      "promptDigest": "30f2293e4da194e278db597075d8e07d0ba6faa44ed6fa634fbf18b47edd689a",
+      "textDigest": "3943b371c71b453009146f728923791b6487e36313891f86d90f003efb5f0509",
+      "textLength": 925,
+      "usage": {
+        "input": 916,
+        "output": 2707
+      },
+      "claims": 2,
+      "reviews": 0
+    },
+    {
+      "slot": 4,
+      "participant": "GPT-A",
+      "phase": "cross_review",
+      "round": 1,
+      "status": "completed",
+      "error": null,
+      "providerFinishReason": null,
+      "requestedReasoning": "xhigh",
+      "requestedOutputTokens": null,
+      "receiptPresent": true,
+      "receiptDigest": "98980514aaf4b9be9815da4bb04cec453447bf1b0a23de128682a20e65613f87",
+      "promptDigest": "70bcb13b3477f59619afe8168f7a4a9500cdf48403beb362737601ff7588ddcf",
+      "textDigest": "9cb4860e2e3af16586746e9f8d67a7b8f02f6f8b7fb8c800f964f14bf4839b95",
+      "textLength": 2329,
+      "usage": {
+        "input": 4325,
+        "output": 2729
+      },
+      "claims": 2,
+      "reviews": 4
+    },
+    {
+      "slot": 5,
+      "participant": "GPT-B",
+      "phase": "cross_review",
+      "round": 1,
+      "status": "completed",
+      "error": null,
+      "providerFinishReason": null,
+      "requestedReasoning": "xhigh",
+      "requestedOutputTokens": null,
+      "receiptPresent": true,
+      "receiptDigest": "e864f6aec3126c1a045530c4df400d5adf59df7dbb2e6eeb7846a38005ef25c6",
+      "promptDigest": "1bf929135f209d568d1301ec432f7590ff987110b1617c8ebbfea10baff234de",
+      "textDigest": "958c3ea0a76f7a76332cd2dc75f6cd41cc48f10861b0984c4c342209a71c46ef",
+      "textLength": 2260,
+      "usage": {
+        "input": 4355,
+        "output": 2643
+      },
+      "claims": 2,
+      "reviews": 4
+    },
+    {
+      "slot": 6,
+      "participant": "DeepSeek-Coral",
+      "phase": "cross_review",
+      "round": 1,
+      "status": "failed",
+      "error": "response_not_completed",
+      "providerFinishReason": null,
+      "requestedReasoning": "max",
+      "requestedOutputTokens": null,
+      "receiptPresent": true,
+      "receiptDigest": "ddd3bcc4b58c766bb31f5d6375541982279b5c32147ef2ed480822ad84f67dd7",
+      "promptDigest": "e8d3e9bb75e841263dd9893ac08c56455f7f5a6d85716261c5e6056f57a970d0",
+      "textDigest": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126",
+      "textLength": 0,
+      "usage": null,
+      "claims": 0,
+      "reviews": 0
+    },
+    {
+      "slot": 7,
+      "participant": "DeepSeek-Coral",
+      "phase": "cross_review",
+      "round": 1,
+      "status": "completed",
+      "error": null,
+      "providerFinishReason": null,
+      "requestedReasoning": "max",
+      "requestedOutputTokens": 16384,
+      "receiptPresent": true,
+      "receiptDigest": "027430416f99c1d34a647e808c539824ba12a9be023a95fa674515c767d2bff4",
+      "promptDigest": "e8d3e9bb75e841263dd9893ac08c56455f7f5a6d85716261c5e6056f57a970d0",
+      "textDigest": "b5d6a4819ebaf56ae24f893c4e599bc13b943086c14197c735e8ab15c135ddb9",
+      "textLength": 2203,
+      "usage": {
+        "input": 4840,
+        "output": 4415
+      },
+      "claims": 2,
+      "reviews": 4
+    },
+    {
+      "slot": 8,
+      "participant": "GPT-A",
+      "phase": "cross_review",
+      "round": 2,
+      "status": "completed",
+      "error": null,
+      "providerFinishReason": null,
+      "requestedReasoning": "xhigh",
+      "requestedOutputTokens": null,
+      "receiptPresent": true,
+      "receiptDigest": "9667f238cfd3324830c97e4508830f68bb705f7549dcc2ffee3addedec4b2242",
+      "promptDigest": "66c36b8e35f7d6c5337746bf42485ee7208f21f6d2f93578dd24d396ac114f94",
+      "textDigest": "93d447ee93347397ce95fa7c1c4225e45c4b858e615be3c3f7945070de7b775c",
+      "textLength": 2419,
+      "usage": {
+        "input": 11372,
+        "output": 3051
+      },
+      "claims": 2,
+      "reviews": 4
+    },
+    {
+      "slot": 9,
+      "participant": "GPT-B",
+      "phase": "cross_review",
+      "round": 2,
+      "status": "completed",
+      "error": null,
+      "providerFinishReason": null,
+      "requestedReasoning": "xhigh",
+      "requestedOutputTokens": null,
+      "receiptPresent": true,
+      "receiptDigest": "2bbcc3a6fc5883de620a9550fd724d2f6bfefbb16f20ff5e73e0a6e6b5b66da1",
+      "promptDigest": "41b5bdd8aceeea82c59c75e1f009c2e708022a86e70502cb7efb2f45f7aa9966",
+      "textDigest": "b5af9e7bdd1f33ce4f28da5a6daf0b27e150b303e10691069c808ec85e90bd03",
+      "textLength": 2337,
+      "usage": {
+        "input": 11353,
+        "output": 3123
+      },
+      "claims": 2,
+      "reviews": 4
+    },
+    {
+      "slot": 10,
+      "participant": "DeepSeek-Coral",
+      "phase": "cross_review",
+      "round": 2,
+      "status": "completed",
+      "error": null,
+      "providerFinishReason": null,
+      "requestedReasoning": "max",
+      "requestedOutputTokens": 16384,
+      "receiptPresent": true,
+      "receiptDigest": "348723bbcc4f6956755f0d9d6f2fe6351e29f5597ca6bda4dfbb70724c6c4ffc",
+      "promptDigest": "8cbae206ca4bd95eede6d673e861ce5f7a5ff1ad09c92f1ea4028c97c8e373f4",
+      "textDigest": "081636a6fb0b6173cfbcf6cf237174098339e39a80c248d12c85f6d25a933034",
+      "textLength": 2110,
+      "usage": {
+        "input": 12595,
+        "output": 3549
+      },
+      "claims": 2,
+      "reviews": 4
+    },
+    {
+      "slot": 11,
+      "participant": "GPT-A",
+      "phase": "verification",
+      "round": 1,
+      "status": "completed",
+      "error": null,
+      "providerFinishReason": null,
+      "requestedReasoning": "xhigh",
+      "requestedOutputTokens": null,
+      "receiptPresent": true,
+      "receiptDigest": "1cfdbabb03500486f70c917bda5a74c2a9d00c033fdcac3e97df0aeff622f04b",
+      "promptDigest": "e4a91c5e7fbd9c4d31bb4a564cf59ca60eb4858d96bb3c693465d0ea8605cf71",
+      "textDigest": "e1f31345ee61784e8f3ee3c913f00080f2b8dc6f636124c1e5909fd09ddeafbc",
+      "textLength": 1254,
+      "usage": {
+        "input": 21301,
+        "output": 1702
+      },
+      "claims": 1,
+      "reviews": 1
+    },
+    {
+      "slot": 12,
+      "participant": "GPT-B",
+      "phase": "verification",
+      "round": 1,
+      "status": "completed",
+      "error": null,
+      "providerFinishReason": null,
+      "requestedReasoning": "xhigh",
+      "requestedOutputTokens": null,
+      "receiptPresent": true,
+      "receiptDigest": "0754c07910e88d09d7155a33ec3306a30b1e5c558125a532f58cf794f34cab39",
+      "promptDigest": "1eb3b5f7692442c06d9c88cb769f0b14cc88ddc5b206ceef1bc92abf536fee92",
+      "textDigest": "dc9434d63d840e78bdb5ab3e33b7d2f0128b68edcc1b21d15e19e38e05b2b425",
+      "textLength": 1322,
+      "usage": {
+        "input": 21344,
+        "output": 2006
+      },
+      "claims": 1,
+      "reviews": 1
+    }
+  ],
+  "evidence": {
+    "total": 3,
+    "byKind": {
+      "user_material": 1,
+      "provider_report": 2
+    },
+    "byStatus": {
+      "reported": 1,
+      "not_run": 2
+    }
+  },
+  "originalFailure": {
+    "preserved": true,
+    "exactCause": "UNVERIFIED: original remote finish reason not retained",
+    "outputLimitAsCause": "UNVERIFIED; a larger explicit bound completed the retry but does not recover the old finish reason"
+  },
+  "remaining": [
+    "real dot/Muse existing-thread round trips",
+    "resident/task/Wiki live flow",
+    "actual Codex read/approval/write gates",
+    "human second-device IME/touch"
+  ],
+  "tokenBudget": {
+    "limit": 100000,
+    "knownReportedTotal": 123013,
+    "knownReportedBeforeFinalRequest": 99663,
+    "reportedOvershoot": 23013,
+    "guard": "settled_reported_usage_soft_limit",
+    "hardProviderTokenCap": false,
+    "originalFailedUsageStillUnknown": true,
+    "stoppedAfterExhaustion": true
+  }
+}

@@ -73,3 +73,42 @@ test('resident and work use the existing Member snapshot; later settings never r
   let s = f.app.store.read().resident, attempt = s.workAttempts.at(-1), turn = s.turns.find(t => t.id === attempt.providerTurnId); assert.equal(turn.participant.maxOutputTokens, 16384); assert.equal(f.sends.at(-1).max_tokens, 16384); assert.deepEqual(attempt.input, original.input); assert.equal(attempt.inputDigest, original.inputDigest);
   f.app.participant({ ...f.member(pid), maxOutputTokens: 32768 }, pid); s = f.app.store.read().resident; assert.equal(s.turns[0].participant.maxOutputTokens, 4096); assert.equal(s.turns.find(t => t.id === turn.id).participant.maxOutputTokens, 16384); assert.deepEqual(s.workAttempts.at(-1).input, original.input); assert.equal(s.workAttempts.at(-1).inputDigest, original.inputDigest);
 });
+
+test('a blocked three-party review resumes only on an explicit command, preserving the failed receipt and total budget with a new output snapshot', async t => {
+  const f = await connect(await workspace(t)); const pid = f.create(); let failReview = true;
+  f.handler(async body => {
+    const prompt = body.messages.at(-1).content;
+    if (prompt.includes('· cross_review ·') && failReview) {
+      const events = [{ id: 'failed-review-receipt', choices: [{ index: 0, delta: {}, finish_reason: 'length' }] }, { choices: [], usage: { prompt_tokens: 31, completion_tokens: 4096 } }];
+      return new Response(events.map(e => 'data: ' + JSON.stringify(e) + '\n\n').join('') + 'data: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+    }
+    const stream = deepseekStream(response(prompt, { id: pid, label: 'DS' }));
+    return new Response((await stream.text()).replaceAll('ds_fixture', 'successful-output-' + f.sends.length), { headers: { 'Content-Type': 'text/event-stream' } });
+  });
+  const did = f.app.engine.create({ ...topic, participantIds: ['fake-a', 'fake-b', pid], limits: { maxRequests: 24, maxRounds: 2, maxVerificationTasks: 3, maxToolJobs: 0, maxTokens: 100000, maxActiveMs: 1140000 } }, 'three-party-output');
+  await until(() => f.app.discussion(did).discussion.status === 'blocked'); const before = structuredClone(f.app.discussion(did).discussion); const failed = before.turns.at(-1);
+  assert.equal(before.used.requests, 6); assert.equal(failed.status, 'failed'); assert.equal(failed.phase, 'cross_review'); assert.equal(failed.providerFinishReason, 'length'); assert.equal(failed.receipt, 'failed-review-receipt'); assert.equal(failed.maxOutputTokens, 4096);
+  f.app.engine.kick(); await f.api('/api/state'); assert.equal(f.sends.length, 2);
+  const settings = { action: 'configure_participant', expectedRevision: before.revision, participantId: pid, maxOutputTokens: 16384 };
+  f.app.engine.control(did, settings, 'output-reconfigure-once'); f.app.engine.control(did, settings, 'output-reconfigure-once'); await f.api('/api/state'); assert.equal(f.sends.length, 2); assert.equal(f.app.discussion(did).discussion.status, 'blocked');
+  assert.equal(f.app.discussion(did).discussion.members.find(p => p.id === pid).reasoningEffort, 'max'); assert.equal(f.member(pid).maxOutputTokens, undefined);
+  failReview = false; const resume = { action: 'resume', expectedRevision: before.revision };
+  f.app.engine.control(did, resume, 'resume-output-once'); f.app.engine.control(did, resume, 'resume-output-once');
+  await until(() => f.app.discussion(did).discussion.status === 'completed'); const after = f.app.discussion(did).discussion, retry = after.turns.find(t => t.taskId === failed.taskId && t.id !== failed.id);
+  assert.equal(after.id, before.id); assert.equal(f.app.store.read().discussions.length, 1); assert.deepEqual(after.limits, before.limits); assert.ok(after.used.requests <= 24); assert.equal(after.used.requests, after.turns.filter(t => t.dispatchStartedAt).length); assert.ok(after.used.outputTokens >= before.used.outputTokens);
+  for (const old of before.turns) assert.deepEqual(after.turns.find(t => t.id === old.id), old);
+  assert.equal(after.turns.filter(t => t.taskId === failed.taskId).length, 2); assert.equal(retry.status, 'completed'); assert.equal(retry.maxOutputTokens, 16384); assert.notEqual(retry.receipt, failed.receipt); assert.equal(f.sends[2].max_tokens, 16384); assert.equal(f.sends[2].reasoning_effort, 'max'); assert.equal(after.used.toolJobs, 0); assert.equal(f.app.store.read().jobs.length, 0);
+});
+
+test('reported-token budgets settle after a successful response: one-request overshoot remains visible and no further dispatch or implicit partial resume occurs', async t => {
+  const f = await connect(await workspace(t)); const pid = f.create(16384), other = f.create(16384);
+  f.handler(body => new Response([
+    { id: 'near-budget-receipt', choices: [{ index: 0, delta: { content: response(body.messages.at(-1).content, { id: pid, label: 'DS' }) }, finish_reason: 'stop' }] },
+    { choices: [], usage: { prompt_tokens: 900, completion_tokens: 99 } }, '[DONE]',
+  ].map(e => 'data: ' + (typeof e === 'string' ? e : JSON.stringify(e)) + '\n\n').join(''), { headers: { 'Content-Type': 'text/event-stream' } }));
+  const id = f.app.engine.create({ ...topic, participantIds: [pid, other], limits: { maxRequests: 24, maxTokens: 1000 } }, 'soft-token-budget');
+  await until(() => f.app.discussion(id).discussion.status === 'partial'); const d = structuredClone(f.app.discussion(id).discussion);
+  assert.equal(d.reason, 'budget_exhausted'); assert.equal(d.used.requests, 2); assert.equal(d.turns.length, 2); assert.ok(d.turns.every(t => t.status === 'completed' && t.usage)); assert.equal(d.turns[0].usage.input + d.turns[0].usage.output, 999); assert.ok(d.used.inputTokens + d.used.outputTokens > 1000); assert.equal(d.limits.maxTokens, 1000);
+  f.app.engine.kick(); await f.api('/api/state'); assert.equal(f.app.discussion(id).discussion.used.requests, 2); assert.equal(f.sends.length, 2);
+  assert.throws(() => f.app.engine.control(id, { action: 'resume', expectedRevision: 1 }, 'finished-topic-resume'), /reconciliation_required/); assert.deepEqual(f.app.discussion(id).discussion, d);
+});

@@ -585,6 +585,9 @@
       "realStatus": "NOT_RUN",
       "apiSubsetStatus": "FAIL",
       "apiSubsetEvidence": "docs/implementation/assets/r8-real-api-20261031/summary.json",
+      "apiContinuationStatus": "PARTIAL",
+      "apiContinuationEvidence": "docs/implementation/assets/r8-continuation-20261031/summary.json",
+      "apiContinuationNote": "After explicit deployment/test approval, the same topic completed 6 additional requests: 12 total, 11 completed and the original failure preserved. DeepSeek Max/16384 completed both reviews; verification reached 2 tasks before budget_exhausted. Reported usage 123013 includes a 23013 one-request overshoot of the unchanged settled-usage soft limit; original failed usage remains unknown. Revision/synthesis and full R8-D remain NOT_RUN. No conversation text or screenshots exported.",
       "note": "Approved GPT2+Coral topic API subset ran 6 requests: 3 independent drafts and 2 GPT cross-reviews completed, then DeepSeek Max response_not_completed. Exact remote finish reason and failed usage were not retained by the running adapter. Full dot/Muse/resident/Codex flow remains NOT_RUN; original gate is unchanged. No credentials or original private conversations included."
     },
     {
