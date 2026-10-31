@@ -1,6 +1,7 @@
 import type { Store } from './store.js';
 import type { WorkspaceState } from './model.js';
 import type { Room, ResidentTurn } from './resident-model.js';
+import { snapshotMember } from './settings.js';
 import type { WorkTask, WorkAttempt, WorkKind, WorkRole, WorkReportV1, WorkReviewV1 } from './work-model.js';
 import { AppError, code, digest, id, integer, now, object, string } from './util.js';
 import { DispatchCoordinator, budgetReason, unresolvedProvider } from './dispatch.js';
@@ -237,7 +238,7 @@ export class WorkQueue {
       JSON.stringify(data), 'JSON 객체만 반환: {"version":1,"action":"say","text":"산출물 또는 검토 본문","replyTo":null,"mentions":[],"claims":[],"reviews":[],"verifications":[],"uncertainty":[],"proposals":[{"kind":"' + (a.purpose === 'review' ? 'work_review' : 'work_report') + '","payload":{"version":1,"taskId":"' + t.id + '","taskVersion":' + a.taskVersion + ',"attemptId":"' + a.id + '","summary":"보고 요약","blockers":[]}}]}',
       a.purpose === 'review' ? 'work_review payload는 summary/blockers 대신 reportDigest, decision(accept|rework|blocked), reason을 사용하세요. 모델의 수동 확인/실행 성공 주장은 서버 관측을 대체하지 않습니다.' : 'text가 산출물 원문입니다. outputs/digest/checks/작성자/실행 여부는 서버가 원문과 실제 관측으로 고정합니다.' ].join('\n\n');
     if (prompt.length + context.history.reduce((n, h) => n + h.content.length, 0) > 180000) { a.status = 'failed'; a.error = 'context_limit_requires_handoff'; t.status = 'blocked'; t.reason = a.error; return null; }
-    const turn: ResidentTurn = { id: requestId, roomId: r.id, participantId: participant.id, participant: structuredClone(participant), generation: context.generation, epoch: r.epoch,
+    const turn: ResidentTurn = { id: requestId, roomId: r.id, participantId: participant.id, participant: snapshotMember(participant), generation: context.generation, epoch: r.epoch,
       status: 'prepared', prompt, promptDigest: digest(prompt), history: structuredClone(context.history), basisSequence: r.lastMessageSequence, text: '', receipt: null, reply: null, usage: null, startedAt: now(), finishedAt: null, error: null, repairOf: null, messageId: null, proposalsStatus: 'none', workAttemptId: a.id, workSeatVersion: a.seatVersion, wikiCitations: a.input.wikiCitations ?? [] };
     a.providerTurnId = requestId; a.providerPromptDigest = turn.promptDigest;
     if (!this.canDispatch(s, turn)) { a.providerTurnId = null; a.providerPromptDigest = null; a.status = 'stale'; a.error = 'work_scope_changed'; t.status = 'blocked'; t.reason = a.error; return null; }

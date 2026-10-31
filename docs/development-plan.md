@@ -2,7 +2,9 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
-2026-10-31 실제 호출 추가 승인: 사용자가 GPT2+CoralBricks 새 토의1개·최대24회/20분과 기존 중단 토의의 원문 보존 종료를 허용했다. [실제 수락 기록](./implementation/phase8-real-api-20261031.md)은 **6요청에서 부분 성공 후 FAIL**이다. 3초안·GPT2개 첫 상호 검토/실제 HTTPS·기록 보존/동시1은 확인했으나 DeepSeek Max 재검토가 정상 완료되지 않아 정지했다. 정확한 원격 finish_reason과 실패 usage는 과거 adapter가 보존하지 않아 UNVERIFIED이며 자동 재전송하지 않았다. 종료/보고 usage 진단을 보강하되 원래 출력 한도·사고·예산·수락 기준은 유지한다. [출력 한도 설정 변경안](./reviews/deepseek-output-limit-impact-20261031.md)은 별도 제안/미승인이다. 실제 dot/Muse·상주 업무/Wiki·Codex/실기기 포함 R8-D 전체는 NOT_RUN으로 남긴다.
+2026-10-31 출력 한도 추가 승인: 사용자가 [DeepSeek 토커별 출력 한도 변경안](./reviews/deepseek-output-limit-impact-20261031.md)을 승인했다. R8 보완으로 기본4,096을 유지하고 512~32,768 범위의 명시 설정·실제 catalog 한도 검증·새 turn snapshot·등록/사후/일시정지 UI를 구현했다. [실행 기록](./implementation/deepseek-output-limits-20261031.md): Node326·Chrome/MCP52 PASS, FAIL/SKIP0. 기존 turn/업무 입력·Provider complete/Store·예산/승인/단일 dispatch·50 gate는 유지한다. ResidentTurn은 기존 participant snapshot을 재사용하고 별도 중복 필드/SQL 이관을 만들지 않는다. 승인 예상12~17파일·350~600줄 중 실제17파일이며 후속 R1~R8 영향·복귀는 승인 검토서를 따른다. 기존6요청/blocked 토의·운영 설정을 바꾸지 않았으며 배포·유료 재검증은 별도다.
+
+2026-10-31 실제 호출 추가 승인: 사용자가 GPT2+CoralBricks 새 토의1개·최대24회/20분과 기존 중단 토의의 원문 보존 종료를 허용했다. [실제 수락 기록](./implementation/phase8-real-api-20261031.md)은 **6요청에서 부분 성공 후 FAIL**이다. 3초안·GPT2개 첫 상호 검토/실제 HTTPS·기록 보존/동시1은 확인했으나 DeepSeek Max 재검토가 정상 완료되지 않아 정지했다. 정확한 원격 finish_reason과 실패 usage는 과거 adapter가 보존하지 않아 UNVERIFIED이며 자동 재전송하지 않았다. 종료/보고 usage 진단 보강 때에는 원래 출력 한도·사고·예산·수락 기준을 유지했다. 당시 제안이던 [출력 한도 설정 변경안](./reviews/deepseek-output-limit-impact-20261031.md)은 위 추가 승인으로 구현 범위에 들어왔다. 실제 dot/Muse·상주 업무/Wiki·Codex/실기기 포함 R8-D 전체는 NOT_RUN으로 남긴다.
 
 2026-10-31 실제 호출 전 준비 관측: PR #27 병합 후 R8의 [준비·격리 점검과 doctor 보완](./implementation/phase8-live-preflight-20261031.md)에서 Ubuntu bwrap mount/PID/proc 가림 PASS, 운영 health/도구 확인과 당시 미등록 토커·상주 off·중단 root·Codex 미등록을 구분했다. 이 준비 점검 시점에는 실제 모델 호출도 미실행이었으며 후속 승인/실측은 위 기록을 따른다. Codex thread 실행·쓰기 및 원래 전체 실계정 gate는 별도 미검증이며 새 페이즈를 신설하거나 50개 기준을 바꾸지 않는다.
 

@@ -6,7 +6,7 @@ export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'ma
 export type ProviderFinishReason = 'stop' | 'length' | 'content_filter' | 'tool_calls' | 'function_call' | 'other';
 export type Phase = 'independent' | 'cross_review' | 'verification' | 'revision' | 'synthesis' | 'summary_review';
 export type RunStatus = 'running' | 'paused' | 'blocked' | 'completed' | 'partial' | 'cancelled';
-export interface ModelChoice { id: string; label: string; reasoningEfforts?: ReasoningEffort[]; reasoningSource?: 'catalog' | 'provider_docs' }
+export interface ModelChoice { id: string; label: string; reasoningEfforts?: ReasoningEffort[]; reasoningSource?: 'catalog' | 'provider_docs'; outputTokenLimit?: number }
 export interface DeviceSignin { connectionId: string; attemptId: string; status: NonNullable<Connection['deviceSignin']>['status']; expiresAt: number; verificationUrl?: string; userCode?: string; error?: string }
 export interface BrowserBinding {
   pageId: number; url: string; accountLabel: string; agentLabel: string;
@@ -31,6 +31,7 @@ export interface Connection {
 export interface Member {
   id: string; label: string; kind: ProviderKind; connectionId: string | null; modelId: string; role: string;
   reasoningEffort?: ReasoningEffort;
+  maxOutputTokens?: number;
 }
 export interface Observation {
   connection: string; response: string; tool: string; work: string;
@@ -76,6 +77,7 @@ export interface DiscussionTurn {
   reasoningEffort?: ReasoningEffort;
   dispatchStartedAt?: string;
   providerFinishReason?: ProviderFinishReason;
+  maxOutputTokens?: number;
 }
 export interface Checkpoint {
   id: string; participantId: string; revision: number; generation: number; basisCursor: number;

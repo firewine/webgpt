@@ -1,8 +1,10 @@
-# DeepSeek 출력 한도 설정 — 제안 / 미승인
+# DeepSeek 출력 한도 설정 — 승인됨
+
+2026-10-31 사용자가 **“출력 한도 설정 추가 승인”**으로 이 변경을 허용했다. 승인 범위는 아래 기본4,096 유지·512~32,768 직접 설정과 관련 계획/fixture/UI/PR이다. 운영 배포·실제 재호출은 별도이며 기존6요청/blocked 토의는 보존한다. 구현 전에 SSOT와 연결 계획을 함께 갱신한다.
 
 2026-10-31 승인된 R8 실제 GPT2+CoralBricks 토의는 6요청에서 중단됐다. 세 독립 초안·GPT 두 계정의 첫 상호 검토는 완료됐고, DeepSeek Max의 첫 상호 검토는 `response_not_completed`, receipt 있음·최종 text0이다. **정확한 원격 finish_reason은 기존 코드가 버려 확인할 수 없다.** 토큰 한도 초과는 유력한 가설이며 이번 실제 요청의 확정 원인으로 쓰지 않는다.
 
-`src/connections/providers.ts::Providers.complete`는 DeepSeek의 `max_tokens`를 4,096으로 고정한다. 정상 stop 이외의 이유를 모두 같은 AppError로 변환하고 뒤에 오는 usage chunk를 기다리지 않는다. 종료 이유와 제공된 usage를 실패에도 남기는 진단/보고 보강은 기존 R8 계약의 오류 수정으로 별도 진행한다. 아래 **출력 한도 설정 추가**는 계획 변경 제안이며 승인 전에 설정/API/DB/UI를 구현하거나 운영 값·실패 요청을 바꾸지 않는다.
+실제 검증 당시 운영 `src/connections/providers.ts::Providers.complete`는 DeepSeek의 `max_tokens`를 4,096으로 고정했고 정상 stop 이외 이유와 뒤따르는 usage를 버렸다. 종료 이유와 보고 usage를 보존하는 보강은 PR #29에서 별도로 검사했다. 아래 **출력 한도 설정 추가**는 승인 후 그 보강 위에서 구현하며 운영 값·실패 요청은 바꾸지 않는다.
 
 ## 최소 변경안과 대안
 
@@ -23,7 +25,7 @@ API 근거는 [CoralBricks 출력 budget/완료](https://www.coralbricks.ai/docs
 
 | 단계 | 기존 계약 유지 / 최소 변경 |
 | --- | --- |
-| R1 | `model.ts::Member/DiscussionTurn`, `resident-model.ts::ResidentTurn`의 선택 `maxOutputTokens` 제안. 기존 SQLite schema/이력은 그대로, 필드 부재는4096. 새 SQL/재초기화 없음 |
+| R1 | `model.ts::Member/DiscussionTurn`의 선택 `maxOutputTokens`. ResidentTurn은 기존 `participant` Member snapshot 안에 같은 값을 보존해 중복 필드를 만들지 않는다. 기존 SQLite schema/이력은 그대로, 필드 부재는4096. 새 SQL/재초기화 없음 |
 | R2 | `settings.ts`, `Workspace.participant`, `DiscussionEngine.control/turn`, `Providers.complete`에서 검증·실행 전 snapshot. DeepSeek `max_tokens`만 명시 값으로 전송. 기존 complete 인터페이스·단일 dispatch·전송 전 기록·미확정 대조 유지. 진행 turn에 소급 적용/자동 재시도 없음 |
 | R3 | `control.html/control.ts`, `RoomView.renderMembers`에서 등록/사후 변경·현재 토의 일시정지 후 설정. 과거 turn의 실제 요청 값 표시. 기존 API/SSE·흑백 GUI·비교/복구 유지 |
 | R4 | 키/계정·모델 목록·Chrome discovery·동일 대화 경계 유지. 가능한 catalog 출력 capability만 확인; 모델 최대치를 꾸며내지 않음 |
@@ -39,4 +41,4 @@ API 근거는 [CoralBricks 출력 budget/완료](https://www.coralbricks.ai/docs
 
 복귀: 방 off/주제 pause·원래 receipt 대조 뒤 새 필드를 지원하지 않는 빌드에서 명시 설정을 쓰지 않는 상태로 돌아간다. DB/원문·실패 결과를 지우지 않는다. 기존 Max를 High로 자동 낮추지 않는다.
 
-**승인 요청은 위 설정 구현과 관련 계획 개정만**이다. 운영 배포·새 실제 호출은 포함하지 않는다. 이번 실제 검증 토의는 원래 ID·6요청·receipt를 보존한다. 재검증 시 같은 토의에서 남은 최대18요청 이내의 새 시간 창과 원하는 출력값을 별도로 허용받아 진행한다. 승인 전 상태는 제안/미구현이다.
+**승인 범위는 위 설정 구현과 관련 계획 개정만**이다. 운영 배포·새 실제 호출은 포함하지 않는다. 이번 실제 검증 토의는 원래 ID·6요청·receipt를 보존한다. 재검증 시 같은 토의에서 남은 최대18요청 이내의 새 시간 창과 원하는 출력값을 별도로 허용받아 진행한다. 실제 실패를 이 설정으로 해결했다는 수락은 별도 실측 전 UNVERIFIED다.

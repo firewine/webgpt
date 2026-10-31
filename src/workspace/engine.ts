@@ -5,7 +5,7 @@ import type { Checkpoint, Discussion, DiscussionTurn, Evidence, Phase, Task, Wor
 import { AppError, code, digest, id, integer, now, object, string, strings } from './util.js';
 import { parseReply, promptFor } from './prompts.js';
 import { failureObservation } from '../connections/completion-failure.js';
-import { reasoningEffort, participantReasoning, oauthKind } from './settings.js';
+import { reasoningEffort, participantReasoning, participantOutput, snapshotMember, oauthKind } from './settings.js';
 import type { LocalMaterials } from './materials.js';
 import { DispatchCoordinator, budgetReason } from './dispatch.js';
 import { contextWiki, visibleRoomMessages } from './wiki-policy.js';
@@ -122,9 +122,11 @@ export class DiscussionEngine {
       } else if (action === 'configure_participant') {
         if (!['paused', 'blocked'].includes(d.status) || d.turns.some(t => ['prepared', 'running', 'unconfirmed'].includes(t.status))) throw new AppError('participant_settings_require_pause', 409);
         const member = d.members.find(p => p.id === body.participantId);
+        if (member && body.maxOutputTokens !== undefined && member.kind !== 'deepseek') throw new AppError('output_limit_requires_deepseek', 409);
         if (!member || !oauthKind(member.kind) && member.kind !== 'deepseek') throw new AppError(member?.kind === 'anthropic' ? 'reasoning_requires_supported_model' : 'reasoning_requires_oauth', 409);
         const c = state.connections.find(c => c.id === member.connectionId); if (!c) throw new AppError('connection_not_found', 404);
-        const settings = participantReasoning(c, member.modelId, body.reasoningEffort); delete member.reasoningEffort; Object.assign(member, settings);
+        if (body.reasoningEffort !== undefined || body.maxOutputTokens === undefined) { const settings = participantReasoning(c, member.modelId, body.reasoningEffort); delete member.reasoningEffort; Object.assign(member, settings); }
+        if (body.maxOutputTokens !== undefined) { const output = participantOutput(c, member.modelId, body.maxOutputTokens); delete member.maxOutputTokens; Object.assign(member, output); }
       } else if (action === 'revise') {
         if (['completed', 'partial', 'cancelled'].includes(d.status)) throw new AppError('discussion_finished', 409);
         d.revision++; d.interventions.push({ revision: d.revision, text: string(body.text, 5000), createdAt: now() });
@@ -272,7 +274,7 @@ export class DiscussionEngine {
     const captured = this.store.transact((state, emit) => {
       const d = findDiscussion(state, discussionId); const task = d.tasks.find(t => t.id === taskId)!;
       if (d.status !== 'running' || task.revision !== d.revision || task.status !== 'pending') return null;
-      const context = d.contexts.find(c => c.participantId === task.participantId)!; const participant = d.members.find(p => p.id === task.participantId)!;
+      const context = d.contexts.find(c => c.participantId === task.participantId)!; const participant = snapshotMember(d.members.find(p => p.id === task.participantId)!);
       let prompt = promptFor(d, task);
       if (task.method === 'codex' && !task.jobId && participant.kind === 'browser' && state.grants.some(g => !g.revoked && g.discussionId === d.id && g.participantId === participant.id && g.tools.includes('codex_send'))) {
         prompt += `\n\n이 과제의 MCP codex_send 권한이 있습니다. taskId=${task.id}. 검증할 내용을 구체적인 프롬프트로 작성해 codex_send({taskId,prompt})로 한 번 제출하세요. 접수 결과는 실행 완료가 아닙니다. 결과는 Core가 실제 완료 후 다시 전달합니다. 도구가 없거나 실패하면 실행하지 못했다고 명시하세요.`;
@@ -285,6 +287,7 @@ export class DiscussionEngine {
         phase: task.phase, round: task.round, status: 'prepared', prompt, promptDigest: digest(prompt), text: '', reply: null,
         startedAt: now(), finishedAt: null, receipt: null, error: null, usage: null, ...(d.wikiCitations ? { wikiCitations: structuredClone(d.wikiCitations) } : {}),
         ...(oauthKind(participant.kind) ? { reasoningEffort: reasoningEffort(participant.reasoningEffort) } : participant.kind === 'deepseek' && participant.reasoningEffort !== undefined ? { reasoningEffort: participant.reasoningEffort } : {}),
+        ...(participant.kind === 'deepseek' ? { maxOutputTokens: participant.maxOutputTokens! } : {}),
         evidenceIds: d.evidence.filter(e => e.revision === d.revision && (task.phase !== 'independent' || e.kind === 'user_material')).map(e => e.id) };
       const denied = this.dispatch.reserve(state, { requestId: turn.id, kind: 'topic', participantId: participant.id, generation: turn.generation, roomId: d.roomId ?? null });
       if (denied) {

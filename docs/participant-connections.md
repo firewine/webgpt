@@ -31,6 +31,8 @@
 
 [DeepSeek 사고 설정·Anthropic 구현 기록](./implementation/deepseek-reasoning-anthropic-20261031.md)에서 제공처별 요청 값·설정 보존·혼합 토론/방·오류와 usage 검사를 구분한다. 기존 DeepSeek 연결은 버전 적용 뒤 카드의 **모델 확인**으로 사고 capability를 갱신한다.
 
+2026-10-31 [승인된 DeepSeek 출력 한도](./reviews/deepseek-output-limit-impact-20261031.md)는 사고 깊이와 별개로 토커에 지정한다. 설정 부재는4,096, 사용자 명시 값은512~32,768이며 실제 catalog가 최대 출력을 보고하면 이를 추가 검증한다. 알려지지 않은 최대치를 context 길이로 추정하지 않는다. 기존 GPT/Anthropic 요청과 키/계정/Chrome 연결은 유지한다. 진행/미확정 발언의 출력 설정을 바꾸거나 과거 turn/업무 입력을 덮어쓰지 않는다. [구현·검사·복귀](./implementation/deepseek-output-limits-20261031.md)를 따르며 실제 실패 해결·배포는 별도 수락이다.
+
 ## 2. GPT: OAuth로 연결하고 웹쫀쿠에서 대화
 
 2026-10-31 [추가 승인](./reviews/deepseek-anthropic-impact-20261031.md)으로 DeepSeek 제공처별 사고 설정과 Anthropic API 연결을 R8 보완에 포함한다. DeepSeek의 제공처 기본/none/low/high/max는 실제 catalog 또는 정확한 모델 ID의 공식 문서에 따른 허용 값만 표시하고 GPT xhigh와 자동 치환하지 않는다. 기존 설정 부재는 그대로 보존하며 변경은 새 토의 또는 일시정지한 토의의 이후 발언에 적용한다. Anthropic은 API key·필요한 workspace ID·공식 모델 목록·Messages SSE를 기존 Completion 계약에 연결한다. 기존 Store/승인/예산/대조를 유지한다. Claude 구독 OAuth는 공개 외부 앱 지원 경로/허가 확인까지 보류하며 미구현을 성공으로 표시하지 않는다. 실계정 유료 호출/운영 수락은 별도다.

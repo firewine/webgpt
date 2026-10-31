@@ -109,9 +109,15 @@ OAuth GPT 사고 깊이는 기본 Extra high이며 Low/Medium/High로 변경할 
 
 Anthropic 구독 OAuth는 [승인된 범위](./reviews/deepseek-anthropic-impact-20261031.md)에 따라 보류했다. API 연결은 Claude 웹의 기존 대화/기억을 가져오지 않으며 사고 깊이 별도 설정도 이번 범위에 없다. Messages 응답의 완료/원문·receipt와 제공된 usage만 사용한다. 출력 한도 4,096토큰이며 중도 종료·`max_tokens`를 정상 완료로 표시하거나 자동 재전송하지 않는다. 장문 실제 추론 적합성·요금/계정 권한은 아직 검증하지 않았다. [구현·검사·복귀 기록](./implementation/deepseek-reasoning-anthropic-20261031.md)을 참조한다.
 
+### DeepSeek 출력 한도 (2026-10-31 승인 보완)
+
+설정 지원 버전을 적용한 뒤 `참여자와 연결 → DeepSeek 연결 카드 → 모델 확인`으로 모델 정보를 갱신한다. `참여자 등록` 또는 `토커 설정 변경 → 출력 한도 (토큰)`에서 **512~32,768 정수**를 입력한다. **빈칸은 기존 기본 4,096**이며 Max 사고 깊이를 골라도 자동으로 높이지 않는다. 실제 모델 목록의 `max_output_tokens`가 있으면 그 최대치도 적용한다. 최대 출력이 보고되지 않았으면 화면에 미확인으로 표시하며 앱 범위 안의 값도 제공처가 거절할 수 있다. context 길이를 최대 출력으로 대신 쓰지 않는다.
+
+전역 토커 설정은 새 토의와 다음 상주/업무 발언에 적용한다. 현재 토의만 바꾸려면 **일시정지 → 진행·미확정 응답 대조 → 토커 카드의 출력 한도 변경**을 사용한다. 전역 설정과 현재 토의는 독립이며, 출력 한도만 바꿔도 사고 깊이는 유지한다. 진행·미확정 발언이 있으면 전역 출력 한도 변경도 거절한다. 이미 준비된/과거 turn과 업무 입력·digest는 소급 변경하지 않는다. 변경만으로 토의를 재개하거나 실패 요청을 다시 보내지 않는다. [구현·검사·복귀 기록](./implementation/deepseek-output-limits-20261031.md)을 참조한다.
+
 ### DeepSeek 응답 실패 진단
 
-DeepSeek가 `response_not_completed`로 중단되면 receipt/원래 요청을 보존하고 원인을 확인한다. 새 진단 빌드는 제공처의 종료 reason과 실제 보고 usage를 실패에도 남긴다. `length`는 출력 한도 도달, `content_filter`·`tool_calls` 등은 별도 종료 신호이며 정상 완료가 아니다. EOF/미완료 stream은 미확정으로 대조한다. 기존 기록에 이유/usage가 없으면 추정해 채우지 않는다. [실계정 부분 실패·진단 보강](./implementation/phase8-real-api-20261031.md)을 따른다. 기본 출력4,096과 사고 값을 자동으로 바꾸지 않으며 출력 한도 설정 추가는 별도 승인 대상이다.
+DeepSeek가 `response_not_completed`로 중단되면 receipt/원래 요청을 보존하고 원인을 확인한다. 새 진단 빌드는 제공처의 종료 reason과 실제 보고 usage를 실패에도 남긴다. `length`는 출력 한도 도달, `content_filter`·`tool_calls` 등은 별도 종료 신호이며 정상 완료가 아니다. EOF/미완료 stream은 미확정으로 대조한다. 기존 기록에 이유/usage가 없으면 추정해 채우지 않는다. [실계정 부분 실패·진단 보강](./implementation/phase8-real-api-20261031.md)을 따른다. 기본 출력4,096과 사고 값을 자동으로 바꾸지 않는다. 위 출력 한도 설정의 승인은 운영 반영·실제 재호출을 허용한 것이 아니며 기존 실패가 한도 때문인지도 여전히 UNVERIFIED다.
 
 ### dot·Muse
 
