@@ -1,6 +1,7 @@
 import type { ResidentStateV1 } from './resident-model.js';
 
 export type ProviderKind = 'fake' | 'openai-oauth' | 'deepseek' | 'browser';
+export type DeepSeekService = 'deepseek' | 'coralbricks' | 'river';
 export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
 export type Phase = 'independent' | 'cross_review' | 'verification' | 'revision' | 'synthesis' | 'summary_review';
 export type RunStatus = 'running' | 'paused' | 'blocked' | 'completed' | 'partial' | 'cancelled';
@@ -18,6 +19,7 @@ export interface Connection {
   status: 'connected' | 'auth_required' | 'unverified' | 'error';
   models: ModelChoice[]; clientId?: string; subject?: string; email?: string; expectedEmail?: string;
   browser?: BrowserBinding; lastCheckedAt?: string; error?: string;
+  apiService?: DeepSeekService;
   browserHistory?: { changedAt: string; binding: BrowserBinding }[];
 }
 export interface Member {

@@ -8,6 +8,7 @@ import { Vault } from './vault.js';
 import { AppError, digest, id, now, object, string } from './util.js';
 import { OAuthService } from '../connections/oauth.js';
 import { Providers } from '../connections/providers.js';
+import { deepSeekService } from '../connections/deepseek-services.js';
 import { BrowserBridge, validateBinding } from '../connections/browser.js';
 import { BrowserDiscovery } from '../connections/browser-discovery.js';
 import { DiscussionEngine, findDiscussion } from './engine.js';
@@ -96,7 +97,7 @@ export class Workspace {
   capabilities(scope?: { discussionId: string; participantId: string; tools: string[] }) { return inspectCapabilities(this, scope); }
   async addDeepSeek(input: unknown): Promise<string> {
     const body = object(input); const key = string(body.key, 4096); const connectionId = id('connection');
-    const connection: Connection = { id: connectionId, kind: 'deepseek', label: string(body.label, 80), status: 'unverified', models: [] };
+    const connection: Connection = { id: connectionId, kind: 'deepseek', label: string(body.label, 80), apiService: deepSeekService(body.apiService), status: 'unverified', models: [] };
     this.vault.put(connectionId, { key });
     this.store.transact((s, emit) => { s.connections.push(connection); emit({ type: 'connection.added', discussionId: null, data: { connectionId } }); });
     try { await this.refreshModels(connectionId); } catch { /* preserve the connection and public failure state for the owner */ }
