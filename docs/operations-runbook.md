@@ -159,6 +159,18 @@ Wiki는 항상 **reported** 지식이다. report source의 관측 근거는 별�
 
 이관은 기존 resident JSON에 optional `wikiSchemaVersion=1`과 기존 빈 배열을 사용하며 기존 계정/대화/개인 기억을 Wiki로 복사하지 않는다. 세대 없는 옛 resident fixture grant는 폐기 상태로 보존한다. 운영 반영/복귀는 G0와 [R7 실행·수락·롤백 기록](./implementation/phase7-shared-wiki-20261031.md)을 따른다. 신규 grant 회수·예약 중지·진행/미확정 대조 후 flag off로 읽기만 남기며 Wiki/충돌/영수증을 삭제하거나 옛 DB로 되돌리지 않는다. 이번 단계의 실제 운영 DB 이관·계정 호출·서비스 재시작은 NOT_RUN이다.
 
+### 통합 수락과 운영 반영 전 점검 (페이즈 8)
+
+[R8 실행 기록](./implementation/resident-acceptance.md)과 [50개 수락 manifest](./implementation/resident-acceptance-manifest.json)를 먼저 본다. Node248/실제 Chrome·MCP 회귀의 fixture 성공은 운영 배포·실계정·실기기·실제 쓰기의 완료가 아니다. 현재 실운영 전체 수락은 미완료다. [승인된 B안](./reviews/r8-topic-transition-decision-20261031.md)에 따라 방을 끈 뒤 설정에서 `참여자의 주제 토론 자동 시작 허용`을 명시 선택할 수 있다. 기존 방은 기본 꺼짐이다. 켜진 방에서 참여자의 공개 근거 제안이 현재 계정/세대/예산 검사를 통과하면 기존 주제 토론을 시작하고 같은 방으로 돌아온다. 업무/실행·승인/미확정·다른 root가 있으면 대기한다. 오래된 맥락/권한의 제안은 재실행하지 않고 원문과 거절 이유를 보존한다.
+
+자동 검증은 `npm run check`와 설치된 Chromium/MCP 경로를 지정한 `npm run test:browser`다. 임시 DB/프로필·모의 계정을 사용하며 `test-results/resident/R8`에 흐름/rollback/handoff/load/2탭 JSON과 화면을 남긴다. source1,000메시지·업무100·Wiki100의 50개 요청 page/원문 대조/transaction 비용은 fixture 측정값이며 장기 운영 용량 보장이 아니다. 기본 명령에서 MCP를 생략해 SKIP됐으면 전체 통과라고 적지 않는다.
+
+실제 운영 반영 전에는 G0에 따라 방 off·topic pause·queued 미전송 취소와 진행/승인/미확정 receipt 대조를 완료한다. 기존 .env/접속 키·대화 DB·계정·Chrome profile을 보존하고 해당 작업실의 소스만 사용자 병합 main으로 갱신·빌드한다. 상주 기능은 `WJ_RESIDENT_ENABLED=true`를 명시한 뒤 기존 webjjoku 서비스 재시작으로 반영한다. 예산/속도·멤버/업무 역할은 기존 UI에서 직접 선택한다. 기존 origin/포트·Tailscale Serve·다른 서비스 설정은 바꾸지 않는다. 이번 개발에서 운영 반영/재시작을 실행한 것은 아니다.
+
+R8-D 실수락은 사용자가 연결 화면에서 GPT2계정 OAuth·DeepSeek·dot/Muse 기존 대화·Codex 읽기 전용 세션을 준비하고 실제 호출을 허용한 뒤 수행한다. 로그인·모델 목록·후속 응답·stream/usage·thread/receipt·독립 검토를 각각 관측한다. 계정/메시지 내용은 공개 증거에 복사하지 않고 식별자/상태·허용된 검사 근거만 남긴다. 실기기의 HTTPS·IME/터치·재접속/재시작과 실제 쓰기 격리도 별도 gate다. 실제 쓰기는 기존 UNVERIFIED 차단을 해제하지 않는다.
+
+이번 읽기 전용 운영 점검에서는 OAuth auth_required·browser 연결1로 dot/Muse 두 연결 미충족·DeepSeek/Codex 미등록·상주 flag off/미이관 상태를 확인했다. 이를 실패를 숨기기 위한 초기화·모의 계정 치환으로 해결하지 않는다. 준비 전 R8-D는 NOT_RUN이며 미확인 gate를 PASS로 바꾸지 않는다. 복귀는 새 예약을 막고 원래 실행을 대조한 뒤 flag off/read-only로 전환하며, Wiki/commands/영수증을 지우거나 옛 DB를 덮어쓰지 않는다.
+
 ## 4. Codex 실행
 
 Codex 로그인은 서버의 실행 OS 사용자 환경에서 별도로 완료한다. `WJ_WORKSPACE_ROOTS` 안의 Git 작업 디렉터리와 기존 Codex thread ID를 UI에서 등록한다. `.git` branch, canonical cwd, host, OS user와 thread metadata를 확인한다. 코드 수정은 main/master가 아닌 작업 브랜치에서만 허용된다.

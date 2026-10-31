@@ -11,7 +11,13 @@ export interface RoomContext { participantId: string; generation: number; histor
 export interface BudgetEntry { requestId: string; kind: 'topic' | 'resident' | 'work'; reservedAt: string; settledAt: string | null; usage: ResidentUsage; error: string | null }
 export interface ResidentReply extends StructuredReply {
   version: 1; action: 'say' | 'pass'; replyTo: string | null; mentions: string[];
-  proposals: { kind: 'work_propose' | 'work_report' | 'work_review' | 'wiki_edit'; payload: Record<string, unknown> }[];
+  proposals: { kind: 'work_propose' | 'work_report' | 'work_review' | 'wiki_edit' | 'topic_propose'; payload: Record<string, unknown> }[];
+}
+export interface TopicIntent {
+  id: string; roomId: string; turnId: string; index: number; participantId: string; epoch: number; generation: number;
+  policyDigest: string; basisDigest: string; inputDigest: string; createdAt: string;
+  input: { topic: string; criteria: string; participantIds: string[]; limits: { maxRequests: number; maxTokens: number; maxActiveMs: number; maxRounds: number; maxVerificationTasks: 0; maxToolJobs: 0 } };
+  status: 'queued' | 'linked' | 'rejected'; discussionId: string | null; reason: string | null;
 }
 export interface RoomClaim { id: string; roomId: string; turnId: string; participantId: string; text: string; assumptions: string[]; status: 'reported' }
 export interface Room {
@@ -23,6 +29,7 @@ export interface Room {
   reason?: string | null; passCount?: number; nextMemberIndex?: number; lastCompletedAt?: string | null;
   seats?: SeatAssignment[];
   wikiPins?: WikiCitation[];
+  autoTopic?: boolean;
   lastMessageSequence: number; createdAt: string; updatedAt: string;
 }
 export interface RoomMessage {
@@ -41,8 +48,9 @@ export interface ResidentTurn {
   messageId: string | null; proposalsStatus: 'none' | 'not_run' | 'stale' | 'applied';
   workAttemptId?: string;
   workSeatVersion?: number;
+  topicPolicyDigest?: string;
   wikiCitations?: WikiSnapshot[];
-  proposalResults?: { index: number; status: 'applied' | 'not_run'; taskId?: string; pageId?: string; conflictId?: string; reason?: string }[];
+  proposalResults?: { index: number; status: 'applied' | 'not_run'; taskId?: string; pageId?: string; conflictId?: string; intentId?: string; reason?: string }[];
   dispatchStartedAt?: string;
 }
 export interface DispatchLease {
@@ -61,6 +69,7 @@ export interface ResidentStateV1 {
   migration: { id: 'resident-v1'; at: string; basisCursor: number };
   rooms: Room[]; messages: RoomMessage[]; turns: ResidentTurn[]; dispatchLeases: DispatchLease[];
   claims?: RoomClaim[];
+  topicIntents?: TopicIntent[];
   workSchemaVersion?: 1;
   workExecutionSchemaVersion?: 1;
   wikiSchemaVersion?: 1;
@@ -72,5 +81,6 @@ export interface RoomSummary {
   observedStatus: Room['observedStatus']; members: RoomMember[]; legacyDiscussionIds: string[];
   topicLink: string | null; lastMessageSequence: number; createdAt: string; updatedAt: string;
   budgets?: RoomBudget | null; pacing?: RoomPacing | null; reason?: string | null;
+  autoTopic?: boolean;
   nextEligibleAt?: string | null; used?: { requests: number; inputTokens: number; outputTokens: number; unknownUsage: number; toolJobs: number };
 }

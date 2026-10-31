@@ -23,6 +23,7 @@ import { WorkQueue } from './work-queue.js';
 import { WorkExecutionBridge, validateWorkExecutionState } from './work-execution.js';
 import { Wiki, validateWikiState } from './wiki.js';
 import { ResidentMcp } from './resident-mcp.js';
+import { validateTopicIntents } from './resident-focus.js';
 
 export class Workspace {
   readonly store: Store; readonly vault: Vault; readonly oauth: OAuthService; readonly browser: BrowserBridge;
@@ -39,7 +40,7 @@ export class Workspace {
   constructor(readonly config: WorkspaceConfig, fakeDelay = 80, options: { residentProvider?: Pick<Providers, 'complete'>; residentClock?: () => number; residentAutoSchedule?: boolean } = {}) {
     this.store = new Store(config.stateDir);
     this.dispatch = new DispatchCoordinator(config.residentEnabled);
-    try { this.resident = new ResidentStore(this.store, config.residentEnabled); validateWikiState(this.store.read()); validateWorkExecutionState(this.store.read(), this.store); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); this.wiki = new Wiki(this.store, config.residentEnabled); }
+    try { this.resident = new ResidentStore(this.store, config.residentEnabled); validateTopicIntents(this.store.read()); validateWikiState(this.store.read()); validateWorkExecutionState(this.store.read(), this.store); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); this.wiki = new Wiki(this.store, config.residentEnabled); }
     catch (error) { this.store.close(); throw error; }
     this.vault = new Vault(join(config.stateDir, 'credentials'));
     const accessPath = join(config.stateDir, 'access-token');

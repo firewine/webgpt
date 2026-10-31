@@ -1,0 +1,17 @@
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { Store } from '../../dist/server/workspace/store.js';
+import { ResidentStore } from '../../dist/server/workspace/resident-store.js';
+import { DiscussionEngine } from '../../dist/server/workspace/engine.js';
+import { ResidentRunner } from '../../dist/server/workspace/resident-runner.js';
+import { DispatchCoordinator } from '../../dist/server/workspace/dispatch.js';
+import { budget, pacing, reply } from '../resident-fixture.mjs';
+const [directory, stage] = process.argv.slice(2), store = new Store(directory), resident = new ResidentStore(store, true), dispatch = new DispatchCoordinator(); resident.dispatchAvailable = true;
+const roomId = resident.snapshot().rooms[0].id; const control = body => resident.control(roomId, { ...body, expectedVersion: resident.snapshot().rooms[0].version }, crypto.randomUUID());
+control({ action: 'configure', budgets: budget(Date.now(), 30), pacing, autoTopic: true }); for (const participantId of ['fake-a', 'fake-b']) control({ action: 'set_member', participantId, enabled: true }); resident.postMessage(roomId, { text: '공개 비교 근거' }, 'source'); control({ action: 'on' });
+const provider = { complete: async input => { input.hooks.dispatched(); const d = JSON.parse(input.prompt.split('\n\n').find(p => p.startsWith('{"roomId":'))); return { text: reply({ proposals: [{ kind: 'topic_propose', payload: { topic: '복구할 주제', criteria: '반론', maxRounds: 2, sourceMessageIds: [d.messages[0].id] } }] }), receipt: 'original', usage: null }; } };
+const engine = new DiscussionEngine(store, provider, { sourceFetch: false, turnTimeoutMs: 1000 }, undefined, dispatch); engine.kick = () => {}; const runner = new ResidentRunner(store, resident, dispatch, provider, engine, 1000, { autoSchedule: false });
+writeFileSync(join(directory, 'topic-fixture.json'), JSON.stringify({ roomId }));
+const original = store.transact.bind(store); store.transact = (fn, command) => original((s, emit) => fn(s, event => { emit(event); if (stage === 'creation_before_commit' && event.type === 'discussion.created') process.kill(process.pid, 'SIGKILL'); }), command);
+store.subscribe(event => { if (stage === 'intent_committed' && event.type === 'resident.topic_intent' || stage === 'creation_committed' && event.type === 'discussion.created') process.kill(process.pid, 'SIGKILL'); });
+await runner.tick(); runner.autoFocus.pump(Date.now() + 2000); throw new Error('Topic crash stage did not trigger');
