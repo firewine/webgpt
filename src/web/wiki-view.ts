@@ -88,9 +88,9 @@ export class WikiView {
   }
   private captureGrant(): void { const p = this.context?.participants.find(p => p.id === $<HTMLSelectElement>('#resident-grant-form [name=participantId]').value); this.grantVersion = p && this.context ? { generation: p.generation, seatVersion: p.seatVersion, epoch: this.context.epoch } : null; }
   private async createGrant(): Promise<void> {
-    if (!this.grantVersion) return; const f = new FormData($<HTMLFormElement>('#resident-grant-form')); const roomId = this.context!.roomId;
+    if (!this.grantVersion) return; const f = new FormData($<HTMLFormElement>('#resident-grant-form')); const roomId = this.context!.roomId; const request = this.opening;
     const result = await this.deps.api<{ id: string; token: string }>(this.path('/grants'), { participantId: f.get('participantId'), scopeRef: f.get('scopeRef'), scopeVersion: this.grantVersion.seatVersion, contextGeneration: this.grantVersion.generation, expectedEpoch: this.grantVersion.epoch, tools: f.getAll('tool'), expiresAt: new Date(String(f.get('expiresAt'))).toISOString() });
-    if (this.context?.roomId !== roomId || !$<HTMLDialogElement>('#resident-grant-dialog').open) return;
+    if (this.context?.roomId !== roomId || this.opening !== request || !$<HTMLDialogElement>('#resident-grant-dialog').open) return;
     $('#resident-grant-token').textContent = `한 번만 표시되는 참여자 전용 키입니다. 대화/Wiki에 붙이지 마세요.\nMCP: ${location.origin}/mcp\nAuthorization: Bearer ${result.token}\nGrant: ${result.id}`;
   }
 }

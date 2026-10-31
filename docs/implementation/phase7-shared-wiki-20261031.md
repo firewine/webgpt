@@ -54,7 +54,7 @@ WikiPage는 방/프로젝트 범위·slug·head를, WikiVersion은 원문·출�
 
 ## 4. 별도 resident MCP 계약
 
-owner는 참여자·현재 scope·seatVersion/contextGeneration/epoch·도구·만료를 명시한다. 신규 키는 random token을 한 번만 반환하고 서버에는 hash만 저장한다. 목록·state·event·Wiki에는 원문 token이 없다. UI 닫기/취소/로그아웃/다른 방 이동 시 표시를 지운다. 최대 유효 기간은7일이며 자동 기본 도구/기한·발급/갱신은 없다.
+owner는 참여자·현재 scope·seatVersion/contextGeneration/epoch·도구·만료를 명시한다. 신규 키는 random token을 한 번만 반환하고 서버에는 hash만 저장한다. 목록·state·event·Wiki에는 원문 token이 없다. UI 닫기/취소/로그아웃/다른 방 이동 시 표시를 지우고, 닫은 뒤 다시 연 창에는 이전 요청의 늦은 키 응답을 표시하지 않는다. 최대 유효 기간은7일이며 자동 기본 도구/기한·발급/갱신은 없다.
 
 매 목록/조회/변경 직전 현재 grant·만료/회수·방/멤버·seat/role·identity·epoch·contextGeneration을 재검사한다. 변경은 command cache 반환 전과 transaction 안에서도 검사하므로 옛 키로 과거 명령을 다시 성공시킬 수 없다. 기존 discussion grant는 이 새 형식으로 재해석하지 않는다.
 

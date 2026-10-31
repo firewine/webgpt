@@ -59,5 +59,14 @@ test('R7 browser: explicit resident grant has selected tools/expiry, token only 
   await page.waitForFunction(() => document.querySelector('#resident-grant-token').textContent.includes('Authorization: Bearer')); const text = await page.locator('#resident-grant-token').textContent(); const token = text.match(/Bearer (\S+)/)[1];
   const raw = JSON.stringify(f.app.store.read()); assert.ok(!raw.includes(token)); await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('#resident-grant-dialog').open && document.querySelector('#resident-grant-token').textContent === '');
   await page.locator('#wiki-grants').click(); await page.getByRole('button', { name: '이 접근 권한 폐기', exact: true }).click(); await until(() => f.app.store.read().resident.residentGrants[0].revoked);
-  assert.equal((await f.call({ token }, 'resident_wiki_get', { pageId: 'anything' })).status, 401); assert.equal(f.app.store.read().grants.length, 0); assert.deepEqual(errors, []);
+  assert.equal((await f.call({ token }, 'resident_wiki_get', { pageId: 'anything' })).status, 401);
+  await page.getByRole('button', { name: '이 접근 권한 폐기', exact: true }).waitFor({ state: 'detached' });
+  let release; let accepted = false; const delayed = new Promise(resolve => { release = resolve; });
+  await page.route('**/api/rooms/*/grants', async route => { if (route.request().method() !== 'POST') return route.continue(); const response = await route.fetch(); accepted = true; await delayed; await route.fulfill({ response }); });
+  await form.locator('[name=tool][value=resident_context_get]').check(); await form.locator('[name=expiresAt]').fill(new Date(Date.now() + 3600000 - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)); await form.getByRole('button', { name: '선택 범위 접근 키 발급', exact: true }).click(); await until(() => accepted);
+  await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('#resident-grant-dialog').open);
+  await page.locator('#wiki-grants').click(); await page.locator('#resident-grant-dialog').waitFor({ state: 'visible' });
+  release(); await page.waitForFunction(() => !document.querySelector('#resident-grant-form [type=submit]').disabled);
+  assert.equal(await page.locator('#resident-grant-token').textContent(), ''); assert.equal(f.app.store.read().resident.residentGrants.length, 2);
+  assert.equal(f.app.store.read().grants.length, 0); assert.deepEqual(errors, []);
 });
