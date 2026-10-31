@@ -103,6 +103,14 @@ test('R3-C/F: 20 events, two reconnects, one status notice, no forced scroll and
   await mkdir('test-results/resident/R3', { recursive: true }); await writeFile('test-results/resident/R3/reconnect.json', JSON.stringify({ messages: 75, newMessages: 20, reconnects: 2, notices: 1, providerCalls: calls }, null, 2));
 });
 
+test('R3 quick member changes wait for the first confirmed refresh and keep separate settings CAS boundaries', { timeout: 30000 }, async t => {
+  const f = await workspace(t, { residentEnabled: true }, { residentAutoSchedule: false }); const browser = await launch(t); const { page, errors } = await open(browser, f); let held; const posts = [];
+  await page.route('**/api/rooms/*/control', async route => { posts.push(route.request().postDataJSON()); if (posts.length === 1) held = route; else await route.continue(); });
+  await page.getByRole('checkbox', { name: '모의 참여자 A 발언 참여', exact: true }).check(); await until(() => held);
+  await page.getByRole('checkbox', { name: '모의 참여자 B 발언 참여', exact: true }).check(); assert.equal(posts.length, 1);
+  await held.continue(); await until(() => f.app.store.read().resident.rooms[0].members.filter(m => m.enabled).length === 2); await until(() => posts.length === 2); assert.equal(posts[1].expectedVersion, posts[0].expectedVersion + 1); assert.deepEqual(errors, []);
+});
+
 test('R3 room settings require explicit values and preserve ledger; focus and uncertain recovery stay in existing APIs', { timeout: 90000 }, async t => {
   const f = await workspace(t, { residentEnabled: true }, { residentAutoSchedule: false }); const browser = await launch(t); const { page, errors } = await open(browser, f);
   await page.locator('#room-power').click(); await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('방 설정')); assert.equal(f.app.store.read().resident.rooms[0].desiredOn, false);

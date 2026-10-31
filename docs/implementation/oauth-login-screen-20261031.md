@@ -16,7 +16,7 @@
 
 ## 검사와 실환경 구분
 
-수정 전 새 browser2개는 FAIL이었다. 초기 수정 후 Node222·browser38 PASS였다. pending 복구 추가 후 `npm run check`는 Node225 PASS, 실제 Chromium156.0.8078.47/Chrome DevTools MCP1.12.0 전체 browser39 PASS, FAIL/SKIP0이다. 검사 파일은 [oauth-login.test.mjs](../../tests/browser/oauth-login.test.mjs)와 [oauth.test.mjs](../../tests/oauth.test.mjs)다. 임시 DB·격리 browser·모의 인증/원격 화면을 쓰며 실제 비밀번호·모델 호출은0이다. 1440/390px 표시·수동 lease·명시 재개·화면만 닫기·진행 중 작업 거절·창 생성 오류, 새로고침 후 동일 요청 복구·20회 중복·다른 기대 계정·10분 만료·callback1회를 확인했다.
+수정 전 새 browser2개는 FAIL이었다. 초기 수정 후 Node222·browser38 PASS였다. pending 복구 추가 후 `npm run check`는 Node225 PASS, 실제 Chromium156.0.8078.47/Chrome DevTools MCP1.12.0 전체 browser40 PASS, FAIL/SKIP0이다. 검사 파일은 [oauth-login.test.mjs](../../tests/browser/oauth-login.test.mjs)와 [oauth.test.mjs](../../tests/oauth.test.mjs)다. 임시 DB·격리 browser·모의 인증/원격 화면을 쓰며 실제 비밀번호·모델 호출은0이다. 1440/390px 표시·수동 lease·명시 재개·화면만 닫기·진행 중 작업 거절·창 생성 오류, 새로고침 후 동일 요청 복구·20회 중복·다른 기대 계정·10분 만료·callback1회를 확인했다.
 
 운영 서비스는 재시작하지 않았다. 기존 owner API로 해당 연결의 새 OAuth 요청·서버 Chrome 창 열기·인증 원격 화면 HTTP200·콜백 listener를 확인했다. 소유자 키는 프로세스 안에서만 사용하고 출력/문서화하지 않았다. 수동 조작은 사용자 로그인용으로 유지했으며 다른 대화에 입력하지 않았다. 새 inline 화면은 이 수정의 운영 반영 전까지 fixture 결과다. 실제 사용자 로그인·동의·identity/모델 목록은 별도 완료 관측 전까지 NOT_RUN이다.
 
@@ -25,3 +25,5 @@
 공식 [등록·로그인 문서](https://developers.openai.com/siwc/token-sharing-open-source/sign-in)의 같은 호스트 loopback 콜백과 계정별 issued client ID 계약을 대조했다. 서버 재시작 전의 과거 승인 URL/창을 재사용하지 않고 새 시도를 시작해야 한다. 직접 로그인·동의가 필요한 단계를 자동화하거나 검증을 생략하지 않는다.
 
 복귀는 변경한 client 화면만 이전 빌드로 되돌리고 기존 서버 상태/키/대화/profile은 유지한다. 수동 조작 잠금은 소유자가 기존 자동 입력 재개로 해제하며 다른 계정 로그아웃·Chrome 초기화·DB 삭제를 하지 않는다. 이번 UI 수정은 기존 로그인 흐름의 오류 수정이며 페이즈 8의 무인 topic/실계정 수락을 완료로 바꾸지 않는다.
+
+CI에서 기존 방 설정 검사의 빠른 멤버 토글이 같은 room version으로 경쟁하는 실패가 반복돼 화면 요청을 직렬화했다. 진행 중 refresh는 최신 화면 반영을 기다리며, 명시 settingsVersion은 그대로 서버 CAS로 검사한다. 자료 저장 알림은 확정된 서버 저장 직후, 선택 완료는 render 뒤에 표시한다. 첫 POST를 보류한 2토글 검사와 기존 stale settings/자료 refresh 회귀를 포함한 전체 browser40 PASS다. Node225 PASS·FAIL/SKIP0이다.

@@ -13,7 +13,7 @@ let tab = 'timeline'; let view: View = 'discussion'; let stream: EventSource | n
 let viewChosen = false; let focusRoomId: string | null = null;
 const effortOptions = [{ value: 'low', label: 'Low · 낮음' }, { value: 'medium', label: 'Medium · 보통' }, { value: 'high', label: 'High · 높음' }, { value: 'xhigh', label: 'Extra high · 매우 높음' }];
 function effortLabel(value: string): string { return effortOptions.find(o => o.value === value)?.label ?? value; }
-let cursor = 0; let refreshing = false; let again = false; let timer = 0; let choiceSignature = ''; let noticeTimer = 0;
+let cursor = 0; let refreshTask: Promise<void> | null = null; let again = false; let timer = 0; let choiceSignature = ''; let noticeTimer = 0;
 let materialSignature = '';
 let pendingMaterialSelection: string | null = null;
 let browserPages: DiscoveryPage[] = []; let browserCandidate: DiscoveryResult | null = null; let browserDiscoveryConnection = ''; let browserChoices = '';
@@ -75,20 +75,22 @@ function connect(): void {
     if (e.id <= cursor) return; cursor = e.id; scheduleRefresh(); });
 }
 function scheduleRefresh(): void { if (timer) return; timer = window.setTimeout(() => { timer = 0; void refresh().catch(report); }, 250); }
-async function refresh(): Promise<void> {
-  if (refreshing) { again = true; return; } refreshing = true;
-  try {
+function refresh(): Promise<void> {
+  if (refreshTask) { again = true; return refreshTask; }
+  refreshTask = (async () => { do {
+    again = false;
     const selection = selected; const snapshot = await api<Snapshot>('/api/state');
-    if (selection !== selected) { again = true; return; }
+    if (selection !== selected) { again = true; continue; }
     const discussion = selection && snapshot.discussions.some(d => d.id === selection) ? (await api<{ discussion: Discussion }>(`/api/discussions/${selection}`)).discussion : null;
     // A connection/SSE refresh may have captured state before a just-created or
     // newly chosen topic. Discard that view rather than erase the user's choice.
-    if (selection !== selected) { again = true; return; }
+    if (selection !== selected) { again = true; continue; }
     state = snapshot; cursor = Math.max(cursor, state.cursor); current = discussion;
     if (!viewChosen) { const saved = localStorage.getItem('wj.room.view'); view = saved && ['room', 'discussion', 'connections', 'execution'].includes(saved) ? saved as View : state.resident.enabled ? 'room' : 'discussion'; }
     if (!current) selected = '';
     $('#login').hidden = true; $('#workspace').hidden = false; render(); await roomView.refresh(state); if (!stream) connect();
-  } finally { refreshing = false; if (again) { again = false; scheduleRefresh(); } }
+  } while (again); })().finally(() => { refreshTask = null; });
+  return refreshTask;
 }
 function details(title: string, value: string, key = title): HTMLDetailsElement { const d = node('details'); d.dataset.key = key; d.append(node('summary', title), node('pre', value)); return d; }
 function preserve(container: HTMLElement, render: () => void): void { const opened = [...container.querySelectorAll<HTMLDetailsElement>('details[open]')].map(d => d.dataset.key); render(); for (const d of container.querySelectorAll<HTMLDetailsElement>('details')) d.open = opened.includes(d.dataset.key); }
@@ -362,7 +364,7 @@ function click(id: string, action: () => Promise<unknown>): void { $(id).addEven
 const prepareButton = button('파일 읽고 자료 저장', async () => {
   const paths = $<HTMLTextAreaElement>('#material-paths').value.split('\n').map(p => p.trim()).filter(Boolean);
   const result = await api<{ id: string }>('/api/materials', { label: $<HTMLInputElement>('#material-label').value, paths });
-  pendingMaterialSelection = result.id; await refresh();
+  pendingMaterialSelection = result.id; announce('파일 사본을 저장했습니다. 다음 토의의 자료 선택을 반영하고 있습니다.'); await refresh();
   announce('파일 사본을 저장하고 다음 토의의 자료로 선택했습니다.');
 }); prepareButton.id = 'material-prepare'; $('#material-prepare').replaceWith(prepareButton);
 const browseButton = button('폴더 확인', () => browseMaterials($<HTMLInputElement>('#material-folder').value)); browseButton.id = 'material-browse'; $('#material-browse').replaceWith(browseButton);

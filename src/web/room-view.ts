@@ -81,6 +81,7 @@ export class RoomView {
   private restoreOnShow = true;
   private panelsSignature = '';
   private settingsVersion = 0;
+  private controls: Promise<void> = Promise.resolve();
   private topic: Discussion | null = null;
   private topicKey = '';
   private topicUnavailable = false;
@@ -368,10 +369,14 @@ export class RoomView {
     const evidence = d.evidence.filter(e => e.revision === d.revision);
     target.append(el('p', `출처 관측 ${evidence.filter(e => e.status === 'observed').length} · 참여자 보고 ${evidence.filter(e => e.status === 'reported').length} · 미실행 ${evidence.filter(e => e.status === 'not_run').length} · 실패 ${evidence.filter(e => e.status === 'failed').length}\n출처를 읽었다는 기록만으로 주장의 검증 성공을 뜻하지 않습니다.`, 'small muted pre-line'));
   }
-  private async control(action: string, more: Record<string, unknown> = {}, expectedVersion = this.detail?.room.version): Promise<void> {
-    if (!this.detail) return;
-    try { await this.deps.api(this.path('/control'), { action, expectedVersion, ...more }); }
-    finally { await this.deps.refresh(); }
+  private control(action: string, more: Record<string, unknown> = {}, expectedVersion?: number): Promise<void> {
+    const roomId = this.roomId;
+    const pending = this.controls.then(async () => {
+      if (!this.detail || this.roomId !== roomId) throw new Error('room_version_conflict');
+      try { await this.deps.api(this.path('/control'), { action, expectedVersion: expectedVersion ?? this.detail.room.version, ...more }); }
+      finally { await this.deps.refresh(); }
+    });
+    this.controls = pending.catch(() => {}); return pending;
   }
   private async loadNew(): Promise<void> {
     let more = true;
