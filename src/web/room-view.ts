@@ -164,7 +164,7 @@ export class RoomView {
     $('#room-messages').replaceChildren(); $('#room-notices').replaceChildren(); $('#room-text').textContent = ''; $<HTMLTextAreaElement>('#room-text').value = '';
     $('#room-raw').replaceChildren(); $('#room-members').replaceChildren(); $('#room-status').replaceChildren(); $('#room-records').replaceChildren();
     this.topic = null; this.topicKey = ''; this.topicUnavailable = false; $('#room-result-content').replaceChildren(); delete $('#room-result-content').dataset.signature; this.renderTopic();
-    this.work = null; this.workOffset = 0; $('#work-items').replaceChildren(); $('#work-detail').replaceChildren();
+    this.work = null; this.workOffset = 0; this.renderWork(); $('#work-detail').replaceChildren();
     void this.wiki.update(null);
     this.replyTo = null; this.mentions.clear(); this.uncertain = false; this.sending = false; this.panelsSignature = ''; this.restoreOnShow = true; this.loaded = false; this.renderReply();
   }
@@ -179,6 +179,7 @@ export class RoomView {
     if (this.roomId !== next.id) {
       this.topic = null; this.topicKey = '';
       this.work = null; this.workOffset = 0;
+      this.renderWork();
       this.loaded = false; this.messages.clear(); this.originals.clear(); this.rows.clear(); this.noticeIds.clear(); $('#room-messages').replaceChildren(); $('#room-notices').replaceChildren();
       this.roomId = next.id; this.after = Math.max(0, next.lastMessageSequence - 50); this.before = this.after;
       this.read = Math.min(next.lastMessageSequence, Math.max(0, Number(stored(this.roomId + '.read')) || 0)); this.openingRead = this.read;
@@ -264,7 +265,7 @@ export class RoomView {
   }
   private renderWork(): void {
     const target = $('#work-items'); target.replaceChildren(); const w = this.work;
-    for (const id of ['#work-new', '#work-seats']) $<HTMLButtonElement>(id).disabled = !this.detail?.enabled;
+    for (const id of ['#work-new', '#work-seats']) $<HTMLButtonElement>(id).disabled = !this.detail?.enabled || !w;
     if (!w?.items.length) target.append(el('p', '등록된 일감이 없습니다. 대화에서 일감을 제안하거나 직접 추가하세요.', 'small muted'));
     for (const task of w?.items ?? []) { const card = el('article', '', 'work-card'); card.dataset.taskId = task.id; card.dataset.reason = task.reason ?? ''; card.append(el('h4', task.title), el('p', `${label(task.status)} · 우선순위 ${task.priority}${task.claimantId ? ' · ' + this.name(task.claimantId) : ''}`, 'small'), el('p', task.reason ? workReason(task.reason) : `보고 ${task.reportCount} · 검토 ${task.reviewCount}`, 'small muted'), this.btn('일감·보고·검토', () => this.openWork(task.id))); target.append(card); }
     $('#work-more').hidden = !w?.hasMore && !this.workOffset; $('#work-more').textContent = w?.hasMore ? '다음 일감' : '처음 일감';

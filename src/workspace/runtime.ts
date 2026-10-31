@@ -10,6 +10,7 @@ import { OAuthService } from '../connections/oauth.js';
 import { CodexOAuth } from '../connections/codex-oauth.js';
 import { Providers } from '../connections/providers.js';
 import { deepSeekService } from '../connections/deepseek-services.js';
+import { ModelCatalogError } from '../connections/model-catalog-error.js';
 import { BrowserBridge, validateBinding } from '../connections/browser.js';
 import { BrowserDiscovery } from '../connections/browser-discovery.js';
 import { DiscussionEngine, findDiscussion } from './engine.js';
@@ -46,6 +47,8 @@ export class Workspace {
     try { this.resident = new ResidentStore(this.store, config.residentEnabled); validateTopicIntents(this.store.read()); validateWikiState(this.store.read()); validateWorkExecutionState(this.store.read(), this.store); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); this.wiki = new Wiki(this.store, config.residentEnabled); }
     catch (error) { this.store.close(); throw error; }
     this.vault = new Vault(join(config.stateDir, 'credentials'));
+    try { for (const connectionId of this.store.read().connectionCleanup ?? []) this.cleanupConnection(connectionId); }
+    catch (error) { this.store.close(); throw error; }
     const accessPath = join(config.stateDir, 'access-token');
     let token = config.accessToken;
     if (!token) {
@@ -111,12 +114,16 @@ export class Workspace {
   async refreshModels(connectionId: string): Promise<void> {
     try {
       const models = await this.providers.models(connectionId);
-      this.store.transact((s, emit) => { const c = s.connections.find(x => x.id === connectionId)!;
+      this.store.transact((s, emit) => { const c = s.connections.find(x => x.id === connectionId);
+        if (!c) throw new AppError('connection_not_found', 404);
+        delete c.modelError;
         c.models = models; c.status = 'connected'; c.error = ''; c.lastCheckedAt = now();
         emit({ type: 'connection.models', discussionId: null, data: { connectionId } }); });
     } catch (error) {
       this.store.transact((s, emit) => { const c = s.connections.find(x => x.id === connectionId); if (!c) return;
         c.error = error instanceof AppError ? error.code : 'model_discovery_failed'; c.status = c.error === 'auth_required' ? 'auth_required' : 'error';
+        c.lastCheckedAt = now();
+        if (error instanceof ModelCatalogError) c.modelError = { httpStatus: error.httpStatus, ...(error.providerCode ? { providerCode: error.providerCode } : {}) }; else delete c.modelError;
         emit({ type: 'connection.failed', discussionId: null, data: { connectionId, code: c.error } }); }); throw error;
     }
   }
@@ -204,6 +211,32 @@ export class Workspace {
   assertNoActiveTurn(connectionId: string): void {
     if (this.store.read().resident?.turns.some(t => ['prepared', 'running', 'unconfirmed'].includes(t.status) && t.participant?.connectionId === connectionId)) throw new AppError('reconciliation_required', 409);
     if (this.store.read().discussions.some(d => d.turns.some(t => ['prepared', 'running', 'unconfirmed'].includes(t.status) && d.members.some(p => p.id === t.participantId && p.connectionId === connectionId)))) throw new AppError('reconciliation_required', 409);
+  }
+  removeConnection(connectionId: string, requestId: string): { removed: true } {
+    const result = this.store.transact((s, emit) => {
+      this.assertNoActiveTurn(connectionId); this.assertConnectionIdle(connectionId);
+      const index = s.connections.findIndex(c => c.id === connectionId);
+      if (index >= 0) {
+        s.connections.splice(index, 1);
+        (s.connectionCleanup ??= []).push(connectionId);
+        emit({ type: 'connection.removed', discussionId: null, data: { connectionId } });
+      }
+      // Keep participant/context/turn snapshots for original conversation records.
+      return { removed: true as const };
+    }, { id: 'connection:remove:' + requestId, input: { connectionId } });
+    this.oauth.forget(connectionId); this.codexOAuth.forget(connectionId);
+    // Also run after a cached command. Crash/interrupted local cleanup is retried
+    // at startup, before dispatch, without issuing any external request.
+    this.cleanupConnection(connectionId);
+    return result;
+  }
+  private cleanupConnection(connectionId: string): void {
+    if (this.store.read().connections.some(c => c.id === connectionId)) throw new AppError('invalid_connection_cleanup', 500);
+    try { this.vault.remove(connectionId); } catch { throw new AppError('connection_cleanup_failed', 500); }
+    if (this.store.read().connectionCleanup?.includes(connectionId)) this.store.transact((s, emit) => {
+      s.connectionCleanup = (s.connectionCleanup ?? []).filter(id => id !== connectionId);
+      emit({ type: 'connection.credentials_removed', discussionId: null, data: { connectionId } });
+    });
   }
   async replaceKey(connectionId: string, key: string): Promise<void> {
     this.assertNoActiveTurn(connectionId);

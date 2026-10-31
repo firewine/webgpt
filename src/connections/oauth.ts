@@ -94,11 +94,12 @@ export class OAuthService {
         if (params.has('error')) throw new AppError('oauth_consent_denied');
         const clientId = params.get('client_id') ?? a.clientId;
         if (!clientId || clientId === 'dynamic_agent_client' || (a.clientId && clientId !== a.clientId)) throw new AppError('oauth_client_mismatch');
-        this.store.transact(s => { const c = s.connections.find(x => x.id === a.connectionId)!; c.clientId = clientId; });
+        this.store.transact(s => { const c = s.connections.find(x => x.id === a.connectionId); if (!c) throw new AppError('connection_not_found', 404); c.clientId = clientId; });
         const value = await this.post(TOKEN, { grant_type: 'authorization_code', client_id: clientId,
           code: string(params.get('code'), 8192), code_verifier: a.verifier, redirect_uri: a.redirect, resource: RESOURCE });
         const identity = await this.identity(string(value.id_token, 32000), clientId, a.nonce);
-        const current = this.store.read().connections.find(c => c.id === a.connectionId)!;
+        const current = this.store.read().connections.find(c => c.id === a.connectionId);
+        if (!current) throw new AppError('connection_not_found', 404);
         if (current.expectedEmail && identity.email?.toLowerCase() !== current.expectedEmail) throw new AppError('oauth_account_mismatch');
         if (current.subject && current.subject !== identity.sub) throw new AppError('oauth_account_mismatch');
         const scopes = string(value.scope, 4000).split(/\s+/);
@@ -113,7 +114,7 @@ export class OAuthService {
         });
       } catch (error) {
         this.store.transact((s, emit) => {
-          const c = s.connections.find(x => x.id === a.connectionId)!;
+          const c = s.connections.find(x => x.id === a.connectionId); if (!c) return;
           c.status = 'auth_required'; c.error = error instanceof AppError ? error.code : 'oauth_validation_failed';
           emit({ type: 'connection.auth_failed', discussionId: null, data: { connectionId: c.id, code: c.error } });
         });
@@ -143,9 +144,10 @@ export class OAuthService {
         const scopes = value.scope === undefined ? tokens.scopes : string(value.scope, 4000).split(/\s+/);
         if (!scopes.includes('chatgpt.tokens.use.direct') || !scopes.includes('resource.invoke')) throw new AppError('plan_permission_missing');
         tokens = this.tokens(value, tokens.clientId, tokens.subject, scopes, tokens);
+        if (!this.store.read().connections.some(c => c.id === connectionId)) throw new AppError('connection_not_found', 404);
         this.vault.put(connectionId, tokens); return tokens.accessToken;
       } catch {
-        this.store.transact((s, emit) => { const connection = s.connections.find(x => x.id === connectionId)!;
+        this.store.transact((s, emit) => { const connection = s.connections.find(x => x.id === connectionId); if (!connection) return;
           connection.status = 'auth_required'; connection.error = 'refresh_failed';
           emit({ type: 'connection.auth_required', discussionId: null, data: { connectionId } }); });
         throw new AppError('auth_required', 409);
@@ -167,7 +169,7 @@ export class OAuthService {
         }
       } catch { revoked = false; }
       this.vault.remove(connectionId);
-      this.store.transact((s, emit) => { const c = s.connections.find(x => x.id === connectionId)!; c.models = []; c.error = revoked ? '' : 'remote_revocation_unconfirmed';
+      this.store.transact((s, emit) => { const c = s.connections.find(x => x.id === connectionId); if (!c) return; c.models = []; c.error = revoked ? '' : 'remote_revocation_unconfirmed';
         emit({ type: 'connection.signed_out', discussionId: null, data: { connectionId, revoked } }); });
       return { revoked };
     });
@@ -199,6 +201,7 @@ export class OAuthService {
     return object(await response.json());
   }
   close(): void { this.attempts.clear(); this.server?.close(); this.server?.closeAllConnections(); }
+  forget(connectionId: string): void { for (const [key, a] of this.attempts) if (a.connectionId === connectionId) this.attempts.delete(key); }
 }
 function equal(a: string, b: string): boolean { const x = Buffer.from(a); const y = Buffer.from(b); return x.length === y.length && timingSafeEqual(x, y); }
 function authUrl(value: unknown): string { const url = new URL(string(value, 2000)); if (url.origin !== ISSUER || url.username || url.password) throw new AppError('invalid_oidc_endpoint'); return url.href; }

@@ -24,4 +24,6 @@ CoralBricks·River는 인증된 `/models` 응답에서 DeepSeek ID만 사용한�
 
 ## 복귀
 
+2026-10-31 후속 실환경에서 CoralBricks의 `403 permission_denied` 계정 검증 요구를 확인했고, 사용자의 billing 검증 후 같은 연결에서 실제 모델2개/connected 상태를 관측했다. 원래 위 fixture 기록은 해당 commit의 증거로 유지한다. 실제 stream/usage/추론은 여전히 NOT_RUN이며 [후속 진단·삭제 구현 기록](connection-removal-model-errors-20261031.md)을 따른다.
+
 서비스 중단 후 기존 빌드로 복귀할 때 새 제공처 연결을 기존 DeepSeek endpoint로 실행하지 않는다. 새 연결은 보존하되 비활성화하고 공식 API 연결만 사용한다. 새 코드에서는 기존 공식 연결의 필드 부재를 지원하므로 DB나 vault를 지울 필요가 없다.

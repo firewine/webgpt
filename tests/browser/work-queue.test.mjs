@@ -13,6 +13,16 @@ async function open(t, f) {
 }
 async function board(page) { if (!await page.locator('#room-panel').isVisible()) await page.locator('#room-panel-toggle').click(); await page.locator('#board-tab-workspace').click(); }
 
+test('work controls wait for initial queue data, so an early click opens the seat dialog after loading instead of being lost', { timeout: 15000 }, async t => {
+  const f = await workFixture(t); const browser = await chromium.launch({ headless: true, ...(process.env.WJ_TEST_CHROMIUM_EXECUTABLE ? { executablePath: process.env.WJ_TEST_CHROMIUM_EXECUTABLE } : {}) }); t.after(() => browser.close());
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } }); await context.request.post(f.url + '/api/login', { data: { token: ownerKey }, headers: { Origin: f.url } }); const page = await context.newPage();
+  let release; const hold = new Promise(r => { release = r; }); t.after(() => release()); let arrived; const pending = new Promise(r => { arrived = r; });
+  await page.route('**/api/rooms/*/work?after=*', async route => { arrived(); await hold; await route.continue(); });
+  await page.goto(f.url); await pending; await page.locator('#work-seats').waitFor();
+  assert.equal(await page.locator('#work-seats').isDisabled(), true, 'a role edit must not be offered before its current scope arrives'); assert.equal(await page.locator('#work-new').isDisabled(), true);
+  const click = page.locator('#work-seats').click(); release(); await click; await page.locator('#work-seat-dialog').waitFor({ state: 'visible' }); await page.locator('#work-seat-form [name=participantId]').selectOption('fake-b'); assert.equal(await page.locator('#work-seat-form [name=role]').inputValue(), 'specialist');
+});
+
 test('R5 owner UI: source message -> explicitly scoped task -> one pickup -> automatic report/review -> visible queue on four viewports', { timeout: 60000 }, async t => {
   const f = await workFixture(t); const { page, errors } = await open(t, f);
   await page.locator('.room-message').first().getByRole('button', { name: '일감 만들기', exact: true }).click();

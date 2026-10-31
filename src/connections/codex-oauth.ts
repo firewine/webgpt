@@ -130,8 +130,8 @@ export class CodexOAuth {
       if (c.status === 'auth_required' || !t || t.kind !== 'codex-oauth' || t.subject !== c.subject || t.accountId !== c.accountId) throw new AppError('auth_required', 409);
       if (t.expiresAt <= this.clock() + 60_000) {
         const res = await this.fetch('/oauth/token', { grant_type: 'refresh_token', client_id: CODEX_CLIENT_ID, refresh_token: t.refreshToken }, undefined, true);
-        if (!res.ok) { await res.body?.cancel().catch(() => {}); if (res.status === 400 || res.status === 401 || res.status === 403) this.store.transact(s => { const row = s.connections.find(c => c.id === connectionId)!; row.status = 'auth_required'; row.error = 'refresh_failed'; }); throw new AppError('codex_refresh_failed', 502); }
-        t = await this.tokens(await readCodexJson(res), c, t); if (this.closed) throw new AppError('device_login_interrupted', 409); this.vault.put(connectionId, t);
+        if (!res.ok) { await res.body?.cancel().catch(() => {}); if (res.status === 400 || res.status === 401 || res.status === 403) this.store.transact(s => { const row = s.connections.find(c => c.id === connectionId); if (row) { row.status = 'auth_required'; row.error = 'refresh_failed'; } }); throw new AppError('codex_refresh_failed', 502); }
+        t = await this.tokens(await readCodexJson(res), c, t); if (this.closed) throw new AppError('device_login_interrupted', 409); this.connection(connectionId); this.vault.put(connectionId, t);
       }
       return { token: t.accessToken, accountId: t.accountId };
     });
@@ -142,6 +142,9 @@ export class CodexOAuth {
     await this.locked(connectionId, async () => { this.connection(connectionId); this.vault.remove(connectionId); this.store.transact((s, emit) => { const c = s.connections.find(c => c.id === connectionId)!; c.status = 'auth_required'; c.models = []; c.error = 'remote_revocation_unconfirmed'; emit({ type: 'connection.signed_out', discussionId: null, data: { connectionId, revoked: false } }); }); });
   }
   private connection(connectionId: string): Connection { const c = this.store.read().connections.find(c => c.id === connectionId && c.kind === 'codex-oauth'); if (!c) throw new AppError('connection_not_found', 404); return c; }
+  forget(connectionId: string): void {
+    const a = this.attempts.get(connectionId); if (a) { a.controller.abort(); a.deviceId = ''; a.userCode = ''; this.attempts.delete(connectionId); }
+  }
   private transition(a: Attempt, status: Status, error: string | null = null): void {
     if (this.closed || this.attempts.get(a.connectionId) !== a) return; a.status = status; a.error = error;
     if (!['starting', 'pending'].includes(status)) { a.deviceId = ''; a.userCode = ''; }
