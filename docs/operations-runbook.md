@@ -69,7 +69,9 @@ Chrome/VNC/CDP를 Tailnet에 직접 열지 않는다. 예제 VNC는 인증된 ga
 
 ### GPT OAuth
 
-`GPT 계정 추가` → `OAuth 로그인 시작` → `서버 Chrome에서 승인 화면 열기` 순서로 진행한다. callback이 Ubuntu loopback에 있으므로 다른 기기의 Chrome에서 승인 URL을 열지 않는다. noVNC로 같은 서버 Chrome에서 계정을 선택하고 로그인·동의를 완료한다. 화면에 표시된 계정 별칭/이메일을 확인하고 `모델 확인` 후 참여자를 만든다.
+`GPT 계정 추가` → `OAuth 로그인 시작` → `별도 로그인 창 열기` 순서로 진행한다. 버튼은 기존 수동 조작 lease를 얻고 앱 안에 서버 Chrome 화면을 표시한다. callback이 Ubuntu loopback에 있으므로 다른 기기의 Chrome에서 승인 URL을 열지 않는다. 표시된 noVNC 화면에서 계정을 선택하고 직접 로그인·동의한다. `로그인 화면 닫기 · 자동 입력 재개` 후 계정 별칭/이메일과 `모델 확인`을 확인하고 참여자를 만든다. `화면만 닫기`/Escape는 자동 입력 잠금을 유지한다. 진행 중인 browser 발언이 있으면 수동 전환을 거절한다.
+
+이 수정이 운영에 반영되기 전의 버튼은 서버 Chrome 탭만 생성한다. 기존 화면에서는 `Ubuntu Chrome → 수동 조작 시작 → 서버 Chrome 화면 열기`로 확인한다. 서버를 재시작했거나 오래된 승인 창이면 같은 연결의 `다시 로그인`으로 새 요청을 시작한다. 과거 창/URL을 계속 사용하지 않는다. [로그인 창 수정·검사 증거](implementation/oauth-login-screen-20261031.md)를 따른다.
 
 두 번째 계정은 별도로 등록한다. 같은 계정을 두 번 등록한 것을 두 계정 검증으로 세지 않는다. PKCE/state/nonce/issuer/audience/subject와 발급 client ID를 검증하며 refresh는 연결별로 직렬화한다. plan usage 권한이 없거나 모델 목록이 없으면 실제 응답 성공으로 표시하지 않는다. 개인 계정의 적격성이나 preview 허용을 앱이 대신 보장할 수 없다.
 

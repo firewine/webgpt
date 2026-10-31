@@ -56,7 +56,7 @@ async function api<T>(path: string, body?: unknown, requestId: string = crypto.r
   if (!response.ok) { if (response.status === 401) lock(); throw new Error(result.error?.code ?? 'request_failed'); }
   return result;
 }
-function lock(): void { stream?.close(); stream = null; roomView.clear(); $('#login').hidden = false; $('#workspace').hidden = true; }
+function lock(): void { stream?.close(); stream = null; roomView.clear(); $<HTMLDialogElement>('#oauth-login-dialog').close(); $('#oauth-desktop').replaceChildren(); $('#oauth-result').replaceChildren(); $('#login').hidden = false; $('#workspace').hidden = true; }
 function form(id: string, handler: (data: Record<string, string>, form: HTMLFormElement) => Promise<unknown>): void {
   $(id).addEventListener('submit', event => { event.preventDefault(); const el = event.currentTarget as HTMLFormElement; const submit = el.querySelector<HTMLButtonElement>('button[type=submit], button:not([type])'); if (submit) submit.disabled = true;
     const data = Object.fromEntries(new FormData(el).entries()) as Record<string, string>;
@@ -256,8 +256,22 @@ function renderConnections(): void {
   const grants = $('#grants-list'); grants.replaceChildren(); for (const grant of state.grants) { const row = node('div', '', 'toolbar'); row.append(node('span', `${grant.participantId} · ${grant.revoked ? '폐기됨' : grant.tools.join(', ')}`, 'small')); if (!grant.revoked) row.append(button('폐기', async () => { await api('/api/grants/revoke', { id: grant.id }); await refresh(); })); grants.append(row); }
 }
 function showOAuth(result: { authorizationUrl: string; connectionId: string }): void {
-  const target = $('#oauth-result'); target.replaceChildren(node('p', 'Ubuntu 서버의 Chrome에서 아래 승인 주소를 여세요. 다른 기기에서 열면 loopback 콜백이 서버로 돌아오지 않습니다.', 'small'));
-  target.append(button('별도 로그인 창 열기', async () => { await api('/api/browser/open-auth', { url: result.authorizationUrl, connectionId: result.connectionId }); announce('dot과 분리된 Chrome 로그인 창에서 웹 GPT용 계정으로 로그인한 뒤 모델 확인을 누르세요.'); }), details('서버에서 열 승인 주소', result.authorizationUrl), button('로그인 완료 · 모델 확인', async () => { await api(`/api/connections/${result.connectionId}/models`, {}); await refresh(); }));
+  const target = $('#oauth-result'); target.replaceChildren(node('p', '로그인 창은 Ubuntu 서버의 Chrome에 열립니다. 아래 버튼을 누르면 이 웹 화면에서 서버 로그인 화면을 바로 볼 수 있습니다. dot과 다른 계정으로 로그인할 수 있습니다.', 'small'));
+  target.append(button('별도 로그인 창 열기', () => openOAuthScreen(result)), details('서버에서 열 승인 주소', result.authorizationUrl), button('로그인 완료 · 모델 확인', async () => { await api(`/api/connections/${result.connectionId}/models`, {}); await refresh(); }));
+}
+async function openOAuthScreen(result: { authorizationUrl: string; connectionId: string }): Promise<void> {
+  // The gateway requires the existing manual-control lease. It refuses takeover
+  // while a browser participant is responding; opening OAuth never bypasses it.
+  await api('/api/browser/control', { paused: true }); await refresh();
+  const desktop = $('#oauth-desktop'); desktop.replaceChildren();
+  if (state?.capabilities.noVncConfigured) {
+    const frame = node('iframe'); frame.id = 'oauth-desktop-frame'; frame.title = 'GPT OAuth 서버 로그인 화면'; frame.src = $('#browser-link').getAttribute('href')!; desktop.append(frame);
+  } else desktop.append(node('p', '원격 화면이 설정되지 않았습니다. 같은 Ubuntu 서버의 Chrome에서 로그인해 주세요.', 'small'));
+  const status = $('#oauth-screen-status'); status.textContent = '분리된 GPT 로그인 창을 준비하고 있습니다. Chrome 자동 입력은 잠겨 있습니다.';
+  $<HTMLDialogElement>('#oauth-login-dialog').showModal();
+  try { await api('/api/browser/open-auth', { url: result.authorizationUrl, connectionId: result.connectionId });
+    status.textContent = '아래 서버 Chrome에서 로그인·동의를 완료하세요. 기존 dot·Muse 대화와 로그인은 유지됩니다. 완료 후 화면을 닫고 모델을 확인하세요.';
+  } catch (error) { status.textContent = '로그인 창을 열지 못했습니다. 서버 화면과 오류 알림을 확인하세요. 자동 입력은 잠긴 상태로 유지합니다.'; throw error; }
 }
 function renderJobs(): void {
   if (!state) return; const bindings = $('#bindings-list'); bindings.replaceChildren();
@@ -363,6 +377,9 @@ click('#capabilities-refresh', async () => {
 click('#logout', async () => { await api('/api/logout', {}); lock(); });
 click('#browser-manual', async () => { await api('/api/browser/control', { paused: true }); await refresh(); });
 click('#browser-automatic', async () => { await api('/api/browser/control', { paused: false }); await refresh(); });
+click('#oauth-screen-resume', async () => { await api('/api/browser/control', { paused: false }); $<HTMLDialogElement>('#oauth-login-dialog').close(); await refresh(); });
+$('#oauth-screen-close').addEventListener('click', () => $<HTMLDialogElement>('#oauth-login-dialog').close());
+$('#oauth-login-dialog').addEventListener('close', () => { $('#oauth-desktop').replaceChildren(); });
 click('#browser-pages', async () => { $('#browser-output').textContent = (await api<{ text: string }>('/api/browser/pages')).text; });
 click('#browser-discovery-pages', loadBrowserPages);
 click('#browser-snapshot', async () => { const id = new FormData($<HTMLFormElement>('#browser-form')).get('pageId'); $('#browser-output').textContent = (await api<{ text: string }>(`/api/browser/snapshot?pageId=${encodeURIComponent(String(id))}`)).text; });
