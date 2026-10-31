@@ -22,7 +22,7 @@ export interface WorkAttempt {
   id: string; taskId: string; roomId: string; taskVersion: number; participantId: string;
   purpose: 'work' | 'review'; seatVersion: number; contextGeneration: number; epoch: number;
   authorizedScopeRef: string; requestId: string; providerTurnId: string | null;
-  input: Pick<WorkTask, 'title' | 'description' | 'kind' | 'sourceMessageIds' | 'acceptance' | 'dependencies' | 'authorizedScopeRef'> & { previousReportId: string | null; feedbackReviewIds: string[] };
+  input: Pick<WorkTask, 'title' | 'description' | 'kind' | 'sourceMessageIds' | 'acceptance' | 'dependencies' | 'authorizedScopeRef'> & { previousReportId: string | null; feedbackReviewIds: string[]; wikiCitations?: import('./wiki-model.js').WikiSnapshot[] };
   inputDigest: string; providerPromptDigest: string | null; reportDigest: string | null;
   status: 'claimed' | 'running' | 'unconfirmed' | 'completed' | 'failed' | 'stale';
   startedAt: string; finishedAt: string | null; reported: boolean; error: string | null;
@@ -38,6 +38,7 @@ export interface WorkReportV1 {
   outputs: { ref: string; digest: string; kind: 'text' | 'command' | 'file_change' }[]; checks: WorkCheck[]; blockers: string[];
   sourceMessageIds: string[]; executionRef: string | null; createdAt: string;
   execution?: WorkExecutionEvidence;
+  wikiCitations?: import('./wiki-model.js').WikiCitation[];
 }
 export interface WorkReviewV1 {
   version: 1; id: string; reportDigest: string; taskVersion: number; reviewerId: string;

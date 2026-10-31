@@ -137,6 +137,24 @@ WJ_MATERIAL_ROOTS=["/home/you/discussion-materials"]
 
 [R6 구현·fixture·복구 기록](./implementation/phase6-work-execution-20261030.md)을 따른다. 설치 schema와 fixture PASS는 실제 사용자 세션의 읽기→승인→작업 브랜치 쓰기 성공이 아니다. R6-F 실세션과 쓰기 격리는 NOT_RUN/UNVERIFIED이며 이번 변경을 운영 서비스에 자동 반영하지 않았다.
 
+### 공유 Wiki·고정 인용·상주 MCP (페이즈 7)
+
+채팅방 오른쪽 작업실 보드의 **공유 Wiki**에서 문서·변경 기록·출처·폐기·충돌을 확인한다. **Wiki 문서 작성**은 범위·slug·제목·본문·공개 출처를 명시한다. 허용된 참여자는 같은 범위에 `wiki_edit` 구조화 intent 또는 별도 resident MCP 도구로 편집하며 매 편집마다 별도 승인을 요구하지 않는다. 방이 꺼졌을 때는 소유자 편집/조회만 가능하고 참여자 변경·새 발언/픽업은 차단한다.
+
+수락한 새 업무 보고는 원래 attempt 범위의 Wiki에 자동 투영된다. 기본 **최신 버전 자동 선택**은 허용 Wiki를 다음 발언·업무·주제 입력에 포함한다. 특정 버전을 고정하려면 문서의 **이 버전을 대화에 고정**을 사용한다. 하나라도 명시 선택하면 선택한 버전만 사용하며, 전부 해제한 빈 선택은 Wiki 입력 없음이다. **최신 버전 자동 선택으로 전환**으로 자동 선택을 복원한다. 자동/고정 모두 이미 시작한 turn·WorkAttempt·topic 입력은 바꾸지 않는다. 말풍선의 Wiki 인용은 입력에 사용한 버전·digest의 추적이며 독립 검증 성공 표시가 아니다.
+
+동시에 같은 버전을 편집하면 한 편집만 게시하고 다른 원문은 **충돌 제안**으로 남기며 HTTP409를 반환한다. 폼의 원문을 유지한 채 변경 기록에서 충돌과 현재 head를 읽고 **현재 버전을 기준으로 조정**한다. 오래된 폼의 expectedVersion을 자동으로 올려 덮어쓰거나 중복 제출하지 않는다. 폐기는 이유·출처가 있는 tombstone 버전을 추가한다. 과거 본문/고정 인용은 남으며 기존 고정을 자동 변경하지 않는다.
+
+Wiki 본문은 문서당 20,000자, 출처 1~20개, 입력 선택은 최대8문서·직렬화 60,000자다. 목록/이력은 최대50개씩 조회한다. 초과 시 `wiki_context_requires_selection`로 차단하며 고정 선택을 줄인다. 이미 claim한 업무는 원래 입력으로 진행한다. 새 업무의 Wiki 조건이 막히면 해당 업무만 blocked로 남기며 다른 허용 업무는 계속 가능하다. 조건을 해결한 뒤 기존 일감 편집으로 범위/조건을 확인해 재개한다. 과거 project Wiki가 들어간 대화에서 해당 권한을 회수하면 `wiki_context_requires_handoff`로 새 전송을 막는다. 허용 Wiki 선택을 확인한 뒤 기존 문맥 인계로 새 세대를 만든다. 원래 이력은 삭제하지 않는다.
+
+Wiki는 항상 **reported** 지식이다. report source의 관측 근거는 별도로 표시하며 모델의 verified 문구로 승격하지 않는다. sourceRefs는 같은 방의 공개 메시지·같은 범위의 수락한 보고·허용된 고정 Wiki 버전뿐이다. 비공개 초안/다른 계정 이력/임의 파일·URL을 source로 가져오지 않으며 본문의 HTML/script/주소는 일반 텍스트다. Wiki를 작성했다고 파일/네트워크/도구 권한이 생기지 않는다.
+
+**참여자 MCP 권한**에서 참여자·현재 업무 범위·도구·만료 시각을 직접 선택한다(최대7일). 새 키는 room/project/참여자·seat version·epoch·contextGeneration·계정 identity에 고정된다. 역할/멤버/세대/epoch가 바뀌거나 만료·회수되면 조회와 변경을 거절한다. 필요하면 현재 범위를 검토해 새 키를 발급한다. 키는 한 번만 표시하고 창을 닫으면 화면에서 지운다. owner 로그인 키나 기존 토의 grant와 혼용하거나 채팅·Wiki·공개 로그에 붙이지 않는다.
+
+새 `/mcp` 도구는 `resident_context_get`, `resident_message_post`, `resident_work_list`, `resident_work_propose`, `resident_work_claim`, `resident_wiki_list`, `resident_wiki_get`, `resident_wiki_edit`다. 실제 작업 시작은 기존 큐가 담당하며 도구 키가 Codex 승인 권한을 주지 않는다. 기존 토의 키의 도구 목록·토의/참여자 범위는 그대로다. 실제 Secure MCP Tunnel/공식 Connector 연결 성공은 별도 검증이며 이 화면에서 자동 생성하지 않는다.
+
+이관은 기존 resident JSON에 optional `wikiSchemaVersion=1`과 기존 빈 배열을 사용하며 기존 계정/대화/개인 기억을 Wiki로 복사하지 않는다. 세대 없는 옛 resident fixture grant는 폐기 상태로 보존한다. 운영 반영/복귀는 G0와 [R7 실행·수락·롤백 기록](./implementation/phase7-shared-wiki-20261031.md)을 따른다. 신규 grant 회수·예약 중지·진행/미확정 대조 후 flag off로 읽기만 남기며 Wiki/충돌/영수증을 삭제하거나 옛 DB로 되돌리지 않는다. 이번 단계의 실제 운영 DB 이관·계정 호출·서비스 재시작은 NOT_RUN이다.
+
 ## 4. Codex 실행
 
 Codex 로그인은 서버의 실행 OS 사용자 환경에서 별도로 완료한다. `WJ_WORKSPACE_ROOTS` 안의 Git 작업 디렉터리와 기존 Codex thread ID를 UI에서 등록한다. `.git` branch, canonical cwd, host, OS user와 thread metadata를 확인한다. 코드 수정은 main/master가 아닌 작업 브랜치에서만 허용된다.
@@ -153,7 +171,7 @@ WJ_CODEX_BINARY=/실제/경로/codex npm run test:codex-contract
 
 ## 5. dot MCP와 Secure MCP Tunnel
 
-작업실의 MCP 권한은 **토의·참여자·도구 목록**에 고정된다. Codex 권한을 포함하려면 그 토의에 binding이 있어야 한다. 발급된 접근 키를 모델의 대화 본문에 넣지 않는다. 토의가 바뀌면 새 scope를 발급한다.
+기존 작업실 MCP 권한은 **토의·참여자·도구 목록**에 고정된다. Codex 권한을 포함하려면 그 토의에 binding이 있어야 한다. 페이즈 7 상주 도구는 위의 별도 resident grant만 사용하며 기존 키를 확대하지 않는다. 발급된 접근 키를 모델의 대화 본문에 넣지 않는다. 토의가 바뀌면 새 scope를 발급한다.
 
 HTTP `/mcp`를 직접 사용할 수 있는 클라이언트는 Bearer 인증을 설정한다. dot이 private 서버에 접근할 때는 공식 Secure MCP Tunnel을 사용한다. Tailscale URL만 OpenAI에 등록해서 접근 가능하다고 가정하지 않는다.
 

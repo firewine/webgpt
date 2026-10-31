@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { residentFixture } from './resident-fixture.mjs';
 import { rotateResidentContext } from '../dist/server/workspace/resident-context.js';
 import { digest } from '../dist/server/workspace/util.js';
+import { Wiki } from '../dist/server/workspace/wiki.js';
 
 test('R2-H: two consumers replay 100 handoffs with one generation/event/receipt and unchanged budgets/originals', async t => {
   const f = await residentFixture(t); await f.runner.tick(); f.advance(); await f.runner.tick();
@@ -52,8 +53,12 @@ test('R2-J: unresolved actor, unreported work/job, topic focus and browser conte
 
 test('other actor work/job references do not become this actor work when it rotates', async t => {
   const f = await residentFixture(t);
+  const wiki = new Wiki(f.store, true); const source = f.resident.postMessage(f.roomId, { text: 'shared original' }, 'wiki-original').messageId;
+  const shared = wiki.edit(f.roomId, { slug: 'shared', title: 'shared', body: 'never inline wiki body', sourceRefs: [{ kind: 'message', id: source }], expectedVersion: 0, scopeRef: 'room:' + f.roomId }, 'shared-wiki');
+  f.store.transact(s => { s.bindings.push({ id: 'private-project' }); });
+  wiki.edit(f.roomId, { slug: 'private-page', title: 'private-page', body: 'private wiki body', sourceRefs: [{ kind: 'message', id: source }], expectedVersion: 0, scopeRef: 'binding:private-project' }, 'private-wiki');
+  wiki.pin(f.roomId, { expectedVersion: f.room().version, pins: [{ pageId: shared.pageId, version: 1 }] }, 'wiki-pin');
   f.store.transact(s => { s.resident.workItems.push({ id: 'other-work', roomId: f.roomId, participantId: 'fake-b', status: 'running' });
-    s.resident.wikiVersions.push({ roomId: f.roomId, pageId: 'shared', version: 1, digest: 'fixture-digest', visibility: 'room_public', body: 'never inline wiki body' }, { roomId: f.roomId, pageId: 'private-page', version: 1, visibility: 'owner_only', body: 'private wiki body' });
     s.jobs.push({ id: 'other-job', discussionId: null, status: 'running' }); s.resident.jobLinks.push({ jobId: 'other-job', participantId: 'fake-b', reported: false }); });
   const result = f.runner.handoff(f.roomId, { participantId: 'fake-a', expectedGeneration: 1, expectedEpoch: f.room().epoch }, 'other-actor-context');
   assert.equal(result.generation, 2); assert.equal(f.calls(), 0); assert.equal(f.store.read().resident.workItems[0].participantId, 'fake-b');

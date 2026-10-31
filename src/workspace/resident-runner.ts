@@ -10,6 +10,8 @@ import { parseResidentReply, promptForRoom, publicRoomData } from './resident-pr
 import { AppError, code, digest, id, now, object, string } from './util.js';
 import type { WorkQueue } from './work-queue.js';
 import type { WorkExecutionBridge } from './work-execution.js';
+import type { Wiki } from './wiki.js';
+import { assertWikiSnapshots, contextWiki, rememberWiki, wikiHistoryAllowed } from './wiki-policy.js';
 
 type Emit = Parameters<Parameters<Store['transact']>[0]>[1];
 const LIVE = ['prepared', 'running', 'unconfirmed'];
@@ -23,7 +25,7 @@ export class ResidentRunner {
   private readonly clock: () => number;
   constructor(private readonly store: Store, private readonly resident: ResidentStore, private readonly dispatch: DispatchCoordinator,
     private readonly provider: Pick<Providers, 'complete'>, private readonly engine: DiscussionEngine, private readonly timeoutMs: number,
-    private readonly options: { clock?: () => number; autoSchedule?: boolean; work?: WorkQueue; execution?: WorkExecutionBridge } = {}) { this.clock = options.clock ?? Date.now; }
+    private readonly options: { clock?: () => number; autoSchedule?: boolean; work?: WorkQueue; execution?: WorkExecutionBridge; wiki?: Wiki } = {}) { this.clock = options.clock ?? Date.now; }
 
   recover(): void {
     if (!this.store.read().resident) return;
@@ -118,13 +120,17 @@ export class ResidentRunner {
       const participant = members[index]!;
       if (participant.kind === 'browser' && state.browserPaused) { room.observedStatus = 'blocked'; room.reason = 'browser_manual_control';
         emit({ type: 'resident.status_changed', discussionId: null, data: { roomId: room.id, status: room.observedStatus, reason: room.reason } }); return null; }
-      const context = roomContext(room, participant.id); const prompt = promptForRoom(state, room, participant, context, repair?.id ?? null);
+      const context = roomContext(room, participant.id); let wikiCitations;
+      try { wikiCitations = contextWiki(state, room, [participant.id]); }
+      catch (e) { if (!(e instanceof AppError)) throw e; room.observedStatus = 'blocked'; room.reason = e.code; room.nextEligibleAt = null; emit({ type: 'resident.blocked', discussionId: null, data: { roomId: room.id, reason: e.code } }); return null; }
+      const prompt = promptForRoom(state, room, participant, context, repair?.id ?? null, wikiCitations);
+      if (!wikiHistoryAllowed(state, room, context)) { room.observedStatus = 'blocked'; room.reason = 'wiki_context_requires_handoff'; room.nextEligibleAt = null; emit({ type: 'resident.blocked', discussionId: null, data: { roomId: room.id, reason: room.reason } }); return null; }
       if (prompt.length + context.history.reduce((n, h) => n + h.content.length, 0) > 180_000) { room.observedStatus = 'blocked'; room.reason = 'context_limit_requires_handoff';
         emit({ type: 'resident.status_changed', discussionId: null, data: { roomId: room.id, status: room.observedStatus, reason: room.reason } }); return null; }
       const turn: ResidentTurn = { id: id('resident_turn'), roomId: room.id, participantId: participant.id, participant: structuredClone(participant),
         generation: context.generation, epoch: room.epoch, status: 'prepared', prompt, promptDigest: digest(prompt), history: structuredClone(context.history),
         basisSequence: room.lastMessageSequence, text: '', receipt: null, reply: null, usage: null, startedAt: new Date(this.clock()).toISOString(), finishedAt: null,
-        error: null, repairOf: repair?.id ?? null, messageId: null, proposalsStatus: 'none', workSeatVersion: room.seats?.find(s => s.participantId === participant.id)?.version ?? 0 };
+        error: null, repairOf: repair?.id ?? null, messageId: null, proposalsStatus: 'none', workSeatVersion: room.seats?.find(s => s.participantId === participant.id)?.version ?? 0, wikiCitations };
       const denied = this.dispatch.reserve(state, { requestId: turn.id, kind: 'resident', participantId: participant.id, generation: context.generation, roomId: room.id }, this.clock());
       if (denied) return null;
       state.resident!.turns.push(turn); room.nextMemberIndex = (index + 1) % members.length;
@@ -163,13 +169,14 @@ export class ResidentRunner {
   private accept(state: WorkspaceState, room: Room, turn: ResidentTurn, result: Completion, emit: Emit): void {
     turn.text = result.text; turn.receipt = result.receipt; turn.usage = result.usage;
     const context = roomContext(room, turn.participantId);
-    if (turn.epoch !== room.epoch || turn.generation !== context.generation) { turn.status = 'stale'; turn.proposalsStatus = 'stale'; return; }
+    if (turn.epoch !== room.epoch || turn.generation !== context.generation || !assertWikiSnapshots(state, room.id, [turn.participantId], turn.wikiCitations)) { turn.status = 'stale'; turn.proposalsStatus = 'stale'; return; }
     if (turn.workAttemptId && (!this.options.work || !this.options.work.canDispatch(state, turn))) { turn.status = 'stale'; turn.proposalsStatus = 'stale'; return; }
-    const data = publicRoomData(state, room); const messages = data.messages.filter(m => m.sequence <= turn.basisSequence);
+    const data = publicRoomData(state, room, [turn.participantId]); const messages = data.messages.filter(m => m.sequence <= turn.basisSequence);
     turn.reply = parseResidentReply(turn.text, { messageIds: messages.map(m => m.id), participantIds: room.members.map(m => m.participantId),
       claimIds: data.claims.filter(c => messages.some(m => m.sourceId === c.turnId)).map(c => c.id) });
     turn.status = 'completed';
     context.history.push({ role: 'user', content: turn.prompt }, { role: 'assistant', content: turn.text }); context.lastSeenSequence = turn.basisSequence;
+    rememberWiki(state, context, turn.wikiCitations);
     room.lastCompletedAt = turn.finishedAt; room.nextEligibleAt = new Date(this.clock() + room.pacing!.minIntervalMs).toISOString();
     if (!turn.reply) {
       turn.error = 'format_invalid';
@@ -185,7 +192,7 @@ export class ResidentRunner {
     } else {
       room.passCount = 0; const messageId = id('message'); turn.messageId = messageId;
       state.resident!.messages.push({ id: messageId, roomId: room.id, sequence: ++room.lastMessageSequence, sourceKind: 'room', sourceId: turn.id,
-        authorId: turn.participantId, text: turn.reply.text, replyTo: turn.reply.replyTo, mentions: turn.reply.mentions, visibility: 'room_public', createdAt: turn.finishedAt! });
+        authorId: turn.participantId, text: turn.reply.text, replyTo: turn.reply.replyTo, mentions: turn.reply.mentions, visibility: 'room_public', createdAt: turn.finishedAt!, wikiCitations: (turn.wikiCitations ?? []).map(({ body: _body, title: _title, epistemicStatus: _status, ...ref }) => ref) });
       for (const claim of turn.reply.claims) (state.resident!.claims ??= []).push({ id: id('room_claim'), roomId: room.id, turnId: turn.id, participantId: turn.participantId, status: 'reported', ...claim });
       emit({ type: 'resident.message_created', discussionId: null, data: { roomId: room.id, messageId, sequence: room.lastMessageSequence } });
     }

@@ -3,6 +3,7 @@ import type { WorkspaceState, CodexJob } from './model.js';
 import type { Room, ResidentTurn } from './resident-model.js';
 import { AppError, now } from './util.js';
 import type { Store } from './store.js';
+import { assertWikiSnapshots, wikiHistoryAllowed } from './wiki-policy.js';
 
 const bounded = (v: unknown, min: number, max: number): boolean => typeof v === 'number' && Number.isSafeInteger(v) && v >= min && v <= max;
 export function validBudget(value: unknown): boolean {
@@ -43,6 +44,9 @@ export class DispatchCoordinator {
       if (!turn || turn.status !== 'prepared' || turn.dispatchStartedAt || lease && (lease.state !== 'reserved' || lease.invokedAt)) throw new AppError('dispatch_not_reserved', 409);
       if (input.participant.id !== turn.participantId || input.prompt !== turn.prompt) throw new AppError('dispatch_input_mismatch', 409);
       const room = state.resident?.rooms.find(r => r.id === lease?.roomId);
+      if (room && 'wikiCitations' in turn && !assertWikiSnapshots(state, room.id, [turn.participantId], turn.wikiCitations)) return false;
+      const history = room?.contexts?.find(c => c.participantId === turn.participantId);
+      if (room && history && !wikiHistoryAllowed(state, room, history)) return false;
       if ('workAttemptId' in turn && turn.workAttemptId && (!this.workGuard || !this.workGuard(state, turn))) return false;
       if (room && (!this.residentEnabled || !room.desiredOn || !room.budgets || Date.parse(room.budgets.deadlineAt) <= Date.now() ||
           lease?.ownerKind === 'resident' && ('epoch' in turn && turn.epoch !== room.epoch || room.contexts?.find(c => c.participantId === turn.participantId)?.generation !== turn.generation))) return false;

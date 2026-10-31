@@ -59,6 +59,7 @@ export interface Task {
   url: string; question: string; reason: string | null; turnId: string | null; jobId: string | null;
 }
 export interface DiscussionTurn {
+  wikiCitations?: import('./wiki-model.js').WikiSnapshot[];
   id: string; taskId: string; participantId: string; revision: number; generation: number;
   phase: Phase; round: number; status: 'prepared' | 'running' | 'completed' | 'failed' | 'unconfirmed' | 'stale';
   prompt: string; promptDigest: string; text: string; reply: StructuredReply | null;
@@ -73,6 +74,7 @@ export interface Checkpoint {
   pendingTaskIds: string[]; unresolvedTurnIds: string[]; requestsUsed: number; applied: boolean;
 }
 export interface Discussion {
+  wikiCitations?: import('./wiki-model.js').WikiSnapshot[];
   id: string; topic: string; materials: string; criteria: string; revision: number;
   members: Member[]; excludedIds: string[]; contexts: Context[];
   phase: Phase; round: number; status: RunStatus; reason: string | null;

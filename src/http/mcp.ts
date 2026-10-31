@@ -4,8 +4,11 @@ import type { WorkspaceState } from '../workspace/model.js';
 import { AppError, digest, id, now, object, string, strings } from '../workspace/util.js';
 import { findDiscussion } from '../workspace/engine.js';
 import { promptFor } from '../workspace/prompts.js';
+import type { ResidentGrant } from '../workspace/wiki-model.js';
+import { residentSchemas, residentDescriptions } from '../workspace/resident-mcp.js';
 const TOOLS = ['task_get', 'context_get', 'result_submit', 'capabilities_get', 'codex_send', 'codex_status', 'codex_result', 'codex_cancel'] as const;
 type Grant = WorkspaceState['grants'][number];
+const residentGrant = (g: Grant | ResidentGrant): g is ResidentGrant => 'kind' in g && g.kind === 'resident';
 export class McpEndpoint {
   constructor(private readonly app: Workspace) {}
   createGrant(input: unknown): { id: string; token: string } {
@@ -20,12 +23,13 @@ export class McpEndpoint {
       emit({ type: 'mcp.granted', discussionId: d.id, data: { grantId, participantId: pid, tools: allowed } });
     }); return { id: grantId, token };
   }
-  grant(header: string | undefined): Grant {
+  grant(header: string | undefined): Grant | ResidentGrant {
     const token = header?.startsWith('Bearer ') ? header.slice(7) : '';
     const grant = this.app.store.read().grants.find(g => !g.revoked && g.hash === digest(token));
-    if (!grant) throw new AppError('mcp_authentication_required', 401); return grant;
+    if (!grant) { if (this.app.residentMcp) return this.app.residentMcp.authenticate(token); throw new AppError('mcp_authentication_required', 401); } return grant;
   }
-  async handle(raw: unknown, grant: Grant): Promise<unknown | null> {
+  async handle(raw: unknown, grant: Grant | ResidentGrant): Promise<unknown | null> {
+    if (residentGrant(grant)) this.app.residentMcp.check(grant);
     const message = object(raw); const requestId = message.id;
     if (message.jsonrpc !== '2.0' || typeof message.method !== 'string') throw new AppError('invalid_jsonrpc');
     if (requestId === undefined) { if (message.method === 'notifications/initialized') return null; throw new AppError('unknown_notification'); }
@@ -33,14 +37,14 @@ export class McpEndpoint {
     let result: unknown;
     if (message.method === 'initialize') result = { protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'webjjoku', version: '0.2.0' } };
     else if (message.method === 'ping') result = {};
-    else if (message.method === 'tools/list') result = { tools: grant.tools.map(name => ({ name, description: descriptions[name] ?? name,
-      inputSchema: schemas[name] ?? { type: 'object', properties: {}, additionalProperties: false } })) };
+    else if (message.method === 'tools/list') result = { tools: grant.tools.map(name => ({ name, description: (residentGrant(grant) ? residentDescriptions[name] : descriptions[name]) ?? name,
+      inputSchema: (residentGrant(grant) ? residentSchemas[name] : schemas[name]) ?? { type: 'object', properties: {}, additionalProperties: false } })) };
     else if (message.method === 'tools/call') {
       const params = object(message.params); const name = string(params.name);
       if (!grant.tools.includes(name)) return { jsonrpc: '2.0', id: requestId, error: { code: -32602, message: 'Tool not granted' } };
       try {
-        const value = await this.call(name, object(params.arguments ?? {}), grant);
-        result = { content: [{ type: 'text', text: JSON.stringify(value) }], isError: false };
+        const value = residentGrant(grant) ? this.app.residentMcp.call(name, object(params.arguments ?? {}), grant) : await this.call(name, object(params.arguments ?? {}), grant);
+        result = { content: [{ type: 'text', text: JSON.stringify(value) }], isError: !!(residentGrant(grant) && value && typeof value === 'object' && 'status' in value && value.status === 'conflict') };
       } catch (error) { result = { content: [{ type: 'text', text: JSON.stringify({ error: error instanceof AppError ? error.code : 'tool_failed' }) }], isError: true }; }
     } else return { jsonrpc: '2.0', id: requestId, error: { code: -32601, message: 'Method not supported' } };
     return { jsonrpc: '2.0', id: requestId, result };

@@ -9,7 +9,7 @@ import { Access } from './access.js';
 import { McpEndpoint } from './mcp.js';
 
 const ROOT = new URL('../../client/web/', import.meta.url);
-const FILES = [['/', 'control.html', 'text/html'], ['/control.js', 'control.js', 'text/javascript'], ['/room-view.js', 'room-view.js', 'text/javascript'], ['/control.css', 'control.css', 'text/css']] as const;
+const FILES = [['/', 'control.html', 'text/html'], ['/control.js', 'control.js', 'text/javascript'], ['/room-view.js', 'room-view.js', 'text/javascript'], ['/wiki-view.js', 'wiki-view.js', 'text/javascript'], ['/control.css', 'control.css', 'text/css']] as const;
 export async function createWorkspaceServer(app: Workspace, log: Logger) {
   const access = new Access(app); const mcp = new McpEndpoint(app);
   const assets = new Map(await Promise.all(FILES.map(async ([path, file, type]) => [path as string, { data: await readFile(new URL(file, ROOT)), type }] as const)));
@@ -78,6 +78,14 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     }
     if (get && path === '/api/state') { json(res, 200, app.snapshot()); return; }
     if (get && path === '/api/rooms') { json(res, 200, { ...app.resident.snapshot(), cursor: app.store.cursor() }); return; }
+    const wikiPath = /^\/api\/rooms\/([\w-]+)\/wiki(?:\/([\w-]+)(?:\/(history))?)?$/.exec(path);
+    if (get && wikiPath) {
+      const room = wikiPath[1]!; const page = wikiPath[2];
+      const after = pageNumber(url, 'after', 0, 0, Number.MAX_SAFE_INTEGER); const limit = pageNumber(url, 'limit', 50, 1, 50);
+      json(res, 200, !page ? app.wiki.list(room, after, limit) : wikiPath[3] ? app.wiki.history(room, page, after, limit) : app.wiki.get(room, page, url.searchParams.has('version') ? pageNumber(url, 'version', 1, 1, Number.MAX_SAFE_INTEGER) : undefined, url.searchParams.get('conflictId') ?? undefined)); return;
+    }
+    const residentGrants = /^\/api\/rooms\/([\w-]+)\/grants(?:\/(revoke))?$/.exec(path);
+    if (get && residentGrants && !residentGrants[2]) { json(res, 200, { grants: app.residentMcp.list(residentGrants[1]!) }); return; }
     const workPath = /^\/api\/rooms\/([\w-]+)\/work(?:\/([\w-]+)(?:\/(claim|review|cancel|update))?)?$/.exec(path);
     if (get && workPath && !workPath[3]) {
       json(res, 200, workPath[2] ? app.workQueue.detail(workPath[1]!, workPath[2]) : app.workQueue.list(workPath[1]!, pageNumber(url, 'after', 0, 0, Number.MAX_SAFE_INTEGER), pageNumber(url, 'limit', 50, 1, 100))); return;
@@ -124,6 +132,11 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     if (get && path === '/api/browser/snapshot') { json(res, 200, { text: await app.browser.snapshot(integer(Number(url.searchParams.get('pageId')), 0, 0, 1_000_000)) }); return; }
     if (req.method !== 'POST') throw new AppError('not_found', 404);
     const input = object(await body(req));
+    if (wikiPath && !wikiPath[3]) { const result = app.wiki.edit(wikiPath[1]!, { ...input, ...(wikiPath[2] ? { pageId: wikiPath[2] } : {}) }, command(req)); json(res, result.status === 'conflict' ? 409 : 200, { ...result, ...(result.status === 'conflict' ? { error: { code: 'wiki_version_conflict' } } : {}) }); return; }
+    const wikiPins = /^\/api\/rooms\/([\w-]+)\/wiki-pins$/.exec(path);
+    if (wikiPins) { json(res, 200, app.wiki.pin(wikiPins[1]!, input, command(req))); return; }
+    if (residentGrants) { if (residentGrants[2]) { app.residentMcp.revoke(residentGrants[1]!, string(input.id, 200)); json(res, 200, { ok: true }); }
+      else { if (input.roomId !== undefined && input.roomId !== residentGrants[1]) throw new AppError('resident_scope_changed', 403); json(res, 201, app.residentMcp.createGrant({ ...input, roomId: residentGrants[1] })); } return; }
     if (workPath) {
       const room = workPath[1]!; const task = workPath[2]; const action = workPath[3];
       if (!task) { json(res, 201, app.workQueue.propose(room, input, command(req))); return; }
