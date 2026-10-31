@@ -8,6 +8,7 @@ import type { RpcId } from '../connections/rpc.js';
 import type { Store } from '../workspace/store.js';
 import type { CodexJob, ExecutionBinding, WorkspaceState } from '../workspace/model.js';
 import { AppError, code, digest, id, integer, now, object, string } from '../workspace/util.js';
+import type { WorkScopePhase } from '../workspace/work-execution.js';
 const execute = promisify(execFile);
 const ACTIVE = ['running', 'blocked_approval', 'reconciling'];
 
@@ -19,6 +20,12 @@ export class CodexExecutor {
   private readonly watchdog: NodeJS.Timeout;
   onProgress: () => void = () => {};
   beforeDispatch: ((state: WorkspaceState, job: CodexJob) => void) | null = null;
+  workScopeGuard: ((state: WorkspaceState, job: CodexJob, phase: WorkScopePhase) => void) | null = null;
+  private checkWorkScope(state: WorkspaceState, job: CodexJob, phase: WorkScopePhase): void {
+    if (!job.requestId.startsWith('resident-work:')) return;
+    if (!this.workScopeGuard) throw new AppError('work_execution_guard_required', 409);
+    this.workScopeGuard(state, job, phase);
+  }
   constructor(private readonly store: Store, private readonly command: string[], private readonly roots: string[], private readonly protectedPaths: string[] = []) {
     this.watchdog = setInterval(() => this.expire(), 1000); this.watchdog.unref();
   }
@@ -97,6 +104,7 @@ export class CodexExecutor {
       if (current.discussionId && !s.discussions.some(d => d.id === current.discussionId && d.revision === current.revision && d.status === 'running')) throw new AppError('discussion_not_running', 409);
       if (s.discussions.some(d => d.id === current.discussionId && d.roomId) && !this.beforeDispatch) throw new AppError('room_dispatch_guard_required', 409);
       this.beforeDispatch?.(s, current);
+      this.checkWorkScope(s, current, 'dispatch');
       current.status = 'running';
       current.deadlineAt = new Date(Date.now() + current.maxDurationMs).toISOString();
       const b = s.bindings.find(b => b.id === binding.id)!; b.sessionTreeId = typeof thread.sessionId === 'string' ? thread.sessionId : null;
@@ -191,6 +199,12 @@ export class CodexExecutor {
           const index = job.activities.findIndex(a => a.id === activityId); if (index >= 0) job.activities[index] = entry; else job.activities.push(entry);
         }
       }
+      // Remote completion remains an observation even when its work scope was
+      // revoked. The bridge must not publish it as a current task result.
+      try { this.checkWorkScope(s, job, 'result'); }
+      catch (error) { if (!(error instanceof AppError)) throw error;
+        const link = s.resident?.jobLinks.find(l => l.input.requestId === job.requestId); if (link) link.resultScopeReason = error.code;
+        emit({ type: 'codex.work_result_stale', discussionId: null, data: { jobId: job.id, reason: error.code } }); }
       emit({ type: 'codex.finished', discussionId: job.discussionId, data: { jobId: job.id, status: job.status } });
     });
     this.onProgress(); queueMicrotask(() => this.kick());
@@ -212,6 +226,7 @@ export class CodexExecutor {
     const job = this.store.read().jobs.find(j => j.id === jobId); const approval = job?.approvals.find(a => a.id === approvalId && a.status === 'pending');
     const rpc = job ? this.processes.get(job.bindingId) : null;
     if (!job || !approval || !rpc || job.status !== 'blocked_approval') throw new AppError('approval_not_pending', 409);
+    if (decision === 'accept') this.checkWorkScope(this.store.read(), job, 'approval');
     rpc.respond(approval.rpcId, { decision });
     this.store.transact((s, emit) => { const current = s.jobs.find(j => j.id === jobId)!;
       current.approvals.find(a => a.id === approvalId)!.status = 'resolved';
@@ -221,6 +236,7 @@ export class CodexExecutor {
   async steer(jobId: string, expectedTurnId: string, text: string): Promise<void> {
     const job = this.store.read().jobs.find(j => j.id === jobId);
     if (!job || job.status !== 'running' || job.turnId !== expectedTurnId) throw new AppError('turn_conflict', 409);
+    this.checkWorkScope(this.store.read(), job, 'steer');
     const rpc = this.processes.get(job.bindingId); if (!rpc) throw new AppError('reconciliation_required', 409);
     await rpc.request('turn/steer', { threadId: job.threadId, expectedTurnId, input: [{ type: 'text', text: string(text, 10_000) }] });
     this.store.transact((_s, emit) => emit({ type: 'codex.steered', discussionId: job.discussionId, data: { jobId, expectedTurnId } }));

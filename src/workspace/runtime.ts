@@ -20,6 +20,7 @@ import { DispatchCoordinator } from './dispatch.js';
 import { ResidentRunner } from './resident-runner.js';
 import { FakeResidentCompletion } from './resident-fake.js';
 import { WorkQueue } from './work-queue.js';
+import { WorkExecutionBridge, validateWorkExecutionState } from './work-execution.js';
 
 export class Workspace {
   readonly store: Store; readonly vault: Vault; readonly oauth: OAuthService; readonly browser: BrowserBridge;
@@ -30,10 +31,11 @@ export class Workspace {
   readonly browserDiscovery: BrowserDiscovery;
   readonly dispatch: DispatchCoordinator; readonly residentRunner: ResidentRunner;
   readonly workQueue: WorkQueue;
+  readonly workExecution: WorkExecutionBridge;
   constructor(readonly config: WorkspaceConfig, fakeDelay = 80, options: { residentProvider?: Pick<Providers, 'complete'>; residentClock?: () => number; residentAutoSchedule?: boolean } = {}) {
     this.store = new Store(config.stateDir);
     this.dispatch = new DispatchCoordinator(config.residentEnabled);
-    try { this.resident = new ResidentStore(this.store, config.residentEnabled); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); }
+    try { this.resident = new ResidentStore(this.store, config.residentEnabled); validateWorkExecutionState(this.store.read(), this.store); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); }
     catch (error) { this.store.close(); throw error; }
     this.vault = new Vault(join(config.stateDir, 'credentials'));
     const accessPath = join(config.stateDir, 'access-token');
@@ -55,15 +57,17 @@ export class Workspace {
     this.engine.materials = this.materials;
     mkdirSync(config.chromeProfileDir, { recursive: true, mode: 0o700 });
     this.codex = new CodexExecutor(this.store, config.codexCommand, config.workspaceRoots, [config.stateDir, config.chromeProfileDir]);
+    this.workExecution = new WorkExecutionBridge(this.store, this.workQueue, this.codex, config.residentEnabled, config.turnTimeoutMs);
+    this.codex.workScopeGuard = (state, job, phase) => this.workExecution.guard(state, job, phase);
     this.engine.executor = this.codex;
     this.codex.beforeDispatch = (state, job) => this.dispatch.validateToolDispatch(state, job);
     this.residentRunner = new ResidentRunner(this.store, this.resident, this.dispatch,
       options.residentProvider ?? new FakeResidentCompletion(this.providers, fakeDelay), this.engine, config.turnTimeoutMs,
-      { work: this.workQueue, ...(options.residentClock ? { clock: options.residentClock } : {}), ...(options.residentAutoSchedule !== undefined ? { autoSchedule: options.residentAutoSchedule } : {}) });
+      { work: this.workQueue, execution: this.workExecution, ...(options.residentClock ? { clock: options.residentClock } : {}), ...(options.residentAutoSchedule !== undefined ? { autoSchedule: options.residentAutoSchedule } : {}) });
     this.resident.dispatchAvailable = true;
     this.codex.onProgress = () => { this.engine.kick(); this.residentRunner.kick(); };
   }
-  start(): void { this.residentRunner.recover(); this.codex.recover(); this.engine.recover(); this.residentRunner.start(); }
+  start(): void { this.workExecution.recover(); this.residentRunner.recover(); this.codex.recover(); this.engine.recover(); this.residentRunner.start(); }
   snapshot() {
     const state = this.store.read();
     return { cursor: this.store.cursor(), connections: state.connections, participants: state.participants,

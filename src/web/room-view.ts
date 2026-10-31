@@ -1,9 +1,9 @@
 import type { Connection, Member, CodexJob, Discussion, MaterialPackage } from '../workspace/model.js';
 import type { RoomSummary, RoomMessage, ResidentTurn, ResidentCheckpoint } from '../workspace/resident-model.js';
 import type { ResidentStatusProjection } from '../workspace/resident-status.js';
-import type { WorkTask, WorkAttempt, SeatAssignment } from '../workspace/work-model.js';
+import type { WorkTask, WorkAttempt, SeatAssignment, WorkJobLink } from '../workspace/work-model.js';
 type WorkItem = Omit<WorkTask, 'reports' | 'reviews'> & { reportCount: number; reviewCount: number };
-type WorkSnapshot = { items: WorkItem[]; seats: SeatAssignment[]; nextAfter: number; hasMore: boolean; cursor: number; enabled: boolean };
+type WorkSnapshot = { items: WorkItem[]; seats: SeatAssignment[]; executions: { taskId: string; attemptId: string; codexJobId: string | null; status: string; reported: boolean; error: string | null }[]; nextAfter: number; hasMore: boolean; cursor: number; enabled: boolean };
 
 type Message = Omit<RoomMessage, 'text'> & { preview: string; truncated: boolean; textLength: number; digest: string };
 type Turn = Pick<ResidentTurn, 'id' | 'participantId' | 'status' | 'generation' | 'epoch' | 'startedAt' | 'finishedAt' | 'error' | 'messageId' | 'proposalsStatus'>;
@@ -29,10 +29,12 @@ function save(key: string, value: string): void { try { localStorage.setItem('wj
 function date(value: string | null): string { return value ? new Date(value).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '관측 없음'; }
 const labels: Record<string, string> = { off: '꺼짐', on: '상주 중', sleeping: '휴면', blocked: '확인 필요', budget_exhausted: '진행 한도 소진', unknown: '미관측', not_run: '미실행', not_applicable: '해당 없음', unconfirmed: '응답 미확인', stale: '이전 세대', prepared: '전송 준비', running: '진행 중', paused: '일시정지', completed: '완료', partial: '부분 완료', cancelled: '취소', failed: '실패', fixture: '모의', connected: '연결됨', auth_required: '로그인 필요', queued: '실행 대기', blocked_approval: '승인 대기', reconciling: '대조 필요', interrupted: '중단', waiting: '응답 대기', ready: '준비됨', backlog: '조건 대기', claimed: '픽업됨', review: '독립 검토', rework: '재작업', done: '업무 완료', observed_pass: '관측 검사 통과', observed_fail: '관측 검사 실패', reported: '참여자 보고' };
 const label = (value: string): string => labels[value] ?? value;
+labels.not_sent = '미전송';
 const topicPhases: Record<Discussion['phase'], string> = { independent: '독립 초기안', cross_review: '상호 검토', verification: '근거 검증', revision: '수정안', synthesis: '종합안 작성', summary_review: '종합안 동료 검토' };
 const topicReasons: Record<string, string> = { procedure_completed: '예정된 토론 절차 완료', budget_exhausted: '진행 한도에 도달함', user_cancelled: '사용자가 토론을 취소함', participant_excluded: '일부 참여자가 제외됨', partial_unstructured_reply: '일부 응답의 형식을 확인하지 못함', restart_requires_reconciliation: '재시작 전 응답의 대조가 필요함' };
 const workReasons: Record<string, string> = { work_source_required: '근거가 된 공개 발언을 선택해 주세요.', work_acceptance_required: '수용 기준이 필요합니다.', work_assignment_required: '허용 참여자와 범위를 정해 주세요.', work_execution_phase_pending: '실제 코드 실행은 페이즈 6 연결을 기다립니다.', work_dependency_pending: '선행 일감의 완료를 기다립니다.', work_scope_not_authorized: '해당 범위를 허용한 업무 역할이 필요합니다.', work_acceptance_not_observed: '수용 기준의 직접 확인이나 실제 근거가 필요합니다.', room_settings_required: '방의 진행 한도와 속도를 설정해 주세요.', budget_exhausted: '방의 진행 한도에 도달했습니다.', work_reconciliation_required: '원래 요청·응답을 대조해 주세요.', work_scope_or_report_changed: '배정·범위·보고가 바뀌어 결과를 보류했습니다.', owner_cancelled: '소유자가 취소했습니다.' };
 const workReason = (reason: string): string => workReasons[reason] ?? '추가 확인이 필요합니다. 원래 요청·응답에서 사유를 확인해 주세요.';
+Object.assign(workReasons, { work_execution_binding_required: 'Codex 업무에 등록된 작업 공간을 선택해 주세요.', execution_binding_not_ready: '등록한 Codex 세션 연결을 확인해 주세요.', work_write_safety_unverified: '저장소 비밀·링크·출력 가림 검증이 필요해 쓰기 업무를 보류합니다. 읽기 전용 연결을 사용할 수 있습니다.', room_tool_budget_exhausted: '실행 한도나 방의 현재 진행 상태를 확인해 주세요.', work_execution_scope_changed: '방·역할·업무 버전이 달라 원래 실행 결과를 보관하고 현재 업무 반영을 보류했습니다.', work_execution_binding_changed: '등록한 작업 공간·세션·권한이 달라 대조가 필요합니다.', work_execution_input_too_large: '원문과 재작업 입력이 실행기 한도를 넘었습니다. 원문을 보존하며 일감 범위를 조정해 주세요.' });
 
 // Match the existing focus publication boundary. A completed speaker alone does
 // not publish an unfinished round, a retry, or a previous topic revision.
@@ -263,7 +265,7 @@ export class RoomView {
   }
   private async openWork(taskId: string): Promise<void> {
     const request = ++this.workDetailRequest; const roomId = this.roomId; const wasOpen = $<HTMLDialogElement>('#work-detail-dialog').open;
-    const { task: t, attempts } = await this.deps.api<{ task: WorkTask; attempts: WorkAttempt[] }>(this.path('/work/' + taskId));
+    const { task: t, attempts, executions } = await this.deps.api<{ task: WorkTask; attempts: WorkAttempt[]; executions: { link: WorkJobLink; job: CodexJob | null }[] }>(this.path('/work/' + taskId));
     if (!this.active || request !== this.workDetailRequest || roomId !== this.roomId || wasOpen && !$<HTMLDialogElement>('#work-detail-dialog').open) return; this.closeDrawers();
     const target = $('#work-detail'); target.dataset.taskId = t.id; target.dataset.version = String(t.version); target.replaceChildren(el('h3', t.title), el('p', `${label(t.status)}${t.reason ? ' · ' + workReason(t.reason) : ''}`, 'small muted'), el('p', t.description, 'pre-line'));
     target.append(this.btn('기록 새로고침', () => this.openWork(t.id)));
@@ -272,9 +274,10 @@ export class RoomView {
     for (const [index, sourceId] of t.sourceMessageIds.entries()) target.append(this.btn(`근거 발언 ${index + 1}`, () => { this.closeDrawers(); return this.jump(sourceId); }));
     if (this.detail?.enabled) {
       if (!['done', 'cancelled'].includes(t.status) && !attempts.some(a => ['claimed', 'running', 'unconfirmed'].includes(a.status))) target.append(this.btn('일감 조건 보완', () => this.workForm(t)));
-      if (!['done', 'cancelled'].includes(t.status)) target.append(this.btn('업무 취소', async () => { await this.deps.api(this.path(`/work/${t.id}/cancel`), { expectedVersion: t.version }); $<HTMLDialogElement>('#work-detail-dialog').close(); await this.deps.refresh(); }));
+      if (!['done', 'cancelled'].includes(t.status)) target.append(this.btn(t.kind === 'codex' ? '업무 취소 (실행은 별도 중단)' : '업무 취소', async () => { await this.deps.api(this.path(`/work/${t.id}/cancel`), { expectedVersion: t.version }); $<HTMLDialogElement>('#work-detail-dialog').close(); await this.deps.refresh(); }));
       if (t.status === 'ready') { const select = el('select'); select.setAttribute('aria-label', '픽업할 참여자'); for (const pid of t.allowedParticipantIds) { const option = el('option', this.name(pid)); option.value = pid; select.append(option); } target.append(select, this.btn('선택 참여자가 픽업', async () => { await this.deps.api(this.path(`/work/${t.id}/claim`), { expectedVersion: t.version, participantId: select.value }); await this.deps.refresh(); if ($<HTMLDialogElement>('#work-detail-dialog').open) await this.openWork(t.id); })); }
     }
+    for (const e of executions) this.renderWorkExecution(target, e.link, e.job);
     for (const report of t.reports) { const details = el('details'); details.open = report.id === t.currentReportId; details.append(el('summary', `산출물 · ${this.name(report.authorId)} · ${date(report.createdAt)}`), el('div', report.text, 'reply'));
       for (const check of report.checks) details.append(el('p', `${report.acceptance.find(a => a.id === check.acceptanceId)?.text ?? check.acceptanceId} · ${label(check.outcome)}\n${check.observation}`, 'small pre-line')); for (const blocker of report.blockers) details.append(el('p', '차단 · ' + blocker, 'small')); target.append(details); }
     for (const review of t.reviews) target.append(el('p', `검토 · ${this.name(review.reviewerId)} · ${review.decision}\n${review.reason}`, 'topic-caveat pre-line'));
@@ -287,6 +290,23 @@ export class RoomView {
       review.addEventListener('submit', event => { event.preventDefault(); submit.disabled = true; const f = new FormData(review); void this.deps.api(this.path(`/work/${t.id}/review`), { expectedVersion: t.version, reportDigest: report.digest, decision: f.get('decision'), reason: f.get('reason'), confirmedAcceptanceIds: f.getAll('confirmedAcceptanceId') }).then(async () => { await this.deps.refresh(); if ($<HTMLDialogElement>('#work-detail-dialog').open) await this.openWork(t.id); }).catch(this.deps.report).finally(() => { submit.disabled = false; }); }); target.append(review);
     }
     $<HTMLDialogElement>('#work-detail-dialog').showModal();
+  }
+  private renderWorkExecution(target: HTMLElement, link: WorkJobLink, job: CodexJob | null): void {
+    const card = el('section', '', 'work-card'); card.dataset.jobId = job?.id ?? ''; card.append(el('h4', 'Codex 실행 · ' + label(job?.status ?? link.status)), el('p', `${link.binding.label} · 읽기 전용\n실행 결과의 수용 여부는 독립 검토 기록을 확인하세요. Codex token 사용량은 미확인입니다.`, 'small pre-line'));
+    if (link.error) card.append(el('p', workReason(link.error), 'topic-caveat'));
+    const original = el('details'); original.append(el('summary', '실행 원문·요청·근거'), el('pre', JSON.stringify({ requestId: link.input.requestId, jobId: link.codexJobId, threadId: link.binding.threadId, turnId: job?.turnId, intentDigest: link.intentDigest, prompt: link.input.prompt, result: link.result, activities: job?.activities, error: job?.error }, null, 2))); card.append(original);
+    const act = async (action: string, body: unknown) => { await this.deps.api(`/api/jobs/${job!.id}/${action}`, body); await this.deps.refresh(); if ($<HTMLDialogElement>('#work-detail-dialog').open) await this.openWork(link.taskId); };
+    for (const a of job?.approvals.filter(a => a.status === 'pending' && job.status === 'blocked_approval') ?? []) {
+      const pending = el('section'); pending.append(el('h4', '실행 승인 요청'), el('pre', JSON.stringify(a.params, null, 2)));
+      for (const [decision, text] of [['accept', '이번 실행 요청 승인'], ['decline', '이번 실행 요청 거절'], ['cancel', '이번 실행 요청 취소']]) pending.append(this.btn(text!, () => act('approve', { approvalId: a.id, decision })));
+      card.append(pending);
+    }
+    if (job && ['queued', 'running', 'blocked_approval'].includes(job.status)) card.append(this.btn('이 실행만 중단 요청', () => act('cancel', {})));
+    if (job?.status === 'reconciling') {
+      const turn = el('input'); turn.setAttribute('aria-label', '원래 Codex turn ID'); turn.value = job.turnId ?? ''; turn.placeholder = '원래 세션에서 확인한 turn ID';
+      card.append(turn, this.btn('원래 Codex 실행 대조', () => act('reconcile', { ...(turn.value.trim() ? { turnId: turn.value.trim() } : {}) })));
+    }
+    target.append(card);
   }
   private async loadTopic(): Promise<void> {
     const room = this.detail!.room; const s = this.snapshot!;
@@ -522,7 +542,8 @@ export class RoomView {
     if (!s.materialPackages.length) materials.append(el('p', '저장한 참고 자료가 없습니다.', 'small muted'));
     for (const m of s.materialPackages) materials.append(el('p', `${m.label} · ${m.files.length}개 파일\n주제 토론에서 직접 선택해 공유합니다.`, 'small pre-line'));
     const jobs = $('#room-jobs'); jobs.replaceChildren();
-    const related = s.jobs.filter(j => !!j.discussionId && (j.discussionId === r.topicLink || r.legacyDiscussionIds.includes(j.discussionId)));
+    const workJobs = new Set(this.work?.executions.map(e => e.codexJobId) ?? []);
+    const related = s.jobs.filter(j => workJobs.has(j.id) || !!j.discussionId && (j.discussionId === r.topicLink || r.legacyDiscussionIds.includes(j.discussionId)));
     for (const j of related) jobs.append(this.btn(`${label(j.status)} · ${j.id}${j.approvals.some(a => a.status === 'pending') ? ' · 승인 필요' : ''}`, () => this.navigate('execution')));
     if (!related.length) jobs.append(el('p', '연결된 실행 기록이 없습니다.', 'small muted'));
     const records = $('#room-records'); records.replaceChildren();

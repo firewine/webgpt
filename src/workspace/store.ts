@@ -49,6 +49,12 @@ export class Store {
     return JSON.parse(String(row?.data)) as WorkspaceState;
   }
   cursor(): number { return Number(this.db.prepare('SELECT COALESCE(MAX(id), 0) AS id FROM events').get()?.id); }
+  readCommand<T>(id: string, input: unknown): { found: false } | { found: true; result: T } {
+    const previous = this.db.prepare('SELECT digest, result FROM commands WHERE id=?').get(id);
+    if (!previous) return { found: false };
+    if (previous.digest !== digest(JSON.stringify(input))) throw new AppError('idempotency_conflict', 409);
+    return { found: true, result: JSON.parse(String(previous.result)) as T };
+  }
   subscribe(listener: (event: DurableEvent) => void): () => void { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
   events(after: number, limit = 500): DurableEvent[] {
     return this.db.prepare('SELECT * FROM events WHERE id>? ORDER BY id LIMIT ?').all(after, limit).map(row => ({

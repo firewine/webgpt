@@ -1,8 +1,8 @@
 # 상주 운영 단계별 변경·이관·수락·롤백
 
-> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-30 PR #15 사용자 병합 후 페이즈 4 구현/검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
+> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-30 PR #20 사용자 병합 후 페이즈 6 구현/검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
 
-설계 근거 C와 계획 P는 [개정 요약](./plan-revision-20261030.md)으로 고정한다. 구현 순서·상태는 맨 위 링크의 SSOT를 따른다. R1~R4는 아래 계약으로 구현하고 [R1 증거](./implementation/phase1-resident-foundation-20261030.md)·[R2 증거](./implementation/phase2-resident-runtime-20261030.md)·[R3 증거](./implementation/phase3-chatroom-gui-20261030.md)·[R4 증거](./implementation/phase4-browser-discovery-20261030.md)를 남겼다. R3-E의 실제 기기 부분과 R4-D 실계정 왕복은 UNVERIFIED이며 자동 검사와 구분한다. R5~R8의 새 타입·파일·심볼·endpoint·검사는 아직 **제안**이다. 아래 원 설계의 제안 표기는 이력을 유지하며 구현 판정은 각 증거를 따른다. 기존 파일/심볼의 E 근거표는 C 기준이며 실계정/DOM/운영 호스트 적합성은 UNVERIFIED다.
+설계 근거 C와 계획 P는 [개정 요약](./plan-revision-20261030.md)으로 고정한다. 구현 순서·상태는 맨 위 링크의 SSOT를 따른다. R1~R4는 아래 계약으로 구현하고 [R1 증거](./implementation/phase1-resident-foundation-20261030.md)·[R2 증거](./implementation/phase2-resident-runtime-20261030.md)·[R3 증거](./implementation/phase3-chatroom-gui-20261030.md)·[R4 증거](./implementation/phase4-browser-discovery-20261030.md)를 남겼다. R3-E의 실제 기기 부분과 R4-D 실계정 왕복은 UNVERIFIED이며 자동 검사와 구분한다. R5/R6는 아래 구현 대응과 [R5 증거](./implementation/phase5-open-work-queue-20261030.md)·[R6 증거](./implementation/phase6-work-execution-20261030.md)를 따른다. R7/R8의 새 타입·파일·심볼·endpoint·검사는 아직 **제안**이다. 아래 원 설계의 제안 표기는 이력을 유지하며 구현 판정은 각 증거를 따른다. 기존 파일/심볼의 E 근거표는 C 기준이며 실계정/DOM/운영 호스트 적합성은 UNVERIFIED다.
 
 ## 1. 공통 변경·검증 원칙
 
@@ -138,14 +138,18 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 
 **데이터/이관:** submit 전 immutable intent·stable requestId를 저장하고 job 생성 후 link한다. 중간 crash는 requestId+binding+promptDigest로 기존 job만 회수한다. 새 업무에 이미 존재하는 Codex job을 임의 연결하지 않는다. 종료 결과는 원래 attempt에 보관하고 stale/폐기 scope는 상위 업무·Wiki의 현재 결과로 수락하지 않는다. report는 RoomMessage로 한 번만 투영한다.
 
-| 수락 ID | 숫자·증거 | 방법(후속 실행) |
+**구현 대응:** 실제 [WorkExecutionBridge](../src/workspace/work-execution.ts)가 기존 ResidentRunner.evaluate의 접점에서 동작한다. WorkJobLink/WorkExecutionEvidence는 work-model.ts, optional workExecutionSchemaVersion=1은 기존 resident JSON에 저장한다. 실제 CodexExecutor에는 새 업무 prefix만 검사하는 workScopeGuard를 dispatch/늦은 승인/결과·입력 변경 경계에 추가했다. 결과 거절은 원래 완료 transaction의 link에 고정해 나중에 guard를 복구해도 되살리지 않는다. 기존 submit/RPC/승인 reviewer/sandbox/bwrap/작업 공간 단일 writer는 불변이다.
+
+복구 대조에는 기존 Store journal의 `readCommand` SELECT 접점 6줄을 추가했다. 기존 read/transact·명령 저장·원자성·물리 스키마를 바꾸지 않고, job 유실을 미전송으로 오판하지 않기 위해 원래 submit의 전체 input digest와 결과 ID를 읽는다. 실제 job과 영수증이 모두 없는 전송 전 취소만 not_sent로 기록한다. 역할·원문·의존성·binding·epoch/generation과 입력 해시를 계속 검사한다. 사용자 지시의 R6 범위·아래 gate 숫자·R7/R8 순서는 그대로다. [실행 증거·한계](./implementation/phase6-work-execution-20261030.md)를 참조한다.
+
+| 수락 ID | 숫자·증거 | 방법·현재 판정 |
 | --- | --- | --- |
-| R6-A | intent 전/후·submit 뒤·link 뒤·승인 대기·완료 뒤 6crash 지점에서 turn/start ≤1·보고 1개 | 기존 codex-rpc fixture+제안 `tests/resident-work-execution.test.mjs` |
-| R6-B | off/권한 회수/task version 변경 3종×queued/늦은 승인/늦은 결과 3시점에서 scope 밖 실행/업무 done 0 | RPC mock의 호출/응답 로그 |
-| R6-C | 같은 workspace 2업무의 동시 writer 최대1, 다른 입력의 같은 ID→409 | 기존 codex 검사+제안 연결 검사 |
-| R6-D | 실제 scope 경계(R2/R3)·repo secret/link/output 가림 gate가 FAIL/UNVERIFIED면 실제 쓰기 호출 0 | 제안 격리 fixture·허용 호스트 정적/실행 검사 기록 |
-| R6-E | completed 응답이 있어도 command/test 근거 없으면 observed execution 0, 리뷰 없는 done 0 | fake 결과/독립 리뷰 로그 |
-| R6-F | 설치 schema·읽기 전용→승인→작은 작업 브랜치 수정→보고/반려/후속 흐름 | 후속 허용된 `npm run test:codex-contract`·실세션 receipt/검사 로그. 이번 NOT_RUN |
+| R6-A | intent 전/후·submit 뒤·link 뒤·승인 대기·완료 뒤 6crash 지점에서 turn/start ≤1·보고 1개 | PASS · resident-work-execution-crash의 실제 SIGKILL 6종. 원래 job/요청/영수증을 대조한 뒤 독립 검토 |
+| R6-B | off/권한 회수/task version 변경 3종×queued/늦은 승인/늦은 결과 3시점에서 scope 밖 실행/업무 done 0 | PASS · resident-work-execution의 9종 RPC 전송/승인/결과 로그 |
+| R6-C | 같은 workspace 2업무의 동시 writer 최대1, 다른 입력의 같은 ID→409 | PASS · 2actor/동일 binding, canonical writer1·idempotency 충돌·유실 영수증/입력 대조 |
+| R6-D | 실제 scope 경계(R2/R3)·repo secret/link/output 가림 gate가 FAIL/UNVERIFIED면 실제 쓰기 호출 0 | 차단 gate PASS · unverified 쓰기 binding 100tick→job/turn0. 실제 저장소 격리/쓰기 성공은 UNVERIFIED |
+| R6-E | completed 응답이 있어도 command/test 근거 없으면 observed execution 0, 리뷰 없는 done 0 | PASS · command 없음/not_run·exit 미확인/unknown·실패/파일 변경 보고 차단, 독립 검토 전 review |
+| R6-F | 설치 schema·읽기 전용→승인→작은 작업 브랜치 수정→보고/반려/후속 흐름 | 설치 Codex 0.165.0 schema PASS. 실제 사용자 thread/읽기→승인→쓰기 전체 흐름은 NOT_RUN/UNVERIFIED |
 
 **롤백:** G0가 필수다. queued work job은 명시적으로 미전송 취소를 기록하고 running/blocked_approval/reconciling은 대조 전 이전 binary로 내리지 않는다. link/intent/receipt·scope 폐기 이력을 보존한다. 기존 단독 job/토론 job은 바꾸지 않는다. 실패를 sandbox 해제/전역 승인으로 우회하지 않는다.
 

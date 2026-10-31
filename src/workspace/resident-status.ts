@@ -24,7 +24,8 @@ export function projectResidentStatus(state: WorkspaceState, roomId: string, eve
     const context = room.contexts?.find(c => c.participantId === member.participantId);
     const turn = state.resident!.turns.filter(t => t.roomId === roomId && t.participantId === member.participantId).at(-1);
     const topicContext = focus?.contexts.find(c => c.participantId === member.participantId);
-    const job = focus && state.jobs.filter(j => j.discussionId === focus.id && focus.tasks.some(t => t.id === j.taskId && t.participantId === member.participantId)).at(-1);
+    const link = state.resident!.jobLinks.filter(l => l.roomId === roomId && l.participantId === member.participantId).at(-1);
+    const job = link ? state.jobs.find(j => j.id === link.codexJobId) : focus && state.jobs.filter(j => j.discussionId === focus.id && focus.tasks.some(t => t.id === j.taskId && t.participantId === member.participantId)).at(-1);
     const progress = turn && events.filter(e => e.type === 'resident.turn_progress' && data(e).turnId === turn.id).at(-1);
     const observed = turn && events.filter(e => ['resident.turn_prepared', 'resident.turn_dispatched', 'resident.turn_receipt', 'resident.turn_progress', 'resident.turn_finished', 'resident.reconciled'].includes(e.type) && data(e).turnId === turn.id).at(-1);
     const generation = context?.generation ?? 1;
