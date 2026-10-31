@@ -43,7 +43,7 @@
 
 선택 `providerFinishReason`만 추가하며 SQL schema 이관·새 provider/로그인·scheduler·DB 재작성은 없다. topic/resident/work의 기존 dispatch와 Store transaction에 작은 adapter로 결합한다. 과거 미확정/receipt·단계·50 gate와 권한은 유지한다. 진단 보강은 fixture/코드 변경이며 **실제 실패 토의를 이 코드로 재실행하거나 서비스를 재시작하지 않았다**.
 
-검사: `npm run check` strict TypeScript/빌드·Node314 PASS. 종료 후 EOF의 보고 usage 보존을 추가 보강한 뒤 provider·설정/실패 관련18개를 다시 PASS했다. 새 실패 검사8개는 늦은 usage, length/filter/tool/기타 reason, EOF/잘못된 JSON의 미확정, 사고 원문 비노출, 토의 예산 차단·상주 ledger/재전송0을 확인한다. 화면 관련 기존 Chromium fixture와 최종 CI는 PR의 정확한 head/check로 판정한다. fixture의 `length` 성공 재현을 실제 요청의 종료 이유로 오인하지 않는다.
+검사: `npm run check` strict TypeScript/빌드·Node314 PASS 후, EOF의 보고 usage 보존을 보강하고 관련18개를 다시 PASS했다. 선행 PR #28의 doctor 준비 진단까지 통합한 최종 전체 `npm run check`는 **Node319 PASS**, FAIL/SKIP0이다. 새 실패 검사8개는 늦은 usage, length/filter/tool/기타 reason, EOF/잘못된 JSON의 미확정, 사고 원문 비노출, 토의 예산 차단·미제공 unknown·상주 ledger/재전송0을 확인한다. 실제 Chrome156.0.8078.47의 기존 토의/제공처 설정 fixture **3개 PASS**도 확인했다. 전체 browser/최종 CI는 PR의 정확한 head/check로 판정한다. fixture의 `length` 성공 재현을 실제 요청의 종료 이유로 오인하지 않는다.
 
 ## 다음 작업과 복귀
 
