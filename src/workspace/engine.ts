@@ -4,7 +4,7 @@ import type { Store } from './store.js';
 import type { Checkpoint, Discussion, DiscussionTurn, Evidence, Phase, Task, WorkspaceState } from './model.js';
 import { AppError, code, digest, id, integer, now, object, string, strings } from './util.js';
 import { parseReply, promptFor } from './prompts.js';
-import { reasoningEffort, modelEffort, oauthKind } from './settings.js';
+import { reasoningEffort, participantReasoning, oauthKind } from './settings.js';
 import type { LocalMaterials } from './materials.js';
 import { DispatchCoordinator, budgetReason } from './dispatch.js';
 import { contextWiki, visibleRoomMessages } from './wiki-policy.js';
@@ -121,9 +121,9 @@ export class DiscussionEngine {
       } else if (action === 'configure_participant') {
         if (!['paused', 'blocked'].includes(d.status) || d.turns.some(t => ['prepared', 'running', 'unconfirmed'].includes(t.status))) throw new AppError('participant_settings_require_pause', 409);
         const member = d.members.find(p => p.id === body.participantId);
-        if (!member || !oauthKind(member.kind)) throw new AppError('reasoning_requires_oauth', 409);
+        if (!member || !oauthKind(member.kind) && member.kind !== 'deepseek') throw new AppError(member?.kind === 'anthropic' ? 'reasoning_requires_supported_model' : 'reasoning_requires_oauth', 409);
         const c = state.connections.find(c => c.id === member.connectionId); if (!c) throw new AppError('connection_not_found', 404);
-        member.reasoningEffort = modelEffort(c, member.modelId, body.reasoningEffort);
+        const settings = participantReasoning(c, member.modelId, body.reasoningEffort); delete member.reasoningEffort; Object.assign(member, settings);
       } else if (action === 'revise') {
         if (['completed', 'partial', 'cancelled'].includes(d.status)) throw new AppError('discussion_finished', 409);
         d.revision++; d.interventions.push({ revision: d.revision, text: string(body.text, 5000), createdAt: now() });
@@ -283,7 +283,7 @@ export class DiscussionEngine {
       const turn: DiscussionTurn = { id: id('turn'), taskId, participantId: participant.id, revision: d.revision, generation: context.generation,
         phase: task.phase, round: task.round, status: 'prepared', prompt, promptDigest: digest(prompt), text: '', reply: null,
         startedAt: now(), finishedAt: null, receipt: null, error: null, usage: null, ...(d.wikiCitations ? { wikiCitations: structuredClone(d.wikiCitations) } : {}),
-        ...(oauthKind(participant.kind) ? { reasoningEffort: reasoningEffort(participant.reasoningEffort) } : {}),
+        ...(oauthKind(participant.kind) ? { reasoningEffort: reasoningEffort(participant.reasoningEffort) } : participant.kind === 'deepseek' && participant.reasoningEffort !== undefined ? { reasoningEffort: participant.reasoningEffort } : {}),
         evidenceIds: d.evidence.filter(e => e.revision === d.revision && (task.phase !== 'independent' || e.kind === 'user_material')).map(e => e.id) };
       const denied = this.dispatch.reserve(state, { requestId: turn.id, kind: 'topic', participantId: participant.id, generation: turn.generation, roomId: d.roomId ?? null });
       if (denied) {

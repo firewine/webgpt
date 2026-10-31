@@ -17,6 +17,8 @@
 
 ## 1. 기준과 실행 원칙
 
+2026-10-31 사용자가 [DeepSeek 사고 설정·Anthropic API 변경안](./reviews/deepseek-anthropic-impact-20261031.md)을 승인했다. 과거 Phase 5의 추가 provider 범위 중 Anthropic API 연결만 R8 보완으로 앞당기며 동시 실행·Git Writer·자동 병합은 확장하지 않는다. 먼저 제공처별 effort/기본값·기존 turn 보존을 검사하고, 이어 작은 Messages adapter와 owner 등록/모델/키 갱신/삭제·혼합 토론 fixture를 결합한다. 기존 50 gate와 실계정/유료 호출 별도 수락은 유지한다. 구독 OAuth는 공식 지원 경로/앱 허가 확인까지 보류한다.
+
 기존 코드/검사 이력은 아래처럼 보존하되 새 상주 기능의 근거로 세지 않는다. 기준 P의 각 WJ/CHAT 결정은 판정표 S01~S08/P38~P44, 다음 변경은 R1~R8에 대응한다. 새 인증/DB/provider/실행기를 만드는 단계가 아니라 있는 backend를 결합하는 단계다.
 
 PR #1~11이 main에 병합됐다. 연결 adapter·영속 Core·토론 UI·MCP·Codex 실행, Ubuntu 서비스·HTTPS·noVNC, Muse thread·첫 응답 복구, 토커 계정·사고 깊이·라운드 설정과 로컬 자료·권한 조회를 반영했다. 전체 실계정·실세션 완료 판정은 남아 있다. [통합 구현 기록](./implementation/wj-002-015.md), [Ubuntu 운영](./implementation/ubuntu-services-20261030.md), [Muse 연결·복구](./implementation/muse-thread-binding-20261030.md), [토커 설정](./implementation/talker-settings-rounds-20261030.md), [로컬 자료·권한 조회](./implementation/local-materials-capabilities-20261030.md)를 함께 따른다. 인증·대화·운영·Codex의 상세 계약은 각 원문을 따른다.

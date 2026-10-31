@@ -4,6 +4,8 @@
 
 2026-10-30 사용자 지시에 따라 **이 표를 페이즈 범위·순서·진행 상태의 SSOT**로 사용한다. 아래 설계/검토 문서의 과거 “계획 문서만” 제한은 당시 작업 이력이며, 현재 승인 작업은 **페이즈 8 통합 수락·복구·부하 검증**이다. PR #22의 병합 main `8f7866388823e46ade64446343d53351c7ef85e5`에서 기존 R1~R7 구현·흑백 GUI·상단 주제·큐·Wiki·Codex·MCP를 그대로 결합해 검증한다. 2026-10-31 사용자 승인으로 [R8-A B안](./reviews/r8-topic-transition-decision-20261031.md)의 명시 허용 자동 주제 전환을 추가한다. optional 설정/intent·기존 configure 접점만 확장하며 Providers/Store·topic·승인/격리·기존 50 gate·단계 순서는 유지한다. R2/R3·업무 경쟁·Wiki 인용을 회귀하고 추가 페이즈는 만들지 않는다. 예상 변경은 16~20파일·450~850줄이다. 추가로 사용자가 [Codex 기기 코드 연결](./reviews/opencodex-login-review-20261031.md)을 별도 추가하도록 승인했다. 일반 GPT OAuth·기존 계정/전역 Codex 인증을 보존하고, 새 kind의 로그인/refresh·모델/stream 어댑터·owner UI만 결합한다. 예상 14~20파일·800~1,500줄이며 기존 큐/Wiki/단일 dispatch·수락 기준은 유지한다. R8 준비에 포함하며 후속 페이즈 신설은 없다. 제품 목표·기존 데이터·승인/미확정 대조는 유지한다. 세부 수락 gate·롤백은 [단계별 계약](./resident-implementation-plan.md)을 참조한다. 계획 변경이 필요하면 **현재 단계와 남은 모든 페이즈의 영향·총변경량을 먼저 검토해 사용자 승인을 받은 뒤** 이 SSOT와 관련 계획서를 함께 변경한다. 구현 결과에 맞춰 계획을 사후 정당화하지 않는다. 구체적인 변경 승인 절차는 [개발 지침](./development-guidelines.md#5-계획-변경-사전-승인과-후속-페이즈-영향-검토)을 따른다.
 
+2026-10-31 추가 승인: 사용자가 **DeepSeek 설정·Anthropic API부터 구현**하는 [변경안](./reviews/deepseek-anthropic-impact-20261031.md)을 승인했다. R8 연결 보완으로 제공처별 실제 지원 사고 값과 Anthropic API key/모델/완료 stream 어댑터를 기존 Providers·vault·Store·토론/방에 결합한다. GPT의 기존 설정과 DeepSeek 설정 부재를 보존하며 자동 effort 변환·계정/과금 fallback은 추가하지 않는다. Anthropic 구독 OAuth는 공식 지원 경로/앱 허가 확인까지 **보류**한다. 예상 20~28파일·700~1,300줄이며 R1~R8·50개 수락 기준·큐/Wiki/Codex 승인·단일 dispatch는 유지하고 회귀한다. [구현·검사 기록](./implementation/deepseek-reasoning-anthropic-20261031.md): Node306·Chrome/MCP51 PASS, 실제 CoralBricks/River catalog만 읽기 관측. 실계정 추론·운영 배포는 NOT_RUN이며 R8 전체 수락을 완료로 바꾸지 않는다. 실계정 유료 호출·배포·병합은 이번 승인에 포함하지 않는다.
+
 | 페이즈 | R단계 | 개발 범위 | 완료 판정 | 상태 |
 | --- | --- | --- | --- | --- |
 | 1. 방 데이터 기반 | R1 | optional resident state·기존 DB 이관·방/메시지 조회·설정 제어 API·기능 flag | 기존 데이터/원문/event cursor/명령 보존, 중복 이관/명령 방지·인증·꺼짐 복구 | **완료 / PR #13 병합** ([증거](./implementation/phase1-resident-foundation-20261030.md)) |
@@ -160,7 +162,7 @@ v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위�
 - Phase 3: 공식 MCP 작업·결과, Secure MCP Tunnel, dot Events와 Muse Connector 검증.
 - Phase 4A: 토론의 검증·개발 요청 → dot 프롬프트 → 기존 Codex 세션 → 참여자 재검토·결과 비교.
 - Phase 4B: 선택 Git Writer MVP. 저장소 1개·코드 변경 작업 1개·draft PR까지.
-- Phase 5: Claude·Gemini 등 추가 provider/API와 다중 root workflow·동시 발언의 검증된 확대.
+- Phase 5: Gemini 등 추가 provider/API와 다중 root workflow·동시 발언의 검증된 확대. Anthropic API 연결은 승인된 R8 보완으로 앞당겼으며 구독 OAuth는 보류한다.
 - Phase 6: 조건부 자동 병합, 운영 고도화, 추가 서버 OS profile·다중 프로젝트.
 
 ## 5. 연결 구조와 실행 위치
@@ -250,7 +252,7 @@ dot이 `task_get`·`codex_send` 등을 호출할 때는 Ubuntu private MCP와 Se
 | Muse | 기존 Muse 대화의 UI 입출력 | 공식 Connector/API·MCP 도구 | 대화·결과·산출물, Connector 권한 |
 | GPT 계정 여러 개 | OAuth + ChatGPT plan usage + Responses | 검증한 모델·도구 확장 | 등록·scope·모델·이력·갱신·사용 한도 분리 |
 | DeepSeek 등 API | API key + provider별 공식 대화 API | 추가 API adapter | 모델·stream 완료·usage·비용·오류 |
-| Claude | 계정 기능에 따른 Web/MCP | 공식 Connector | 도구·결과 제출 |
+| Claude | Anthropic API key·인증된 모델 목록·Messages (fixture PASS, 실계정 NOT_RUN) | 공식 외부 앱 OAuth/Connector는 권한·계약 확인 전 보류 | 모델·workspace·stream 완료·usage·계정 권한 |
 | Gemini | Web 어댑터 | 계정에서 확인한 공식 연결 | 현재 계정의 실제 기능 |
 
 ### 7.1 GPT dot
@@ -540,7 +542,7 @@ GUI 기준 96397/ai-chatroom 고정 SHA와 운영 기준 31803을 구분한다. 
 
 ### Phase 5 — 추가 Provider·동시 실행 용량 확장
 
-- Phase 2의 GPT OAuth 다중 계정·DeepSeek·dot/Muse를 기반으로 Claude·Gemini와 추가 API provider를 연결한다.
+- Phase 2의 GPT OAuth 다중 계정·DeepSeek·dot/Muse와 R8 보완의 Anthropic API를 기반으로 Gemini 등 추가 provider를 연결한다. Anthropic 실계정 수락은 별개로 남긴다.
 - 기존 AccountConnection·Participant 계약의 실제 용량을 검증해 병렬도를 확장한다. 현재 계정의 최소 역할/큐 배정은 R5에 포함하며 이 단계까지 미루지 않는다.
 - GPT 3·Claude 1·Gemini 1은 과거 기획값이다. 실제 계정 수·가용성을 확인한다.
 - dot은 같은 ChatGPT 계정의 한도를 공유한다. Muse 계정도 실측 등록한다.

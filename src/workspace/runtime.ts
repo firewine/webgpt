@@ -15,7 +15,7 @@ import { BrowserBridge, validateBinding } from '../connections/browser.js';
 import { BrowserDiscovery } from '../connections/browser-discovery.js';
 import { DiscussionEngine, findDiscussion } from './engine.js';
 import { CodexExecutor } from '../execution/codex.js';
-import { modelEffort, oauthKind } from './settings.js';
+import { participantReasoning } from './settings.js';
 import { LocalMaterials, materialMetadata } from './materials.js';
 import { inspectCapabilities, installedVersion } from './capabilities.js';
 import { ResidentStore } from './resident-store.js';
@@ -111,6 +111,15 @@ export class Workspace {
     try { await this.refreshModels(connectionId); } catch { /* preserve the connection and public failure state for the owner */ }
     return connectionId;
   }
+  async addAnthropic(input: unknown): Promise<string> {
+    const b = object(input); if (Object.keys(b).some(k => !['label', 'key', 'workspaceId'].includes(k))) throw new AppError('invalid_input');
+    const workspaceId = b.workspaceId === undefined || b.workspaceId === '' ? '' : string(b.workspaceId, 128);
+    if (workspaceId && !/^[A-Za-z0-9_-]+$/.test(workspaceId)) throw new AppError('invalid_anthropic_workspace');
+    const key = string(b.key, 4096); if (/[\r\n]/.test(key)) throw new AppError('invalid_input');
+    const connection: Connection = { id: id('connection'), kind: 'anthropic', label: string(b.label, 80), status: 'unverified', models: [], ...(workspaceId ? { anthropicWorkspaceId: workspaceId } : {}) };
+    this.vault.put(connection.id, { key }); this.store.transact((s, emit) => { s.connections.push(connection); emit({ type: 'connection.added', discussionId: null, data: { connectionId: connection.id } }); });
+    try { await this.refreshModels(connection.id); } catch { /* same connection/key remains available for owner diagnosis */ } return connection.id;
+  }
   async refreshModels(connectionId: string): Promise<void> {
     try {
       const models = await this.providers.models(connectionId);
@@ -192,12 +201,11 @@ export class Workspace {
           s.resident?.turns.some(t => t.participantId === existing.id && ['prepared', 'running', 'unconfirmed'].includes(t.status)))) throw new AppError('resident_account_change_requires_new_participant', 409);
       const connection = s.connections.find(c => c.id === body.connectionId && c.status === 'connected');
       if (!connection) throw new AppError('connection_not_ready', 409);
-      if (body.reasoningEffort !== undefined && !oauthKind(connection.kind)) throw new AppError('reasoning_requires_oauth', 409);
       const modelId = string(body.modelId, 200); if (!connection.models.some(m => m.id === modelId)) throw new AppError('model_not_available', 409);
       if (connection.kind === 'browser' && s.participants.some(p => p.id !== participantId && p.connectionId === connection.id)) throw new AppError('browser_participant_already_exists', 409);
       const member: Member = { id: participantId, label: string(body.label, 80), kind: connection.kind, connectionId: connection.id,
         modelId, role: string(body.role ?? '', 500, true),
-        ...(oauthKind(connection.kind) ? { reasoningEffort: modelEffort(connection, modelId, body.reasoningEffort, existing?.reasoningEffort) } : {}) };
+        ...participantReasoning(connection, modelId, body.reasoningEffort, existing?.kind === connection.kind ? existing.reasoningEffort : undefined) };
       if (existing) s.participants[s.participants.indexOf(existing)] = member; else s.participants.push(member);
       emit({ type: existing ? 'participant.updated' : 'participant.added', discussionId: null, data: { participantId } });
     }); return participantId;
@@ -240,7 +248,7 @@ export class Workspace {
   }
   async replaceKey(connectionId: string, key: string): Promise<void> {
     this.assertNoActiveTurn(connectionId);
-    if (!this.store.read().connections.some(c => c.id === connectionId && c.kind === 'deepseek')) throw new AppError('connection_not_found', 404);
+    if (!this.store.read().connections.some(c => c.id === connectionId && ['deepseek', 'anthropic'].includes(c.kind))) throw new AppError('connection_not_found', 404);
     this.vault.put(connectionId, { key: string(key, 4096) }); await this.refreshModels(connectionId);
   }
   browserControl(paused: boolean): void {

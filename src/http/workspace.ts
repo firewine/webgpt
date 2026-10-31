@@ -183,6 +183,7 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
       await app.browser.openAuthorization(string(input.url, 12_000), connectionId); json(res, 200, { ok: true }); return;
     }
     if (path === '/api/connections/deepseek') { json(res, 201, { id: await app.addDeepSeek(input) }); return; }
+    if (path === '/api/connections/anthropic') { json(res, 201, { id: await app.addAnthropic(input) }); return; }
     if (path === '/api/connections/browser') { json(res, 201, { id: await app.addBrowser(input) }); return; }
     const connectionPath = /^\/api\/connections\/([\w-]+)\/(models|logout|credential|remove)$/.exec(path);
     if (connectionPath) {
