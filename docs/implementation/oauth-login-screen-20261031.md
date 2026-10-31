@@ -10,11 +10,13 @@
 
 사용자가 추가 보고한 `signin_pending`은 미만료 요청이 있을 때 `OAuthService.begin`이 409만 반환해 새로고침 후 승인 화면을 복구할 수 없던 오류다. 같은 연결은 원래 state/nonce/PKCE/attemptId/승인 주소를 반환하며 만료 시간을 연장하지 않는다. 다른 기대 계정으로 바꾸려 하면 거절하고, 완료/만료된 callback은 다시 사용하지 않는다. 자동 재인증·계정 전환·token 폐기는 하지 않는다.
 
-제품 변경은 `src/web/control.ts`·`control.html`·`control.css`와 `src/connections/oauth.ts::begin/authorization`이다. OAuth endpoint·PKCE/state/nonce·계정/키·provider complete·기존 profile·승인/예산·Store transaction은 유지한다. 기존 응답 필드도 그대로다. 새 백엔드·인증 방식·provider는 만들지 않았다.
+추가 사용자 요청으로 이메일은 UI/owner API 필수이며, 입력한 이메일을 login_hint로 전달하고 검증된 identity와 대조한다. 기존 이메일 없는 연결도 같은 ID에서 입력을 받아 재개한다. 로그인 시작과 다시 로그인이 원격 dialog를 자동으로 열며 별도 재열기 버튼은 복구용으로 유지한다.
+
+제품 변경은 `src/web/control.ts`·`control.html`·`control.css`, `src/http/workspace.ts`와 `src/connections/oauth.ts::begin/authorization`이다. OAuth endpoint·PKCE/state/nonce·계정/키·provider complete·기존 profile·승인/예산·Store transaction은 유지한다. 기존 응답 필드도 그대로다. 새 백엔드·인증 방식·provider는 만들지 않았다.
 
 ## 검사와 실환경 구분
 
-수정 전 새 browser2개는 FAIL이었다. 초기 수정 후 Node222·browser38 PASS였다. pending 복구 추가 후 `npm run check`는 Node224 PASS, 실제 Chromium156.0.8078.47/Chrome DevTools MCP1.12.0 전체 browser38 PASS, FAIL/SKIP0이다. 검사 파일은 [oauth-login.test.mjs](../../tests/browser/oauth-login.test.mjs)와 [oauth.test.mjs](../../tests/oauth.test.mjs)다. 임시 DB·격리 browser·모의 인증/원격 화면을 쓰며 실제 비밀번호·모델 호출은0이다. 1440/390px 표시·수동 lease·명시 재개·화면만 닫기·진행 중 작업 거절·창 생성 오류, 새로고침 후 동일 요청 복구·20회 중복·다른 기대 계정·10분 만료·callback1회를 확인했다.
+수정 전 새 browser2개는 FAIL이었다. 초기 수정 후 Node222·browser38 PASS였다. pending 복구 추가 후 `npm run check`는 Node225 PASS, 실제 Chromium156.0.8078.47/Chrome DevTools MCP1.12.0 전체 browser39 PASS, FAIL/SKIP0이다. 검사 파일은 [oauth-login.test.mjs](../../tests/browser/oauth-login.test.mjs)와 [oauth.test.mjs](../../tests/oauth.test.mjs)다. 임시 DB·격리 browser·모의 인증/원격 화면을 쓰며 실제 비밀번호·모델 호출은0이다. 1440/390px 표시·수동 lease·명시 재개·화면만 닫기·진행 중 작업 거절·창 생성 오류, 새로고침 후 동일 요청 복구·20회 중복·다른 기대 계정·10분 만료·callback1회를 확인했다.
 
 운영 서비스는 재시작하지 않았다. 기존 owner API로 해당 연결의 새 OAuth 요청·서버 Chrome 창 열기·인증 원격 화면 HTTP200·콜백 listener를 확인했다. 소유자 키는 프로세스 안에서만 사용하고 출력/문서화하지 않았다. 수동 조작은 사용자 로그인용으로 유지했으며 다른 대화에 입력하지 않았다. 새 inline 화면은 이 수정의 운영 반영 전까지 fixture 결과다. 실제 사용자 로그인·동의·identity/모델 목록은 별도 완료 관측 전까지 NOT_RUN이다.
 

@@ -163,7 +163,8 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     if (path === '/api/discussions') { json(res, 201, { id: app.engine.create(input, command(req)) }); return; }
     if (discussionPath?.[2]) { app.engine.control(discussionPath[1]!, input, command(req)); json(res, 200, { ok: true }); return; }
     if (path === '/api/connections/oauth') {
-      const result = await app.oauth.begin(string(input.label, 80), input.connectionId ? string(input.connectionId) : undefined, input.expectedEmail ? string(input.expectedEmail, 254) : undefined);
+      if (typeof input.expectedEmail !== 'string' || !input.expectedEmail.trim()) throw new AppError('account_email_required');
+      const result = await app.oauth.begin(string(input.label, 80), input.connectionId ? string(input.connectionId) : undefined, string(input.expectedEmail, 254));
       json(res, 200, result); return;
     }
     if (path === '/api/browser/open-auth') {

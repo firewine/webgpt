@@ -79,3 +79,9 @@ test('resuming does not extend the ten minute sign-in lifetime; expired callback
   t.mock.timers.tick(10_001); const next = await f.service.begin('Expiry', a.begin.connectionId); assert.notEqual(next.attemptId, a.begin.attemptId); assert.notEqual(next.authorizationUrl, a.begin.authorizationUrl);
   await assert.rejects(f.service.finish(a.params), /invalid_oauth_state/); assert.equal(f.requests.length, 0); assert.equal(f.store.read().connections.length, 1);
 });
+
+test('legacy pending sign-in can bind the newly required expected email without replacing its PKCE or attempt', async t => {
+  const f = await fixture(t); const a = await f.signin('legacy'); const next = await f.service.begin('Legacy', a.begin.connectionId, 'legacy@example.test');
+  assert.equal(next.attemptId, a.begin.attemptId); assert.equal(new URL(next.authorizationUrl).searchParams.get('state'), a.url.searchParams.get('state')); assert.equal(new URL(next.authorizationUrl).searchParams.get('code_challenge'), a.url.searchParams.get('code_challenge')); assert.equal(new URL(next.authorizationUrl).searchParams.get('login_hint'), 'legacy@example.test');
+  await f.service.finish(a.params); assert.equal(f.store.read().connections[0].email, 'legacy@example.test'); assert.equal(f.store.read().connections.length, 1);
+});
