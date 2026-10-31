@@ -14,6 +14,8 @@
 
 **v0.2 구현:** 공동 대화 UI, 영속 토의 엔진, GPT 다중 OAuth·DeepSeek·기존 Chrome 대화 어댑터, MCP 도구, Codex 실행·승인·결과 환류, 운영 스크립트. [Ubuntu 로컬 모의 토론](docs/implementation/ubuntu-readiness-20261030.md)과 [systemd·실제 HTTPS·인증 noVNC 입력](docs/implementation/ubuntu-services-20261030.md)을 확인했습니다. 실계정·다른 Tailnet 기기·실제 재부팅·실제 Codex 세션의 완료 판정은 아직 **NOT_RUN**입니다. [구현·검증 기록](docs/implementation/wj-002-015.md)을 함께 확인하세요.
 
+DeepSeek 참여자는 공식 API·CoralBricks·River 중 제공처를 선택해 별도로 등록할 수 있습니다. 각 제공처의 키와 실제 모델 목록을 사용하며, 추가 제공처의 실계정 응답은 아직 NOT_RUN입니다. [연결 검사 기록](docs/implementation/deepseek-services-20261031.md)을 참조하세요.
+
 ## 바로 실행
 
 로컬 참고 파일의 읽기 전용 첨부와 연결·권한 현황도 지원합니다. [구현·검증 기록](docs/implementation/local-materials-capabilities-20261030.md)과 [설정 절차](docs/operations-runbook.md)를 확인하세요. 로컬 파일 공유는 기본 비활성이며 별도 `WJ_MATERIAL_ROOTS`와 사용자의 첨부 선택이 필요합니다.
