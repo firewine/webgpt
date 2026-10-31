@@ -1,8 +1,8 @@
 # 상주 운영 단계별 변경·이관·수락·롤백
 
-> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-31 PR #21 사용자 병합 후 페이즈 7 구현/검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
+> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-31 PR #22 사용자 병합 후 페이즈 8 통합 검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
 
-설계 근거 C와 계획 P는 [개정 요약](./plan-revision-20261030.md)으로 고정한다. 구현 순서·상태는 맨 위 링크의 SSOT를 따른다. R1~R4는 아래 계약으로 구현하고 [R1 증거](./implementation/phase1-resident-foundation-20261030.md)·[R2 증거](./implementation/phase2-resident-runtime-20261030.md)·[R3 증거](./implementation/phase3-chatroom-gui-20261030.md)·[R4 증거](./implementation/phase4-browser-discovery-20261030.md)를 남겼다. R3-E의 실제 기기 부분과 R4-D 실계정 왕복은 UNVERIFIED이며 자동 검사와 구분한다. R5/R6는 아래 구현 대응과 [R5 증거](./implementation/phase5-open-work-queue-20261030.md)·[R6 증거](./implementation/phase6-work-execution-20261030.md)를 따른다. R7의 실제 타입·파일·심볼·endpoint·검사는 아래 구현 대응과 [R7 증거](./implementation/phase7-shared-wiki-20261031.md)에 기록했다. R8는 아직 **제안**이다. 아래 원 설계의 제안 표기는 이력을 유지하며 구현 판정은 각 증거를 따른다. 기존 파일/심볼의 E 근거표는 C 기준이며 실계정/DOM/운영 호스트 적합성은 UNVERIFIED다.
+설계 근거 C와 계획 P는 [개정 요약](./plan-revision-20261030.md)으로 고정한다. 구현 순서·상태는 맨 위 링크의 SSOT를 따른다. R1~R4는 아래 계약으로 구현하고 [R1 증거](./implementation/phase1-resident-foundation-20261030.md)·[R2 증거](./implementation/phase2-resident-runtime-20261030.md)·[R3 증거](./implementation/phase3-chatroom-gui-20261030.md)·[R4 증거](./implementation/phase4-browser-discovery-20261030.md)를 남겼다. R3-E의 실제 기기 부분과 R4-D 실계정 왕복은 UNVERIFIED이며 자동 검사와 구분한다. R5/R6는 아래 구현 대응과 [R5 증거](./implementation/phase5-open-work-queue-20261030.md)·[R6 증거](./implementation/phase6-work-execution-20261030.md)를 따른다. R7의 실제 타입·파일·심볼·endpoint·검사는 아래 구현 대응과 [R7 증거](./implementation/phase7-shared-wiki-20261031.md)에 기록했다. R8의 통합/복구/부하 fixture와 남은 무인 전환/실환경 조건은 [R8 증거](./implementation/resident-acceptance.md)를 따른다. 아래 원 설계의 제안 표기는 이력을 유지하며 구현 판정은 각 증거를 따른다. 기존 파일/심볼의 E 근거표는 C 기준이며 실계정/DOM/운영 호스트 적합성은 UNVERIFIED다.
 
 ## 1. 공통 변경·검증 원칙
 
@@ -185,15 +185,17 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 
 **계약/모델/이관:** API/schema 추가 변경 없음. R1 fixture로부터 R7까지 이관한 상태와 기존 main v1 데이터를 각각 검사한다. 8 gate의 숫자 증거를 연결한다. 실제 계정/호스트 수락은 사용자 직접 인증·별도 허용 후 수행하며 이번 문서 작업에서 시도하지 않는다.
 
+**실행 대응:** `tests/resident-e2e.test.mjs`·`resident-load.test.mjs`·`resident-wiki-crash.test.mjs`·`tests/browser/resident-e2e.test.mjs`를 추가하고 기존 테스트를 모두 유지했다. 제품 코드/API/schema 변경0이다. [50개 manifest](./implementation/resident-acceptance-manifest.json)와 [실행·이관·부하·복귀 기록](./implementation/resident-acceptance.md)에 자동/실환경을 구분했다. R8-A는 자동 업무→Wiki/다음 발화와 기존 owner focus/복귀만 확인됐고 완전 무인 topic 시작은 미구현이다. 이를 통과로 바꾸지 않고 미승인 제안으로 분리했다. 아래 수락 문구·숫자를 승인 없이 바꾸지 않았다.
+
 | 수락 ID | 숫자·증거 | 방법(후속 실행) |
 | --- | --- | --- |
-| R8-A | 3모의 참여자·1방 on→사용자 추가 지시 없이 자유 대화→업무1 pickup→결과/반려1회→재작업/완료→Wiki1갱신→다음 발화 인용→topic1회→같은 방 복귀 | 제안 e2e의 message/task/job/wiki ID 연결 로그 |
-| R8-B | 8단계별 crash/off/budget/scope negative gate 전부 PASS, provider 동시≤1·중복 외부 start0·비공개 유출0 | fixture 및 기존 회귀 검사·수락 manifest |
-| R8-C | 4viewport·2탭·새로고침/재접속 후 이력·읽기 위치·예산/승인·단일dispatch 유지 | browser 검사·화면·카운터 |
+| R8-A | 3모의 참여자·1방 on→사용자 추가 지시 없이 자유 대화→업무1 pickup→결과/반려1회→재작업/완료→Wiki1갱신→다음 발화 인용→topic1회→같은 방 복귀 | UNVERIFIED(전체) · 자동 업무/Wiki와 owner focus1/복귀1의 ID 로그 PASS, 무인 topic 결정 대기 |
+| R8-B | 8단계별 crash/off/budget/scope negative gate 전부 PASS, provider 동시≤1·중복 외부 start0·비공개 유출0 | PASS · 전체 회귀+Wiki 실제 SIGKILL3·수락 manifest |
+| R8-C | 4viewport·2탭·새로고침/재접속 후 이력·읽기 위치·예산/승인·단일dispatch 유지 | PASS(Chrome fixture) · 2탭/4폭·SSE/읽기 위치·중복 승인409·job/turn1 |
 | R8-D | 실제 GPT2계정+DeepSeek, dot/Muse 각각 기존 thread 포함 흐름. 실제 읽기 Codex와 허용된 쓰기 gate 별도 | 사용자 허용 뒤 receipt/카탈로그·stream/usage·검사·화면 기록. 현재 전부 UNVERIFIED |
-| R8-E | G0→flag off/legacy 화면 복귀→다시 resident on에서 기존/새 원문·commands/receipt 누락0·재전송0 | rollback/re-enable fixture 로그 |
-| R8-F | 1,000메시지/100업무/100Wiki fixture에서 /api/state 새 raw 본문 노출0·history limit=50 초과0·본문 원문 누락0, state transaction 비용 측정값 기록 | 제안 부하 fixture·응답 크기/시간/heap 로그. 실제 장기 호스트 규모는 UNVERIFIED |
-| R8-G | ready/review 업무·Wiki·규칙·예산 actor 인계1회+중복 등록2회 뒤 원래 ID/예산 보존·확정 report의 다른 담당자 리뷰 가능, task/job 재전송0·새 scope 확대0 | 제안 resident 인계 e2e·checkpoint/cursor/lease 로그 |
+| R8-E | G0→flag off/legacy 화면 복귀→다시 resident on에서 기존/새 원문·commands/receipt 누락0·재전송0 | PASS(fixture) · 동일 DB flag off/re-enable·legacy paused·각100tick 호출0 |
+| R8-F | 1,000메시지/100업무/100Wiki fixture에서 /api/state 새 raw 본문 노출0·history limit=50 초과0·본문 원문 누락0, state transaction 비용 측정값 기록 | PASS(fixture) · 50개 요청 page·모든 원문/상태 bytes/12개 transaction·heap JSON. 실제 장기 호스트 UNVERIFIED |
+| R8-G | ready/review 업무·Wiki·규칙·예산 actor 인계1회+중복 등록2회 뒤 원래 ID/예산 보존·확정 report의 다른 담당자 리뷰 가능, task/job 재전송0·새 scope 확대0 | PASS(fixture) · 인계/같은 명령2·room 멤버 중복 등록2·예산/ID·다른 리뷰·옛 grant 거절 |
 
 **롤백:** 앞 단계별 G0를 조합한다. 부분 PASS로 실계정/쓰기/Wiki/상주 전체 완료를 표시하지 않는다. 실패 기능만 off/read-only/blocked로 남기고 기존 연결·토론·기록을 보존한다. 남은 UNVERIFIED와 사용자 결정은 릴리스 차단 조건으로 기록한다.
 

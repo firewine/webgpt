@@ -1,0 +1,13 @@
+{
+  "roomId": "room_49c2c45b-c9a6-4486-a03b-2bc6e1dffde5",
+  "taskId": "work_b7835d42-4669-426e-bb0a-502e449195a2",
+  "readyId": "work_0fa20c4c-51da-4b85-b1e4-9493fbf47a2f",
+  "checkpointId": "resident_checkpoint_ff76a28c-9d41-4601-a6b6-f41c2f086d4c",
+  "generation": 2,
+  "duplicateMemberRegistrations": 2,
+  "duplicateHandoffCommands": 2,
+  "originalReportDigest": "dcab7a212ff000737f71c8a64f95c5e60d9b9c1df0aa5d270f935eada2d6f1ad",
+  "reviewer": "fake-b",
+  "budgetReset": false,
+  "codexJobs": 0
+}
