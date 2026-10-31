@@ -13,6 +13,8 @@ import type { WorkExecutionBridge } from './work-execution.js';
 import type { Wiki } from './wiki.js';
 import { assertWikiSnapshots, contextWiki, rememberWiki, wikiHistoryAllowed } from './wiki-policy.js';
 import { ResidentFocus, topicPolicy } from './resident-focus.js';
+import { failureObservation } from '../connections/completion-failure.js';
+import { snapshotMember } from './settings.js';
 
 type Emit = Parameters<Parameters<Store['transact']>[0]>[1];
 const LIVE = ['prepared', 'running', 'unconfirmed'];
@@ -130,7 +132,7 @@ export class ResidentRunner {
       if (!wikiHistoryAllowed(state, room, context)) { room.observedStatus = 'blocked'; room.reason = 'wiki_context_requires_handoff'; room.nextEligibleAt = null; emit({ type: 'resident.blocked', discussionId: null, data: { roomId: room.id, reason: room.reason } }); return null; }
       if (prompt.length + context.history.reduce((n, h) => n + h.content.length, 0) > 180_000) { room.observedStatus = 'blocked'; room.reason = 'context_limit_requires_handoff';
         emit({ type: 'resident.status_changed', discussionId: null, data: { roomId: room.id, status: room.observedStatus, reason: room.reason } }); return null; }
-      const turn: ResidentTurn = { id: id('resident_turn'), roomId: room.id, participantId: participant.id, participant: structuredClone(participant),
+      const turn: ResidentTurn = { id: id('resident_turn'), roomId: room.id, participantId: participant.id, participant: snapshotMember(participant),
         generation: context.generation, epoch: room.epoch, status: 'prepared', prompt, promptDigest: digest(prompt), history: structuredClone(context.history),
         basisSequence: room.lastMessageSequence, text: '', receipt: null, reply: null, usage: null, startedAt: new Date(this.clock()).toISOString(), finishedAt: null,
         error: null, repairOf: repair?.id ?? null, messageId: null, proposalsStatus: 'none', workSeatVersion: room.seats?.find(s => s.participantId === participant.id)?.version ?? 0, wikiCitations,
@@ -160,6 +162,7 @@ export class ResidentRunner {
       if (outcome.result) this.accept(state, room, turn, outcome.result, emit);
       else {
         turn.status = outcome.uncertain ? 'unconfirmed' : 'failed'; turn.error = code(outcome.failure);
+        Object.assign(turn, failureObservation(outcome.failure));
         const member = room.members.find(m => m.participantId === turn.participantId);
         if (turn.error === 'dispatch_scope_changed') { turn.status = 'stale'; turn.proposalsStatus = 'stale'; }
         else if (member) member.blockedReason = turn.error;

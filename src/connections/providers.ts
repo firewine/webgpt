@@ -5,11 +5,12 @@ import type { Member, ModelChoice, Context, BrowserBinding } from '../workspace/
 import type { OAuthService } from './oauth.js';
 import { AppError, id, object, string } from '../workspace/util.js';
 import { sse } from './stream.js';
-import { reasoningEffort, reasoningEfforts, modelEffort, oauthKind, participantReasoning } from '../workspace/settings.js';
+import { reasoningEffort, reasoningEfforts, modelEffort, oauthKind, participantReasoning, participantOutput, DEFAULT_DEEPSEEK_OUTPUT_TOKENS } from '../workspace/settings.js';
 import { deepSeekEndpoint, deepSeekService, deepSeekReasoning, deepSeekThinking } from './deepseek-services.js';
 import { Anthropic } from './anthropic.js';
 import { readCodexJson, type CodexOAuth } from './codex-oauth.js';
 import { modelCatalogError } from './model-catalog-error.js';
+import { CompletionFailure } from './completion-failure.js';
 
 export interface Completion { text: string; receipt: string | null; usage: { input: number; output: number } | null }
 export interface Hooks { dispatched(): void; receipt(id: string): void; delta(text: string): void }
@@ -39,6 +40,7 @@ export class Providers {
       id: string(oauthKind(c.kind) ? x.slug : x.id, 200), label: string(oauthKind(c.kind) ? x.display_name : x.id, 200),
       ...(c.kind === 'codex-oauth' ? { reasoningEfforts: (Array.isArray(x.supported_reasoning_levels) ? x.supported_reasoning_levels.map(object).map(v => v.effort) : []).filter((v): v is typeof reasoningEfforts[number] => reasoningEfforts.includes(v as typeof reasoningEfforts[number])) } : {}),
       ...(c.kind === 'deepseek' ? deepSeekReasoning(c.apiService, x) : {}),
+      ...(c.kind === 'deepseek' && typeof x.max_output_tokens === 'number' && Number.isSafeInteger(x.max_output_tokens) && x.max_output_tokens > 0 ? { outputTokenLimit: x.max_output_tokens } : {}),
     }));
     if (c.kind === 'codex-oauth' && !models.length) throw new AppError('model_discovery_failed', 502);
     if (c.kind !== 'deepseek' || deepSeekService(c.apiService) === 'deepseek') return models;
@@ -48,6 +50,7 @@ export class Providers {
   }
   async complete(input: CompletionInput): Promise<Completion> {
     const { participant: p, signal, hooks } = input;
+    if (p.kind !== 'deepseek' && p.maxOutputTokens !== undefined) throw new AppError('output_limit_requires_deepseek', 409);
     if (p.kind === 'fake') {
       hooks.dispatched(); const receipt = id('fake'); hooks.receipt(receipt);
       await delay(this.fakeDelay, undefined, { signal });
@@ -73,10 +76,11 @@ export class Providers {
     const oauth = oauthKind(p.kind);
     if (codex) modelEffort(c, p.modelId, p.reasoningEffort);
     const thinking = p.kind === 'deepseek' ? deepSeekThinking(c.apiService, participantReasoning(c, p.modelId, p.reasoningEffort).reasoningEffort) : {};
+    const output = p.kind === 'deepseek' ? participantOutput(c, p.modelId, p.maxOutputTokens).maxOutputTokens ?? DEFAULT_DEEPSEEK_OUTPUT_TOKENS : null;
     const endpoint = codex ? 'https://chatgpt.com/backend-api/codex/responses' : oauth ? 'https://api.openai.com/v1/responses' : deepSeekEndpoint(c.apiService, 'chat/completions');
     const body = codex ? { model: p.modelId, instructions, input: history.map(h => ({ type: 'message', role: h.role, content: [{ type: h.role === 'assistant' ? 'output_text' : 'input_text', text: h.content }] })), store: false, stream: true, reasoning: { effort: reasoningEffort(p.reasoningEffort) } } : oauth
       ? { model: p.modelId, instructions, input: history, store: false, stream: true, reasoning: { effort: reasoningEffort(p.reasoningEffort) } }
-      : { model: p.modelId, messages: [{ role: 'system', content: instructions }, ...history], stream: true, stream_options: { include_usage: true }, max_tokens: 4096, ...thinking };
+      : { model: p.modelId, messages: [{ role: 'system', content: instructions }, ...history], stream: true, stream_options: { include_usage: true }, max_tokens: output, ...thinking };
     signal.throwIfAborted(); hooks.dispatched();
     let res: Response;
     try { res = await this.request(endpoint, {
@@ -90,7 +94,7 @@ export class Providers {
       }
       throw new AppError(res.status === 401 || res.status === 403 ? 'auth_required' : res.status === 429 ? 'usage_limit' : 'provider_http_error', 502, res.status >= 500);
     }
-    let text = ''; let receipt: string | null = null; let usage: Completion['usage'] = null; let completed = false; let done = false;
+    let text = ''; let receipt: string | null = null; let usage: Completion['usage'] = null; let completed = false; let done = false; let finishReason: unknown = null;
     try {
       for await (const data of sse(res)) {
         if (data === '[DONE]') { done = true; continue; }
@@ -113,12 +117,19 @@ export class Providers {
             const choice = object(entry); if (choice.index !== 0) continue;
             const delta = choice.delta ? object(choice.delta) : {};
             if (typeof delta.content === 'string') { text += delta.content; hooks.delta(delta.content); }
-            if (choice.finish_reason === 'stop') completed = true;
-            else if (choice.finish_reason !== null && choice.finish_reason !== undefined) throw new AppError('response_not_completed', 502);
+            if (choice.finish_reason !== null && choice.finish_reason !== undefined) {
+              if (finishReason !== null && finishReason !== choice.finish_reason) throw new AppError('stream_unconfirmed', 502, true);
+              finishReason = choice.finish_reason; completed = finishReason === 'stop';
+            }
           }
         }
       }
-    } catch (error) { if (error instanceof AppError) throw error; throw new AppError('stream_unconfirmed', 502, true); }
+    } catch (error) {
+      if (!oauth && (finishReason !== null || usage !== null) && (!(error instanceof AppError) || ['stream_unconfirmed', 'response_not_completed'].includes(error.code))) throw new CompletionFailure(error instanceof AppError && error.code === 'response_not_completed' ? 'response_not_completed' : 'stream_unconfirmed', finishReason, usage, !(error instanceof AppError) || error.uncertain);
+      if (error instanceof AppError) throw error; throw new AppError('stream_unconfirmed', 502, true);
+    }
+    if (!oauth && finishReason !== null && finishReason !== 'stop') throw new CompletionFailure(done ? 'response_not_completed' : 'stream_unconfirmed', finishReason, usage, !done);
+    if (!oauth && (!completed || !done)) throw new CompletionFailure('stream_unconfirmed', finishReason, usage, true);
     if (!completed || (!oauth && !done)) throw new AppError('stream_unconfirmed', 502, true);
     if (!text.trim()) throw new AppError('empty_response', 502);
     return { text, receipt, usage };

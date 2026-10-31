@@ -19,6 +19,9 @@ let deviceTimer = 0; let deviceLogin: { connectionId: string; attemptId: string 
 let deviceSequence = 0;
 function effortLabel(value: string): string { return [...effortOptions, ...deepseekEffortOptions].find(o => o.value === value)?.label ?? value; }
 function savedEffort(p: Member): string { return p.reasoningEffort ?? (p.kind === 'deepseek' ? 'default' : 'xhigh'); }
+function outputMaximum(c: Connection | undefined, modelId: string): number { const cap = c?.models.find(m => m.id === modelId)?.outputTokenLimit; return typeof cap === 'number' && Number.isSafeInteger(cap) && cap > 0 ? Math.min(32768, cap) : 32768; }
+function outputNote(c: Connection | undefined, modelId: string): string { const cap = c?.models.find(m => m.id === modelId)?.outputTokenLimit; return `비우면 기본 4,096토큰. 앱 입력 범위 512~32,768. ${cap ? '모델 목록 최대 출력 ' + cap.toLocaleString('ko-KR') + '토큰.' : '제공처 최대 출력은 확인되지 않았습니다.'} 사고 깊이는 별도로 유지합니다.`; }
+function outputValue(value: string): number | 'default' { return value.trim() === '' ? 'default' : Number(value); }
 function effortChoices(c: Connection | undefined, modelId: string): { value: string; label: string }[] {
   const allowed = c?.models.find(m => m.id === modelId)?.reasoningEfforts ?? [];
   return c?.kind === 'deepseek' ? deepseekEffortOptions.filter(o => o.value === 'default' || allowed.some(v => v === o.value)) : c?.kind === 'codex-oauth' ? effortOptions.filter(o => allowed.some(v => v === o.value)) : effortOptions;
@@ -33,6 +36,7 @@ const states: Record<string, string> = { running: '진행 중', paused: '일시�
   prepared: '전송 준비', pending: '대기', failed: '실패', unconfirmed: '결과 미확인', stale: '이전 조건의 응답', connected: '연결됨', auth_required: '로그인 필요', unverified: '미확인', error: '연결 오류',
   observed: '자료 관측됨', reported: '참여자 보고', not_run: '미실행', queued: '실행 대기', blocked_approval: '승인 대기', reconciling: '실행 확인 필요', interrupted: '중단됨', ready: '준비됨', fixture: '모의', not_applicable: '해당 없음', waiting: '대기' };
 const errors: Record<string, string> = { authentication_required: '접속 키를 확인해 주세요.', root_workflow_busy: '진행 중인 토의를 먼저 완료하거나 취소해 주세요.', two_participants_required: '참여자를 2명 이상 선택해 주세요.',
+  invalid_output_limit: '출력 한도는 512~32,768 범위의 정수로 지정하세요.', output_limit_requires_deepseek: '출력 한도 설정은 DeepSeek 연결에서 지원합니다.', output_limit_not_supported: '모델 목록이 보고한 최대 출력을 넘었습니다. 출력 한도를 직접 조절해 주세요.', participant_output_requires_idle: '진행·미확정 발언을 먼저 확인한 뒤 출력 한도를 변경하세요.',
   device_login_unavailable: 'ChatGPT 보안 설정 또는 workspace에서 기기 코드 로그인을 허용해 주세요.', device_login_expired: '기기 코드가 만료됐습니다. 같은 계정에서 새 로그인을 시작해 주세요.', device_login_interrupted: '서버가 재시작됐거나 이전 요청이 끝났습니다. 같은 계정에서 다시 시작해 주세요.', device_login_start_failed: '기기 코드를 받지 못했습니다. 연결 상태를 확인해 주세요.', device_login_poll_failed: '로그인 승인 상태를 확인하지 못했습니다.', codex_version_required: '설정한 Codex 실행 파일의 버전을 확인하지 못했습니다.', codex_refresh_failed: '이 계정의 인증을 갱신하지 못했습니다. 연결 상태를 확인해 주세요.',
   signin_pending: '이미 시작한 로그인이 있습니다. 서버 Chrome 화면에서 진행해 주세요.', signin_account_pending: '진행 중 로그인과 다른 계정을 지정했습니다. 기존 로그인을 마치거나 이 계정을 로그아웃한 뒤 다시 시작해 주세요.',
   account_email_required: '로그인할 웹 GPT 계정 이메일을 입력해 주세요.', invalid_account_email: '웹 GPT 계정 이메일을 확인해 주세요.',
@@ -177,13 +181,15 @@ function updateEffort(): void {
   else if (c?.kind === 'codex-oauth' && (changed || !allowed.includes(previous))) select.value = effortOptions.filter(e => allowed.includes(e.value)).at(-1)?.value ?? '';
   else if (gptKind(c?.kind) && (changed || !allowed.includes(previous))) select.value = 'xhigh';
   const source = c?.models.find(m => m.id === modelId)?.reasoningSource;
+  const output = $<HTMLInputElement>('#participant-output'); output.disabled = c?.kind !== 'deepseek'; $('#participant-output-controls').hidden = output.disabled; output.max = String(outputMaximum(c, modelId)); if (changed) output.value = ''; $('#participant-output-note').textContent = outputNote(c, modelId);
   $('#participant-effort-note').textContent = c?.kind === 'deepseek' ? source ? `제공처 기본값은 요청을 덮어쓰지 않습니다. ${source === 'catalog' ? '실제 모델 목록' : '제공처 공식 문서'}에서 확인한 값만 선택합니다.` : '사고 설정 지원 정보가 없어 제공처 기본값만 표시합니다. 연결 카드에서 모델 확인을 눌러 주세요.' : c?.kind === 'browser' ? '기존 dot·Muse의 모델과 사고 깊이는 원래 서비스에서 조절합니다.' : c?.kind === 'codex-oauth' ? '이 계정의 모델 목록에서 확인한 사고 깊이만 선택합니다. Extra high를 지원하면 기본으로 사용합니다.' : gptKind(c?.kind) ? '기본 Extra high. 모델이 지원하지 않는 값은 오류로 표시합니다.' : '이 연결은 제공처의 기본 사고 설정을 사용합니다.';
 }
 function control(body: Record<string, unknown>): Promise<unknown> { if (!current) return Promise.resolve(); return api(`/api/discussions/${current.id}/control`, { expectedRevision: current.revision, ...body }).then(refresh); }
 function renderDiscussion(): void {
   if (!current) return; const d = current;
   $('#discussion-title').textContent = d.topic; $('#discussion-meta').textContent = `DISCUSSION / REVISION ${d.revision} · ${time(d.createdAt)}`;
-  const stateLine = $('#discussion-state'); stateLine.replaceChildren(badge(d.status), node('span', `요청 ${d.used.requests}/${d.limits.maxRequests} · 토큰 ${d.used.inputTokens + d.used.outputTokens} · 사용량 미제공 ${d.used.unknownUsage}회`, 'small muted'));
+  const unknownUsage = Math.max(d.used.unknownUsage, d.turns.filter(t => t.dispatchStartedAt && !['prepared', 'running'].includes(t.status) && t.usage === null).length);
+  const stateLine = $('#discussion-state'); stateLine.replaceChildren(badge(d.status), node('span', `요청 ${d.used.requests}/${d.limits.maxRequests} · 토큰 ${d.used.inputTokens + d.used.outputTokens} · 사용량 미확인 ${unknownUsage}회`, 'small muted'));
   if (d.reason) stateLine.append(node('span', errors[d.reason] ?? d.reason, 'small muted'));
   const track = $('#phase-track'); track.replaceChildren(); const order = Object.keys(phases) as Phase[];
   for (const [index, phase] of order.entries()) track.append(node('div', `${String(index + 1).padStart(2, '0')} ${phases[phase]}`, `phase-step ${phase === d.phase ? 'current' : index < order.indexOf(d.phase) ? 'past' : ''}`));
@@ -200,6 +206,12 @@ function renderDiscussion(): void {
       card.append(button('사고 깊이 변경', () => { if (!['paused', 'blocked'].includes(d.status)) { announce('토의를 일시정지하고 현재 발언이 끝난 뒤 변경하세요.', true); return; }
         modal('이 토의의 사고 깊이', [{ name: 'reasoningEffort', label: '사고 깊이', options: effortChoices(state?.connections.find(c => c.id === p.connectionId), p.modelId), value: savedEffort(p) }], values => control({ action: 'configure_participant', participantId: p.id, ...values }), '완료된 발언은 보존하고 이후 발언부터 적용합니다.'); }));
     }
+    if (p.kind === 'deepseek') {
+      card.append(node('p', '출력 한도 · ' + (p.maxOutputTokens ?? 4096).toLocaleString('ko-KR') + '토큰', 'small muted'));
+      card.append(button('출력 한도 변경', () => { if (!['paused', 'blocked'].includes(d.status) || d.turns.some(t => ['prepared', 'running', 'unconfirmed'].includes(t.status))) { announce('토의를 일시정지하고 진행·미확정 응답을 확인한 뒤 변경하세요.', true); return; }
+        const c = state?.connections.find(c => c.id === p.connectionId);
+        modal('이 토의의 출력 한도', [{ name: 'maxOutputTokens', label: '출력 한도 (토큰)', required: false, number: { min: 512, max: outputMaximum(c, p.modelId) }, value: p.maxOutputTokens?.toString() ?? '' }], values => control({ action: 'configure_participant', participantId: p.id, maxOutputTokens: outputValue(values.maxOutputTokens ?? '') }), outputNote(c, p.modelId) + ' 완료된 발언은 보존하고 이후 발언부터 적용합니다.'); }));
+    }
     const job = state?.jobs.filter(j => j.discussionId === d.id && d.tasks.some(t => t.id === j.taskId && t.participantId === p.id)).at(-1); const toolState = job?.status ?? context.observation.tool;
     card.append(node('div', `연결 ${states[context.observation.connection] ?? context.observation.connection} / 응답 ${states[context.observation.response] ?? context.observation.response}\n도구 ${states[toolState] ?? toolState} / 업무 ${states[d.status] ?? d.status}`, 'observations')); members.append(card); }
   for (const el of document.querySelectorAll<HTMLElement>('[data-tab]')) el.classList.toggle('selected', el.dataset.tab === tab);
@@ -213,11 +225,12 @@ function renderTimeline(target: HTMLElement, d: Discussion): void {
   if (!d.turns.length) target.append(node('div', '참여자의 첫 제안을 기다리고 있습니다.', 'empty'));
   for (const t of d.turns) {
     const card = node('article', '', 'turn'); const head = node('header', '', 'turn-header'); const who = node('div', '', 'inline'); who.append(node('strong', labelFor(t.participantId)), node('span', `${phases[t.phase]} · ${t.round}회`, 'muted')); head.append(who, badge(t.status));
-    card.append(head, node('div', (t.reply?.text ?? t.text) || '응답을 기다리고 있습니다…', 'reply'));
+    card.append(head, node('div', (t.reply?.text ?? t.text) || (t.status === 'failed' ? '완료된 응답이 없습니다. 실패 기록을 확인해 주세요.' : t.status === 'unconfirmed' ? '응답 수신 여부를 원래 요청과 대조해야 합니다.' : '응답을 기다리고 있습니다…'), 'reply'));
     if (t.reply?.uncertainty.length) card.append(node('div', t.reply.uncertainty.join('\n'), 'uncertainty'));
     if (t.reply?.reviews.length) { const reviews = node('div'); for (const r of t.reply.reviews) reviews.append(node('p', `${r.stance === 'challenge' ? '반론' : r.stance === 'support' ? '지지' : '미확인'} · ${d.claims.find(c => c.id === r.claimId)?.text ?? r.claimId}\n${r.reason}`, 'small')); card.append(reviews); }
-    card.append(node('footer', `revision ${t.revision} · 문맥 ${t.generation} · ${time(t.startedAt)}${t.reasoningEffort ? ' · 요청 사고 깊이 ' + effortLabel(t.reasoningEffort) : ''}${t.error ? ` · ${t.error}` : ''}`));
-    card.append(details('원본 응답과 수신 기록', JSON.stringify({ turnId: t.id, receipt: t.receipt, usage: t.usage, evidenceIds: t.evidenceIds, promptDigest: t.promptDigest, raw: t.text }, null, 2), t.id)); target.append(card);
+    card.append(node('footer', `revision ${t.revision} · 문맥 ${t.generation} · ${time(t.startedAt)}${t.reasoningEffort ? ' · 요청 사고 깊이 ' + effortLabel(t.reasoningEffort) : ''}${t.error ? ` · ${t.error}` : ''}${t.providerFinishReason ? ' · ' + ({ stop: '제공처 stop 수신 · 스트림 완료 미확정', length: '응답 출력 한도 도달', content_filter: '제공처 필터로 종료', tool_calls: '도구 호출로 종료', function_call: '함수 호출로 종료', other: '제공처의 기타 종료' }[t.providerFinishReason]) : ''}`));
+    if (t.maxOutputTokens !== undefined) card.append(node('p', '요청 출력 한도 · ' + t.maxOutputTokens.toLocaleString('ko-KR') + '토큰', 'small muted'));
+    card.append(details('원본 응답과 수신 기록', JSON.stringify({ turnId: t.id, receipt: t.receipt, usage: t.usage, maxOutputTokens: t.maxOutputTokens ?? null, evidenceIds: t.evidenceIds, promptDigest: t.promptDigest, raw: t.text }, null, 2), t.id)); target.append(card);
   }
 }
 function renderComparison(target: HTMLElement, d: Discussion): void {
@@ -293,12 +306,13 @@ function renderConnections(): void {
   for (const p of state.participants.filter(p => p.kind !== 'fake')) {
     const connection = state.connections.find(c => c.id === p.connectionId); const card = node('article', '', 'connection-card');
     card.append(node('h3', p.label), node('p', '계정 · ' + (connection?.email ?? connection?.browser?.accountLabel ?? connection?.label ?? '연결 삭제됨 · 이전 대화 기록 보존'), 'small muted'), node('p', p.modelId + (reasoningKind(p.kind) ? ' · ' + effortLabel(savedEffort(p)) : ''), 'small'));
+    if (p.kind === 'deepseek') card.append(node('p', '출력 한도 · ' + (p.maxOutputTokens ?? 4096).toLocaleString('ko-KR') + '토큰', 'small'));
     card.append(button('토커 설정 변경', () => { if (connection?.status !== 'connected') { announce('먼저 해당 계정을 로그인하고 모델을 확인해 주세요.', true); return; }
       const form = $<HTMLFormElement>('#participant-form'); let hidden = form.elements.namedItem('participantId') as HTMLInputElement | null;
       if (!hidden) { hidden = node('input'); hidden.type = 'hidden'; hidden.name = 'participantId'; form.append(hidden); } hidden.value = p.id;
       $<HTMLSelectElement>('#participant-connection').value = p.connectionId!; updateModels(); $<HTMLSelectElement>('#participant-model').value = p.modelId;
       (form.elements.namedItem('label') as HTMLInputElement).value = p.label; (form.elements.namedItem('role') as HTMLInputElement).value = p.role;
-      $<HTMLSelectElement>('#participant-effort').value = savedEffort(p); updateEffort(); $('#participant-save').textContent = '토커 설정 저장'; $('#participant-edit-cancel').hidden = false; form.scrollIntoView({ behavior: 'smooth' });
+      $<HTMLSelectElement>('#participant-effort').value = savedEffort(p); updateEffort(); $<HTMLInputElement>('#participant-output').value = p.maxOutputTokens?.toString() ?? ''; $('#participant-save').textContent = '토커 설정 저장'; $('#participant-edit-cancel').hidden = false; form.scrollIntoView({ behavior: 'smooth' });
     })); participants.append(card);
   }
   $('#browser-state').textContent = `${state.capabilities.browserConfigured ? 'Chrome 명령 설정됨' : 'Chrome 명령 미설정'} · ${state.browserPaused ? '수동 조작 중 · 자동 입력 잠김' : '자동 입력 가능'} · ${state.capabilities.noVncConfigured ? '화면 연결 설정됨' : '화면 연결 미설정'}`;
@@ -368,12 +382,13 @@ function renderJobs(): void {
       for (const activity of job.activities) card.append(details(`${activity.type} · ${activity.status}`, activity.text, `${job.id}:${activity.id}`)); if (job.error) card.append(node('p', job.error, 'small muted')); target.append(card); }
   });
 }
-type Field = { name: string; label: string; multiline?: boolean; required?: boolean; secret?: boolean; email?: boolean; options?: { value: string; label: string }[]; value?: string };
+type Field = { name: string; label: string; multiline?: boolean; required?: boolean; secret?: boolean; email?: boolean; number?: { min: number; max: number }; options?: { value: string; label: string }[]; value?: string };
 let modalAction: ((values: Record<string, string>) => Promise<unknown>) | null = null;
 function modal(title: string, fields: Field[], action: (values: Record<string, string>) => Promise<unknown>, note?: string, submitLabel = '적용'): void {
   $<HTMLButtonElement>('#action-form button[type=submit]').textContent = submitLabel;
   $('#action-title').textContent = title; const target = $('#action-fields'); target.replaceChildren(); if (note) target.append(node('p', note, 'small muted'));
   for (const field of fields) { const label = node('label', field.label); const input = field.options ? node('select') : field.multiline ? node('textarea') : node('input'); input.name = field.name; input.required = field.required !== false; if (input instanceof HTMLTextAreaElement) input.rows = 6; else if (input instanceof HTMLInputElement && field.secret) { input.type = 'password'; input.autocomplete = 'off'; }
+    if (input instanceof HTMLInputElement && field.number) { input.type = 'number'; input.min = String(field.number.min); input.max = String(field.number.max); input.step = '1'; }
     if (input instanceof HTMLSelectElement && field.options) selectOptions(input, field.options.map(o => ({ id: o.value, label: o.label }))); if (field.value !== undefined) input.value = field.value; label.append(input); target.append(label); }
   for (const field of fields.filter(f => f.email)) (target.querySelector(`[name="${field.name}"]`) as HTMLInputElement).type = 'email';
   modalAction = action; $<HTMLDialogElement>('#action-dialog').showModal();
@@ -391,7 +406,7 @@ form('#codex-oauth-form', startDevice);
 form('#deepseek-form', async (values, el) => { try { await api('/api/connections/deepseek', values); await refresh(); } finally { (el.elements.namedItem('key') as HTMLInputElement).value = ''; } });
 form('#anthropic-form', async (values, el) => { try { await api('/api/connections/anthropic', values); await refresh(); } finally { (el.elements.namedItem('key') as HTMLInputElement).value = ''; } });
 function clearParticipantEdit(): void { $('#participant-form').querySelector('[name=participantId]')?.remove(); $<HTMLFormElement>('#participant-form').reset(); $('#participant-save').textContent = '참여자 등록'; $('#participant-edit-cancel').hidden = true; updateModels(); }
-form('#participant-form', async values => { const { participantId, ...settings } = values; await api(participantId ? '/api/participants/' + participantId : '/api/participants', settings); clearParticipantEdit(); announce(participantId ? '설정을 저장했습니다. 새 토의부터 적용합니다.' : '참여자를 등록했습니다.'); await refresh(); });
+form('#participant-form', async values => { const { participantId, ...settings } = values; await api(participantId ? '/api/participants/' + participantId : '/api/participants', { ...settings, ...(settings.maxOutputTokens !== undefined ? { maxOutputTokens: outputValue(settings.maxOutputTokens) } : {}) }); clearParticipantEdit(); announce(participantId ? '설정을 저장했습니다. 새 토의와 이후 상주 발언부터 적용합니다.' : '참여자를 등록했습니다.'); await refresh(); });
 $('#participant-edit-cancel').addEventListener('click', clearParticipantEdit);
 form('#browser-form', async (values, form) => {
   const { label, connectionId, threadSelector, threadAttribute, threadValue, threadJsonKey, sendAppearsAfterInput, ...binding } = values;

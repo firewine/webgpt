@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { loadWorkspaceConfig } from '../dist/server/workspace/config.js';
+import { readReadiness } from './readiness.mjs';
 const run = promisify(execFile); const root = fileURLToPath(new URL('../', import.meta.url));
 const config = loadWorkspaceConfig(); const action = process.argv[2];
 const quote = value => { if (/[\r\n\0]/.test(value)) throw new Error('Invalid unit path'); return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('%', '%%').replaceAll('$', '$$')}"`; };
@@ -23,6 +24,7 @@ try {
       catch { checks[name] = { installed: false }; }
     }
     try { checks.health = await (await fetch(`http://127.0.0.1:${process.env.WJ_PORT ?? '3000'}/health`, { signal: AbortSignal.timeout(2000) })).json(); } catch { checks.health = 'NOT_RUNNING'; }
+    checks.readiness = await readReadiness(config);
     console.log(JSON.stringify(checks, null, 2)); if (!checks.node.ok) process.exitCode = 1;
   } else if (action === 'install') {
     if (platform() !== 'linux') throw new Error('The user service installer supports Linux only.');

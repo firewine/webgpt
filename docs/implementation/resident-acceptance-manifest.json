@@ -583,7 +583,9 @@
       "evidence": "real_account_required",
       "files": [],
       "realStatus": "NOT_RUN",
-      "note": "Separate account preparation/permission required. Read-only operational metadata: OAuth auth_required, one browser connection (required dot and Muse pair incomplete), no DeepSeek/Codex binding, resident feature off. No credentials or account content collected."
+      "apiSubsetStatus": "FAIL",
+      "apiSubsetEvidence": "docs/implementation/assets/r8-real-api-20261031/summary.json",
+      "note": "Approved GPT2+Coral topic API subset ran 6 requests: 3 independent drafts and 2 GPT cross-reviews completed, then DeepSeek Max response_not_completed. Exact remote finish reason and failed usage were not retained by the running adapter. Full dot/Muse/resident/Codex flow remains NOT_RUN; original gate is unchanged. No credentials or original private conversations included."
     },
     {
       "id": "R8-E",

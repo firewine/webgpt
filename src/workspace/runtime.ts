@@ -15,7 +15,7 @@ import { BrowserBridge, validateBinding } from '../connections/browser.js';
 import { BrowserDiscovery } from '../connections/browser-discovery.js';
 import { DiscussionEngine, findDiscussion } from './engine.js';
 import { CodexExecutor } from '../execution/codex.js';
-import { participantReasoning } from './settings.js';
+import { participantReasoning, participantOutput } from './settings.js';
 import { LocalMaterials, materialMetadata } from './materials.js';
 import { inspectCapabilities, installedVersion } from './capabilities.js';
 import { ResidentStore } from './resident-store.js';
@@ -203,9 +203,13 @@ export class Workspace {
       if (!connection) throw new AppError('connection_not_ready', 409);
       const modelId = string(body.modelId, 200); if (!connection.models.some(m => m.id === modelId)) throw new AppError('model_not_available', 409);
       if (connection.kind === 'browser' && s.participants.some(p => p.id !== participantId && p.connectionId === connection.id)) throw new AppError('browser_participant_already_exists', 409);
+      const output = participantOutput(connection, modelId, body.maxOutputTokens, existing?.kind === connection.kind ? existing.maxOutputTokens : undefined);
+      if (existing?.kind === 'deepseek' && connection.kind === 'deepseek' && output.maxOutputTokens !== existing.maxOutputTokens &&
+          (s.discussions.some(d => d.turns.some(t => t.participantId === existing.id && ['prepared', 'running', 'unconfirmed'].includes(t.status))) ||
+           s.resident?.turns.some(t => t.participantId === existing.id && ['prepared', 'running', 'unconfirmed'].includes(t.status)))) throw new AppError('participant_output_requires_idle', 409);
       const member: Member = { id: participantId, label: string(body.label, 80), kind: connection.kind, connectionId: connection.id,
         modelId, role: string(body.role ?? '', 500, true),
-        ...participantReasoning(connection, modelId, body.reasoningEffort, existing?.kind === connection.kind ? existing.reasoningEffort : undefined) };
+        ...participantReasoning(connection, modelId, body.reasoningEffort, existing?.kind === connection.kind ? existing.reasoningEffort : undefined), ...output };
       if (existing) s.participants[s.participants.indexOf(existing)] = member; else s.participants.push(member);
       emit({ type: existing ? 'participant.updated' : 'participant.added', discussionId: null, data: { participantId } });
     }); return participantId;

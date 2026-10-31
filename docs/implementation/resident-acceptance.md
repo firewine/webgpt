@@ -34,6 +34,8 @@ engine.create는 transaction 밖에서 원래 requestId/input으로 호출한다
 
 ## 3. R8 수락
 
+2026-10-31 추가 실측: 별도 승인된 GPT2+CoralBricks 토의의 [API 부분 검증](./phase8-real-api-20261031.md)은 6요청·완료5/실패1이다. 실제 초기3응답과 GPT 상호 검토2·기록/dispatch/HTTPS는 확인했지만 DeepSeek 재검토에서 중단됐다. 실패 이후의 검증/수정/종합과 dot/Muse/Codex를 포함한 원래 R8-D 전체는 실행하지 않았다. 아래 gate의 원문/전체 판정은 완화하지 않고 부분 증거를 분리한다.
+
 | Gate | 결과·검증 방법 |
 |---|---|
 | R8-A | PASS(fixture) · `resident-e2e.test.mjs`의 원래 3인 전체 무인 흐름, owner focus0·topic1·복귀1 |
