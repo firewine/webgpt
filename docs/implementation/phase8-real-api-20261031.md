@@ -1,5 +1,7 @@
 # 페이즈 8 — 실제 GPT2·CoralBricks 토의 / 2026-10-31
 
+이 문서는 최초6요청 실패 당시 기록이다. PR #29 병합·별도 적용/테스트 승인 뒤 같은 토의를 이어간 [후속 재검증](./phase8-continuation-20261031.md)은 총12요청·PARTIAL/예산 소진으로 종료했다. 아래 원래 실패·usage 미보존 사실은 수정하지 않는다.
+
 **결과: 부분 성공 후 FAIL.** 3명의 독립 초안과 GPT2계정의 첫 상호 검토는 완료했으나 DeepSeek Max의 첫 상호 검토가 `response_not_completed`로 중단됐다. 6요청·4분15.545초, 완료5/실패1/미확정0이며 자동 재전송하지 않았다. [수치·보존/dispatch 증거](./assets/r8-real-api-20261031/summary.json), [실제 desktop 화면](./assets/r8-real-api-20261031/topic-desktop.png), [실제 mobile 비교](./assets/r8-real-api-20261031/comparison-mobile.png)를 함께 본다.
 
 ## 승인·실행 범위

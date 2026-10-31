@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-31",
+  "result": "SETUP_PASS_ROOM_OFF",
+  "approval": {
+    "deepseek": "high",
+    "roomSetup": true,
+    "profile": "standard",
+    "roomStart": false
+  },
+  "residentEnabled": true,
+  "profile": {
+    "durationMinutes": 60,
+    "budgets": {
+      "maxRequests": 24,
+      "maxTokens": 200000,
+      "maxToolJobs": 0,
+      "deadlineAt": "2026-10-31T11:07:03.046Z"
+    },
+    "pacing": {
+      "minIntervalMs": 30000,
+      "idleNudgeMs": 300000,
+      "passBackoffMs": 120000,
+      "sleepAfterPasses": 3
+    },
+    "autoTopic": false
+  },
+  "selectedParticipants": [
+    "GPT-A",
+    "GPT-B",
+    "DeepSeek-Coral"
+  ],
+  "deepseekOutputOverride": null,
+  "deepseekEffectiveOutput": 4096,
+  "checks": {
+    "oldTopicsPreserved": true,
+    "onlyGlobalDeepseekDepthChanged": true,
+    "deepseekHigh": true,
+    "deepseekOutputUnchanged": true,
+    "otherEnvPreserved": true,
+    "browserManualLockPreserved": true,
+    "jobsPreserved": true,
+    "bindingsPreserved": true,
+    "roomOff": true,
+    "profileMatches": true,
+    "residentModelCalls": 0,
+    "selectedMembers": 3,
+    "analysisOnlySeats": 3
+  },
+  "ui": {
+    "browserVersion": "156.0.8078.47",
+    "authenticatedPrivateHttps": true,
+    "viewports": [
+      1440,
+      390
+    ],
+    "selectedMembers": 3,
+    "selectedDeepseekDepth": "high",
+    "roomRemainsOff": true,
+    "reloadPreservedOff": true,
+    "standardSettingsVerified": true,
+    "maxRequests": 24,
+    "maxReportedTokens": 200000,
+    "minIntervalSeconds": 30,
+    "idleNudgeSeconds": 300,
+    "passBackoffSeconds": 120,
+    "sleepAfterPasses": 3,
+    "deadlineVisibleAndConsistent": true,
+    "mobileOverflow": false,
+    "pageErrors": 0,
+    "mutationRequests": 0,
+    "externalRequests": 0,
+    "screenOrDialogueExported": false
+  },
+  "originalTopic": "Same12requests/partial remains untouched; no budget reset or new topic.",
+  "realResidentFlow": "NOT_RUN",
+  "budgetSemantics": "reported token soft limit; a single request can exceed it; no cost estimate or automatic renewal"
+}
