@@ -2,6 +2,8 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
+2026-10-31 상주방 설정 승인·표준 선택: 기존 DeepSeek 토커를 High로 변경하고 resident flag 활성화·기존 additive 이관·GPT2+Coral3명/방 내부 analysis 역할·초기 표준24요청/보고20만 token/60분/30초 간격을 저장했다. [설정·실제 UI·보존 기록](./implementation/phase8-resident-setup-20261031.md): 방 off·모델 호출0·기존12요청 partial/과거 Max 기록·다른 설정 보존. 초기 종료 시각은20:07:03 KST이며 자동 갱신/자동 주제 시작·Codex 권한은 추가하지 않았다. U1/U2의 이번 방 설정을 선택한 것이고 미래 기본값/장기 운영 정책은 미정으로 유지한다. 실계정 상주 흐름·R8-D 전체 수락은 미완료다.
+
 2026-10-31 PR #29 병합 후 R8 재검증: main `2f3ca34e454f07c294c7e6eaa87cf052b7c79475`에서 사용자가 서버 적용·테스트를 별도 승인했다. 병합 버전을 빌드/서비스 재시작하고 기존 토의의 DeepSeek만 Max/출력16,384로 설정해 **추가6요청 모두 완료, 총12요청에서 PARTIAL**이다. 상호 검토2라운드·검증2개까지 진행했으나 기존100,000 보고 token soft limit이 소진됐다. 보고 합계123,013·마지막1요청의23,013 초과를 숨기지 않으며 과거 실패 usage는 UNKNOWN이다. 이후 호출0·예산/원문/기존6turn·다른 계정/방/실행 보존을 [실제 재검증 기록](./implementation/phase8-continuation-20261031.md)에 남겼다. 수정/종합·실제 dot/Muse/상주 업무·Wiki/Codex/실기기와 R8-D 전체는 미완료다. src/기존 계약·50 gate를 바꾸거나 새 페이즈를 만들지 않았다.
 
 2026-10-31 출력 한도 추가 승인: 사용자가 [DeepSeek 토커별 출력 한도 변경안](./reviews/deepseek-output-limit-impact-20261031.md)을 승인했다. R8 보완으로 기본4,096을 유지하고 512~32,768 범위의 명시 설정·실제 catalog 한도 검증·새 turn snapshot·등록/사후/일시정지 UI를 구현했다. [실행 기록](./implementation/deepseek-output-limits-20261031.md): Node326·Chrome/MCP52 PASS, FAIL/SKIP0. 기존 turn/업무 입력·Provider complete/Store·예산/승인/단일 dispatch·50 gate는 유지한다. ResidentTurn은 기존 participant snapshot을 재사용하고 별도 중복 필드/SQL 이관을 만들지 않는다. 승인 예상12~17파일·350~600줄 중 실제17파일이며 후속 R1~R8 영향·복귀는 승인 검토서를 따른다. 기존6요청/blocked 토의·운영 설정을 바꾸지 않았으며 배포·유료 재검증은 별도다.
