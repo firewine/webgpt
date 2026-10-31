@@ -625,5 +625,13 @@
       ],
       "note": "One accepted handoff, two duplicate handoff commands and two duplicate room-member registrations; no account/role/scope creation."
     }
-  ]
+  ],
+  "integratedValidation": {
+    "nodePass": 270,
+    "browserPass": 46,
+    "fail": 0,
+    "skip": 0,
+    "realAccounts": "NOT_RUN",
+    "evidence": "docs/implementation/codex-device-login-20261031.md"
+  }
 }

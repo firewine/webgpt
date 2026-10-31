@@ -7,15 +7,16 @@ import { Store } from './store.js';
 import { Vault } from './vault.js';
 import { AppError, digest, id, now, object, string } from './util.js';
 import { OAuthService } from '../connections/oauth.js';
+import { CodexOAuth } from '../connections/codex-oauth.js';
 import { Providers } from '../connections/providers.js';
 import { deepSeekService } from '../connections/deepseek-services.js';
 import { BrowserBridge, validateBinding } from '../connections/browser.js';
 import { BrowserDiscovery } from '../connections/browser-discovery.js';
 import { DiscussionEngine, findDiscussion } from './engine.js';
 import { CodexExecutor } from '../execution/codex.js';
-import { reasoningEffort } from './settings.js';
+import { modelEffort, oauthKind } from './settings.js';
 import { LocalMaterials, materialMetadata } from './materials.js';
-import { inspectCapabilities } from './capabilities.js';
+import { inspectCapabilities, installedVersion } from './capabilities.js';
 import { ResidentStore } from './resident-store.js';
 import { DispatchCoordinator } from './dispatch.js';
 import { ResidentRunner } from './resident-runner.js';
@@ -29,6 +30,7 @@ import { validateTopicIntents } from './resident-focus.js';
 export class Workspace {
   readonly store: Store; readonly vault: Vault; readonly oauth: OAuthService; readonly browser: BrowserBridge;
   readonly providers: Providers; readonly engine: DiscussionEngine; readonly codex: CodexExecutor;
+  readonly codexOAuth: CodexOAuth;
   readonly accessHash: string;
   readonly materials: LocalMaterials;
   readonly resident: ResidentStore;
@@ -54,9 +56,12 @@ export class Workspace {
     if (token.length < 32) throw new AppError('invalid_access_token', 500);
     this.accessHash = digest(token);
     this.oauth = new OAuthService(this.store, this.vault, config.oauthPort);
+    this.codexOAuth = new CodexOAuth(this.store, this.vault, this.oauth);
     this.browser = new BrowserBridge(this.store, config.chromeCommand);
     this.browserDiscovery = new BrowserDiscovery(this.browser);
-    this.providers = new Providers(this.store, this.vault, this.oauth, this.browser, fetch, fakeDelay);
+    this.providers = new Providers(this.store, this.vault, this.oauth, this.browser, fetch, fakeDelay, this.codexOAuth, async () => {
+      const observed = await installedVersion(config.codexCommand); if (observed.status !== 'observed' || !observed.version) throw new AppError('codex_version_required', 409); return observed.version;
+    });
     this.workQueue.wiki = this.wiki;
     this.dispatch.workGuard = (state, turn) => this.workQueue.canDispatch(state, turn);
     this.engine = new DiscussionEngine(this.store, this.providers, config, undefined, this.dispatch);
@@ -180,12 +185,12 @@ export class Workspace {
           s.resident?.turns.some(t => t.participantId === existing.id && ['prepared', 'running', 'unconfirmed'].includes(t.status)))) throw new AppError('resident_account_change_requires_new_participant', 409);
       const connection = s.connections.find(c => c.id === body.connectionId && c.status === 'connected');
       if (!connection) throw new AppError('connection_not_ready', 409);
-      if (body.reasoningEffort !== undefined && connection.kind !== 'openai-oauth') throw new AppError('reasoning_requires_oauth', 409);
+      if (body.reasoningEffort !== undefined && !oauthKind(connection.kind)) throw new AppError('reasoning_requires_oauth', 409);
       const modelId = string(body.modelId, 200); if (!connection.models.some(m => m.id === modelId)) throw new AppError('model_not_available', 409);
       if (connection.kind === 'browser' && s.participants.some(p => p.id !== participantId && p.connectionId === connection.id)) throw new AppError('browser_participant_already_exists', 409);
       const member: Member = { id: participantId, label: string(body.label, 80), kind: connection.kind, connectionId: connection.id,
         modelId, role: string(body.role ?? '', 500, true),
-        ...(connection.kind === 'openai-oauth' ? { reasoningEffort: reasoningEffort(body.reasoningEffort, existing?.reasoningEffort) } : {}) };
+        ...(oauthKind(connection.kind) ? { reasoningEffort: modelEffort(connection, modelId, body.reasoningEffort, existing?.reasoningEffort) } : {}) };
       if (existing) s.participants[s.participants.indexOf(existing)] = member; else s.participants.push(member);
       emit({ type: existing ? 'participant.updated' : 'participant.added', discussionId: null, data: { participantId } });
     }); return participantId;
@@ -213,5 +218,5 @@ export class Workspace {
       s.browserPaused = paused; emit({ type: 'browser.manual_control', discussionId: null, data: { paused } });
     });
   }
-  async close(): Promise<void> { const stopping = Promise.all([this.engine.close(), this.residentRunner.close()]); this.codex.close(); this.browser.close(); this.oauth.close(); await stopping; this.store.close(); }
+  async close(): Promise<void> { const stopping = Promise.all([this.engine.close(), this.residentRunner.close(), this.codexOAuth.close()]); this.codex.close(); this.browser.close(); this.oauth.close(); await stopping; this.store.close(); }
 }

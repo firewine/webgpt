@@ -575,7 +575,7 @@ export class RoomView {
     for (const p of s.participants) {
       const m = roomMembers.find(m => m.participantId === p.id); const card = el('article', '', 'room-member'); card.dataset.tone = this.tone(p.id);
       const status = statuses.find(c => c.participantId === p.id); const info = el('div', '', 'member-info'); const name = el('div', '', 'member-name');
-      name.append(el('strong', p.label), el('span', p.kind === 'fake' ? '모의' : p.kind === 'openai-oauth' ? 'GPT' : p.kind === 'deepseek' ? 'API' : '웹', 'member-kind')); info.append(name);
+      name.append(el('strong', p.label), el('span', p.kind === 'fake' ? '모의' : ['openai-oauth', 'codex-oauth'].includes(p.kind) ? 'GPT' : p.kind === 'deepseek' ? 'API' : '웹', 'member-kind')); info.append(name);
       info.append(el('small', p.kind === 'fake' ? '외부 모델 호출 없음' : (s.connections.find(c => c.id === p.connectionId)?.label ?? '연결 미확인'), 'member-account'));
       const state = m?.blockedReason ? '확인 필요 · ' + m.blockedReason : status ? label(status.response.state) : '미참여';
       info.append(el('small', state, 'member-observed')); info.title = `${p.label}\n${p.modelId}\n${p.role}\n${state}`;

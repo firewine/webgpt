@@ -30,6 +30,7 @@ export class OAuthService {
   async begin(label: string, existingId?: string, expectedEmail?: string): Promise<{ attemptId: string; connectionId: string; authorizationUrl: string }> {
     const expected = expectedEmail?.trim().toLowerCase();
     if (expected && (!expected.includes('@') || expected.length > 254)) throw new AppError('invalid_account_email');
+    if (existingId && !this.store.read().connections.some(c => c.id === existingId && c.kind === 'openai-oauth')) throw new AppError('connection_not_found', 404);
     await this.listen();
     for (const [key, a] of this.attempts) if (a.expiresAt <= Date.now()) this.attempts.delete(key);
     const state = this.store.read();
@@ -176,7 +177,7 @@ export class OAuthService {
     if (!res.ok) throw new AppError('oidc_discovery_failed', 502);
     const metadata = object(await res.json()); if (metadata.issuer !== ISSUER) throw new AppError('invalid_issuer'); return metadata;
   }
-  private async identity(token: string, clientId: string, nonce?: string): Promise<{ sub: string; email: string | undefined }> {
+  async identity(token: string, clientId: string, nonce?: string): Promise<{ sub: string; email: string | undefined; accountId: string | undefined; expiresAt: number }> {
     const metadata = await this.metadata();
     const res = await this.request(authUrl(metadata.jwks_uri), { redirect: 'error', signal: AbortSignal.timeout(15_000) });
     if (!res.ok) throw new AppError('jwks_failed', 502);
@@ -187,7 +188,9 @@ export class OAuthService {
     });
     if (nonce !== undefined && (typeof payload.nonce !== 'string' || !equal(payload.nonce, nonce))) throw new AppError('invalid_nonce');
     if (typeof payload.iat !== 'number' || payload.iat > Date.now() / 1000 + 5 || (Array.isArray(payload.aud) && payload.aud.length > 1 && payload.azp !== clientId)) throw new AppError('invalid_identity_claims');
-    return { sub: string(payload.sub), email: typeof payload.email === 'string' ? payload.email : undefined };
+    const auth = payload['https://api.openai.com/auth'];
+    const accountId = auth && typeof auth === 'object' && !Array.isArray(auth) ? (auth as Record<string, unknown>).chatgpt_account_id : undefined;
+    return { sub: string(payload.sub), email: typeof payload.email === 'string' ? payload.email : undefined, accountId: typeof accountId === 'string' && accountId.trim() ? accountId : undefined, expiresAt: payload.exp! * 1000 };
   }
   private async post(url: string, body: Record<string, string>): Promise<Record<string, unknown>> {
     const response = await this.request(url, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20_000),

@@ -316,3 +316,5 @@ dialog { max-height: calc(100dvh - 20px); overflow-y: auto; background: var(--pa
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
 .wiki-body{white-space:pre-wrap;overflow-wrap:anywhere;max-height:55vh;overflow:auto}#wiki-detail>button{margin:.25rem}#wiki-detail>div>button{display:block;margin:.25rem 0;max-width:100%;overflow-wrap:anywhere}#resident-grant-token{white-space:pre-wrap;overflow-wrap:anywhere}
 .oauth-login-dialog{width:min(1600px,96vw);max-width:96vw;max-height:96dvh;padding:18px}.oauth-login-dialog iframe{display:block;width:100%;height:70dvh;border:1px solid var(--line);border-radius:8px;background:var(--room-bg);margin-bottom:14px}.oauth-login-dialog .panel-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+
+#device-code { font-size: 1.7rem; user-select: all; overflow-wrap: anywhere; }

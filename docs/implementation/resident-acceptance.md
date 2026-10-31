@@ -7,8 +7,8 @@
 | 관측 | 결과 |
 |---|---|
 | 환경 | Ubuntu 개발 환경, Node24.18.0 / npm11.16.0 / Chrome156.0.8078.47 / Chrome DevTools MCP1.12.0 |
-| Node 회귀 | strict TypeScript·빌드·248 PASS, FAIL/SKIP0 |
-| 브라우저 회귀 | 실제 Chrome/MCP39 PASS, FAIL/SKIP0 |
+| Node 회귀 | strict TypeScript·빌드·270 PASS, FAIL/SKIP0 |
+| 브라우저 회귀 | 실제 Chrome/MCP46 PASS, FAIL/SKIP0 |
 | 구분 | 임시 DB·3모의 참여자·모의 provider/Codex RPC, 실제 Chrome/HTTP/SSE/자식 프로세스 SIGKILL |
 | 미실행 | 운영 이관/배포·서비스 재시작·실계정 추론·사용자 Codex thread·실제 파일 쓰기 NOT_RUN |
 
@@ -48,7 +48,7 @@ engine.create는 transaction 밖에서 원래 requestId/input으로 호출한다
 
 ## 4. 부하 측정
 
-[부하 JSON](./assets/phase8-20261031/load.json)은 1,000원문/100업무/100Wiki를 만들고 인증 HTTP로 전 원문을 다시 대조한 결과다. 알림 포함1,100메시지·요청 page50, 기존 메시지/업무 API 최대100 계약은 유지한다. 전체 SQLite state 약2.39MB, `/api/state`1,345바이트, no-op callback의 실제 전체 transaction12회 중앙값13.91ms·p95/최대21.96ms·heap50,138,720바이트다. 이는 해당 실행의 측정이며 장기 호스트 용량/속도 임계값 보장은 UNVERIFIED다. 원문은 측정 전후 동일하며 기록 삭제/DB 교체는 없다.
+[부하 JSON](./assets/phase8-20261031/load.json)은 1,000원문/100업무/100Wiki를 만들고 인증 HTTP로 전 원문을 다시 대조한 결과다. 알림 포함1,100메시지·요청 page50, 기존 메시지/업무 API 최대100 계약은 유지한다. 전체 SQLite state 2,386,813바이트, `/api/state`1,345바이트, no-op callback의 실제 전체 transaction12회 중앙값13.96ms·p95/최대22.21ms·heap74,275,368바이트다. 이는 해당 실행의 측정이며 장기 호스트 용량/속도 임계값 보장은 UNVERIFIED다. 원문은 측정 전후 동일하며 기록 삭제/DB 교체는 없다.
 
 ## 5. 실행과 운영 적용
 
@@ -68,3 +68,7 @@ npm run test:browser
 [G0](../resident-implementation-plan.md#2-공통-롤백-g0--모든-단계의-선행-조건)로 예약을 막고 원래 turn/job/receipt를 대조한다. off 상태에서 autoTopic=false와 flag off로 신규 자동 시작을 막되 intent·원문·discussion·Wiki/충돌·commands를 보존한다. 시작/미확정 토론을 삭제·재전송하거나 옛 DB로 덮어쓰지 않는다. 이전 빌드 복귀 전 topic/job을 기존 절차로 대조한다. fixture rollback을 실제 호스트 복구 성공으로 표시하지 않는다.
 
 U1/U2 기본 예산/속도, U3 실제 계정/역할/범위와 별도 실계정 허용은 유지한다. B안 추가 승인으로 원래 R8-A를 구현했고, 수락 문구를 완화하거나 후속 페이즈를 만들지 않았다. 사용자 파일35개 hash·로컬 링크/원래 gate 문구·diff 검사는 최종 제출 전에 확인한다. 병합은 사용자 담당이다.
+
+최종 통합에는 일반 GPT 로그인 표시/필수 이메일/진행 복구, CoralBricks·River와 승인된 Codex 기기 코드 연결도 포함했다. [기기 코드 증거](./codex-device-login-20261031.md)의 15 Node/2 browser와 기존 연결 검사를 모두 결합했다. 연결 준비 fixture의 성공은 원래 R8-D 실계정 gate를 대체하지 않는다.
+
+최종 제출 점검: 원래50 gate 문구/숫자 변경0, 사용자 파일35개 hash 변화0, 상대 문서 링크143개 누락0, 설치 Codex0.165.0 App Server schema PASS(로그인/thread/turn0), git diff --check 오류0.

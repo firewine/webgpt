@@ -67,7 +67,13 @@ Chrome/VNC/CDP를 Tailnet에 직접 열지 않는다. 예제 VNC는 인증된 ga
 
 ## 3. 계정과 기존 대화
 
-### GPT OAuth
+### GPT 기기 코드 로그인 (Codex 계정)
+
+`GPT · 기기 코드 로그인`에서 별칭·필수 이메일을 입력하고 시작한다. 앱에 표시된 코드로 **현재 접속 기기**의 인증 페이지에서 로그인·동의를 마친다. 서버 Chrome이나 SSH 포트 전달은 필요하지 않다. 서명·이메일·계정 ID 확인 뒤 해당 Codex 계정의 실제 모델 목록을 표시한다. 일반 GPT OAuth와 다른 연결이며 기존 dot/CLI 로그인은 가져오지 않는다. 지원 여부는 계정 보안 설정/workspace 권한에 따르고 자동 유료 테스트는 없다.
+
+창을 닫거나 새로고침했으면 같은 계정 카드에서 원래 요청을 다시 연다. `로그인 취소`·만료·서버 재시작 뒤 새 요청은 직접 시작한다. 다른 이메일로 승인했으면 연결을 거절한다. 코드를 채팅이나 공개 로그에 붙이지 않는다. 모델 확인 뒤 같은 계정/모델로 참여자를 만들고 지원 사고 깊이를 선택한다. 이 흐름은 기존 Chrome 수동 잠금을 자동 해제하지 않는다. [실행 증거·차이·복귀](implementation/codex-device-login-20261031.md)를 따른다. 실계정/권한/추론·운영 반영은 아직 NOT_RUN이다.
+
+### GPT 일반 OAuth
 
 새로고침으로 승인 버튼을 잃었으면 같은 계정 카드의 `다시 로그인`으로 미만료 요청을 복구한다. 반복해 눌러도 요청·만료 시간이 새로 생기지 않는다. 진행 중 기대 이메일을 바꾸려 하면 거절한다. 서버를 재시작했거나 10분이 지났다면 새 요청의 창에서 진행한다. 계정 재등록·state 삭제로 오류를 숨기지 않는다.
 
@@ -163,7 +169,7 @@ Wiki는 항상 **reported** 지식이다. report source의 관측 근거는 별�
 
 ### 통합 수락과 운영 반영 전 점검 (페이즈 8)
 
-[R8 실행 기록](./implementation/resident-acceptance.md)과 [50개 수락 manifest](./implementation/resident-acceptance-manifest.json)를 먼저 본다. Node248/실제 Chrome·MCP 회귀의 fixture 성공은 운영 배포·실계정·실기기·실제 쓰기의 완료가 아니다. 현재 실운영 전체 수락은 미완료다. [승인된 B안](./reviews/r8-topic-transition-decision-20261031.md)에 따라 방을 끈 뒤 설정에서 `참여자의 주제 토론 자동 시작 허용`을 명시 선택할 수 있다. 기존 방은 기본 꺼짐이다. 켜진 방에서 참여자의 공개 근거 제안이 현재 계정/세대/예산 검사를 통과하면 기존 주제 토론을 시작하고 같은 방으로 돌아온다. 업무/실행·승인/미확정·다른 root가 있으면 대기한다. 오래된 맥락/권한의 제안은 재실행하지 않고 원문과 거절 이유를 보존한다.
+[R8 실행 기록](./implementation/resident-acceptance.md)과 [50개 수락 manifest](./implementation/resident-acceptance-manifest.json)를 먼저 본다. Node270/실제 Chrome·MCP46의 최종 통합 회귀의 fixture 성공은 운영 배포·실계정·실기기·실제 쓰기의 완료가 아니다. 현재 실운영 전체 수락은 미완료다. [승인된 B안](./reviews/r8-topic-transition-decision-20261031.md)에 따라 방을 끈 뒤 설정에서 `참여자의 주제 토론 자동 시작 허용`을 명시 선택할 수 있다. 기존 방은 기본 꺼짐이다. 켜진 방에서 참여자의 공개 근거 제안이 현재 계정/세대/예산 검사를 통과하면 기존 주제 토론을 시작하고 같은 방으로 돌아온다. 업무/실행·승인/미확정·다른 root가 있으면 대기한다. 오래된 맥락/권한의 제안은 재실행하지 않고 원문과 거절 이유를 보존한다.
 
 자동 검증은 `npm run check`와 설치된 Chromium/MCP 경로를 지정한 `npm run test:browser`다. 임시 DB/프로필·모의 계정을 사용하며 `test-results/resident/R8`에 흐름/rollback/handoff/load/2탭 JSON과 화면을 남긴다. source1,000메시지·업무100·Wiki100의 50개 요청 page/원문 대조/transaction 비용은 fixture 측정값이며 장기 운영 용량 보장이 아니다. 기본 명령에서 MCP를 생략해 SKIP됐으면 전체 통과라고 적지 않는다.
 

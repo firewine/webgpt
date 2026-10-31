@@ -1,45 +1,45 @@
 {
-  "roomId": "room_4bec9d73-0c9d-4d40-a167-8ea875859eca",
+  "roomId": "room_d80d4fa0-72e4-48be-9d3c-8b1b5d1a50e1",
   "memberIds": [
     "fake-a",
     "fake-b",
     "fake-c"
   ],
-  "taskId": "work_796c2985-c90c-4eb5-aef3-324f0f6f6ca6",
+  "taskId": "work_88dc9f61-c874-4315-831c-4e3e36028472",
   "attempts": [
-    "work_attempt_3202c169-c3f4-4541-ba59-a1b3d7e050ab",
-    "work_attempt_d457be29-92a6-4c35-88e5-b7ef9f7891d1",
-    "work_attempt_065c7638-8577-4124-8f61-29e36f3bb1a7",
-    "work_attempt_b0521ee5-6673-4abd-be2a-16309ffea3f3"
+    "work_attempt_c827ce1f-3a60-46a0-8681-09a30e3af828",
+    "work_attempt_c3b5cffb-edc8-46ff-8b09-72715373411a",
+    "work_attempt_ca281d60-6318-4c05-85d2-ade181631bcd",
+    "work_attempt_dc0b5a01-6bf9-4b1e-832a-faa074e0db76"
   ],
   "reports": [
     {
-      "id": "work_report_071041a7-b8e6-4cef-8a2f-a0c539eba875",
-      "digest": "b9ab1e179578fc68769070874efec3e751e7e620ad6a0559233f8d8751525895"
+      "id": "work_report_7ceeb5b3-f2d8-4c5a-8b6b-c922cc6c74d0",
+      "digest": "eef871ad8aadaa87e26b369bb23b65bf17bbb964fe5f0cf629cba14600b8c9cd"
     },
     {
-      "id": "work_report_5955dce6-bcb3-4dbe-93f8-b496b40c9d06",
-      "digest": "b2306bb2bc9bf562dba5f342509058fda6243f3513dc35a486a223abb94959e3"
+      "id": "work_report_d5b4c184-99b0-4bb9-a538-8b2bc84bfdcd",
+      "digest": "75abbb62a4eb5d320bf782a14882284478e03e89663d4ea0d0db3dd9b20d00a2"
     }
   ],
   "reviews": [
     {
-      "id": "work_review_5c626b46-78a9-481e-b6c9-30a5c94d87d7",
+      "id": "work_review_fa83f94a-cc0c-4600-8a90-a2f7b3b5efd8",
       "decision": "rework"
     },
     {
-      "id": "work_review_a0c8ecc5-565e-4c06-b5db-247cb19bfc9b",
+      "id": "work_review_3c67b155-f387-4755-a3a8-40a857d4c363",
       "decision": "accept"
     }
   ],
   "wiki": {
-    "pageId": "wiki_b92ae973-13a9-4dba-b1d1-d86d77eea043",
+    "pageId": "wiki_60d480b7-def0-4c88-a6ef-f46c23eba632",
     "version": 2,
-    "digest": "66427b5bf61ed9ad5371d32f988b65dbac7451d9dbeceef402c46d33c9c4b363"
+    "digest": "41dd084a2f98b96dd3724bb72a3483f3c485e36cb13899144f081949d7344f8b"
   },
-  "nextTurn": "resident_turn_12d0bb0e-8ada-4fc6-942e-607fef974de4",
-  "topicIntentId": "resident-topic:resident_turn_12d0bb0e-8ada-4fc6-942e-607fef974de4:0",
-  "discussionId": "discussion_c4a252d3-fcd4-487e-bfcd-c4ce95e0a500",
+  "nextTurn": "resident_turn_0b2baf1a-ef56-4ac7-9a23-dd605fb20cde",
+  "topicIntentId": "resident-topic:resident_turn_0b2baf1a-ef56-4ac7-9a23-dd605fb20cde:0",
+  "discussionId": "discussion_0d0cd441-6635-4d11-9c77-89c30065e99f",
   "focusReturns": 1,
   "maximumProviderCalls": 1,
   "transportRequests": 23,

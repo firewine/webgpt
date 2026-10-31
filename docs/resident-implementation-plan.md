@@ -199,6 +199,10 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 
 **롤백:** 앞 단계별 G0를 조합한다. 부분 PASS로 실계정/쓰기/Wiki/상주 전체 완료를 표시하지 않는다. 실패 기능만 off/read-only/blocked로 남기고 기존 연결·토론·기록을 보존한다. 남은 UNVERIFIED와 사용자 결정은 릴리스 차단 조건으로 기록한다.
 
+### R8 연결 준비 추가 승인 — Codex 기기 코드
+
+2026-10-31 사용자가 [영향 보고/정적 검토](./reviews/opencodex-login-review-20261031.md) 뒤 별도 기기 코드 연결을 승인했다. 새 제안 codex-oauth.ts와 기존 model/runtime/providers/oauth/settings·HTTP/control/room-view의 접점을 사용한다. 기존 complete·vault·Store transaction·SSE·Codex 실행/승인·큐/Wiki는 유지한다. optional kind/계정 metadata는 additive이며 일반 GPT를 자동 전환하지 않는다. 기대 이메일·서명/issuer/audience/sub/account 대조·2계정 격리·만료/취소·중복20·전송/stream/usage·390px·기존 회귀로 판정한다. 임의 모델/한도/금액·자동 warmup은 없다. 복귀 전 새 kind의 발언을 off로 두고 credential/원문을 보존한다. 실제 로그인은 사용자 직접 동의, 추론·배포는 별도이며 원래 R8-D를 낮추지 않는다. 예상 14~20파일·800~1,500줄이다.
+
 ## 11. 사용자 결정 필요
 
 | ID | 아직 확정되지 않은 것 | 결정 전 동작/선행 개발 | 바꾸지 않는 경계 |

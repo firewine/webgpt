@@ -16,6 +16,8 @@
 
 DeepSeek 참여자는 공식 API·CoralBricks·River 중 제공처를 선택해 별도로 등록할 수 있습니다. 각 제공처의 키와 실제 모델 목록을 사용하며, 추가 제공처의 실계정 응답은 아직 NOT_RUN입니다. [연결 검사 기록](docs/implementation/deepseek-services-20261031.md)을 참조하세요.
 
+GPT는 [기기 코드 연결](docs/implementation/codex-device-login-20261031.md)로 현재 기기의 브라우저에서 로그인할 수 있습니다. 이메일은 필수이며 Codex 계정에 허용된 모델/사고 깊이로 참여자를 등록합니다. 기존 일반 OAuth도 유지하며 [로그인 시작 한 번으로 서버 화면 표시·진행 요청 복구](docs/implementation/oauth-login-screen-20261031.md)를 지원합니다. 실제 계정 수락·운영 반영은 별도입니다. 방의 자동 주제 시작은 off 상태에서 명시 허용한 경우만 사용하며, 모의3인에서 업무→Wiki→topic→같은 방 복귀·owner 추가 지시0을 확인했습니다.
+
 ## 바로 실행
 
 로컬 참고 파일의 읽기 전용 첨부와 연결·권한 현황도 지원합니다. [구현·검증 기록](docs/implementation/local-materials-capabilities-20261030.md)과 [설정 절차](docs/operations-runbook.md)를 확인하세요. 로컬 파일 공유는 기본 비활성이며 별도 `WJ_MATERIAL_ROOTS`와 사용자의 첨부 선택이 필요합니다.
@@ -100,7 +102,7 @@ npx playwright install --with-deps chromium
 npm run test:browser
 ```
 
-페이즈 8 기준 Node231개·실제 Chromium/MCP browser38개가 통과했습니다(FAIL0/SKIP0). [R8 실행 기록](docs/implementation/resident-acceptance.md)은 자동 검사 성공과 미완료인 무인 주제 전환/실계정 수락을 구분합니다. Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. browser 검사 중 설치된 Chrome DevTools MCP 검사는 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
+페이즈 8 최종 통합 Node270개·실제 Chromium/MCP browser46개가 통과했습니다(FAIL0/SKIP0). [R8 실행 기록](docs/implementation/resident-acceptance.md)은 승인된 무인 주제 전환의 fixture 성공과 미완료인 실계정/실기기 수락을 구분합니다. Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. browser 검사 중 설치된 Chrome DevTools MCP 검사는 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
 
 ```bash
 npm install --no-save --package-lock=false @openai/codex@0.165.0 chrome-devtools-mcp@1.12.0

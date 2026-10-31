@@ -2,7 +2,7 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
-2026-10-30 사용자 지시에 따라 **이 표를 페이즈 범위·순서·진행 상태의 SSOT**로 사용한다. 아래 설계/검토 문서의 과거 “계획 문서만” 제한은 당시 작업 이력이며, 현재 승인 작업은 **페이즈 8 통합 수락·복구·부하 검증**이다. PR #22의 병합 main `8f7866388823e46ade64446343d53351c7ef85e5`에서 기존 R1~R7 구현·흑백 GUI·상단 주제·큐·Wiki·Codex·MCP를 그대로 결합해 검증한다. 2026-10-31 사용자 승인으로 [R8-A B안](./reviews/r8-topic-transition-decision-20261031.md)의 명시 허용 자동 주제 전환을 추가한다. optional 설정/intent·기존 configure 접점만 확장하며 Providers/Store·topic·승인/격리·기존 50 gate·단계 순서는 유지한다. R2/R3·업무 경쟁·Wiki 인용을 회귀하고 추가 페이즈는 만들지 않는다. 예상 변경은 16~20파일·450~850줄이다. 제품 목표·기존 데이터·승인/미확정 대조는 유지한다. 세부 수락 gate·롤백은 [단계별 계약](./resident-implementation-plan.md)을 참조한다. 계획 변경이 필요하면 **현재 단계와 남은 모든 페이즈의 영향·총변경량을 먼저 검토해 사용자 승인을 받은 뒤** 이 SSOT와 관련 계획서를 함께 변경한다. 구현 결과에 맞춰 계획을 사후 정당화하지 않는다. 구체적인 변경 승인 절차는 [개발 지침](./development-guidelines.md#5-계획-변경-사전-승인과-후속-페이즈-영향-검토)을 따른다.
+2026-10-30 사용자 지시에 따라 **이 표를 페이즈 범위·순서·진행 상태의 SSOT**로 사용한다. 아래 설계/검토 문서의 과거 “계획 문서만” 제한은 당시 작업 이력이며, 현재 승인 작업은 **페이즈 8 통합 수락·복구·부하 검증**이다. PR #22의 병합 main `8f7866388823e46ade64446343d53351c7ef85e5`에서 기존 R1~R7 구현·흑백 GUI·상단 주제·큐·Wiki·Codex·MCP를 그대로 결합해 검증한다. 2026-10-31 사용자 승인으로 [R8-A B안](./reviews/r8-topic-transition-decision-20261031.md)의 명시 허용 자동 주제 전환을 추가한다. optional 설정/intent·기존 configure 접점만 확장하며 Providers/Store·topic·승인/격리·기존 50 gate·단계 순서는 유지한다. R2/R3·업무 경쟁·Wiki 인용을 회귀하고 추가 페이즈는 만들지 않는다. 예상 변경은 16~20파일·450~850줄이다. 추가로 사용자가 [Codex 기기 코드 연결](./reviews/opencodex-login-review-20261031.md)을 별도 추가하도록 승인했다. 일반 GPT OAuth·기존 계정/전역 Codex 인증을 보존하고, 새 kind의 로그인/refresh·모델/stream 어댑터·owner UI만 결합한다. 예상 14~20파일·800~1,500줄이며 기존 큐/Wiki/단일 dispatch·수락 기준은 유지한다. R8 준비에 포함하며 후속 페이즈 신설은 없다. 제품 목표·기존 데이터·승인/미확정 대조는 유지한다. 세부 수락 gate·롤백은 [단계별 계약](./resident-implementation-plan.md)을 참조한다. 계획 변경이 필요하면 **현재 단계와 남은 모든 페이즈의 영향·총변경량을 먼저 검토해 사용자 승인을 받은 뒤** 이 SSOT와 관련 계획서를 함께 변경한다. 구현 결과에 맞춰 계획을 사후 정당화하지 않는다. 구체적인 변경 승인 절차는 [개발 지침](./development-guidelines.md#5-계획-변경-사전-승인과-후속-페이즈-영향-검토)을 따른다.
 
 | 페이즈 | R단계 | 개발 범위 | 완료 판정 | 상태 |
 | --- | --- | --- | --- | --- |
@@ -17,13 +17,13 @@
 
 페이즈마다 작업 브랜치·검토 가능한 PR, 사용자 병합을 유지한다. 큰 단계는 2를 dispatch/발화/인계, 6을 안전 경계/실행 연결, 7을 Wiki/인용·MCP로 나눌 수 있다. 다음 단계가 아직 없으면 성공처럼 응답하지 않는다. 실계정·서비스 반영은 별도 검증 범위로 두고 독립 fixture 개발을 계속한다. U1/U2/U3는 [사용자 결정 목록](./resident-implementation-plan.md#11-사용자-결정-필요)을 유지한다. 디자인 패턴은 [개발 지침](./development-guidelines.md)의 작은 Adapter/DI·명시 상태 전이·기존 transaction·검사/롤백 기준을 따른다.
 
-본문의 Phase 0~4A/4B는 이전 릴리스 범위 구분이다. 현재 구현 순서·상태는 위 페이즈 1~8로만 관리한다. 페이즈 8의 [50개 수락표](./implementation/resident-acceptance-manifest.json)는 fixture PASS46·UNVERIFIED3·NOT_RUN1로 구분한다. Node248 PASS이며 전체 Chrome/MCP 회귀 결과는 [R8 실행 기록](./implementation/resident-acceptance.md)을 따른다. 자동 업무·Wiki 인용·주제 시작·같은 방 복귀는 방 on 이후 사용자 중계 없이 모의 참여자3명으로 검증했다. [B안 승인](./reviews/r8-topic-transition-decision-20261031.md)에 따른 optional 허용·intent와 기존 엔진을 사용했으며 owner focus 요청0·topic1·복귀1이다. 실제 계정/기기 수락은 별개다. 기존 Codex 0.165.0 계약과 쓰기 차단은 유지한다. 운영 DB 이관·서비스 반영·실계정 호출은 NOT_RUN이다. Wiki의 자동 최신/고정 선택·과대 입력 차단과 명시 예산/속도·역할/범위를 유지하며 미정 U1/U2 기본값을 만들지 않는다. R6-F 실세션·쓰기, R3-E 실기기 IME/터치, R4-D 실제 dot/Muse 왕복과 R8-D 혼합 실계정 수락은 미확인이다. 자동 검사 PASS로 이 조건을 낮추거나 완료로 바꾸지 않는다.
+본문의 Phase 0~4A/4B는 이전 릴리스 범위 구분이다. 현재 구현 순서·상태는 위 페이즈 1~8로만 관리한다. 페이즈 8의 [50개 수락표](./implementation/resident-acceptance-manifest.json)는 fixture PASS46·UNVERIFIED3·NOT_RUN1로 구분한다. 최종 통합 Node270 PASS·Chrome/MCP46 PASS이며 전체 Chrome/MCP 회귀 결과는 [R8 실행 기록](./implementation/resident-acceptance.md)을 따른다. 자동 업무·Wiki 인용·주제 시작·같은 방 복귀는 방 on 이후 사용자 중계 없이 모의 참여자3명으로 검증했다. [B안 승인](./reviews/r8-topic-transition-decision-20261031.md)에 따른 optional 허용·intent와 기존 엔진을 사용했으며 owner focus 요청0·topic1·복귀1이다. 실제 계정/기기 수락은 별개다. 기존 Codex 0.165.0 계약과 쓰기 차단은 유지한다. 운영 DB 이관·서비스 반영·실계정 호출은 NOT_RUN이다. Wiki의 자동 최신/고정 선택·과대 입력 차단과 명시 예산/속도·역할/범위를 유지하며 미정 U1/U2 기본값을 만들지 않는다. R6-F 실세션·쓰기, R3-E 실기기 IME/터치, R4-D 실제 dot/Muse 왕복과 R8-D 혼합 실계정 수락은 미확인이다. 자동 검사 PASS로 이 조건을 낮추거나 완료로 바꾸지 않는다.
 
 > 계획 개정의 고정 근거는 C=8f81d861b3f170ef2024b90d9eeba56ce34f0f79, P=8db0f42f499f674c66c3a0df0a4d8e0f25fb216e다. [1쪽 요약·기준 차이·근거](./plan-revision-20261030.md), [104항목 판정](./reviews/plan-decision-register-20261030.md), [운영 계약](./company-workflow-plan.md), [8단계 변경·이관·수락·롤백](./resident-implementation-plan.md)은 설계 근거로 유지한다. 구현은 병합 main 05684f83d229acc86769ce8675f632bb21743dd6에서 시작했으며 runtime은 C와 동일했다. 신규 기능의 실제 상태는 위 SSOT와 단계별 실행 증거로 판정하고, 실계정·DOM·호스트 적합성은 별도 검증 전까지 UNVERIFIED다.
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | v0.17-R8-fixture — R1~R7 결합의 통합/복구/부하 검사·50개 수락 증거, 실제 기기·실계정·R6-F·최종 실운영 수락 UNVERIFIED. 진행 상태는 맨 위 SSOT 참조 |
+| 상태 | v0.18-R8-connections — 승인된 자동 주제·기기 코드/추가 DeepSeek 연결·통합/복구/부하 검사·50개 수락 증거, 실제 기기·실계정·R6-F·최종 실운영 수락 UNVERIFIED. 진행 상태는 맨 위 SSOT 참조 |
 | 최초 작성일 | 2026-08-15 |
 | 개정일 | 2026-10-31 (KST) |
 | 저장소 | [firewine/webgpt](https://github.com/firewine/webgpt) |
