@@ -62,3 +62,20 @@ test('expected web GPT account rejects accidental dot account before storing cre
   assert.equal(await f.service.access(right.begin.connectionId), 'secret-web-account');
   assert.equal(f.store.read().connections.find(c => c.id === right.begin.connectionId).expectedEmail, 'web-account@example.test');
 });
+
+test('reopening an active sign-in twenty times resumes one PKCE attempt and keeps account/callback single use', async t => {
+  const f = await fixture(t); const a = await f.signin('recover', {}, undefined, 'recover@example.test');
+  const resumed = await Promise.all(Array.from({ length: 20 }, () => f.service.begin('Recover', a.begin.connectionId, 'recover@example.test')));
+  assert.ok(resumed.every(value => JSON.stringify(value) === JSON.stringify(a.begin))); assert.equal(f.store.read().connections.length, 1); assert.equal(f.requests.length, 0);
+  await assert.rejects(f.service.begin('Different', a.begin.connectionId, 'different@example.test'), /signin_account_pending/);
+  assert.equal(f.store.read().connections[0].expectedEmail, 'recover@example.test');
+  await f.service.finish(a.params); assert.equal(await f.service.access(a.begin.connectionId), 'secret-recover');
+  await assert.rejects(f.service.finish(a.params), /invalid_oauth_state/); assert.equal(f.requests.filter(r => r.url.endsWith('/token')).length, 1);
+});
+
+test('resuming does not extend the ten minute sign-in lifetime; expired callbacks cannot replace the new attempt', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() }); const f = await fixture(t); const a = await f.signin('expiry');
+  t.mock.timers.tick(590_000); assert.deepEqual(await f.service.begin('Expiry', a.begin.connectionId), a.begin);
+  t.mock.timers.tick(10_001); const next = await f.service.begin('Expiry', a.begin.connectionId); assert.notEqual(next.attemptId, a.begin.attemptId); assert.notEqual(next.authorizationUrl, a.begin.authorizationUrl);
+  await assert.rejects(f.service.finish(a.params), /invalid_oauth_state/); assert.equal(f.requests.length, 0); assert.equal(f.store.read().connections.length, 1);
+});

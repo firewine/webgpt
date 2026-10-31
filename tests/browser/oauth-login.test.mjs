@@ -24,6 +24,8 @@ test('OAuth window: opening a separate server login also reveals its authenticat
   assert.equal(new URL(f.opens[0].url).hostname, 'auth.openai.com'); assert.equal(new URL(f.opens[0].url).searchParams.get('client_id'), 'dynamic_agent_client');
   assert.equal(await f.page.locator('#oauth-desktop-frame').getAttribute('src'), '/browser/vnc.html?autoconnect=1&path=websockify&resize=scale');
   for (const width of [1440, 390]) { await f.page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); assert.equal(await f.page.locator('#oauth-desktop-frame').isVisible(), true); assert.equal(await f.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); }
+  await f.page.locator('#oauth-screen-close').click(); await f.page.reload(); await f.page.locator('[data-view=connections]').click(); await f.page.getByRole('button', { name: '다시 로그인', exact: true }).click(); await f.page.getByRole('button', { name: '별도 로그인 창 열기', exact: true }).click(); await until(() => f.opens.length === 2);
+  assert.deepEqual(f.opens[1], f.opens[0]); assert.equal(f.app.store.read().connections.length, 1); await f.page.frameLocator('#oauth-desktop-frame').getByText('Fixture server Chrome login display', { exact: true }).waitFor();
   await f.page.getByRole('button', { name: '로그인 화면 닫기 · 자동 입력 재개', exact: true }).click(); await until(() => !f.app.store.read().browserPaused); await f.page.locator('#oauth-desktop-frame').waitFor({ state: 'detached' }); assert.deepEqual(f.errors, []);
 });
 

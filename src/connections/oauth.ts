@@ -32,11 +32,15 @@ export class OAuthService {
     if (expected && (!expected.includes('@') || expected.length > 254)) throw new AppError('invalid_account_email');
     await this.listen();
     for (const [key, a] of this.attempts) if (a.expiresAt <= Date.now()) this.attempts.delete(key);
-    if (this.attempts.size >= 8) throw new AppError('too_many_signins', 429);
     const state = this.store.read();
     const existing = existingId ? state.connections.find(c => c.id === existingId && c.kind === 'openai-oauth') : undefined;
     if (existingId && !existing) throw new AppError('connection_not_found', 404);
-    if ([...this.attempts.values()].some(a => a.connectionId === existingId)) throw new AppError('signin_pending', 409);
+    const pending = existingId ? [...this.attempts.values()].find(a => a.connectionId === existingId) : undefined;
+    if (pending) {
+      if (expected && expected !== existing?.expectedEmail) throw new AppError('signin_account_pending', 409);
+      return this.authorization(pending, state.hostId);
+    }
+    if (this.attempts.size >= 8) throw new AppError('too_many_signins', 429);
     const connectionId = existing?.id ?? id('connection');
     const attempt: Attempt = { id: id('signin'), connectionId, state: randomBytes(32).toString('base64url'),
       nonce: randomBytes(32).toString('base64url'), verifier: randomBytes(48).toString('base64url'),
@@ -47,15 +51,18 @@ export class OAuthService {
     });
     if (existing && expected) this.store.transact(s => { s.connections.find(c => c.id === connectionId)!.expectedEmail = expected; });
     this.attempts.set(attempt.state, attempt);
+    return this.authorization(attempt, state.hostId);
+  }
+  private authorization(attempt: Attempt, hostId: string): { attemptId: string; connectionId: string; authorizationUrl: string } {
     const url = new URL(`${ISSUER}/api/accounts/authorize`);
-    const params: Record<string, string> = { client_id: attempt.clientId ?? 'dynamic_agent_client', ext_agent_host_id: state.hostId,
+    const params: Record<string, string> = { client_id: attempt.clientId ?? 'dynamic_agent_client', ext_agent_host_id: hostId,
       response_type: 'code', redirect_uri: attempt.redirect, scope: SCOPES, resource: RESOURCE,
       state: attempt.state, nonce: attempt.nonce, code_challenge_method: 'S256',
       code_challenge: createHash('sha256').update(attempt.verifier).digest('base64url') };
     if (!attempt.clientId) params.agent_name_hint = 'Webjjoku';
     // Deliberately omit retained ID tokens from URLs returned to the web client.
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-    return { attemptId: attempt.id, connectionId, authorizationUrl: url.href };
+    return { attemptId: attempt.id, connectionId: attempt.connectionId, authorizationUrl: url.href };
   }
   private async listen(): Promise<void> {
     if (this.server?.listening) return;
