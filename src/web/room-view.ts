@@ -81,6 +81,7 @@ export class RoomView {
   private restoreOnShow = true;
   private panelsSignature = '';
   private settingsVersion = 0;
+  private controls: Promise<void> = Promise.resolve();
   private topic: Discussion | null = null;
   private topicKey = '';
   private topicUnavailable = false;
@@ -368,10 +369,14 @@ export class RoomView {
     const evidence = d.evidence.filter(e => e.revision === d.revision);
     target.append(el('p', `출처 관측 ${evidence.filter(e => e.status === 'observed').length} · 참여자 보고 ${evidence.filter(e => e.status === 'reported').length} · 미실행 ${evidence.filter(e => e.status === 'not_run').length} · 실패 ${evidence.filter(e => e.status === 'failed').length}\n출처를 읽었다는 기록만으로 주장의 검증 성공을 뜻하지 않습니다.`, 'small muted pre-line'));
   }
-  private async control(action: string, more: Record<string, unknown> = {}, expectedVersion = this.detail?.room.version): Promise<void> {
-    if (!this.detail) return;
-    try { await this.deps.api(this.path('/control'), { action, expectedVersion, ...more }); }
-    finally { await this.deps.refresh(); }
+  private control(action: string, more: Record<string, unknown> = {}, expectedVersion?: number): Promise<void> {
+    const roomId = this.roomId;
+    const pending = this.controls.then(async () => {
+      if (!this.detail || this.roomId !== roomId) throw new Error('room_version_conflict');
+      try { await this.deps.api(this.path('/control'), { action, expectedVersion: expectedVersion ?? this.detail.room.version, ...more }); }
+      finally { await this.deps.refresh(); }
+    });
+    this.controls = pending.catch(() => {}); return pending;
   }
   private async loadNew(): Promise<void> {
     let more = true;
@@ -399,7 +404,7 @@ export class RoomView {
     $('#room-wake').hidden = !room.desiredOn || room.observedStatus === 'on'; $<HTMLButtonElement>('#room-wake').disabled = !d.enabled;
     $('#room-disabled').hidden = d.enabled; $<HTMLButtonElement>('#room-send').disabled = !d.enabled || this.sending || this.uncertain;
     $<HTMLButtonElement>('#room-settings').disabled = !d.enabled;
-    $('#room-pacing').textContent = room.pacing ? `발언 간격 ${room.pacing.minIntervalMs / 1000}초\n연속 pass ${room.pacing.sleepAfterPasses}회 후 휴면` : '진행 한도와 대화 속도를 설정하세요.';
+    $('#room-pacing').textContent = room.pacing ? `발언 간격 ${room.pacing.minIntervalMs / 1000}초\n연속 pass ${room.pacing.sleepAfterPasses}회 후 휴면\n참여자 주제 시작 ${room.autoTopic ? '허용' : '꺼짐'}` : '진행 한도와 대화 속도를 설정하세요.';
     this.renderTopic(); this.renderMessages(); this.renderReply(); this.renderPanels(); this.unread();
     $('#room-more').hidden = !this.before;
     for (const n of d.status.notices) if (!this.noticeIds.has(n.id)) {
@@ -570,7 +575,7 @@ export class RoomView {
     for (const p of s.participants) {
       const m = roomMembers.find(m => m.participantId === p.id); const card = el('article', '', 'room-member'); card.dataset.tone = this.tone(p.id);
       const status = statuses.find(c => c.participantId === p.id); const info = el('div', '', 'member-info'); const name = el('div', '', 'member-name');
-      name.append(el('strong', p.label), el('span', p.kind === 'fake' ? '모의' : p.kind === 'openai-oauth' ? 'GPT' : p.kind === 'deepseek' ? 'API' : '웹', 'member-kind')); info.append(name);
+      name.append(el('strong', p.label), el('span', p.kind === 'fake' ? '모의' : ['openai-oauth', 'codex-oauth'].includes(p.kind) ? 'GPT' : p.kind === 'deepseek' ? 'API' : '웹', 'member-kind')); info.append(name);
       info.append(el('small', p.kind === 'fake' ? '외부 모델 호출 없음' : (s.connections.find(c => c.id === p.connectionId)?.label ?? '연결 미확인'), 'member-account'));
       const state = m?.blockedReason ? '확인 필요 · ' + m.blockedReason : status ? label(status.response.state) : '미참여';
       info.append(el('small', state, 'member-observed')); info.title = `${p.label}\n${p.modelId}\n${p.role}\n${state}`;
@@ -613,12 +618,13 @@ export class RoomView {
     if (!this.detail) return; this.settingsVersion = this.detail.room.version; const form = $<HTMLFormElement>('#room-settings-form'); form.reset(); const { budgets: b, pacing: p } = this.detail.room;
     const values = { maxRequests: b?.maxRequests, maxTokens: b?.maxTokens, maxToolJobs: b?.maxToolJobs, deadlineAt: b ? localDate(b.deadlineAt) : undefined, minInterval: p ? p.minIntervalMs / 1000 : undefined, idleNudge: p ? p.idleNudgeMs / 1000 : undefined, passBackoff: p ? p.passBackoffMs / 1000 : undefined, sleepAfterPasses: p?.sleepAfterPasses };
     for (const [key, value] of Object.entries(values)) (form.elements.namedItem(key) as HTMLInputElement).value = value === undefined ? '' : String(value);
+    (form.elements.namedItem('autoTopic') as HTMLInputElement).checked = this.detail.room.autoTopic === true;
     $<HTMLDialogElement>('#room-settings-dialog').showModal();
   }
   private async saveSettings(): Promise<void> {
     const form = $<HTMLFormElement>('#room-settings-form'); const submit = form.querySelector<HTMLButtonElement>('[type=submit]')!; if (submit.disabled) return; submit.disabled = true;
     const v = Object.fromEntries(new FormData(form)) as Record<string, string>;
-    try { await this.control('configure', { budgets: { maxRequests: Number(v.maxRequests), maxTokens: Number(v.maxTokens), maxToolJobs: Number(v.maxToolJobs), deadlineAt: new Date(v.deadlineAt!).toISOString() }, pacing: { minIntervalMs: Math.round(Number(v.minInterval) * 1000), idleNudgeMs: Math.round(Number(v.idleNudge) * 1000), passBackoffMs: Math.round(Number(v.passBackoff) * 1000), sleepAfterPasses: Number(v.sleepAfterPasses) } }, this.settingsVersion); $<HTMLDialogElement>('#room-settings-dialog').close(); }
+    try { await this.control('configure', { autoTopic: v.autoTopic === 'on', budgets: { maxRequests: Number(v.maxRequests), maxTokens: Number(v.maxTokens), maxToolJobs: Number(v.maxToolJobs), deadlineAt: new Date(v.deadlineAt!).toISOString() }, pacing: { minIntervalMs: Math.round(Number(v.minInterval) * 1000), idleNudgeMs: Math.round(Number(v.idleNudge) * 1000), passBackoffMs: Math.round(Number(v.passBackoff) * 1000), sleepAfterPasses: Number(v.sleepAfterPasses) } }, this.settingsVersion); $<HTMLDialogElement>('#room-settings-dialog').close(); }
     finally { submit.disabled = false; }
   }
   private drawer(dialogId: string, panel: string, slot: string): void { $(slot).append($(panel)); $(panel).hidden = false; const d = $<HTMLDialogElement>(dialogId); if (!d.open) d.showModal(); if (panel === '#room-panel') $('#room-panel-toggle').setAttribute('aria-expanded', 'true'); }

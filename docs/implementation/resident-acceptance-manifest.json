@@ -1,0 +1,637 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-31",
+  "baselineSha": "8f7866388823e46ade64446343d53351c7ef85e5",
+  "scope": "R1-R8 acceptance map. PASS denotes linked fixture results only; real requirements stay open. Authoritative tested head/CI is recorded on the R8 PR.",
+  "gateCount": 50,
+  "counts": {
+    "PASS": 46,
+    "UNVERIFIED": 3,
+    "NOT_RUN": 1
+  },
+  "gates": [
+    {
+      "id": "R1-A",
+      "requirement": "3종 fixture의 legacy ID/내용 digest·event cursor·command 결과 100% 동일",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-store.test.mjs",
+        "tests/resident-http.test.mjs",
+        "tests/workspace-http.test.mjs"
+      ]
+    },
+    {
+      "id": "R1-B",
+      "requirement": "fixture마다 migration 100회→Room 1개, 추가 모델 호출/legacy event 재발행 0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-store.test.mjs",
+        "tests/resident-http.test.mjs",
+        "tests/workspace-http.test.mjs"
+      ]
+    },
+    {
+      "id": "R1-C",
+      "requirement": "메시지/제어 mutation key 각각 20회→각 결과/새 event 1개, payload 변경→409",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-store.test.mjs",
+        "tests/resident-http.test.mjs",
+        "tests/workspace-http.test.mjs"
+      ]
+    },
+    {
+      "id": "R1-D",
+      "requirement": "인증 없음/잘못된 Host/Origin→기존 401/403, 새 endpoint 우회 0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-store.test.mjs",
+        "tests/resident-http.test.mjs",
+        "tests/workspace-http.test.mjs"
+      ]
+    },
+    {
+      "id": "R2-A",
+      "requirement": "Room/topic/work 후보 100개 경쟁→전체 provider 최대 동시 1, 중복 requestId dispatch 0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-dispatch.test.mjs",
+        "tests/resident-room.test.mjs",
+        "tests/resident-replies.test.mjs",
+        "tests/resident-context.test.mjs",
+        "tests/resident-restart.test.mjs",
+        "tests/resident-runtime-http.test.mjs"
+      ]
+    },
+    {
+      "id": "R2-B",
+      "requirement": "prepared 전/후·dispatched 후·receipt 후·delta 중·final commit 전 6지점 crash→재전송 0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-dispatch.test.mjs",
+        "tests/resident-room.test.mjs",
+        "tests/resident-replies.test.mjs",
+        "tests/resident-context.test.mjs",
+        "tests/resident-restart.test.mjs",
+        "tests/resident-runtime-http.test.mjs"
+      ]
+    },
+    {
+      "id": "R2-C",
+      "requirement": "fixture maxRequests=6 소진 뒤 추가 호출 0, pass/보완 포함 6 이하, unknown usage를 0원으로 표시 0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-dispatch.test.mjs",
+        "tests/resident-room.test.mjs",
+        "tests/resident-replies.test.mjs",
+        "tests/resident-context.test.mjs",
+        "tests/resident-restart.test.mjs",
+        "tests/resident-runtime-http.test.mjs"
+      ]
+    },
+    {
+      "id": "R2-D",
+      "requirement": "off/sleep/budget_exhausted 뒤 100 tick→호출 0; missed timer 100개→추가 후보 평가 최대 1",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-dispatch.test.mjs",
+        "tests/resident-room.test.mjs",
+        "tests/resident-replies.test.mjs",
+        "tests/resident-context.test.mjs",
+        "tests/resident-restart.test.mjs",
+        "tests/resident-runtime-http.test.mjs"
+      ]
+    },
+    {
+      "id": "R2-E",
+      "requirement": "3참여자 topic 2라운드에서 기존 공개 장벽 유지, focus 종료→같은 roomId 복귀 1회",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-dispatch.test.mjs",
+        "tests/resident-room.test.mjs",
+        "tests/resident-replies.test.mjs",
+        "tests/resident-context.test.mjs",
+        "tests/resident-restart.test.mjs",
+        "tests/resident-runtime-http.test.mjs"
+      ]
+    },
+    {
+      "id": "R2-F",
+      "requirement": "raw stream 100조각/잘못된 구조/없는 replyTo→검증 전 action 0; 확정 text/claims/원문 digest 보존",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-dispatch.test.mjs",
+        "tests/resident-room.test.mjs",
+        "tests/resident-replies.test.mjs",
+        "tests/resident-context.test.mjs",
+        "tests/resident-restart.test.mjs",
+        "tests/resident-runtime-http.test.mjs"
+      ]
+    },
+    {
+      "id": "R2-G",
+      "requirement": "인증/429 한도/미지원 effort/DOM 불일치 4종에서 100 tick 동안 같은 요청 재시도 0·차단 이유 유지",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-dispatch.test.mjs",
+        "tests/resident-room.test.mjs",
+        "tests/resident-replies.test.mjs",
+        "tests/resident-context.test.mjs",
+        "tests/resident-restart.test.mjs",
+        "tests/resident-runtime-http.test.mjs"
+      ]
+    },
+    {
+      "id": "R2-H",
+      "requirement": "2소비자/100인계 요청과 4crash 지점→세대 증가/적용 각1·중복 provider/job0·예산 초기화0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-dispatch.test.mjs",
+        "tests/resident-room.test.mjs",
+        "tests/resident-replies.test.mjs",
+        "tests/resident-context.test.mjs",
+        "tests/resident-restart.test.mjs",
+        "tests/resident-runtime-http.test.mjs"
+      ]
+    },
+    {
+      "id": "R2-I",
+      "requirement": "이전 generation의 say/work_report/wiki_edit 3종→현재 상태/action 적용0·기존 attempt 원문 보존",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-dispatch.test.mjs",
+        "tests/resident-room.test.mjs",
+        "tests/resident-replies.test.mjs",
+        "tests/resident-context.test.mjs",
+        "tests/resident-restart.test.mjs",
+        "tests/resident-runtime-http.test.mjs"
+      ]
+    },
+    {
+      "id": "R2-J",
+      "requirement": "미확정 turn·진행/미보고 work/job·topic focus·browser 경계에서 자동 세대/창 교체0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-dispatch.test.mjs",
+        "tests/resident-room.test.mjs",
+        "tests/resident-replies.test.mjs",
+        "tests/resident-context.test.mjs",
+        "tests/resident-restart.test.mjs",
+        "tests/resident-runtime-http.test.mjs"
+      ]
+    },
+    {
+      "id": "R3-A",
+      "requirement": "390/768/1024/1440px 4종에서 가로 overflow 0, 입력·멘션·패널·승인·복구 기능 접근 가능",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/browser/resident-room.test.mjs",
+        "tests/resident-status.test.mjs",
+        "tests/browser/chatroom-design.test.mjs"
+      ]
+    },
+    {
+      "id": "R3-B",
+      "requirement": "envelope 포함 기존 100,000자 한도 내 90,000자 본문 접기/펼치기·digest 동일, replyTo/scroll/unread 유지",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/browser/resident-room.test.mjs",
+        "tests/resident-status.test.mjs",
+        "tests/browser/chatroom-design.test.mjs"
+      ]
+    },
+    {
+      "id": "R3-C",
+      "requirement": "이벤트 20개 재생+2회 재접속→메시지 20개, provider 추가 호출 0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/browser/resident-room.test.mjs",
+        "tests/resident-status.test.mjs",
+        "tests/browser/chatroom-design.test.mjs"
+      ]
+    },
+    {
+      "id": "R3-D",
+      "requirement": "기존 토론·연결/계정·자료·Codex 승인·미확정 화면 회귀 전부 유지",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/browser/resident-room.test.mjs",
+        "tests/resident-status.test.mjs",
+        "tests/browser/chatroom-design.test.mjs"
+      ]
+    },
+    {
+      "id": "R3-E",
+      "requirement": "IME 조합중 Enter 전송 0, 확정 입력 1회, 터치/키보드로 hover 기능 접근",
+      "status": "UNVERIFIED",
+      "evidence": "fixture",
+      "files": [
+        "tests/browser/resident-room.test.mjs",
+        "tests/resident-status.test.mjs",
+        "tests/browser/chatroom-design.test.mjs"
+      ],
+      "fixtureStatus": "PASS",
+      "realStatus": "NOT_RUN",
+      "note": "Actual Chrome synthetic IME/keyboard PASS; physical keyboard/touch on actual client devices not observed."
+    },
+    {
+      "id": "R3-F",
+      "requirement": "응답대기/도구진행/관측중단/이전세대 4fixture의 실제 상태·시각 보존, event20회 재생 알림1·자기 알림100회 재투입 추가알림/모델/셸 호출0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/browser/resident-room.test.mjs",
+        "tests/resident-status.test.mjs",
+        "tests/browser/chatroom-design.test.mjs"
+      ]
+    },
+    {
+      "id": "R4-A",
+      "requirement": "2서비스×정상/구버전DOM/다중후보/thread변경/기존초안 10종 fixture에서 전송 0·목표 불명확 자동저장 0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/browser-discovery.test.mjs",
+        "tests/browser/browser-discovery.test.mjs",
+        "tests/browser/bridge.test.mjs"
+      ]
+    },
+    {
+      "id": "R4-B",
+      "requirement": "정상 후보→기존 probe→binding 저장, advanced 선택자 필수 입력 0개",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/browser-discovery.test.mjs",
+        "tests/browser/browser-discovery.test.mjs",
+        "tests/browser/bridge.test.mjs"
+      ]
+    },
+    {
+      "id": "R4-C",
+      "requirement": "account/thread 불일치·draft·busy에서 실제 send 0, 기존 selector/receipt 회귀 통과",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/browser-discovery.test.mjs",
+        "tests/browser/browser-discovery.test.mjs",
+        "tests/browser/bridge.test.mjs"
+      ]
+    },
+    {
+      "id": "R4-D",
+      "requirement": "실제 dot/Muse 각 1개 기존 대화에서 profile/identity/thread·왕복 확인",
+      "status": "UNVERIFIED",
+      "evidence": "fixture",
+      "files": [
+        "tests/browser-discovery.test.mjs",
+        "tests/browser/browser-discovery.test.mjs",
+        "tests/browser/bridge.test.mjs"
+      ],
+      "realStatus": "NOT_RUN",
+      "note": "Discovery/identity fixtures do not verify existing dot/Muse account threads."
+    },
+    {
+      "id": "R5-A",
+      "requirement": "ready 업무 1개에 2소비자/100동시 HTTP claim→정확히 1claim·1lease",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-work-queue.test.mjs",
+        "tests/resident-work-crash.test.mjs",
+        "tests/browser/work-queue.test.mjs"
+      ]
+    },
+    {
+      "id": "R5-B",
+      "requirement": "같은 proposal 20회→업무 1개; acceptance 없음·없는 source/dep·순환·권한 밖은 ready 0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-work-queue.test.mjs",
+        "tests/resident-work-crash.test.mjs",
+        "tests/browser/work-queue.test.mjs"
+      ]
+    },
+    {
+      "id": "R5-C",
+      "requirement": "3개 업무 중 1개 dependency blocked이면 나머지 허용 ready 2개 처리 가능, 동일 slot 중복 0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-work-queue.test.mjs",
+        "tests/resident-work-crash.test.mjs",
+        "tests/browser/work-queue.test.mjs"
+      ]
+    },
+    {
+      "id": "R5-D",
+      "requirement": "claim 후 재시작·timeout·멤버 off에서 새 attempt 무단 생성 0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-work-queue.test.mjs",
+        "tests/resident-work-crash.test.mjs",
+        "tests/browser/work-queue.test.mjs"
+      ]
+    },
+    {
+      "id": "R5-E",
+      "requirement": "다른 제출자 리뷰 없이는 done 0, 반려 1회→기존 결과 유지·새 attempt 1개",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-work-queue.test.mjs",
+        "tests/resident-work-crash.test.mjs",
+        "tests/browser/work-queue.test.mjs"
+      ]
+    },
+    {
+      "id": "R5-F",
+      "requirement": "5역할 정책 예시에서 각각 scope 밖 명령1종→수락0, “상위 지시”/역할 문구만으로 권한 확대0·자기 승인0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-work-queue.test.mjs",
+        "tests/resident-work-crash.test.mjs",
+        "tests/browser/work-queue.test.mjs"
+      ]
+    },
+    {
+      "id": "R6-A",
+      "requirement": "intent 전/후·submit 뒤·link 뒤·승인 대기·완료 뒤 6crash 지점에서 turn/start ≤1·보고 1개",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-work-execution.test.mjs",
+        "tests/resident-work-execution-crash.test.mjs",
+        "tests/browser/work-execution.test.mjs"
+      ]
+    },
+    {
+      "id": "R6-B",
+      "requirement": "off/권한 회수/task version 변경 3종×queued/늦은 승인/늦은 결과 3시점에서 scope 밖 실행/업무 done 0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-work-execution.test.mjs",
+        "tests/resident-work-execution-crash.test.mjs",
+        "tests/browser/work-execution.test.mjs"
+      ]
+    },
+    {
+      "id": "R6-C",
+      "requirement": "같은 workspace 2업무의 동시 writer 최대1, 다른 입력의 같은 ID→409",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-work-execution.test.mjs",
+        "tests/resident-work-execution-crash.test.mjs",
+        "tests/browser/work-execution.test.mjs"
+      ]
+    },
+    {
+      "id": "R6-D",
+      "requirement": "실제 scope 경계(R2/R3)·repo secret/link/output 가림 gate가 FAIL/UNVERIFIED면 실제 쓰기 호출 0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-work-execution.test.mjs",
+        "tests/resident-work-execution-crash.test.mjs",
+        "tests/browser/work-execution.test.mjs"
+      ],
+      "note": "Write-blocking negative gate PASS. Actual repository secret/link/output isolation remains UNVERIFIED; writing stays blocked."
+    },
+    {
+      "id": "R6-E",
+      "requirement": "completed 응답이 있어도 command/test 근거 없으면 observed execution 0, 리뷰 없는 done 0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-work-execution.test.mjs",
+        "tests/resident-work-execution-crash.test.mjs",
+        "tests/browser/work-execution.test.mjs"
+      ]
+    },
+    {
+      "id": "R6-F",
+      "requirement": "설치 schema·읽기 전용→승인→작은 작업 브랜치 수정→보고/반려/후속 흐름",
+      "status": "UNVERIFIED",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-work-execution.test.mjs",
+        "tests/resident-work-execution-crash.test.mjs",
+        "tests/browser/work-execution.test.mjs",
+        "scripts/codex-contract.mjs"
+      ],
+      "fixtureStatus": "PASS",
+      "realStatus": "NOT_RUN",
+      "note": "Installed CLI schema and RPC fixture only; no real user thread or write acceptance."
+    },
+    {
+      "id": "R7-A",
+      "requirement": "사용자/AI 같은 baseVersion 2편집→1개 채택·1개 409, 원문/과거 인용 digest 동일",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-wiki.test.mjs",
+        "tests/resident-mcp.test.mjs",
+        "tests/browser/resident-wiki.test.mjs"
+      ]
+    },
+    {
+      "id": "R7-B",
+      "requirement": "같은 edit/report ID 20회→Wiki version/방 알림 각각1; reported를 verified로 자칭해도 승격0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-wiki.test.mjs",
+        "tests/resident-mcp.test.mjs",
+        "tests/browser/resident-wiki.test.mjs"
+      ]
+    },
+    {
+      "id": "R7-C",
+      "requirement": "비공개 초안·타 방 자료·타 계정 context·폐기 grant의 조회/편집/claim/action 수락0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-wiki.test.mjs",
+        "tests/resident-mcp.test.mjs",
+        "tests/browser/resident-wiki.test.mjs"
+      ]
+    },
+    {
+      "id": "R7-D",
+      "requirement": "다음 2발언/업무가 동일 pinned page/version/digest/sourceRefs 인용, 이후 수정으로 과거 입력 변경0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-wiki.test.mjs",
+        "tests/resident-mcp.test.mjs",
+        "tests/browser/resident-wiki.test.mjs"
+      ]
+    },
+    {
+      "id": "R7-E",
+      "requirement": "기존 도구 목록/응답/토론 grant 권한 변화0, 추가 grant 없이는 resident 도구0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-wiki.test.mjs",
+        "tests/resident-mcp.test.mjs",
+        "tests/browser/resident-wiki.test.mjs"
+      ]
+    },
+    {
+      "id": "R7-F",
+      "requirement": "Wiki HTML/script/javascript링크·비공개/임의 URL 참조 4종에서 코드 실행/권한 확대/보호 URL fetch 0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-wiki.test.mjs",
+        "tests/resident-mcp.test.mjs",
+        "tests/browser/resident-wiki.test.mjs"
+      ]
+    },
+    {
+      "id": "R7-G",
+      "requirement": "옛 세대/세대 누락 2종×room 발화/work claim/wiki edit 3도구→수락0, 기존 discussion grant 응답 변화0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-wiki.test.mjs",
+        "tests/resident-mcp.test.mjs",
+        "tests/browser/resident-wiki.test.mjs"
+      ]
+    },
+    {
+      "id": "R8-A",
+      "requirement": "3모의 참여자·1방 on→사용자 추가 지시 없이 자유 대화→업무1 pickup→결과/반려1회→재작업/완료→Wiki1갱신→다음 발화 인용→topic1회→같은 방 복귀",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-e2e.test.mjs",
+        "tests/resident-load.test.mjs",
+        "tests/resident-wiki-crash.test.mjs",
+        "tests/browser/resident-e2e.test.mjs",
+        "tests/resident-focus.test.mjs",
+        "tests/fixtures/resident-focus-crash.mjs"
+      ],
+      "note": "Owner explicitly opts into automatic topics before room on. Three fake participants complete the original full sequence with zero owner focus requests, one topic and one return. Duplicate20, stale/off/budget/scope and three actual SIGKILL boundaries PASS. Real-account acceptance remains separate.",
+      "fixtureStatus": "PASS"
+    },
+    {
+      "id": "R8-B",
+      "requirement": "8단계별 crash/off/budget/scope negative gate 전부 PASS, provider 동시≤1·중복 외부 start0·비공개 유출0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-dispatch.test.mjs",
+        "tests/resident-room.test.mjs",
+        "tests/resident-replies.test.mjs",
+        "tests/resident-context.test.mjs",
+        "tests/resident-restart.test.mjs",
+        "tests/resident-runtime-http.test.mjs",
+        "tests/resident-work-queue.test.mjs",
+        "tests/resident-work-crash.test.mjs",
+        "tests/browser/work-queue.test.mjs",
+        "tests/resident-work-execution.test.mjs",
+        "tests/resident-work-execution-crash.test.mjs",
+        "tests/browser/work-execution.test.mjs",
+        "scripts/codex-contract.mjs",
+        "tests/resident-wiki.test.mjs",
+        "tests/resident-mcp.test.mjs",
+        "tests/browser/resident-wiki.test.mjs",
+        "tests/resident-wiki-crash.test.mjs"
+      ]
+    },
+    {
+      "id": "R8-C",
+      "requirement": "4viewport·2탭·새로고침/재접속 후 이력·읽기 위치·예산/승인·단일dispatch 유지",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-e2e.test.mjs",
+        "tests/resident-load.test.mjs",
+        "tests/resident-wiki-crash.test.mjs",
+        "tests/browser/resident-e2e.test.mjs"
+      ]
+    },
+    {
+      "id": "R8-D",
+      "requirement": "실제 GPT2계정+DeepSeek, dot/Muse 각각 기존 thread 포함 흐름. 실제 읽기 Codex와 허용된 쓰기 gate 별도",
+      "status": "NOT_RUN",
+      "evidence": "real_account_required",
+      "files": [],
+      "realStatus": "NOT_RUN",
+      "note": "Separate account preparation/permission required. Read-only operational metadata: OAuth auth_required, one browser connection (required dot and Muse pair incomplete), no DeepSeek/Codex binding, resident feature off. No credentials or account content collected."
+    },
+    {
+      "id": "R8-E",
+      "requirement": "G0→flag off/legacy 화면 복귀→다시 resident on에서 기존/새 원문·commands/receipt 누락0·재전송0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-e2e.test.mjs",
+        "tests/resident-load.test.mjs",
+        "tests/resident-wiki-crash.test.mjs",
+        "tests/browser/resident-e2e.test.mjs",
+        "tests/browser/chatroom-design.test.mjs",
+        "tests/resident-restart.test.mjs"
+      ]
+    },
+    {
+      "id": "R8-F",
+      "requirement": "1,000메시지/100업무/100Wiki fixture에서 /api/state 새 raw 본문 노출0·history limit=50 초과0·본문 원문 누락0, state transaction 비용 측정값 기록",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-e2e.test.mjs",
+        "tests/resident-load.test.mjs",
+        "tests/resident-wiki-crash.test.mjs",
+        "tests/browser/resident-e2e.test.mjs"
+      ],
+      "note": "Requests/default history page size 50 verified. Existing message/work API maximum 100 remains unchanged. Measurements are fixture observations, not a long-term host capacity promise."
+    },
+    {
+      "id": "R8-G",
+      "requirement": "ready/review 업무·Wiki·규칙·예산 actor 인계1회+중복 등록2회 뒤 원래 ID/예산 보존·확정 report의 다른 담당자 리뷰 가능, task/job 재전송0·새 scope 확대0",
+      "status": "PASS",
+      "evidence": "fixture",
+      "files": [
+        "tests/resident-e2e.test.mjs",
+        "tests/resident-load.test.mjs",
+        "tests/resident-wiki-crash.test.mjs",
+        "tests/browser/resident-e2e.test.mjs"
+      ],
+      "note": "One accepted handoff, two duplicate handoff commands and two duplicate room-member registrations; no account/role/scope creation."
+    }
+  ],
+  "integratedValidation": {
+    "nodePass": 270,
+    "browserPass": 46,
+    "fail": 0,
+    "skip": 0,
+    "realAccounts": "NOT_RUN",
+    "evidence": "docs/implementation/codex-device-login-20261031.md"
+  }
+}

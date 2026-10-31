@@ -2,7 +2,7 @@
 
 여러 AI가 팀·역할을 맡아 목표를 논의하고, 업무 큐에서 일감을 가져가 수행·리뷰·재작업·Wiki 기록까지 이어가는 개인용 AI 작업실을 개발합니다. GUI는 단톡방 형태이며 Ubuntu 서버와 허용된 Tailscale 기기의 브라우저를 사용합니다.
 
-**현재 코드와 목표의 차이:** 기존 연결·독립 토론·근거 비교·영속 기록·Codex 기반 위에 상주 방·단톡방 GUI·업무 역할·열린 작업큐·분석 산출물·독립 리뷰/재작업·공유 Wiki를 구현했습니다. 큐에 기존 Codex의 읽기 전용 실행·승인·원래 실행 대조·명령 근거 보고를 연결했습니다. 실제 쓰기는 안전 gate 미검증으로 차단합니다. [개발 페이즈 SSOT](docs/development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)와 [페이즈 7 실행 증거](docs/implementation/phase7-shared-wiki-20261031.md)를 확인하세요. 페이즈 8의 통합 실운영 수락, 실제 기기 IME·실계정 상주 운영·이번 변경의 배포는 미검증입니다.
+**현재 코드와 목표의 차이:** 기존 연결·독립 토론·근거 비교·영속 기록·Codex 기반 위에 상주 방·단톡방 GUI·업무 역할·열린 작업큐·분석 산출물·독립 리뷰/재작업·공유 Wiki를 구현했습니다. 큐에 기존 Codex의 읽기 전용 실행·승인·원래 실행 대조·명령 근거 보고를 연결했습니다. 실제 쓰기는 안전 gate 미검증으로 차단합니다. 페이즈 8에서 3인 자동 업무→Wiki→다음 대화, 기존 주제 토론 복귀·2탭·롤백/재활성화·부하 검사를 결합했습니다. [개발 페이즈 SSOT](docs/development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)와 [50개 수락 항목·실행 증거](docs/implementation/resident-acceptance.md)를 확인하세요. 실기기·실계정·실제 쓰기 수락과 운영 반영은 아직 완료하지 않았습니다.
 
 채팅방 디자인은 96397 예시의 참여자 목록·아바타 말풍선·오른쪽 탭 패널에 맞추고, 사용자 요청대로 흑백 테마를 적용했습니다. 밝음·어두움 모두 버튼·말풍선·로고·아바타를 회색 계열로 표시합니다. [변경한 PC/모바일 화면과 검증](docs/implementation/chatroom-design-refinement-20261030.md)을 볼 수 있습니다. 기존 연결·승인·복구와 기능 flag는 유지합니다.
 
@@ -13,6 +13,10 @@
 [공유 Wiki](docs/implementation/phase7-shared-wiki-20261031.md): 참여자의 구조화 편집과 수락한 업무 보고를 출처가 있는 reported 버전으로 기록합니다. 다음 발언·업무에 허용된 최신 지식을 자동 반영하며 특정 버전을 고정할 수도 있습니다. 편집 충돌·폐기·과거 인용을 보존합니다. 상주 MCP 권한은 기존 토의 키와 별도로 참여자·범위·세대·도구·만료를 지정해 발급합니다.
 
 **v0.2 구현:** 공동 대화 UI, 영속 토의 엔진, GPT 다중 OAuth·DeepSeek·기존 Chrome 대화 어댑터, MCP 도구, Codex 실행·승인·결과 환류, 운영 스크립트. [Ubuntu 로컬 모의 토론](docs/implementation/ubuntu-readiness-20261030.md)과 [systemd·실제 HTTPS·인증 noVNC 입력](docs/implementation/ubuntu-services-20261030.md)을 확인했습니다. 실계정·다른 Tailnet 기기·실제 재부팅·실제 Codex 세션의 완료 판정은 아직 **NOT_RUN**입니다. [구현·검증 기록](docs/implementation/wj-002-015.md)을 함께 확인하세요.
+
+DeepSeek 참여자는 공식 API·CoralBricks·River 중 제공처를 선택해 별도로 등록할 수 있습니다. 각 제공처의 키와 실제 모델 목록을 사용하며, 추가 제공처의 실계정 응답은 아직 NOT_RUN입니다. [연결 검사 기록](docs/implementation/deepseek-services-20261031.md)을 참조하세요.
+
+GPT는 [기기 코드 연결](docs/implementation/codex-device-login-20261031.md)로 현재 기기의 브라우저에서 로그인할 수 있습니다. 이메일은 필수이며 Codex 계정에 허용된 모델/사고 깊이로 참여자를 등록합니다. 기존 일반 OAuth도 유지하며 [로그인 시작 한 번으로 서버 화면 표시·진행 요청 복구](docs/implementation/oauth-login-screen-20261031.md)를 지원합니다. 실제 계정 수락·운영 반영은 별도입니다. 방의 자동 주제 시작은 off 상태에서 명시 허용한 경우만 사용하며, 모의3인에서 업무→Wiki→topic→같은 방 복귀·owner 추가 지시0을 확인했습니다.
 
 ## 바로 실행
 
@@ -33,6 +37,8 @@ npm start
 브라우저에서 <http://127.0.0.1:3000>을 열고 서버에서 확인한 접속 키를 입력합니다. **모의 참여자 A/B**를 선택하고 주제를 입력하면 전체 토의 절차를 볼 수 있습니다. 모의 결과에는 실제 모델·사실 검증이 아니라는 표시가 붙습니다. 접속 키를 채팅·Git·공개 로그에 붙이지 마세요.
 
 `참여자와 연결`에서 실제 계정을 등록하고 모델과 역할을 선택합니다. 로그인 성공, 모델 사용 권한, 실제 응답 완료는 별도로 확인합니다. GPT는 공식 OAuth로 인증한 public Responses 경로를 사용하며, 기존 ChatGPT 대화나 dot의 기억을 OAuth로 가져오지 않습니다. 기존 dot·Muse 맥락은 별도의 Chrome 연결에서 유지합니다.
+
+GPT의 **별도 로그인 창 열기**는 앱 안에 서버 Chrome 화면을 표시합니다. 그 화면에서 직접 로그인·동의하고 명시 재개 후 모델을 확인합니다. [창이 보이지 않던 문제의 수정·검증](docs/implementation/oauth-login-screen-20261031.md)을 확인하세요.
 
 ## 사용 흐름
 
@@ -96,7 +102,7 @@ npx playwright install --with-deps chromium
 npm run test:browser
 ```
 
-페이즈 7 기준 Node 검사 222개와 실제 Chromium/MCP 검사 36개가 통과했습니다(FAIL0/SKIP0). Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. browser 검사 중 설치된 Chrome DevTools MCP 검사는 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
+페이즈 8 최종 통합 Node270개·실제 Chromium/MCP browser46개가 통과했습니다(FAIL0/SKIP0). [R8 실행 기록](docs/implementation/resident-acceptance.md)은 승인된 무인 주제 전환의 fixture 성공과 미완료인 실계정/실기기 수락을 구분합니다. Node 검사에는 설치된 systemd의 unit 검증도 포함되므로 Ubuntu 환경에서 실행합니다. browser 검사 중 설치된 Chrome DevTools MCP 검사는 기본 명령에서는 명시적으로 SKIP됩니다. CI와 아래 설정에서는 모두 실행됩니다.
 
 ```bash
 npm install --no-save --package-lock=false @openai/codex@0.165.0 chrome-devtools-mcp@1.12.0

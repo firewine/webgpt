@@ -1,4 +1,4 @@
-import type { Connection, Member, Discussion, ExecutionBinding, CodexJob, DurableEvent, Phase, MaterialPackage } from '../workspace/model.js';
+import type { Connection, Member, Discussion, ExecutionBinding, CodexJob, DurableEvent, Phase, MaterialPackage, ProviderKind, DeviceSignin } from '../workspace/model.js';
 import { RoomView } from './room-view.js';
 import type { RoomSnapshot } from './room-view.js';
 import type { DiscoveryPage, DiscoveryResult } from '../connections/browser-discovery-model.js';
@@ -12,8 +12,11 @@ let state: Snapshot | null = null; let current: Discussion | null = null; let se
 let tab = 'timeline'; let view: View = 'discussion'; let stream: EventSource | null = null;
 let viewChosen = false; let focusRoomId: string | null = null;
 const effortOptions = [{ value: 'low', label: 'Low · 낮음' }, { value: 'medium', label: 'Medium · 보통' }, { value: 'high', label: 'High · 높음' }, { value: 'xhigh', label: 'Extra high · 매우 높음' }];
+const gptKind = (kind?: ProviderKind) => kind === 'openai-oauth' || kind === 'codex-oauth';
+let deviceTimer = 0; let deviceLogin: { connectionId: string; attemptId: string } | null = null;
+let deviceSequence = 0;
 function effortLabel(value: string): string { return effortOptions.find(o => o.value === value)?.label ?? value; }
-let cursor = 0; let refreshing = false; let again = false; let timer = 0; let choiceSignature = ''; let noticeTimer = 0;
+let cursor = 0; let refreshTask: Promise<void> | null = null; let again = false; let timer = 0; let choiceSignature = ''; let noticeTimer = 0;
 let materialSignature = '';
 let pendingMaterialSelection: string | null = null;
 let browserPages: DiscoveryPage[] = []; let browserCandidate: DiscoveryResult | null = null; let browserDiscoveryConnection = ''; let browserChoices = '';
@@ -23,6 +26,10 @@ const states: Record<string, string> = { running: '진행 중', paused: '일시�
   prepared: '전송 준비', pending: '대기', failed: '실패', unconfirmed: '결과 미확인', stale: '이전 조건의 응답', connected: '연결됨', auth_required: '로그인 필요', unverified: '미확인', error: '연결 오류',
   observed: '자료 관측됨', reported: '참여자 보고', not_run: '미실행', queued: '실행 대기', blocked_approval: '승인 대기', reconciling: '실행 확인 필요', interrupted: '중단됨', ready: '준비됨', fixture: '모의', not_applicable: '해당 없음', waiting: '대기' };
 const errors: Record<string, string> = { authentication_required: '접속 키를 확인해 주세요.', root_workflow_busy: '진행 중인 토의를 먼저 완료하거나 취소해 주세요.', two_participants_required: '참여자를 2명 이상 선택해 주세요.',
+  device_login_unavailable: 'ChatGPT 보안 설정 또는 workspace에서 기기 코드 로그인을 허용해 주세요.', device_login_expired: '기기 코드가 만료됐습니다. 같은 계정에서 새 로그인을 시작해 주세요.', device_login_interrupted: '서버가 재시작됐거나 이전 요청이 끝났습니다. 같은 계정에서 다시 시작해 주세요.', device_login_start_failed: '기기 코드를 받지 못했습니다. 연결 상태를 확인해 주세요.', device_login_poll_failed: '로그인 승인 상태를 확인하지 못했습니다.', codex_version_required: '설정한 Codex 실행 파일의 버전을 확인하지 못했습니다.', codex_refresh_failed: '이 계정의 인증을 갱신하지 못했습니다. 연결 상태를 확인해 주세요.',
+  signin_pending: '이미 시작한 로그인이 있습니다. 서버 Chrome 화면에서 진행해 주세요.', signin_account_pending: '진행 중 로그인과 다른 계정을 지정했습니다. 기존 로그인을 마치거나 이 계정을 로그아웃한 뒤 다시 시작해 주세요.',
+  account_email_required: '로그인할 웹 GPT 계정 이메일을 입력해 주세요.', invalid_account_email: '웹 GPT 계정 이메일을 확인해 주세요.',
+  invalid_api_service: 'API 제공처를 다시 선택해 주세요.', deepseek_model_unavailable: '이 API 키에서 사용 가능한 DeepSeek 모델을 찾지 못했습니다. 제공처의 모델 권한을 확인해 주세요.',
   wiki_version_conflict: '다른 편집이 먼저 반영됐습니다. 내 입력은 Wiki 변경 기록의 충돌 제안으로 보존했습니다.', wiki_sources_required: 'Wiki의 근거가 된 공개 원문을 선택해 주세요.', wiki_source_not_public: '같은 방과 허용 범위의 공개 출처만 참조할 수 있습니다.', wiki_context_requires_handoff: '이전 Wiki 맥락의 접근 범위가 바뀌었습니다. 원래 기록을 보존하고 문맥 인계 후 다시 시작하세요.', resident_scope_changed: '역할·문맥 세대·방 상태가 바뀌었습니다. 최신 기록으로 범위를 다시 확인하세요.', wiki_context_requires_selection: '고정한 Wiki 원문이 입력 한도를 넘습니다. 고정 문서를 줄여 주세요.', invalid_grant_expiry: '접근 권한의 만료 시각을 현재부터 7일 이내로 정해 주세요.',
   work_execution_scope_changed: '방·역할·업무 버전이 바뀌어 이 실행의 승인을 보류했습니다. 원래 실행과 현재 배정을 확인하세요.', work_execution_immutable_input: '업무 실행의 입력은 고정돼 있습니다. 실행을 대조한 뒤 반려·새 시도로 변경 내용을 남겨 주세요.', work_execution_link_required: '원래 업무 입력과 실행의 연결을 확인할 수 없습니다. 새 실행을 만들지 말고 원래 기록을 대조하세요.', work_write_safety_unverified: '저장소의 비밀·링크·출력 경계 검증 전에는 쓰기 업무를 실행할 수 없습니다.', room_tool_budget_exhausted: '방의 실행 한도나 현재 진행 상태를 확인해 주세요.',
   work_version_conflict: '다른 화면에서 업무 배정이나 일감이 바뀌었습니다. 새 기록을 확인한 뒤 다시 수정하세요.', work_not_ready: '완료 조건·의존성·허용 범위를 확인해 주세요.', work_room_not_ready: '방을 켜고 진행 한도와 현재 토론 상태를 확인해 주세요.', work_slot_or_scope_unavailable: '선택한 참여자의 업무 범위나 사용 중인 슬롯을 확인해 주세요.', work_source_not_public: '같은 방에 공개된 발언만 일감 근거로 사용할 수 있습니다.', work_dependency_cycle: '선행 일감이 서로를 기다리는 순환입니다. 의존성을 바꿔 주세요.', work_attempt_requires_reconciliation: '진행 중이거나 미확정인 업무를 먼저 대조해 주세요.', work_report_conflict: '현재 보고가 바뀌었습니다. 최신 산출물에서 다시 검토해 주세요.', work_scope_not_found: '이 방 또는 등록한 작업 공간만 범위로 선택할 수 있습니다.', work_action_not_authorized: '배정된 역할과 업무 범위가 이 동작을 허용하지 않습니다.', work_independent_review_required: '산출물 작성자와 다른 검토자가 필요합니다.',
@@ -56,7 +63,7 @@ async function api<T>(path: string, body?: unknown, requestId: string = crypto.r
   if (!response.ok) { if (response.status === 401) lock(); throw new Error(result.error?.code ?? 'request_failed'); }
   return result;
 }
-function lock(): void { stream?.close(); stream = null; roomView.clear(); $('#login').hidden = false; $('#workspace').hidden = true; }
+function lock(): void { stream?.close(); stream = null; roomView.clear(); closeDeviceScreen(); $('#device-code').textContent = ''; $<HTMLDialogElement>('#oauth-login-dialog').close(); $('#oauth-desktop').replaceChildren(); $('#oauth-result').replaceChildren(); $('#login').hidden = false; $('#workspace').hidden = true; }
 function form(id: string, handler: (data: Record<string, string>, form: HTMLFormElement) => Promise<unknown>): void {
   $(id).addEventListener('submit', event => { event.preventDefault(); const el = event.currentTarget as HTMLFormElement; const submit = el.querySelector<HTMLButtonElement>('button[type=submit], button:not([type])'); if (submit) submit.disabled = true;
     const data = Object.fromEntries(new FormData(el).entries()) as Record<string, string>;
@@ -73,9 +80,13 @@ function connect(): void {
     if (e.id <= cursor) return; cursor = e.id; scheduleRefresh(); });
 }
 function scheduleRefresh(): void { if (timer) return; timer = window.setTimeout(() => { timer = 0; void refresh().catch(report); }, 250); }
-async function refresh(): Promise<void> {
-  if (refreshing) { again = true; return; } refreshing = true;
-  try {
+function refresh(): Promise<void> {
+  // An awaiting mutation needs a read started after it committed. Join one
+  // following cycle, rather than waiting for an active stream to become quiet.
+  if (refreshTask) { again = true; return refreshTask.then(() => refreshTask ?? refresh()); }
+  if (timer) { clearTimeout(timer); timer = 0; }
+  again = false;
+  refreshTask = (async () => {
     const selection = selected; const snapshot = await api<Snapshot>('/api/state');
     if (selection !== selected) { again = true; return; }
     const discussion = selection && snapshot.discussions.some(d => d.id === selection) ? (await api<{ discussion: Discussion }>(`/api/discussions/${selection}`)).discussion : null;
@@ -86,7 +97,8 @@ async function refresh(): Promise<void> {
     if (!viewChosen) { const saved = localStorage.getItem('wj.room.view'); view = saved && ['room', 'discussion', 'connections', 'execution'].includes(saved) ? saved as View : state.resident.enabled ? 'room' : 'discussion'; }
     if (!current) selected = '';
     $('#login').hidden = true; $('#workspace').hidden = false; render(); await roomView.refresh(state); if (!stream) connect();
-  } finally { refreshing = false; if (again) { again = false; scheduleRefresh(); } }
+  })().finally(() => { refreshTask = null; if (again) { again = false; scheduleRefresh(); } });
+  return refreshTask;
 }
 function details(title: string, value: string, key = title): HTMLDetailsElement { const d = node('details'); d.dataset.key = key; d.append(node('summary', title), node('pre', value)); return d; }
 function preserve(container: HTMLElement, render: () => void): void { const opened = [...container.querySelectorAll<HTMLDetailsElement>('details[open]')].map(d => d.dataset.key); render(); for (const d of container.querySelectorAll<HTMLDetailsElement>('details')) d.open = opened.includes(d.dataset.key); }
@@ -142,9 +154,13 @@ async function browseMaterials(path: string): Promise<void> {
     }));
   }
 }
-function updateModels(): void { const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); selectOptions($('#participant-model'), c?.models ?? []);
-  $<HTMLSelectElement>('#participant-effort').disabled = c?.kind !== 'openai-oauth';
-  $('#participant-effort-note').textContent = c?.kind === 'browser' ? '기존 dot·Muse의 모델과 사고 깊이는 원래 서비스에서 조절합니다.' : c?.kind === 'openai-oauth' ? '기본 Extra high. 모델이 지원하지 않는 값은 오류로 표시합니다.' : '이 연결에는 GPT 사고 깊이 요청 설정을 사용하지 않습니다.';
+function updateModels(): void { const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); selectOptions($('#participant-model'), c?.models ?? []); updateEffort(); }
+function updateEffort(): void {
+  const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); const select = $<HTMLSelectElement>('#participant-effort'); select.disabled = !gptKind(c?.kind);
+  const allowed: readonly string[] = c?.kind === 'codex-oauth' ? c.models.find(m => m.id === $<HTMLSelectElement>('#participant-model').value)?.reasoningEfforts ?? [] : effortOptions.map(e => e.value);
+  for (const option of select.options) option.disabled = !allowed.includes(option.value);
+  if (c?.kind === 'codex-oauth' && !allowed.includes(select.value)) select.value = effortOptions.filter(e => allowed.includes(e.value)).at(-1)?.value ?? '';
+  $('#participant-effort-note').textContent = c?.kind === 'browser' ? '기존 dot·Muse의 모델과 사고 깊이는 원래 서비스에서 조절합니다.' : c?.kind === 'codex-oauth' ? '이 계정의 모델 목록에서 확인한 사고 깊이만 선택합니다. Extra high를 지원하면 기본으로 사용합니다.' : gptKind(c?.kind) ? '기본 Extra high. 모델이 지원하지 않는 값은 오류로 표시합니다.' : '이 연결에는 GPT 사고 깊이 요청 설정을 사용하지 않습니다.';
 }
 function control(body: Record<string, unknown>): Promise<unknown> { if (!current) return Promise.resolve(); return api(`/api/discussions/${current.id}/control`, { expectedRevision: current.revision, ...body }).then(refresh); }
 function renderDiscussion(): void {
@@ -160,12 +176,12 @@ function renderDiscussion(): void {
   if (['running', 'paused', 'blocked'].includes(d.status)) controls.append(button('조건 보완', () => modal('토의 조건 보완', [{ name: 'text', label: '추가 조건', multiline: true }], values => control({ action: 'revise', ...values }))), button('토의 취소', () => modal('토의 취소', [], () => control({ action: 'cancel' }), '이미 전송된 응답과 Codex 실행은 기록에 남습니다. Codex 중단은 실행 화면에서 별도로 요청할 수 있습니다.')));
   controls.append(node('span', `${(d.used.activeMs / 60000).toFixed(1)} / ${d.limits.maxActiveMs / 60000}분 · 실행 ${d.used.toolJobs}/${d.limits.maxToolJobs}`, 'small muted'));
   const members = $('#member-status'); members.replaceChildren();
-  for (const p of d.members) { const context = d.contexts.find(c => c.participantId === p.id)!; const card = node('article', '', 'member-card'); const head = node('div', '', 'inline'); head.append(node('span', p.kind === 'fake' ? 'F' : p.kind === 'openai-oauth' ? 'G' : p.kind === 'deepseek' ? 'D' : p.label.slice(0, 1), 'avatar'), node('span', p.label, 'name'));
+  for (const p of d.members) { const context = d.contexts.find(c => c.participantId === p.id)!; const card = node('article', '', 'member-card'); const head = node('div', '', 'inline'); head.append(node('span', p.kind === 'fake' ? 'F' : gptKind(p.kind) ? 'G' : p.kind === 'deepseek' ? 'D' : p.label.slice(0, 1), 'avatar'), node('span', p.label, 'name'));
     card.append(head, node('div', `${d.excludedIds.includes(p.id) ? '참여 제외 · ' : ''}${p.modelId} · 문맥 ${context.generation}`, 'small muted'));
-    if (p.kind === 'openai-oauth') {
+    if (gptKind(p.kind)) {
       card.append(node('p', '사고 깊이 · ' + effortLabel(p.reasoningEffort ?? 'xhigh'), 'small muted'));
       card.append(button('사고 깊이 변경', () => { if (!['paused', 'blocked'].includes(d.status)) { announce('토의를 일시정지하고 현재 발언이 끝난 뒤 변경하세요.', true); return; }
-        modal('이 토의의 사고 깊이', [{ name: 'reasoningEffort', label: '사고 깊이', options: effortOptions, value: p.reasoningEffort ?? 'xhigh' }], values => control({ action: 'configure_participant', participantId: p.id, ...values }), '완료된 발언은 보존하고 이후 발언부터 적용합니다.'); }));
+        modal('이 토의의 사고 깊이', [{ name: 'reasoningEffort', label: '사고 깊이', options: p.kind === 'codex-oauth' ? effortOptions.filter(e => state?.connections.find(c => c.id === p.connectionId)?.models.find(m => m.id === p.modelId)?.reasoningEfforts?.some(v => v === e.value)) : effortOptions, value: p.reasoningEffort ?? 'xhigh' }], values => control({ action: 'configure_participant', participantId: p.id, ...values }), '완료된 발언은 보존하고 이후 발언부터 적용합니다.'); }));
     }
     const job = state?.jobs.filter(j => j.discussionId === d.id && d.tasks.some(t => t.id === j.taskId && t.participantId === p.id)).at(-1); const toolState = job?.status ?? context.observation.tool;
     card.append(node('div', `연결 ${states[context.observation.connection] ?? context.observation.connection} / 응답 ${states[context.observation.response] ?? context.observation.response}\n도구 ${states[toolState] ?? toolState} / 업무 ${states[d.status] ?? d.status}`, 'observations')); members.append(card); }
@@ -224,10 +240,15 @@ function renderRecords(target: HTMLElement, d: Discussion): void {
 }
 function renderConnections(): void {
   if (!state) return; const target = $('#connections-list'); target.replaceChildren();
-  for (const c of state.connections) { const card = node('article', '', 'connection-card'); card.append(node('h3', c.label), badge(c.status), node('p', `${c.kind}${c.email ? ` · ${c.email}` : ''}`, 'muted'), node('p', `${c.models.length}개 모델${c.error ? ` · ${c.error}` : ''}`, 'small'));
+  for (const c of state.connections) { const service = c.kind === 'deepseek' ? ({ deepseek: 'DeepSeek 공식 API', coralbricks: 'CoralBricks · DeepSeek', river: 'River · DeepSeek' }[c.apiService ?? 'deepseek']) : c.kind === 'codex-oauth' ? 'GPT · 기기 코드 연결 (Codex)' : c.kind;
+    const card = node('article', '', 'connection-card'); card.append(node('h3', c.label), badge(c.status), node('p', `${service}${c.email ? ` · ${c.email}` : ''}`, 'muted'), node('p', `${c.models.length}개 모델${c.error ? ` · ${c.error}` : ''}`, 'small'));
     if (c.browser?.thread) card.append(node('p', `연결된 대화 ID: ${c.browser.thread.value}`, 'small muted'));
     const row = node('div', '', 'toolbar'); row.append(button('모델 확인', async () => { await api(`/api/connections/${c.id}/models`, {}); await refresh(); }));
-    if (c.kind === 'openai-oauth') row.append(button('다시 로그인', async () => { showOAuth(await api('/api/connections/oauth', { label: c.label, connectionId: c.id, expectedEmail: c.expectedEmail })); }), button('이 계정 로그아웃', async () => { const result = await api<{ revoked: boolean }>(`/api/connections/${c.id}/logout`, {}); announce(result.revoked ? '계정 연결을 해제했습니다.' : '로컬 인증 정보를 지웠습니다. 원격 폐기 여부는 확인하지 못했습니다.'); await refresh(); }));
+    if (c.kind === 'openai-oauth') row.append(button('다시 로그인', async () => {
+      const start = async (expectedEmail: string) => { await showOAuth(await api('/api/connections/oauth', { label: c.label, connectionId: c.id, expectedEmail })); };
+      if (c.expectedEmail || c.email) await start(c.expectedEmail || c.email!);
+      else modal('로그인할 GPT 계정 확인', [{ name: 'expectedEmail', label: '웹 GPT 계정 이메일', email: true }], async values => { await start(values.expectedEmail!); }, '등록된 계정 ID는 유지합니다. dot과 다른 계정의 이메일을 입력하세요.');
+    }), button('이 계정 로그아웃', async () => { const result = await api<{ revoked: boolean }>(`/api/connections/${c.id}/logout`, {}); announce(result.revoked ? '계정 연결을 해제했습니다.' : '로컬 인증 정보를 지웠습니다. 원격 폐기 여부는 확인하지 못했습니다.'); await refresh(); }));
     if (c.kind === 'deepseek') row.append(button('API 키 갱신', () => modal('DeepSeek API 키 갱신', [{ name: 'key', label: '새 API 키', secret: true }], async values => { await api(`/api/connections/${c.id}/credential`, values); await refresh(); })));
     if (c.kind === 'browser' && c.browser) { const browserBinding = c.browser; row.append(button('기존 대화 다시 찾기', async () => {
       $<HTMLDetailsElement>('#browser-connection-panel').open = true; await loadBrowserPages(); $<HTMLSelectElement>('#browser-discovery-connection').value = c.id; invalidateDiscovery(); $('#browser-discovery-form').scrollIntoView();
@@ -236,18 +257,19 @@ function renderConnections(): void {
       for (const [key, value] of Object.entries({ label: c.label, ...browserBinding, threadSelector: browserBinding.thread?.selector ?? '', threadAttribute: browserBinding.thread?.attribute ?? '', threadValue: browserBinding.thread?.value ?? '', threadJsonKey: browserBinding.thread?.jsonKey ?? '', sendAppearsAfterInput: !!browserBinding.sendAppearsAfterInput })) {
         const input = form.elements.namedItem(key) as HTMLInputElement | null; if (input) { if (input.type === 'checkbox') input.checked = value === true; else input.value = String(value); }
       } owner.scrollIntoView({ behavior: 'smooth' }); })); }
+    if (c.kind === 'codex-oauth') row.append(button('기기 코드 로그인', async () => { await startDevice({ label: c.label, expectedEmail: c.expectedEmail ?? c.email ?? '', connectionId: c.id }); }), button('이 계정 로그아웃', async () => { await api(`/api/connections/${c.id}/logout`, {}); announce('로컬 연결을 해제했습니다. 원격 인증 폐기 여부는 확인하지 못했습니다.'); await refresh(); }));
     card.append(row); target.append(card); }
   if (!state.connections.length) target.append(node('p', '등록된 실제 계정이 없습니다. 모의 참여자로 전체 흐름을 먼저 확인할 수 있습니다.', 'small muted'));
   const participants = $('#participants-list'); participants.replaceChildren();
   for (const p of state.participants.filter(p => p.kind !== 'fake')) {
     const connection = state.connections.find(c => c.id === p.connectionId); const card = node('article', '', 'connection-card');
-    card.append(node('h3', p.label), node('p', '계정 · ' + (connection?.email ?? connection?.browser?.accountLabel ?? connection?.label ?? '연결 확인 필요'), 'small muted'), node('p', p.modelId + (p.kind === 'openai-oauth' ? ' · ' + effortLabel(p.reasoningEffort ?? 'xhigh') : ''), 'small'));
+    card.append(node('h3', p.label), node('p', '계정 · ' + (connection?.email ?? connection?.browser?.accountLabel ?? connection?.label ?? '연결 확인 필요'), 'small muted'), node('p', p.modelId + (gptKind(p.kind) ? ' · ' + effortLabel(p.reasoningEffort ?? 'xhigh') : ''), 'small'));
     card.append(button('토커 설정 변경', () => { if (connection?.status !== 'connected') { announce('먼저 해당 계정을 로그인하고 모델을 확인해 주세요.', true); return; }
       const form = $<HTMLFormElement>('#participant-form'); let hidden = form.elements.namedItem('participantId') as HTMLInputElement | null;
       if (!hidden) { hidden = node('input'); hidden.type = 'hidden'; hidden.name = 'participantId'; form.append(hidden); } hidden.value = p.id;
       $<HTMLSelectElement>('#participant-connection').value = p.connectionId!; updateModels(); $<HTMLSelectElement>('#participant-model').value = p.modelId;
       (form.elements.namedItem('label') as HTMLInputElement).value = p.label; (form.elements.namedItem('role') as HTMLInputElement).value = p.role;
-      $<HTMLSelectElement>('#participant-effort').value = p.reasoningEffort ?? 'xhigh'; $('#participant-save').textContent = '토커 설정 저장'; $('#participant-edit-cancel').hidden = false; form.scrollIntoView({ behavior: 'smooth' });
+      $<HTMLSelectElement>('#participant-effort').value = p.reasoningEffort ?? 'xhigh'; updateEffort(); $('#participant-save').textContent = '토커 설정 저장'; $('#participant-edit-cancel').hidden = false; form.scrollIntoView({ behavior: 'smooth' });
     })); participants.append(card);
   }
   $('#browser-state').textContent = `${state.capabilities.browserConfigured ? 'Chrome 명령 설정됨' : 'Chrome 명령 미설정'} · ${state.browserPaused ? '수동 조작 중 · 자동 입력 잠김' : '자동 입력 가능'} · ${state.capabilities.noVncConfigured ? '화면 연결 설정됨' : '화면 연결 미설정'}`;
@@ -255,9 +277,54 @@ function renderConnections(): void {
   if (browserSignature !== browserChoices) { browserChoices = browserSignature; selectOptions($('#browser-discovery-connection'), state.connections.filter(c => c.kind === 'browser'), '새 연결'); }
   const grants = $('#grants-list'); grants.replaceChildren(); for (const grant of state.grants) { const row = node('div', '', 'toolbar'); row.append(node('span', `${grant.participantId} · ${grant.revoked ? '폐기됨' : grant.tools.join(', ')}`, 'small')); if (!grant.revoked) row.append(button('폐기', async () => { await api('/api/grants/revoke', { id: grant.id }); await refresh(); })); grants.append(row); }
 }
-function showOAuth(result: { authorizationUrl: string; connectionId: string }): void {
-  const target = $('#oauth-result'); target.replaceChildren(node('p', 'Ubuntu 서버의 Chrome에서 아래 승인 주소를 여세요. 다른 기기에서 열면 loopback 콜백이 서버로 돌아오지 않습니다.', 'small'));
-  target.append(button('별도 로그인 창 열기', async () => { await api('/api/browser/open-auth', { url: result.authorizationUrl, connectionId: result.connectionId }); announce('dot과 분리된 Chrome 로그인 창에서 웹 GPT용 계정으로 로그인한 뒤 모델 확인을 누르세요.'); }), details('서버에서 열 승인 주소', result.authorizationUrl), button('로그인 완료 · 모델 확인', async () => { await api(`/api/connections/${result.connectionId}/models`, {}); await refresh(); }));
+function closeDeviceScreen(): void { clearTimeout(deviceTimer); deviceTimer = 0; deviceLogin = null; deviceSequence++; $('#device-code').textContent = ''; $('#device-actions').hidden = true; $<HTMLDialogElement>('#device-login-dialog').close(); }
+async function startDevice(input: Record<string, string>): Promise<void> {
+  closeDeviceScreen(); const sequence = deviceSequence; const dialog = $<HTMLDialogElement>('#device-login-dialog');
+  $('#device-code').textContent = ''; $('#device-actions').hidden = true; $('#device-status').textContent = '로그인 코드를 준비하고 있습니다.'; dialog.showModal();
+  try {
+    const result = await api<DeviceSignin>('/api/connections/codex-oauth', input);
+    if (sequence !== deviceSequence) return; deviceLogin = { connectionId: result.connectionId, attemptId: result.attemptId }; await showDevice(result); await refresh();
+  } catch (e) { if (sequence === deviceSequence) $('#device-status').textContent = errors[e instanceof Error ? e.message : ''] ?? '로그인을 시작하지 못했습니다. 계정 카드와 오류 알림을 확인해 주세요.'; throw e; }
+}
+async function showDevice(result: DeviceSignin): Promise<void> {
+  const active = deviceLogin; if (!active || active.connectionId !== result.connectionId || active.attemptId !== result.attemptId) return;
+  clearTimeout(deviceTimer); deviceTimer = 0;
+  $('#device-actions').hidden = result.status !== 'pending'; $('#device-code').textContent = result.status === 'pending' ? result.userCode ?? '' : '';
+  if (result.status === 'pending') {
+    if (result.verificationUrl !== $<HTMLAnchorElement>('#device-open').href || !result.userCode) throw new Error('device_login_start_failed');
+    $('#device-status').textContent = `이 기기에서 인증 페이지를 열고 위 코드를 입력하세요. 서버 Chrome은 필요하지 않습니다. 만료 ${new Date(result.expiresAt).toLocaleTimeString('ko-KR')}`;
+    deviceTimer = window.setTimeout(() => { void pollDevice(active).catch(report); }, 2000); return;
+  }
+  if (result.status === 'completed') {
+    $('#device-status').textContent = '계정 로그인이 완료됐습니다. 사용 가능한 모델을 확인하고 있습니다.';
+    try { await api(`/api/connections/${active.connectionId}/models`, {}); if (deviceLogin === active) $('#device-status').textContent = '로그인·모델 확인을 마쳤습니다. 대화 참여자를 등록할 수 있습니다.'; }
+    catch (e) { if (deviceLogin === active) $('#device-status').textContent = '로그인은 완료됐지만 모델 목록을 확인하지 못했습니다. 계정 카드에서 모델 확인을 다시 눌러 주세요.'; report(e); }
+  } else $('#device-status').textContent = result.status === 'cancelled' ? '로그인을 취소했습니다.' : errors[result.error ?? ''] ?? `로그인 상태: ${result.status}. 같은 계정 카드에서 다시 확인해 주세요.`;
+  await refresh();
+}
+async function pollDevice(active: NonNullable<typeof deviceLogin>): Promise<void> {
+  if (deviceLogin !== active) return;
+  try { const result = await api<DeviceSignin>(`/api/connections/${active.connectionId}/device-signin?attemptId=${encodeURIComponent(active.attemptId)}`); if (deviceLogin === active) await showDevice(result); }
+  catch (e) { if (deviceLogin === active) { $('#device-status').textContent = '연결 상태를 다시 확인하고 있습니다. 로그인 요청은 다시 보내지 않습니다.'; deviceTimer = window.setTimeout(() => { void pollDevice(active).catch(report); }, 5000); } throw e; }
+}
+async function showOAuth(result: { authorizationUrl: string; connectionId: string }): Promise<void> {
+  const target = $('#oauth-result'); target.replaceChildren(node('p', '로그인을 시작하면 서버 Chrome 화면을 바로 표시합니다. 화면을 닫았으면 아래 버튼으로 다시 열 수 있습니다.', 'small'));
+  target.append(button('별도 로그인 창 열기', () => openOAuthScreen(result)), details('서버에서 열 승인 주소', result.authorizationUrl), button('로그인 완료 · 모델 확인', async () => { await api(`/api/connections/${result.connectionId}/models`, {}); await refresh(); }));
+  await openOAuthScreen(result);
+}
+async function openOAuthScreen(result: { authorizationUrl: string; connectionId: string }): Promise<void> {
+  // The gateway requires the existing manual-control lease. It refuses takeover
+  // while a browser participant is responding; opening OAuth never bypasses it.
+  await api('/api/browser/control', { paused: true }); await refresh();
+  const desktop = $('#oauth-desktop'); desktop.replaceChildren();
+  if (state?.capabilities.noVncConfigured) {
+    const frame = node('iframe'); frame.id = 'oauth-desktop-frame'; frame.title = 'GPT OAuth 서버 로그인 화면'; frame.src = $('#browser-link').getAttribute('href')!; desktop.append(frame);
+  } else desktop.append(node('p', '원격 화면이 설정되지 않았습니다. 같은 Ubuntu 서버의 Chrome에서 로그인해 주세요.', 'small'));
+  const status = $('#oauth-screen-status'); status.textContent = '분리된 GPT 로그인 창을 준비하고 있습니다. Chrome 자동 입력은 잠겨 있습니다.';
+  $<HTMLDialogElement>('#oauth-login-dialog').showModal();
+  try { await api('/api/browser/open-auth', { url: result.authorizationUrl, connectionId: result.connectionId });
+    status.textContent = '아래 서버 Chrome에서 로그인·동의를 완료하세요. 기존 dot·Muse 대화와 로그인은 유지됩니다. 완료 후 화면을 닫고 모델을 확인하세요.';
+  } catch (error) { status.textContent = '로그인 창을 열지 못했습니다. 서버 화면과 오류 알림을 확인하세요. 자동 입력은 잠긴 상태로 유지합니다.'; throw error; }
 }
 function renderJobs(): void {
   if (!state) return; const bindings = $('#bindings-list'); bindings.replaceChildren();
@@ -272,12 +339,13 @@ function renderJobs(): void {
       for (const activity of job.activities) card.append(details(`${activity.type} · ${activity.status}`, activity.text, `${job.id}:${activity.id}`)); if (job.error) card.append(node('p', job.error, 'small muted')); target.append(card); }
   });
 }
-type Field = { name: string; label: string; multiline?: boolean; required?: boolean; secret?: boolean; options?: { value: string; label: string }[]; value?: string };
+type Field = { name: string; label: string; multiline?: boolean; required?: boolean; secret?: boolean; email?: boolean; options?: { value: string; label: string }[]; value?: string };
 let modalAction: ((values: Record<string, string>) => Promise<unknown>) | null = null;
 function modal(title: string, fields: Field[], action: (values: Record<string, string>) => Promise<unknown>, note?: string): void {
   $('#action-title').textContent = title; const target = $('#action-fields'); target.replaceChildren(); if (note) target.append(node('p', note, 'small muted'));
   for (const field of fields) { const label = node('label', field.label); const input = field.options ? node('select') : field.multiline ? node('textarea') : node('input'); input.name = field.name; input.required = field.required !== false; if (input instanceof HTMLTextAreaElement) input.rows = 6; else if (input instanceof HTMLInputElement && field.secret) { input.type = 'password'; input.autocomplete = 'off'; }
     if (input instanceof HTMLSelectElement && field.options) selectOptions(input, field.options.map(o => ({ id: o.value, label: o.label }))); if (field.value !== undefined) input.value = field.value; label.append(input); target.append(label); }
+  for (const field of fields.filter(f => f.email)) (target.querySelector(`[name="${field.name}"]`) as HTMLInputElement).type = 'email';
   modalAction = action; $<HTMLDialogElement>('#action-dialog').showModal();
 }
 form('#action-form', async values => { await modalAction?.(values); $<HTMLDialogElement>('#action-dialog').close(); $('#action-fields').replaceChildren(); });
@@ -288,7 +356,8 @@ form('#discussion-form', async values => { const participantIds = [...document.q
   const targetRoom = focusRoomId;
   const result = await api<{ id?: string; discussionId?: string }>(targetRoom ? `/api/rooms/${targetRoom}/focus` : '/api/discussions', { topic: values.topic, criteria: values.criteria, materials: values.materials, materialPackageIds, participantIds, executionBindingId: values.executionBindingId || null,
     limits: { maxRequests: Number(values.maxRequests), maxRounds: Number(values.maxRounds), maxActiveMs: Number(values.maxMinutes) * 60_000 } }); selected = (result.id ?? result.discussionId)!; focusRoomId = null; $('#discussion-mode').hidden = true; localStorage.setItem('wj.discussion', selected); if (targetRoom) showView('room'); await refresh(); });
-form('#oauth-form', async values => { showOAuth(await api('/api/connections/oauth', values)); await refresh(); });
+form('#oauth-form', async values => { await showOAuth(await api('/api/connections/oauth', values)); await refresh(); });
+form('#codex-oauth-form', startDevice);
 form('#deepseek-form', async (values, el) => { try { await api('/api/connections/deepseek', values); await refresh(); } finally { (el.elements.namedItem('key') as HTMLInputElement).value = ''; } });
 function clearParticipantEdit(): void { $('#participant-form').querySelector('[name=participantId]')?.remove(); $<HTMLFormElement>('#participant-form').reset(); $('#participant-save').textContent = '참여자 등록'; $('#participant-edit-cancel').hidden = true; updateModels(); }
 form('#participant-form', async values => { const { participantId, ...settings } = values; await api(participantId ? '/api/participants/' + participantId : '/api/participants', settings); clearParticipantEdit(); announce(participantId ? '설정을 저장했습니다. 새 토의부터 적용합니다.' : '참여자를 등록했습니다.'); await refresh(); });
@@ -333,6 +402,7 @@ form('#job-form', async values => { await api('/api/jobs', values); await refres
 form('#grant-form', async values => { const tools = ['task_get', 'context_get', 'result_submit', 'capabilities_get', ...(values.codex === 'on' ? ['codex_send', 'codex_status', 'codex_result', 'codex_cancel'] : [])];
   const result = await api<{ id: string; token: string }>('/api/grants', { ...values, tools }); $('#grant-result').textContent = `한 번만 표시되는 접근 키입니다. 대화 본문에 붙여 넣지 마세요.\nMCP URL: ${location.origin}/mcp\nAuthorization: Bearer ${result.token}\nGrant: ${result.id}`; await refresh(); });
 $('#participant-connection').addEventListener('change', updateModels);
+$('#participant-model').addEventListener('change', updateEffort);
 for (const el of document.querySelectorAll<HTMLElement>('[data-view]')) el.addEventListener('click', () => showView(el.dataset.view as View));
 for (const el of document.querySelectorAll<HTMLElement>('[data-tab]')) el.addEventListener('click', () => { tab = el.dataset.tab!; renderDiscussion(); });
 $('#new-discussion').addEventListener('click', () => { focusRoomId = null; $('#discussion-mode').hidden = true; selected = ''; current = null; localStorage.removeItem('wj.discussion'); showView('discussion'); render(); $('#topic').focus(); });
@@ -340,7 +410,7 @@ function click(id: string, action: () => Promise<unknown>): void { $(id).addEven
 const prepareButton = button('파일 읽고 자료 저장', async () => {
   const paths = $<HTMLTextAreaElement>('#material-paths').value.split('\n').map(p => p.trim()).filter(Boolean);
   const result = await api<{ id: string }>('/api/materials', { label: $<HTMLInputElement>('#material-label').value, paths });
-  pendingMaterialSelection = result.id; await refresh();
+  pendingMaterialSelection = result.id; announce('파일 사본을 저장했습니다. 다음 토의의 자료 선택을 반영하고 있습니다.'); await refresh();
   announce('파일 사본을 저장하고 다음 토의의 자료로 선택했습니다.');
 }); prepareButton.id = 'material-prepare'; $('#material-prepare').replaceWith(prepareButton);
 const browseButton = button('폴더 확인', () => browseMaterials($<HTMLInputElement>('#material-folder').value)); browseButton.id = 'material-browse'; $('#material-browse').replaceWith(browseButton);
@@ -363,6 +433,13 @@ click('#capabilities-refresh', async () => {
 click('#logout', async () => { await api('/api/logout', {}); lock(); });
 click('#browser-manual', async () => { await api('/api/browser/control', { paused: true }); await refresh(); });
 click('#browser-automatic', async () => { await api('/api/browser/control', { paused: false }); await refresh(); });
+$('#device-close').addEventListener('click', closeDeviceScreen);
+$('#device-login-dialog').addEventListener('close', () => { if ($<HTMLDialogElement>('#device-login-dialog').open) return; clearTimeout(deviceTimer); deviceTimer = 0; deviceLogin = null; deviceSequence++; $('#device-code').textContent = ''; });
+click('#device-cancel', async () => { const active = deviceLogin; if (!active) return; await api(`/api/connections/${active.connectionId}/device-signin/cancel`, { attemptId: active.attemptId }); if (deviceLogin === active) await pollDevice(active); });
+click('#device-copy', async () => { const code = $('#device-code').textContent; if (!code || !deviceLogin) return; try { await navigator.clipboard.writeText(code); announce('기기 코드를 복사했습니다.'); } catch { announce('자동 복사를 사용할 수 없습니다. 화면의 코드를 직접 선택해 복사하세요.', true); } });
+click('#oauth-screen-resume', async () => { await api('/api/browser/control', { paused: false }); $<HTMLDialogElement>('#oauth-login-dialog').close(); await refresh(); });
+$('#oauth-screen-close').addEventListener('click', () => $<HTMLDialogElement>('#oauth-login-dialog').close());
+$('#oauth-login-dialog').addEventListener('close', () => { $('#oauth-desktop').replaceChildren(); });
 click('#browser-pages', async () => { $('#browser-output').textContent = (await api<{ text: string }>('/api/browser/pages')).text; });
 click('#browser-discovery-pages', loadBrowserPages);
 click('#browser-snapshot', async () => { const id = new FormData($<HTMLFormElement>('#browser-form')).get('pageId'); $('#browser-output').textContent = (await api<{ text: string }>(`/api/browser/snapshot?pageId=${encodeURIComponent(String(id))}`)).text; });

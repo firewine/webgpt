@@ -8,7 +8,7 @@ import { MATERIAL_LIMITS } from './materials.js';
 import { now } from './util.js';
 
 const execute = promisify(execFile);
-async function version(command: string[]) {
+export async function installedVersion(command: string[]) {
   const binary = command[0]!; let args = ['--version'];
   if (/^(node|nodejs)$/.test(basename(binary))) {
     if (!command[1] || !isAbsolute(command[1]) || !/\.[cm]?js$/.test(command[1])) return { status: 'unknown', version: null };
@@ -25,9 +25,9 @@ async function version(command: string[]) {
 export async function inspectCapabilities(app: Workspace, scope?: { discussionId: string; participantId: string; tools: string[] }) {
   const codexVisible = !scope || scope.tools.some(t => t.startsWith('codex_'));
   const [codex, bubblewrap, chromeMcp] = await Promise.all([
-    codexVisible ? version(app.config.codexCommand) : Promise.resolve(null),
-    codexVisible ? version(['bwrap']) : Promise.resolve(null),
-    !scope && app.config.chromeCommand ? version(app.config.chromeCommand) : Promise.resolve(null),
+    codexVisible ? installedVersion(app.config.codexCommand) : Promise.resolve(null),
+    codexVisible ? installedVersion(['bwrap']) : Promise.resolve(null),
+    !scope && app.config.chromeCommand ? installedVersion(app.config.chromeCommand) : Promise.resolve(null),
   ]);
   const state = app.store.read(); const discussion = scope ? findDiscussion(state, scope.discussionId) : null;
   const bindings = state.bindings.filter(b => !scope || codexVisible && b.id === discussion!.executionBindingId);

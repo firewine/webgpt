@@ -77,6 +77,8 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
       res.on('close', () => upstream.destroy()); upstream.end(); return;
     }
     if (get && path === '/api/state') { json(res, 200, app.snapshot()); return; }
+    const devicePath = /^\/api\/connections\/([\w-]+)\/device-signin(?:\/(cancel))?$/.exec(path);
+    if (get && devicePath && !devicePath[2]) { json(res, 200, app.codexOAuth.status(devicePath[1]!, url.searchParams.get('attemptId') ?? undefined)); return; }
     if (get && path === '/api/rooms') { json(res, 200, { ...app.resident.snapshot(), cursor: app.store.cursor() }); return; }
     const wikiPath = /^\/api\/rooms\/([\w-]+)\/wiki(?:\/([\w-]+)(?:\/(history))?)?$/.exec(path);
     if (get && wikiPath) {
@@ -163,8 +165,17 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     if (path === '/api/discussions') { json(res, 201, { id: app.engine.create(input, command(req)) }); return; }
     if (discussionPath?.[2]) { app.engine.control(discussionPath[1]!, input, command(req)); json(res, 200, { ok: true }); return; }
     if (path === '/api/connections/oauth') {
-      const result = await app.oauth.begin(string(input.label, 80), input.connectionId ? string(input.connectionId) : undefined, input.expectedEmail ? string(input.expectedEmail, 254) : undefined);
+      if (typeof input.expectedEmail !== 'string' || !input.expectedEmail.trim()) throw new AppError('account_email_required');
+      const result = await app.oauth.begin(string(input.label, 80), input.connectionId ? string(input.connectionId) : undefined, string(input.expectedEmail, 254));
       json(res, 200, result); return;
+    }
+    if (path === '/api/connections/codex-oauth') {
+      if (input.connectionId) app.assertConnectionIdle(string(input.connectionId, 100));
+      json(res, 200, await app.codexOAuth.begin(input, command(req))); return;
+    }
+    if (devicePath?.[2] === 'cancel') {
+      if (Object.keys(input).some(k => k !== 'attemptId')) throw new AppError('invalid_input');
+      app.codexOAuth.cancel(devicePath[1]!, string(input.attemptId, 100)); json(res, 200, { cancelled: true }); return;
     }
     if (path === '/api/browser/open-auth') {
       const connectionId = string(input.connectionId, 100);
@@ -177,7 +188,9 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     if (connectionPath) {
       if (connectionPath[2] === 'models') await app.refreshModels(connectionPath[1]!);
       else if (connectionPath[2] === 'credential') await app.replaceKey(connectionPath[1]!, string(input.key, 4096));
-      else { app.assertConnectionIdle(connectionPath[1]!); json(res, 200, await app.oauth.signOut(connectionPath[1]!)); return; }
+      else { app.assertConnectionIdle(connectionPath[1]!); const c = app.store.read().connections.find(c => c.id === connectionPath[1]);
+        if (c?.kind === 'codex-oauth') { await app.codexOAuth.signOut(c.id); json(res, 200, { revoked: false }); }
+        else json(res, 200, await app.oauth.signOut(connectionPath[1]!)); return; }
       json(res, 200, { ok: true }); return;
     }
     if (path === '/api/participants') { json(res, 201, { id: app.participant(input) }); return; }

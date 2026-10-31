@@ -104,6 +104,8 @@ API/app-owned context는 한도에 맞는 경우 history anchor를 새 generatio
 
 **6단계 DiscussionEngine은 남기고 Room의 focus activity로 연결한다.** 공개 메시지/선택 자료 snapshot과 기존 participant IDs로 engine.create를 호출하고 topicLink를 저장한다. root_workflow_busy·revision·예산·활성 Discussion 1개 제약을 존중한다.
 
+2026-10-31 승인된 [R8-A B안](./reviews/r8-topic-transition-decision-20261031.md)에 따라 owner가 off 상태 방 설정에서 `autoTopic`을 명시 허용하면 참여자의 확정 `topic_propose`도 기존 focus로 연결한다. 누락된 기존 방은 금지다. 서버가 공개 출처·actor/세대/정책/예산을 고정한 intent를 저장하고 transaction 밖에서 기존 engine.create를 호출한다. 업무/실행·미확정·다른 root가 있으면 시작을 보류하며, 생성 후 crash는 같은 command/토론 ID로 대조한다. 새 MCP 권한이나 private 자료·Codex 권한은 부여하지 않는다.
+
 focus 중 Room은 존재하며 사용자 메시지/업무 결과/Wiki event를 수신하지만 ambient 발화는 대기한다. 독립 초안·같은 라운드 새 답은 Room projector·Wiki·인용/MCP로 다른 참여자에게 유출하지 않는다. owner 원문 보기와 모델 공개 범위는 별개다. 초안 전체 수집/닫힌 라운드 후에만 허용 내용을 room_public으로 투영한다.
 
 종료/부분 종료 후 desiredOn·예산·미확정·epoch를 검사해 ambient로 복귀한다. 사용자 조건은 기존 engine.control revise로 공통 revision에 반영한다. 멘션이 한 참여자에게만 다른 새 사실/권한을 주는 우회 경로가 되지 않는다. pause/cancel/off가 기존 job/업무를 삭제하지 않는다.

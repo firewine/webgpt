@@ -1,0 +1,13 @@
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { Store } from '../../dist/server/workspace/store.js';
+import { ResidentStore } from '../../dist/server/workspace/resident-store.js';
+import { Wiki } from '../../dist/server/workspace/wiki.js';
+const [directory, stage] = process.argv.slice(2); const store = new Store(directory); const resident = new ResidentStore(store, true); const wiki = new Wiki(store, true);
+const roomId = resident.snapshot().rooms[0].id; const source = resident.postMessage(roomId, { text: 'Crash fixture public source' }, 'r8-wiki-source').messageId;
+const input = { slug: 'crash-memory', title: '중단 뒤 보존할 지식', body: '공개 원문에 근거한 crash-safe Wiki original', scopeRef: 'room:' + roomId, expectedVersion: 0, sourceRefs: [{ kind: 'message', id: source }] };
+writeFileSync(join(directory, 'wiki-input.json'), JSON.stringify({ roomId, input }));
+const original = store.transact.bind(store);
+store.transact = (fn, command) => original((s, emit) => fn(s, event => { emit(event); if (stage === 'before_commit' && event.type === 'resident.wiki_edited') process.kill(process.pid, 'SIGKILL'); }), command);
+store.subscribe(event => { if (stage === 'notice_committed' && event.type === 'resident.message_created' || stage === 'edit_committed' && event.type === 'resident.wiki_edited') process.kill(process.pid, 'SIGKILL'); });
+wiki.edit(roomId, input, 'r8-wiki-crash'); throw new Error('Wiki crash stage did not trigger');

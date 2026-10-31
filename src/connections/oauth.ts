@@ -12,7 +12,7 @@ const TOKEN = `${ISSUER}/api/accounts/oauth/token`;
 const RESOURCE = 'https://api.openai.com/v1';
 const SCOPES = 'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct';
 interface TokenSet { accessToken: string; refreshToken: string; idToken: string; expiresAt: number; scopes: string[]; clientId: string; subject: string }
-interface Attempt { id: string; connectionId: string; state: string; nonce: string; verifier: string; redirect: string; clientId: string | null; expiresAt: number }
+interface Attempt { id: string; connectionId: string; state: string; nonce: string; verifier: string; redirect: string; clientId: string | null; expiresAt: number; expectedEmail: string | undefined }
 type Fetch = typeof fetch;
 export class OAuthService {
   private server: Server | null = null;
@@ -30,32 +30,42 @@ export class OAuthService {
   async begin(label: string, existingId?: string, expectedEmail?: string): Promise<{ attemptId: string; connectionId: string; authorizationUrl: string }> {
     const expected = expectedEmail?.trim().toLowerCase();
     if (expected && (!expected.includes('@') || expected.length > 254)) throw new AppError('invalid_account_email');
+    if (existingId && !this.store.read().connections.some(c => c.id === existingId && c.kind === 'openai-oauth')) throw new AppError('connection_not_found', 404);
     await this.listen();
     for (const [key, a] of this.attempts) if (a.expiresAt <= Date.now()) this.attempts.delete(key);
-    if (this.attempts.size >= 8) throw new AppError('too_many_signins', 429);
     const state = this.store.read();
     const existing = existingId ? state.connections.find(c => c.id === existingId && c.kind === 'openai-oauth') : undefined;
     if (existingId && !existing) throw new AppError('connection_not_found', 404);
-    if ([...this.attempts.values()].some(a => a.connectionId === existingId)) throw new AppError('signin_pending', 409);
+    const pending = existingId ? [...this.attempts.values()].find(a => a.connectionId === existingId) : undefined;
+    if (pending) {
+      if (expected && existing?.expectedEmail && expected !== existing.expectedEmail) throw new AppError('signin_account_pending', 409);
+      if (expected && !existing?.expectedEmail) { this.store.transact(s => { s.connections.find(c => c.id === existingId)!.expectedEmail = expected; }); pending.expectedEmail = expected; }
+      return this.authorization(pending, state.hostId);
+    }
+    if (this.attempts.size >= 8) throw new AppError('too_many_signins', 429);
     const connectionId = existing?.id ?? id('connection');
     const attempt: Attempt = { id: id('signin'), connectionId, state: randomBytes(32).toString('base64url'),
       nonce: randomBytes(32).toString('base64url'), verifier: randomBytes(48).toString('base64url'),
-      redirect: `http://127.0.0.1:${this.port}/auth/callback`, clientId: existing?.clientId ?? null, expiresAt: Date.now() + 600_000 };
+      redirect: `http://127.0.0.1:${this.port}/auth/callback`, clientId: existing?.clientId ?? null, expiresAt: Date.now() + 600_000, expectedEmail: expected ?? existing?.expectedEmail };
     if (!existing) this.store.transact((s, emit) => {
       s.connections.push({ id: connectionId, kind: 'openai-oauth', label: string(label, 80), status: 'auth_required', models: [], ...(expected ? { expectedEmail: expected } : {}) });
       emit({ type: 'connection.added', discussionId: null, data: { connectionId } });
     });
     if (existing && expected) this.store.transact(s => { s.connections.find(c => c.id === connectionId)!.expectedEmail = expected; });
     this.attempts.set(attempt.state, attempt);
+    return this.authorization(attempt, state.hostId);
+  }
+  private authorization(attempt: Attempt, hostId: string): { attemptId: string; connectionId: string; authorizationUrl: string } {
     const url = new URL(`${ISSUER}/api/accounts/authorize`);
-    const params: Record<string, string> = { client_id: attempt.clientId ?? 'dynamic_agent_client', ext_agent_host_id: state.hostId,
+    const params: Record<string, string> = { client_id: attempt.clientId ?? 'dynamic_agent_client', ext_agent_host_id: hostId,
       response_type: 'code', redirect_uri: attempt.redirect, scope: SCOPES, resource: RESOURCE,
       state: attempt.state, nonce: attempt.nonce, code_challenge_method: 'S256',
       code_challenge: createHash('sha256').update(attempt.verifier).digest('base64url') };
     if (!attempt.clientId) params.agent_name_hint = 'Webjjoku';
+    if (attempt.expectedEmail) params.login_hint = attempt.expectedEmail;
     // Deliberately omit retained ID tokens from URLs returned to the web client.
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-    return { attemptId: attempt.id, connectionId, authorizationUrl: url.href };
+    return { attemptId: attempt.id, connectionId: attempt.connectionId, authorizationUrl: url.href };
   }
   private async listen(): Promise<void> {
     if (this.server?.listening) return;
@@ -167,7 +177,7 @@ export class OAuthService {
     if (!res.ok) throw new AppError('oidc_discovery_failed', 502);
     const metadata = object(await res.json()); if (metadata.issuer !== ISSUER) throw new AppError('invalid_issuer'); return metadata;
   }
-  private async identity(token: string, clientId: string, nonce?: string): Promise<{ sub: string; email: string | undefined }> {
+  async identity(token: string, clientId: string, nonce?: string): Promise<{ sub: string; email: string | undefined; accountId: string | undefined; expiresAt: number }> {
     const metadata = await this.metadata();
     const res = await this.request(authUrl(metadata.jwks_uri), { redirect: 'error', signal: AbortSignal.timeout(15_000) });
     if (!res.ok) throw new AppError('jwks_failed', 502);
@@ -178,7 +188,9 @@ export class OAuthService {
     });
     if (nonce !== undefined && (typeof payload.nonce !== 'string' || !equal(payload.nonce, nonce))) throw new AppError('invalid_nonce');
     if (typeof payload.iat !== 'number' || payload.iat > Date.now() / 1000 + 5 || (Array.isArray(payload.aud) && payload.aud.length > 1 && payload.azp !== clientId)) throw new AppError('invalid_identity_claims');
-    return { sub: string(payload.sub), email: typeof payload.email === 'string' ? payload.email : undefined };
+    const auth = payload['https://api.openai.com/auth'];
+    const accountId = auth && typeof auth === 'object' && !Array.isArray(auth) ? (auth as Record<string, unknown>).chatgpt_account_id : undefined;
+    return { sub: string(payload.sub), email: typeof payload.email === 'string' ? payload.email : undefined, accountId: typeof accountId === 'string' && accountId.trim() ? accountId : undefined, expiresAt: payload.exp! * 1000 };
   }
   private async post(url: string, body: Record<string, string>): Promise<Record<string, unknown>> {
     const response = await this.request(url, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20_000),

@@ -67,19 +67,31 @@ Chrome/VNC/CDP를 Tailnet에 직접 열지 않는다. 예제 VNC는 인증된 ga
 
 ## 3. 계정과 기존 대화
 
-### GPT OAuth
+### GPT 기기 코드 로그인 (Codex 계정)
 
-`GPT 계정 추가` → `OAuth 로그인 시작` → `서버 Chrome에서 승인 화면 열기` 순서로 진행한다. callback이 Ubuntu loopback에 있으므로 다른 기기의 Chrome에서 승인 URL을 열지 않는다. noVNC로 같은 서버 Chrome에서 계정을 선택하고 로그인·동의를 완료한다. 화면에 표시된 계정 별칭/이메일을 확인하고 `모델 확인` 후 참여자를 만든다.
+`GPT · 기기 코드 로그인`에서 별칭·필수 이메일을 입력하고 시작한다. 앱에 표시된 코드로 **현재 접속 기기**의 인증 페이지에서 로그인·동의를 마친다. 서버 Chrome이나 SSH 포트 전달은 필요하지 않다. 서명·이메일·계정 ID 확인 뒤 해당 Codex 계정의 실제 모델 목록을 표시한다. 일반 GPT OAuth와 다른 연결이며 기존 dot/CLI 로그인은 가져오지 않는다. 지원 여부는 계정 보안 설정/workspace 권한에 따르고 자동 유료 테스트는 없다.
+
+창을 닫거나 새로고침했으면 같은 계정 카드에서 원래 요청을 다시 연다. `로그인 취소`·만료·서버 재시작 뒤 새 요청은 직접 시작한다. 다른 이메일로 승인했으면 연결을 거절한다. 코드를 채팅이나 공개 로그에 붙이지 않는다. 모델 확인 뒤 같은 계정/모델로 참여자를 만들고 지원 사고 깊이를 선택한다. 이 흐름은 기존 Chrome 수동 잠금을 자동 해제하지 않는다. [실행 증거·차이·복귀](implementation/codex-device-login-20261031.md)를 따른다. 실계정/권한/추론·운영 반영은 아직 NOT_RUN이다.
+
+### GPT 일반 OAuth
+
+새로고침으로 승인 버튼을 잃었으면 같은 계정 카드의 `다시 로그인`으로 미만료 요청을 복구한다. 반복해 눌러도 요청·만료 시간이 새로 생기지 않는다. 진행 중 기대 이메일을 바꾸려 하면 거절한다. 서버를 재시작했거나 10분이 지났다면 새 요청의 창에서 진행한다. 계정 재등록·state 삭제로 오류를 숨기지 않는다.
+
+`GPT 계정 추가`에서 로그인할 이메일을 반드시 입력하고 `OAuth 로그인 시작`을 누른다. 서버 Chrome 화면이 자동으로 열린다. 화면을 닫았으면 `별도 로그인 창 열기`로 다시 연다. 버튼은 기존 수동 조작 lease를 얻고 앱 안에 서버 Chrome 화면을 표시한다. callback이 Ubuntu loopback에 있으므로 다른 기기의 Chrome에서 승인 URL을 열지 않는다. 표시된 noVNC 화면에서 계정을 선택하고 직접 로그인·동의한다. `로그인 화면 닫기 · 자동 입력 재개` 후 계정 별칭/이메일과 `모델 확인`을 확인하고 참여자를 만든다. `화면만 닫기`/Escape는 자동 입력 잠금을 유지한다. 진행 중인 browser 발언이 있으면 수동 전환을 거절한다.
+
+이 수정이 운영에 반영되기 전의 버튼은 서버 Chrome 탭만 생성한다. 기존 화면에서는 `Ubuntu Chrome → 수동 조작 시작 → 서버 Chrome 화면 열기`로 확인한다. 서버를 재시작했거나 오래된 승인 창이면 같은 연결의 `다시 로그인`으로 새 요청을 시작한다. 과거 창/URL을 계속 사용하지 않는다. [로그인 창 수정·검사 증거](implementation/oauth-login-screen-20261031.md)를 따른다.
 
 두 번째 계정은 별도로 등록한다. 같은 계정을 두 번 등록한 것을 두 계정 검증으로 세지 않는다. PKCE/state/nonce/issuer/audience/subject와 발급 client ID를 검증하며 refresh는 연결별로 직렬화한다. plan usage 권한이 없거나 모델 목록이 없으면 실제 응답 성공으로 표시하지 않는다. 개인 계정의 적격성이나 preview 허용을 앱이 대신 보장할 수 없다.
 
-dot과 웹 GPT를 다른 계정으로 쓸 때는 GPT 계정 추가에서 별칭과 선택 이메일을 지정하고 `별도 로그인 창 열기`를 사용한다. 연결별 격리 context에서 열려 기존 dot 쿠키를 사용하지 않는다. 지정 이메일과 검증된 identity가 다르면 연결을 거절한다. 실제 계정 차이는 사용자가 선택한 identity로 확인하며 이름만 다르게 붙여 두 계정으로 세지 않는다.
+dot과 웹 GPT를 다른 계정으로 쓸 때는 GPT 계정 추가에서 별칭과 필수 이메일을 지정하고 `별도 로그인 창 열기`를 사용한다. 연결별 격리 context에서 열려 기존 dot 쿠키를 사용하지 않는다. 지정 이메일과 검증된 identity가 다르면 연결을 거절한다. 실제 계정 차이는 사용자가 선택한 identity로 확인하며 이름만 다르게 붙여 두 계정으로 세지 않는다.
 
 OAuth GPT 사고 깊이는 기본 Extra high이며 Low/Medium/High로 변경할 수 있다. 등록한 토커 설정 변경은 새 토의부터 적용한다. 현재 토의는 일시정지·응답 확정 뒤 토커 카드의 사고 깊이 변경으로 이후 발언만 바꾼다. 모델이 요청값을 지원하지 않으면 오류를 확인하고 직접 조절한다. 기존 browser dot·Muse는 원래 서비스의 모델·사고 깊이를 따른다. [설정과 재검토 기록](implementation/talker-settings-rounds-20261030.md)을 참조한다.
 
 ### DeepSeek
 
 연결 UI에 허가된 API 키를 입력하면 서버 vault에 저장하고 모델 목록을 조회한다. 입력란은 요청 뒤 비운다. 응답의 실제 usage를 사용하며 `[DONE]`만 있거나 stream이 중간 종료된 경우 완료로 간주하지 않는다. 만료된 키는 해당 연결의 `API 키 갱신`에서 교체한다.
+
+`DeepSeek 연결 → API 제공처`에서 공식 API·CoralBricks·River를 선택한다. 제공처마다 별도 연결과 해당 서비스에서 발급한 키를 사용한다. CoralBricks·River에서는 인증된 모델 목록의 DeepSeek 모델만 표시하며 목록에 없으면 임의 모델로 대체하지 않는다. 기존 연결은 공식 DeepSeek를 유지한다. 제공처를 바꾸려면 새 연결을 등록한다. 키는 채팅·문서가 아니라 이 입력란에만 넣는다. [제공처별 고정 주소·검증 범위](implementation/deepseek-services-20261031.md)를 참조한다.
 
 ### dot·Muse
 
@@ -154,6 +166,18 @@ Wiki는 항상 **reported** 지식이다. report source의 관측 근거는 별�
 새 `/mcp` 도구는 `resident_context_get`, `resident_message_post`, `resident_work_list`, `resident_work_propose`, `resident_work_claim`, `resident_wiki_list`, `resident_wiki_get`, `resident_wiki_edit`다. 실제 작업 시작은 기존 큐가 담당하며 도구 키가 Codex 승인 권한을 주지 않는다. 기존 토의 키의 도구 목록·토의/참여자 범위는 그대로다. 실제 Secure MCP Tunnel/공식 Connector 연결 성공은 별도 검증이며 이 화면에서 자동 생성하지 않는다.
 
 이관은 기존 resident JSON에 optional `wikiSchemaVersion=1`과 기존 빈 배열을 사용하며 기존 계정/대화/개인 기억을 Wiki로 복사하지 않는다. 세대 없는 옛 resident fixture grant는 폐기 상태로 보존한다. 운영 반영/복귀는 G0와 [R7 실행·수락·롤백 기록](./implementation/phase7-shared-wiki-20261031.md)을 따른다. 신규 grant 회수·예약 중지·진행/미확정 대조 후 flag off로 읽기만 남기며 Wiki/충돌/영수증을 삭제하거나 옛 DB로 되돌리지 않는다. 이번 단계의 실제 운영 DB 이관·계정 호출·서비스 재시작은 NOT_RUN이다.
+
+### 통합 수락과 운영 반영 전 점검 (페이즈 8)
+
+[R8 실행 기록](./implementation/resident-acceptance.md)과 [50개 수락 manifest](./implementation/resident-acceptance-manifest.json)를 먼저 본다. Node270/실제 Chrome·MCP46의 최종 통합 회귀의 fixture 성공은 운영 배포·실계정·실기기·실제 쓰기의 완료가 아니다. 현재 실운영 전체 수락은 미완료다. [승인된 B안](./reviews/r8-topic-transition-decision-20261031.md)에 따라 방을 끈 뒤 설정에서 `참여자의 주제 토론 자동 시작 허용`을 명시 선택할 수 있다. 기존 방은 기본 꺼짐이다. 켜진 방에서 참여자의 공개 근거 제안이 현재 계정/세대/예산 검사를 통과하면 기존 주제 토론을 시작하고 같은 방으로 돌아온다. 업무/실행·승인/미확정·다른 root가 있으면 대기한다. 오래된 맥락/권한의 제안은 재실행하지 않고 원문과 거절 이유를 보존한다.
+
+자동 검증은 `npm run check`와 설치된 Chromium/MCP 경로를 지정한 `npm run test:browser`다. 임시 DB/프로필·모의 계정을 사용하며 `test-results/resident/R8`에 흐름/rollback/handoff/load/2탭 JSON과 화면을 남긴다. source1,000메시지·업무100·Wiki100의 50개 요청 page/원문 대조/transaction 비용은 fixture 측정값이며 장기 운영 용량 보장이 아니다. 기본 명령에서 MCP를 생략해 SKIP됐으면 전체 통과라고 적지 않는다.
+
+실제 운영 반영 전에는 G0에 따라 방 off·topic pause·queued 미전송 취소와 진행/승인/미확정 receipt 대조를 완료한다. 기존 .env/접속 키·대화 DB·계정·Chrome profile을 보존하고 해당 작업실의 소스만 사용자 병합 main으로 갱신·빌드한다. 상주 기능은 `WJ_RESIDENT_ENABLED=true`를 명시한 뒤 기존 webjjoku 서비스 재시작으로 반영한다. 예산/속도·멤버/업무 역할은 기존 UI에서 직접 선택한다. 기존 origin/포트·Tailscale Serve·다른 서비스 설정은 바꾸지 않는다. 이번 개발에서 운영 반영/재시작을 실행한 것은 아니다.
+
+R8-D 실수락은 사용자가 연결 화면에서 GPT2계정 OAuth·DeepSeek·dot/Muse 기존 대화·Codex 읽기 전용 세션을 준비하고 실제 호출을 허용한 뒤 수행한다. 로그인·모델 목록·후속 응답·stream/usage·thread/receipt·독립 검토를 각각 관측한다. 계정/메시지 내용은 공개 증거에 복사하지 않고 식별자/상태·허용된 검사 근거만 남긴다. 실기기의 HTTPS·IME/터치·재접속/재시작과 실제 쓰기 격리도 별도 gate다. 실제 쓰기는 기존 UNVERIFIED 차단을 해제하지 않는다.
+
+이번 읽기 전용 운영 점검에서는 OAuth auth_required·browser 연결1로 dot/Muse 두 연결 미충족·DeepSeek/Codex 미등록·상주 flag off/미이관 상태를 확인했다. 이를 실패를 숨기기 위한 초기화·모의 계정 치환으로 해결하지 않는다. 준비 전 R8-D는 NOT_RUN이며 미확인 gate를 PASS로 바꾸지 않는다. 복귀는 새 예약을 막고 원래 실행을 대조한 뒤 flag off/read-only로 전환하며, Wiki/commands/영수증을 지우거나 옛 DB를 덮어쓰지 않는다.
 
 ## 4. Codex 실행
 

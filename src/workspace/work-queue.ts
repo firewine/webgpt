@@ -281,6 +281,7 @@ export class WorkQueue {
     if (!this.enabled || turn.status !== 'completed' || !turn.reply || turn.epoch !== r.epoch || turn.generation !== roomContext(r, turn.participantId).generation) return;
     const results: NonNullable<ResidentTurn['proposalResults']> = [];
     for (const [index, p] of turn.reply.proposals.entries()) {
+      if (p.kind === 'topic_propose') continue; // ResidentFocus journals this after work/Wiki effects in the same transaction.
       try {
         if ((turn.workSeatVersion ?? 0) !== (r.seats?.find(s => s.participantId === turn.participantId)?.version ?? 0)) throw new AppError('work_policy_changed', 409);
         if (p.kind === 'wiki_edit') {

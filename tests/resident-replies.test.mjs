@@ -29,7 +29,7 @@ for (const invalid of ['unstructured', reply({ replyTo: 'not-an-observed-message
   });
 }
 
-for (const kind of ['say', 'work_report', 'wiki_edit']) {
+for (const kind of ['say', 'work_report', 'wiki_edit', 'topic_propose']) {
   test('R2-I: late previous-generation ' + kind + ' is retained stale with no message or intent application', async t => {
     let release; const raw = kind === 'say' ? reply() : reply({ proposals: [{ kind, payload: { status: 'done', body: 'do not apply' } }] });
     const f = await residentFixture(t, { complete: async input => { input.hooks.dispatched(); await new Promise(r => { release = r; }); return { text: raw, receipt: 'late-original', usage: null }; } });
@@ -37,6 +37,7 @@ for (const kind of ['say', 'work_report', 'wiki_edit']) {
     f.store.transact(s => { s.resident.rooms[0].contexts[0].generation++; }); release(); await pending;
     const state = f.store.read().resident; assert.equal(state.turns[0].text, raw); assert.equal(state.turns[0].status, 'stale'); assert.equal(state.turns[0].proposalsStatus, 'stale');
     assert.deepEqual(state.messages, []); assert.deepEqual(state.workItems, []); assert.deepEqual(state.wikiVersions, []); assert.deepEqual(f.room().contexts[0].history, []);
+    assert.equal(state.topicIntents, undefined);
   });
 }
 

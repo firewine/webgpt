@@ -12,6 +12,7 @@ import type { WorkQueue } from './work-queue.js';
 import type { WorkExecutionBridge } from './work-execution.js';
 import type { Wiki } from './wiki.js';
 import { assertWikiSnapshots, contextWiki, rememberWiki, wikiHistoryAllowed } from './wiki-policy.js';
+import { ResidentFocus, topicPolicy } from './resident-focus.js';
 
 type Emit = Parameters<Parameters<Store['transact']>[0]>[1];
 const LIVE = ['prepared', 'running', 'unconfirmed'];
@@ -23,9 +24,10 @@ export class ResidentRunner {
   private active: Promise<void> | null = null; private timer: ReturnType<typeof setTimeout> | null = null;
   private abort: AbortController | null = null; private unsubscribe: (() => void) | null = null;
   private readonly clock: () => number;
+  readonly autoFocus: ResidentFocus;
   constructor(private readonly store: Store, private readonly resident: ResidentStore, private readonly dispatch: DispatchCoordinator,
     private readonly provider: Pick<Providers, 'complete'>, private readonly engine: DiscussionEngine, private readonly timeoutMs: number,
-    private readonly options: { clock?: () => number; autoSchedule?: boolean; work?: WorkQueue; execution?: WorkExecutionBridge; wiki?: Wiki } = {}) { this.clock = options.clock ?? Date.now; }
+    private readonly options: { clock?: () => number; autoSchedule?: boolean; work?: WorkQueue; execution?: WorkExecutionBridge; wiki?: Wiki } = {}) { this.clock = options.clock ?? Date.now; this.autoFocus = new ResidentFocus(store, engine, resident.enabled); }
 
   recover(): void {
     if (!this.store.read().resident) return;
@@ -90,6 +92,7 @@ export class ResidentRunner {
     this.options.execution?.tick();
     if (!this.resident.enabled) return;
     this.projectFocus();
+    if (this.autoFocus.pump(this.clock())) return;
     const captured = this.store.transact((state, emit) => {
       const room = state.resident?.rooms.find(r => r.desiredOn && r.observedStatus === 'on' && !r.topicLink);
       if (!room) return null;
@@ -130,7 +133,8 @@ export class ResidentRunner {
       const turn: ResidentTurn = { id: id('resident_turn'), roomId: room.id, participantId: participant.id, participant: structuredClone(participant),
         generation: context.generation, epoch: room.epoch, status: 'prepared', prompt, promptDigest: digest(prompt), history: structuredClone(context.history),
         basisSequence: room.lastMessageSequence, text: '', receipt: null, reply: null, usage: null, startedAt: new Date(this.clock()).toISOString(), finishedAt: null,
-        error: null, repairOf: repair?.id ?? null, messageId: null, proposalsStatus: 'none', workSeatVersion: room.seats?.find(s => s.participantId === participant.id)?.version ?? 0, wikiCitations };
+        error: null, repairOf: repair?.id ?? null, messageId: null, proposalsStatus: 'none', workSeatVersion: room.seats?.find(s => s.participantId === participant.id)?.version ?? 0, wikiCitations,
+        ...(room.autoTopic ? { topicPolicyDigest: topicPolicy(state, room) } : {}) };
       const denied = this.dispatch.reserve(state, { requestId: turn.id, kind: 'resident', participantId: participant.id, generation: context.generation, roomId: room.id }, this.clock());
       if (denied) return null;
       state.resident!.turns.push(turn); room.nextMemberIndex = (index + 1) % members.length;
@@ -163,6 +167,7 @@ export class ResidentRunner {
       }
       this.options.work?.finishTurn(state, room, turn, emit);
       this.dispatch.settle(state, turn.id, turn.usage, turn.error, turn.status === 'unconfirmed');
+      this.autoFocus.capture(state, room, turn, emit, this.clock());
       emit({ type: 'resident.turn_finished', discussionId: null, data: { roomId: room.id, turnId: turn.id, status: turn.status, reason: turn.error } });
     });
   }
@@ -246,6 +251,7 @@ export class ResidentRunner {
       else throw new AppError('invalid_resolution');
       this.options.work?.finishTurn(state, room, turn, emit);
       this.dispatch.settle(state, turn.id, turn.usage, turn.error, false);
+      this.autoFocus.capture(state, room, turn, emit, this.clock());
       room.observedStatus = room.desiredOn ? 'blocked' : 'off'; room.reason = 'owner_resume_required'; room.nextEligibleAt = null;
       emit({ type: 'resident.reconciled', discussionId: null, data: { roomId, turnId, status: turn.status } });
       return { turnId, status: turn.status };

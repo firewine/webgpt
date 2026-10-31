@@ -1,0 +1,21 @@
+{
+  "seededMessages": 1000,
+  "wikiNotices": 100,
+  "messages": 1100,
+  "tasks": 100,
+  "wikiPages": 100,
+  "missingOriginals": 0,
+  "maxRequestedMessagePage": 50,
+  "maxRequestedWorkWikiPage": 50,
+  "apiStateBytes": 1345,
+  "stateBytes": 2386813,
+  "heapUsedBytes": 74275368,
+  "transaction": {
+    "samples": 12,
+    "medianMs": 13.958152500000324,
+    "p95Ms": 22.210293000000092,
+    "maxMs": 22.210293000000092
+  },
+  "transportCalls": 0,
+  "realHostLongTermScale": "UNVERIFIED"
+}

@@ -1,0 +1,49 @@
+{
+  "roomId": "room_d80d4fa0-72e4-48be-9d3c-8b1b5d1a50e1",
+  "memberIds": [
+    "fake-a",
+    "fake-b",
+    "fake-c"
+  ],
+  "taskId": "work_88dc9f61-c874-4315-831c-4e3e36028472",
+  "attempts": [
+    "work_attempt_c827ce1f-3a60-46a0-8681-09a30e3af828",
+    "work_attempt_c3b5cffb-edc8-46ff-8b09-72715373411a",
+    "work_attempt_ca281d60-6318-4c05-85d2-ade181631bcd",
+    "work_attempt_dc0b5a01-6bf9-4b1e-832a-faa074e0db76"
+  ],
+  "reports": [
+    {
+      "id": "work_report_7ceeb5b3-f2d8-4c5a-8b6b-c922cc6c74d0",
+      "digest": "eef871ad8aadaa87e26b369bb23b65bf17bbb964fe5f0cf629cba14600b8c9cd"
+    },
+    {
+      "id": "work_report_d5b4c184-99b0-4bb9-a538-8b2bc84bfdcd",
+      "digest": "75abbb62a4eb5d320bf782a14882284478e03e89663d4ea0d0db3dd9b20d00a2"
+    }
+  ],
+  "reviews": [
+    {
+      "id": "work_review_fa83f94a-cc0c-4600-8a90-a2f7b3b5efd8",
+      "decision": "rework"
+    },
+    {
+      "id": "work_review_3c67b155-f387-4755-a3a8-40a857d4c363",
+      "decision": "accept"
+    }
+  ],
+  "wiki": {
+    "pageId": "wiki_60d480b7-def0-4c88-a6ef-f46c23eba632",
+    "version": 2,
+    "digest": "41dd084a2f98b96dd3724bb72a3483f3c485e36cb13899144f081949d7344f8b"
+  },
+  "nextTurn": "resident_turn_0b2baf1a-ef56-4ac7-9a23-dd605fb20cde",
+  "topicIntentId": "resident-topic:resident_turn_0b2baf1a-ef56-4ac7-9a23-dd605fb20cde:0",
+  "discussionId": "discussion_0d0cd441-6635-4d11-9c77-89c30065e99f",
+  "focusReturns": 1,
+  "maximumProviderCalls": 1,
+  "transportRequests": 23,
+  "codexJobs": 0,
+  "explicitOwnerFocusRequests": 0,
+  "realAccounts": "NOT_RUN"
+}

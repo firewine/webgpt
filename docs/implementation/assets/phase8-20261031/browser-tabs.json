@@ -1,0 +1,20 @@
+{
+  "browser": "156.0.8078.47",
+  "widths": [
+    1440,
+    1024,
+    768,
+    390
+  ],
+  "tabs": 2,
+  "messages": 25,
+  "streams": [
+    3,
+    3
+  ],
+  "reloads": 2,
+  "extraProviderCalls": 0,
+  "readOnlyPosts": 0,
+  "maxProvider": 1,
+  "realDevice": "UNVERIFIED"
+}
