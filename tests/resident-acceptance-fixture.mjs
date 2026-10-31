@@ -7,7 +7,7 @@ import { until } from './workspace-helpers.mjs';
 
 export const key = () => crypto.randomUUID();
 export const evidence = async (name, value) => { await mkdir('test-results/resident/R8', { recursive: true }); await writeFile('test-results/resident/R8/' + name + '.json', JSON.stringify(value, null, 2)); };
-export async function acceptanceFixture(t) {
+export async function acceptanceFixture(t, { autoTopic = false } = {}) {
   let ambient = 0; let reports = 0; let reviews = 0; let active = 0; let maximum = 0; const calls = []; let f;
   const observe = async (input, complete, kind) => {
     assert.equal(input.participant.kind, 'fake', 'Acceptance fixtures must never call a real account');
@@ -27,19 +27,22 @@ export async function acceptanceFixture(t) {
     } else {
       const d = JSON.parse(input.prompt.split('\n\n').find(v => v.startsWith('{"roomId":'))); ambient++;
       value = reply({ text: '[모의 자유 대화] ' + input.participant.label + (d.wiki.length ? ' · 공유 Wiki v' + d.wiki[0].version + '를 읽고 다시 분석했습니다.' : ' · 공개 원문과 반론을 함께 검토합니다.'),
-        proposals: ambient === 3 ? [{ kind: 'work_propose', payload: f.proposal({ proposalKey: 'unattended-analysis', title: '공개 토론에서 나온 분석 일감', sourceMessageIds: d.messages.filter(m => m.sourceKind === 'room').map(m => m.id) }) }] : [] });
+        proposals: ambient === 3 ? [{ kind: 'work_propose', payload: f.proposal({ proposalKey: 'unattended-analysis', title: '공개 토론에서 나온 분석 일감', sourceMessageIds: d.messages.filter(m => m.sourceKind === 'room').map(m => m.id) }) }] : ambient === 4 && autoTopic ? [{ kind: 'topic_propose', payload: { topic: '공유 Wiki와 산출물의 근거·이견을 비교', criteria: '근거, 반론, 불확실성', maxRounds: 2, sourceMessageIds: [d.messages.at(-1).id] } }] : [] });
     }
     input.hooks.delta(value); return { text: value, receipt, usage: { input: 10, output: 20 } };
   }, 'resident') } });
   f.app.store.transact(s => { s.participants.push({ ...s.participants[0], id: 'fake-c', label: '모의 참여자 C' }); });
   f.control({ action: 'set_member', participantId: 'fake-c', enabled: true });
   f.q.seat(f.roomId, { participantId: 'fake-c', expectedVersion: 0, role: 'specialist', enabled: true, kinds: ['analysis'], scopeRefs: ['room:' + f.roomId] }, key());
+  if (autoTopic) { const r = f.app.store.read().resident.rooms[0]; f.control({ action: 'configure', budgets: r.budgets, pacing: r.pacing, autoTopic: true }); }
   const topicComplete = f.app.providers.complete.bind(f.app.providers);
   f.app.providers.complete = input => observe(input, () => topicComplete(input), 'topic');
   return { ...f, room: () => f.app.store.read().resident.rooms[0], calls, maximum: () => maximum,
     runUnattended: async () => { f.control({ action: 'on' }); for (let i = 0; i < 8; i++) await f.step(); return f.app.store.read(); },
     focusAndReturn: async () => {
-      const did = f.app.residentRunner.focus(f.roomId, { topic: '공유 Wiki와 산출물의 근거·이견을 비교', participantIds: ['fake-a', 'fake-b', 'fake-c'], limits: { maxRequests: 30, maxRounds: 2, maxVerificationTasks: 0 } }, 'acceptance-focus');
+      let did;
+      if (autoTopic) { await f.step(); did = f.app.store.read().resident.topicIntents[0].discussionId; assert.ok(did); }
+      else did = f.app.residentRunner.focus(f.roomId, { topic: '공유 Wiki와 산출물의 근거·이견을 비교', participantIds: ['fake-a', 'fake-b', 'fake-c'], limits: { maxRequests: 30, maxRounds: 2, maxVerificationTasks: 0 } }, 'acceptance-focus');
       await until(() => ['completed', 'partial'].includes(f.app.store.read().discussions.find(d => d.id === did)?.status), 15000);
       await f.step(); return did;
     } };

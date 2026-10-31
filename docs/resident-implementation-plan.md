@@ -181,15 +181,15 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 
 ## 10. R8 — 최종 형태 수락과 한계
 
-**대상:** 기존 tests/engine·providers·persistence·restart·workspace-http·codex·browser 검사 보존. 제안 `tests/resident-e2e.test.mjs`, `tests/browser/resident-e2e.test.mjs`, `docs/implementation/resident-acceptance.md`. 제품 코드 변경은 앞 단계의 검증된 결합만 허용한다.
+**대상:** 기존 tests/engine·providers·persistence·restart·workspace-http·codex·browser 검사 보존. `tests/resident-e2e.test.mjs`, `tests/browser/resident-e2e.test.mjs`, `docs/implementation/resident-acceptance.md`와 승인된 자동 주제 접점. 새 제안 `src/workspace/resident-focus.ts`·`tests/resident-focus.test.mjs`, 기존 resident-model/prompts/store/runner·runtime 결합·room-view/control 설정을 변경한다.
 
-**계약/모델/이관:** API/schema 추가 변경 없음. R1 fixture로부터 R7까지 이관한 상태와 기존 main v1 데이터를 각각 검사한다. 8 gate의 숫자 증거를 연결한다. 실제 계정/호스트 수락은 사용자 직접 인증·별도 허용 후 수행하며 이번 문서 작업에서 시도하지 않는다.
+**계약/모델/이관:** 2026-10-31 [B안 승인](./reviews/r8-topic-transition-decision-20261031.md)으로 optional autoTopic·durable intent와 기존 configure의 명시 허용 boolean만 추가한다. Providers.complete·기존 topic parser·Store transaction/물리 schema·Codex RPC·MCP 권한·기존 50 gate 숫자는 유지한다. R2 dispatch/복구·R3 UI·R5/R6 업무 경쟁·R7 Wiki snapshot을 추가 회귀한다. R8가 마지막 확정 페이즈이므로 후속 단계 신설은 없다. 총16~20파일·450~850줄 예상이다. R1→R7 및 legacy v1 이관에서 기존 방 허용 false·원문/영수증 보존을 확인한다. 실제 계정/호스트 수락은 사용자 직접 인증·별도 허용 후 수행한다.
 
-**실행 대응:** `tests/resident-e2e.test.mjs`·`resident-load.test.mjs`·`resident-wiki-crash.test.mjs`·`tests/browser/resident-e2e.test.mjs`를 추가하고 기존 테스트를 모두 유지했다. 제품 코드/API/schema 변경0이다. [50개 manifest](./implementation/resident-acceptance-manifest.json)와 [실행·이관·부하·복귀 기록](./implementation/resident-acceptance.md)에 자동/실환경을 구분했다. R8-A는 자동 업무→Wiki/다음 발화와 기존 owner focus/복귀만 확인됐고 완전 무인 topic 시작은 미구현이다. 이를 통과로 바꾸지 않고 미승인 제안으로 분리했다. 아래 수락 문구·숫자를 승인 없이 바꾸지 않았다.
+**실행 대응:** 통합/부하/Wiki SIGKILL·2탭 검사를 추가했다. [50개 manifest](./implementation/resident-acceptance-manifest.json)와 [실행·이관·부하·복귀 기록](./implementation/resident-acceptance.md)은 자동/실환경을 구분한다. B안 구현 후 모의3인 전체 흐름·owner focus0·topic1·복귀1을 관측해 R8-A fixture PASS로 기록했다. 추가 검사는 미허용/off/회수/구세대/한도 소진의 시작0, 중복 intent20회와 생성 전후 crash에서 topic1·복귀1·중복 start0을 확인한다. 원래 수락 문구·숫자는 그대로다.
 
 | 수락 ID | 숫자·증거 | 방법(후속 실행) |
 | --- | --- | --- |
-| R8-A | 3모의 참여자·1방 on→사용자 추가 지시 없이 자유 대화→업무1 pickup→결과/반려1회→재작업/완료→Wiki1갱신→다음 발화 인용→topic1회→같은 방 복귀 | UNVERIFIED(전체) · 자동 업무/Wiki와 owner focus1/복귀1의 ID 로그 PASS, 무인 topic 결정 대기 |
+| R8-A | 3모의 참여자·1방 on→사용자 추가 지시 없이 자유 대화→업무1 pickup→결과/반려1회→재작업/완료→Wiki1갱신→다음 발화 인용→topic1회→같은 방 복귀 | PASS(fixture) · 명시 허용 뒤 모의3인 전체 흐름, owner focus0·topic1·복귀1. 실계정 별도 |
 | R8-B | 8단계별 crash/off/budget/scope negative gate 전부 PASS, provider 동시≤1·중복 외부 start0·비공개 유출0 | PASS · 전체 회귀+Wiki 실제 SIGKILL3·수락 manifest |
 | R8-C | 4viewport·2탭·새로고침/재접속 후 이력·읽기 위치·예산/승인·단일dispatch 유지 | PASS(Chrome fixture) · 2탭/4폭·SSE/읽기 위치·중복 승인409·job/turn1 |
 | R8-D | 실제 GPT2계정+DeepSeek, dot/Muse 각각 기존 thread 포함 흐름. 실제 읽기 Codex와 허용된 쓰기 gate 별도 | 사용자 허용 뒤 receipt/카탈로그·stream/usage·검사·화면 기록. 현재 전부 UNVERIFIED |

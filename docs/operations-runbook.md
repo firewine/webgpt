@@ -157,7 +157,7 @@ Wiki는 항상 **reported** 지식이다. report source의 관측 근거는 별�
 
 ### 통합 수락과 운영 반영 전 점검 (페이즈 8)
 
-[R8 실행 기록](./implementation/resident-acceptance.md)과 [50개 수락 manifest](./implementation/resident-acceptance-manifest.json)를 먼저 본다. Node231/실제 Chrome·MCP38의 fixture 성공은 운영 배포·실계정·실기기·실제 쓰기의 완료가 아니다. 현재 전체 수락은 미완료이며 무인 주제 전환은 [미승인 제안](./reviews/r8-topic-transition-decision-20261031.md)의 결정이 필요하다. 승인 전에는 기존 owner 주제 버튼/권한을 유지한다.
+[R8 실행 기록](./implementation/resident-acceptance.md)과 [50개 수락 manifest](./implementation/resident-acceptance-manifest.json)를 먼저 본다. Node248/실제 Chrome·MCP 회귀의 fixture 성공은 운영 배포·실계정·실기기·실제 쓰기의 완료가 아니다. 현재 실운영 전체 수락은 미완료다. [승인된 B안](./reviews/r8-topic-transition-decision-20261031.md)에 따라 방을 끈 뒤 설정에서 `참여자의 주제 토론 자동 시작 허용`을 명시 선택할 수 있다. 기존 방은 기본 꺼짐이다. 켜진 방에서 참여자의 공개 근거 제안이 현재 계정/세대/예산 검사를 통과하면 기존 주제 토론을 시작하고 같은 방으로 돌아온다. 업무/실행·승인/미확정·다른 root가 있으면 대기한다. 오래된 맥락/권한의 제안은 재실행하지 않고 원문과 거절 이유를 보존한다.
 
 자동 검증은 `npm run check`와 설치된 Chromium/MCP 경로를 지정한 `npm run test:browser`다. 임시 DB/프로필·모의 계정을 사용하며 `test-results/resident/R8`에 흐름/rollback/handoff/load/2탭 JSON과 화면을 남긴다. source1,000메시지·업무100·Wiki100의 50개 요청 page/원문 대조/transaction 비용은 fixture 측정값이며 장기 운영 용량 보장이 아니다. 기본 명령에서 MCP를 생략해 SKIP됐으면 전체 통과라고 적지 않는다.
 

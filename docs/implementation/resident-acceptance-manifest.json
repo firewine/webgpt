@@ -5,8 +5,8 @@
   "scope": "R1-R8 acceptance map. PASS denotes linked fixture results only; real requirements stay open. Authoritative tested head/CI is recorded on the R8 PR.",
   "gateCount": 50,
   "counts": {
-    "PASS": 45,
-    "UNVERIFIED": 4,
+    "PASS": 46,
+    "UNVERIFIED": 3,
     "NOT_RUN": 1
   },
   "gates": [
@@ -526,15 +526,17 @@
     {
       "id": "R8-A",
       "requirement": "3모의 참여자·1방 on→사용자 추가 지시 없이 자유 대화→업무1 pickup→결과/반려1회→재작업/완료→Wiki1갱신→다음 발화 인용→topic1회→같은 방 복귀",
-      "status": "UNVERIFIED",
+      "status": "PASS",
       "evidence": "fixture",
       "files": [
         "tests/resident-e2e.test.mjs",
         "tests/resident-load.test.mjs",
         "tests/resident-wiki-crash.test.mjs",
-        "tests/browser/resident-e2e.test.mjs"
+        "tests/browser/resident-e2e.test.mjs",
+        "tests/resident-focus.test.mjs",
+        "tests/fixtures/resident-focus-crash.mjs"
       ],
-      "note": "Autonomous through Wiki/next speech PASS; existing explicit owner focus/return PASS. Fully autonomous topic initiation is not implemented. Decision proposal: docs/reviews/r8-topic-transition-decision-20261031.md. Original acceptance criterion remains unchanged.",
+      "note": "Owner explicitly opts into automatic topics before room on. Three fake participants complete the original full sequence with zero owner focus requests, one topic and one return. Duplicate20, stale/off/budget/scope and three actual SIGKILL boundaries PASS. Real-account acceptance remains separate.",
       "fixtureStatus": "PASS"
     },
     {

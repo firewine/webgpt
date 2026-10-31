@@ -20,6 +20,14 @@ function messages(f, label, count) {
   f.app.store.transact((s, emit) => { const r = s.resident.rooms[0]; for (let i = 0; i < count; i++) { const id = 'browser-r8-' + crypto.randomUUID(); s.resident.messages.push({ id, roomId: r.id, sequence: ++r.lastMessageSequence, sourceKind: 'room', sourceId: null, authorId: 'fake-c', text: label + i + ' · ' + '원문과 반론을 보존하는 긴 발언입니다. '.repeat(20), replyTo: null, mentions: [], visibility: 'room_public', createdAt: new Date().toISOString() }); emit({ type: 'resident.message_created', discussionId: null, data: { roomId: r.id, messageId: id, sequence: r.lastMessageSequence } }); } });
 }
 
+test('R8 auto topic UI: old rooms start unchecked, owner explicitly opts in while off, reload retains choice and a live room refuses reconfiguration', { timeout: 30000 }, async t => {
+  const f = await acceptanceFixture(t); const b = await tabs(t, f), page = b.pages[0]; await page.locator('#room-settings').click();
+  const choice = page.locator('#room-settings-form [name=autoTopic]'); assert.equal(await choice.isChecked(), false); await choice.check(); await page.getByRole('button', { name: '설정 저장', exact: true }).click(); await page.waitForFunction(() => !document.querySelector('#room-settings-dialog').open); assert.equal(f.room().autoTopic, true);
+  await page.reload(); await page.locator('#room-settings').click(); assert.equal(await choice.isChecked(), true); await page.locator('#room-settings-dialog [data-close-drawer]').click();
+  f.control({ action: 'on' }); const r = f.room(); assert.throws(() => f.control({ action: 'configure', budgets: r.budgets, pacing: r.pacing, autoTopic: false }), /room_configuration_requires_off/); assert.equal(f.room().autoTopic, true);
+  await page.setViewportSize({ width: 390, height: 844 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); assert.deepEqual(b.errors, []); assert.equal(f.calls.length, 0);
+});
+
 test('R8-C: two live tabs share the autonomous task/Wiki flow, preserve history/read position after reconnect/reload and remain usable at four widths', { timeout: 90000 }, async t => {
   const f = await acceptanceFixture(t); const b = await tabs(t, f); await f.runUnattended();
   for (const page of b.pages) { await board(page); await page.locator('#work-items').getByText('공개 토론에서 나온 분석 일감', { exact: true }).waitFor(); await page.locator('#wiki-items .work-card').waitFor(); await close(page); }

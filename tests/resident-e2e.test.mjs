@@ -12,8 +12,8 @@ import { acceptanceFixture, evidence } from './resident-acceptance-fixture.mjs';
 import { storage, ownerKey } from './workspace-helpers.mjs';
 import { topic } from './workspace-helpers.mjs';
 
-test('R8-A/B: three speakers autonomously propose, pick up, reject/rework, review and publish Wiki before an explicit topic focus returns to the same room', async t => {
-  const f = await acceptanceFixture(t); const s = await f.runUnattended(); const r = s.resident.rooms[0];
+test('R8-A/B: three speakers autonomously propose, pick up, reject/rework, review, publish/cite Wiki and start a topic before returning to the same room without owner relay', async t => {
+  const f = await acceptanceFixture(t, { autoTopic: true }); const s = await f.runUnattended(); const r = s.resident.rooms[0];
   assert.equal(r.members.filter(m => m.enabled).length, 3); assert.deepEqual(s.resident.turns.slice(0, 3).map(v => v.participantId), ['fake-a', 'fake-b', 'fake-c']);
   assert.equal(s.resident.workItems.length, 1); const task = s.resident.workItems[0]; assert.equal(task.proposedBy, 'fake-c'); assert.equal(task.status, 'done');
   assert.equal(task.reports.length, 2); assert.deepEqual(task.reviews.map(v => v.decision), ['rework', 'accept']); assert.ok(task.reviews.every(v => v.reviewerId !== task.reports[0].authorId));
@@ -26,7 +26,8 @@ test('R8-A/B: three speakers autonomously propose, pick up, reject/rework, revie
   assert.equal(d.status, 'completed'); assert.equal(d.wikiCitations[0].digest, wiki.digest); assert.ok(d.turns.every(v => v.wikiCitations[0].digest === wiki.digest));
   assert.equal(f.room().topicLink, null); assert.equal(f.room().id, f.roomId); assert.equal(f.app.store.events(0).filter(e => e.type === 'resident.focus_returned').length, 1);
   assert.equal(f.maximum(), 1); assert.equal(new Set(f.calls.map(v => v.requestId)).size, f.calls.length); assert.equal(end.jobs.length, 0);
-  await evidence('flow', { roomId: f.roomId, memberIds: r.members.map(m => m.participantId), taskId: task.id, attempts: s.resident.workAttempts.map(a => a.id), reports: task.reports.map(v => ({ id: v.id, digest: v.digest })), reviews: task.reviews.map(v => ({ id: v.id, decision: v.decision })), wiki: { pageId: wiki.pageId, version: wiki.version, digest: wiki.digest }, nextTurn: next.id, discussionId: did, focusReturns: 1, maximumProviderCalls: f.maximum(), transportRequests: f.calls.length, codexJobs: 0, explicitOwnerFocusRequests: 1, realAccounts: 'NOT_RUN' });
+  assert.equal(end.resident.topicIntents.length, 1); assert.equal(end.resident.topicIntents[0].discussionId, did); assert.equal(next.reply.proposals[0].kind, 'topic_propose');
+  await evidence('flow', { roomId: f.roomId, memberIds: r.members.map(m => m.participantId), taskId: task.id, attempts: s.resident.workAttempts.map(a => a.id), reports: task.reports.map(v => ({ id: v.id, digest: v.digest })), reviews: task.reviews.map(v => ({ id: v.id, decision: v.decision })), wiki: { pageId: wiki.pageId, version: wiki.version, digest: wiki.digest }, nextTurn: next.id, topicIntentId: end.resident.topicIntents[0].id, discussionId: did, focusReturns: 1, maximumProviderCalls: f.maximum(), transportRequests: f.calls.length, codexJobs: 0, explicitOwnerFocusRequests: 0, realAccounts: 'NOT_RUN' });
 });
 
 test('R8-E: G0, flag-off legacy operation and re-enable preserve room/Wiki/raw records/commands/receipts with zero transport replay', async t => {

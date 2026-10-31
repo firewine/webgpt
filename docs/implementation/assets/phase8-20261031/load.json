@@ -7,14 +7,14 @@
   "missingOriginals": 0,
   "maxRequestedMessagePage": 50,
   "maxRequestedWorkWikiPage": 50,
-  "apiStateBytes": 1327,
+  "apiStateBytes": 1345,
   "stateBytes": 2386813,
-  "heapUsedBytes": 61501288,
+  "heapUsedBytes": 50138720,
   "transaction": {
     "samples": 12,
-    "medianMs": 14.518685000000005,
-    "p95Ms": 22.955685000000813,
-    "maxMs": 22.955685000000813
+    "medianMs": 13.910968999999568,
+    "p95Ms": 21.962111000000732,
+    "maxMs": 21.962111000000732
   },
   "transportCalls": 0,
   "realHostLongTermScale": "UNVERIFIED"

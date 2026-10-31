@@ -1,48 +1,49 @@
 {
-  "roomId": "room_a04b6641-2a5a-41fd-9345-6b792d666d71",
+  "roomId": "room_4bec9d73-0c9d-4d40-a167-8ea875859eca",
   "memberIds": [
     "fake-a",
     "fake-b",
     "fake-c"
   ],
-  "taskId": "work_584b0179-6a0e-43f4-92dc-dd2ea1a49097",
+  "taskId": "work_796c2985-c90c-4eb5-aef3-324f0f6f6ca6",
   "attempts": [
-    "work_attempt_3caa39f7-ab8d-4052-a570-b05c37bb9c79",
-    "work_attempt_f5e5864b-e54b-4272-b8d2-f6031673fd8b",
-    "work_attempt_0b614ca3-1be5-415c-9186-ef26f8acb134",
-    "work_attempt_0962ac2a-26b8-458d-a088-069cc6f421ac"
+    "work_attempt_3202c169-c3f4-4541-ba59-a1b3d7e050ab",
+    "work_attempt_d457be29-92a6-4c35-88e5-b7ef9f7891d1",
+    "work_attempt_065c7638-8577-4124-8f61-29e36f3bb1a7",
+    "work_attempt_b0521ee5-6673-4abd-be2a-16309ffea3f3"
   ],
   "reports": [
     {
-      "id": "work_report_80037fc5-92b3-4a80-b886-49b173ae9c34",
-      "digest": "d580ebf82ab7c82b9ee928a216ec494ff42cd4ed3e8cdb3f0231991eda01b9b9"
+      "id": "work_report_071041a7-b8e6-4cef-8a2f-a0c539eba875",
+      "digest": "b9ab1e179578fc68769070874efec3e751e7e620ad6a0559233f8d8751525895"
     },
     {
-      "id": "work_report_dc047b02-340a-49a5-af53-ce1f94675a21",
-      "digest": "e6f94bd1100d157520755519a2d7ef045f286f4578fe65dccbaeaed108955bfa"
+      "id": "work_report_5955dce6-bcb3-4dbe-93f8-b496b40c9d06",
+      "digest": "b2306bb2bc9bf562dba5f342509058fda6243f3513dc35a486a223abb94959e3"
     }
   ],
   "reviews": [
     {
-      "id": "work_review_49d8c37f-fa10-4b9e-8a55-fb4590a0223e",
+      "id": "work_review_5c626b46-78a9-481e-b6c9-30a5c94d87d7",
       "decision": "rework"
     },
     {
-      "id": "work_review_d9dbe591-cb43-45fe-a46d-df718b697973",
+      "id": "work_review_a0c8ecc5-565e-4c06-b5db-247cb19bfc9b",
       "decision": "accept"
     }
   ],
   "wiki": {
-    "pageId": "wiki_625e7330-f446-4369-8922-cc771d083c20",
+    "pageId": "wiki_b92ae973-13a9-4dba-b1d1-d86d77eea043",
     "version": 2,
-    "digest": "6be4fc1c725fd6ac540295f9d65147a53d122d9de415f5bd0294b4a3e6622632"
+    "digest": "66427b5bf61ed9ad5371d32f988b65dbac7451d9dbeceef402c46d33c9c4b363"
   },
-  "nextTurn": "resident_turn_05328e74-b111-4ce3-9d84-6333e0db0729",
-  "discussionId": "discussion_4a2e330e-0620-4541-88b2-15c3000f30f3",
+  "nextTurn": "resident_turn_12d0bb0e-8ada-4fc6-942e-607fef974de4",
+  "topicIntentId": "resident-topic:resident_turn_12d0bb0e-8ada-4fc6-942e-607fef974de4:0",
+  "discussionId": "discussion_c4a252d3-fcd4-487e-bfcd-c4ce95e0a500",
   "focusReturns": 1,
   "maximumProviderCalls": 1,
   "transportRequests": 23,
   "codexJobs": 0,
-  "explicitOwnerFocusRequests": 1,
+  "explicitOwnerFocusRequests": 0,
   "realAccounts": "NOT_RUN"
 }
