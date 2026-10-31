@@ -1,11 +1,11 @@
 import type { ResidentStateV1 } from './resident-model.js';
 
-export type ProviderKind = 'fake' | 'openai-oauth' | 'codex-oauth' | 'deepseek' | 'browser';
+export type ProviderKind = 'fake' | 'openai-oauth' | 'codex-oauth' | 'deepseek' | 'anthropic' | 'browser';
 export type DeepSeekService = 'deepseek' | 'coralbricks' | 'river';
-export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
+export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type Phase = 'independent' | 'cross_review' | 'verification' | 'revision' | 'synthesis' | 'summary_review';
 export type RunStatus = 'running' | 'paused' | 'blocked' | 'completed' | 'partial' | 'cancelled';
-export interface ModelChoice { id: string; label: string; reasoningEfforts?: ReasoningEffort[] }
+export interface ModelChoice { id: string; label: string; reasoningEfforts?: ReasoningEffort[]; reasoningSource?: 'catalog' | 'provider_docs' }
 export interface DeviceSignin { connectionId: string; attemptId: string; status: NonNullable<Connection['deviceSignin']>['status']; expiresAt: number; verificationUrl?: string; userCode?: string; error?: string }
 export interface BrowserBinding {
   pageId: number; url: string; accountLabel: string; agentLabel: string;
@@ -22,6 +22,7 @@ export interface Connection {
   browser?: BrowserBinding; lastCheckedAt?: string; error?: string;
   modelError?: { httpStatus: number; providerCode?: string };
   apiService?: DeepSeekService;
+  anthropicWorkspaceId?: string;
   accountId?: string;
   deviceSignin?: { attemptId: string; status: 'starting' | 'pending' | 'completed' | 'failed' | 'cancelled' | 'expired' | 'interrupted' };
   browserHistory?: { changedAt: string; binding: BrowserBinding }[];

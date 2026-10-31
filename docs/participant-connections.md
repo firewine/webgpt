@@ -21,6 +21,7 @@
 | dot(may) | 서버 Chrome의 기존 dot 대화; 검증 후 공식 MCP/이벤트 병행 | 실제 dot의 기존 맥락 + 웹쫀쿠 주제·발언 참조 |
 | Muse | 서버 Chrome의 기존 Muse 대화; 공식 Connector는 별도 검증 | 실제 Muse의 기존 맥락 + 웹쫀쿠 주제·발언 참조 |
 | DeepSeek | 서버에서 보관하는 API key + 공식 대화 API | 웹쫀쿠의 해당 참여자 대화 이력 |
+| Anthropic / Claude API | 연결별 API key + 인증된 모델 목록 + Messages API. 구현·fixture PASS, 실계정 NOT_RUN·구독 OAuth 보류 | 웹쫀쿠의 해당 참여자 대화 이력 |
 
 이 표는 연결할 수 있는 유형이며 실제 등록된 계정 수나 모델 가용성을 뜻하지 않는다. GPT A·B는 서로 다른 사용 허가된 계정의 예시다. 같은 계정의 두 등록·모델·역할을 두 개의 독립 계정으로 세지 않는다. dot과 GPT가 같은 계정을 쓰면 계정 자원 관계도 함께 기록한다.
 
@@ -28,7 +29,11 @@
 
 2026-10-30 사용자 요청으로 dot의 기존 Chrome 계정과 웹 GPT OAuth 로그인을 연결별 별도 context로 분리했다. OAuth GPT 토커의 사고 깊이는 기본 Extra high이며 계정·모델과 함께 사후 조절할 수 있다. [구현·검증 기록](./implementation/talker-settings-rounds-20261030.md)은 실제 쿠키 격리·설정·request fixture와 아직 미검증인 별도 실계정 로그인·추론을 구분한다.
 
+[DeepSeek 사고 설정·Anthropic 구현 기록](./implementation/deepseek-reasoning-anthropic-20261031.md)에서 제공처별 요청 값·설정 보존·혼합 토론/방·오류와 usage 검사를 구분한다. 기존 DeepSeek 연결은 버전 적용 뒤 카드의 **모델 확인**으로 사고 capability를 갱신한다.
+
 ## 2. GPT: OAuth로 연결하고 웹쫀쿠에서 대화
+
+2026-10-31 [추가 승인](./reviews/deepseek-anthropic-impact-20261031.md)으로 DeepSeek 제공처별 사고 설정과 Anthropic API 연결을 R8 보완에 포함한다. DeepSeek의 제공처 기본/none/low/high/max는 실제 catalog 또는 정확한 모델 ID의 공식 문서에 따른 허용 값만 표시하고 GPT xhigh와 자동 치환하지 않는다. 기존 설정 부재는 그대로 보존하며 변경은 새 토의 또는 일시정지한 토의의 이후 발언에 적용한다. Anthropic은 API key·필요한 workspace ID·공식 모델 목록·Messages SSE를 기존 Completion 계약에 연결한다. 기존 Store/승인/예산/대조를 유지한다. Claude 구독 OAuth는 공개 외부 앱 지원 경로/허가 확인까지 보류하며 미구현을 성공으로 표시하지 않는다. 실계정 유료 호출/운영 수락은 별도다.
 
 2026-10-29 확인한 [Sign in with ChatGPT 안내](https://developers.openai.com/siwc/quickstart)와 [ChatGPT plan usage](https://developers.openai.com/siwc/token-sharing-open-source)는 대상 앱·계정의 허가 범위에서 OAuth 인증으로 Responses 요청을 수행하는 경로를 제공한다. 웹쫀쿠의 일반 GPT 참여자는 이 경로를 우선 구현한다. 별도의 OpenAI API key 입력이나 일반 ChatGPT DOM 자동화를 기본 경로로 요구하지 않는다.
 

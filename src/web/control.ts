@@ -13,9 +13,16 @@ let tab = 'timeline'; let view: View = 'discussion'; let stream: EventSource | n
 let viewChosen = false; let focusRoomId: string | null = null;
 const effortOptions = [{ value: 'low', label: 'Low · 낮음' }, { value: 'medium', label: 'Medium · 보통' }, { value: 'high', label: 'High · 높음' }, { value: 'xhigh', label: 'Extra high · 매우 높음' }];
 const gptKind = (kind?: ProviderKind) => kind === 'openai-oauth' || kind === 'codex-oauth';
+const reasoningKind = (kind?: ProviderKind) => gptKind(kind) || kind === 'deepseek';
+const deepseekEffortOptions = [{ value: 'default', label: '제공처 기본값' }, { value: 'none', label: 'None · 사고 끄기' }, { value: 'low', label: 'Low · 낮음' }, { value: 'high', label: 'High · 높음' }, { value: 'max', label: 'Max · 최대' }];
 let deviceTimer = 0; let deviceLogin: { connectionId: string; attemptId: string } | null = null;
 let deviceSequence = 0;
-function effortLabel(value: string): string { return effortOptions.find(o => o.value === value)?.label ?? value; }
+function effortLabel(value: string): string { return [...effortOptions, ...deepseekEffortOptions].find(o => o.value === value)?.label ?? value; }
+function savedEffort(p: Member): string { return p.reasoningEffort ?? (p.kind === 'deepseek' ? 'default' : 'xhigh'); }
+function effortChoices(c: Connection | undefined, modelId: string): { value: string; label: string }[] {
+  const allowed = c?.models.find(m => m.id === modelId)?.reasoningEfforts ?? [];
+  return c?.kind === 'deepseek' ? deepseekEffortOptions.filter(o => o.value === 'default' || allowed.some(v => v === o.value)) : c?.kind === 'codex-oauth' ? effortOptions.filter(o => allowed.some(v => v === o.value)) : effortOptions;
+}
 let cursor = 0; let refreshTask: Promise<void> | null = null; let again = false; let timer = 0; let choiceSignature = ''; let noticeTimer = 0;
 let materialSignature = '';
 let pendingMaterialSelection: string | null = null;
@@ -29,7 +36,9 @@ const errors: Record<string, string> = { authentication_required: '접속 키를
   device_login_unavailable: 'ChatGPT 보안 설정 또는 workspace에서 기기 코드 로그인을 허용해 주세요.', device_login_expired: '기기 코드가 만료됐습니다. 같은 계정에서 새 로그인을 시작해 주세요.', device_login_interrupted: '서버가 재시작됐거나 이전 요청이 끝났습니다. 같은 계정에서 다시 시작해 주세요.', device_login_start_failed: '기기 코드를 받지 못했습니다. 연결 상태를 확인해 주세요.', device_login_poll_failed: '로그인 승인 상태를 확인하지 못했습니다.', codex_version_required: '설정한 Codex 실행 파일의 버전을 확인하지 못했습니다.', codex_refresh_failed: '이 계정의 인증을 갱신하지 못했습니다. 연결 상태를 확인해 주세요.',
   signin_pending: '이미 시작한 로그인이 있습니다. 서버 Chrome 화면에서 진행해 주세요.', signin_account_pending: '진행 중 로그인과 다른 계정을 지정했습니다. 기존 로그인을 마치거나 이 계정을 로그아웃한 뒤 다시 시작해 주세요.',
   account_email_required: '로그인할 웹 GPT 계정 이메일을 입력해 주세요.', invalid_account_email: '웹 GPT 계정 이메일을 확인해 주세요.',
+  auth_required: '이 연결의 로그인 또는 API 키 권한을 확인해 주세요.',
   invalid_api_service: 'API 제공처를 다시 선택해 주세요.', deepseek_model_unavailable: '이 API 키에서 사용 가능한 DeepSeek 모델을 찾지 못했습니다. 제공처의 모델 권한을 확인해 주세요.',
+  anthropic_workspace_required: '이 Anthropic 키에 맞는 Workspace ID를 확인해 주세요. 여러 workspace용 키에는 ID가 필요합니다.', invalid_anthropic_workspace: 'Anthropic Workspace ID 형식을 확인해 주세요.', reasoning_requires_supported_model: '사고 깊이는 설정을 지원하는 GPT·DeepSeek 모델에서 조절할 수 있습니다. 기존 웹 대화는 원래 서비스에서 조절하세요.',
   coralbricks_verification_required: 'CoralBricks에서 계정 검증을 위한 결제수단 등록을 요구합니다. 공식 사이트에서 검증 후 모델 확인을 다시 눌러 주세요.',
   model_access_denied: '제공처가 모델 조회 권한을 거절했습니다. 해당 계정의 모델·앱 접근 권한을 확인해 주세요.', model_rate_limited: '제공처의 조회 한도에 도달했습니다. 잠시 후 다시 확인해 주세요.', provider_credits_required: '제공처의 잔액이 부족합니다. 공식 사이트에서 사용 한도를 확인해 주세요.', model_catalog_not_found: '제공처의 모델 조회 주소를 찾지 못했습니다.', model_provider_unavailable: '제공처 서버가 모델 목록을 반환하지 못했습니다. 잠시 후 다시 확인해 주세요.', model_discovery_failed: '모델 목록을 확인하지 못했습니다. 연결 카드의 오류와 제공처 상태를 확인해 주세요.',
   connection_in_use: '이 연결이 참여 중인 방을 끄고 진행 중인 토의를 완료하거나 취소한 뒤 삭제해 주세요.', connection_not_found: '이미 삭제됐거나 찾을 수 없는 연결입니다. 연결 목록을 다시 확인해 주세요.', connection_cleanup_failed: '연결은 해제됐지만 서버의 인증 파일 정리가 끝나지 않았습니다. 같은 삭제 요청을 다시 확인해 주세요.',
@@ -159,11 +168,16 @@ async function browseMaterials(path: string): Promise<void> {
 }
 function updateModels(): void { const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); selectOptions($('#participant-model'), c?.models ?? []); updateEffort(); }
 function updateEffort(): void {
-  const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); const select = $<HTMLSelectElement>('#participant-effort'); select.disabled = !gptKind(c?.kind);
+  const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); const select = $<HTMLSelectElement>('#participant-effort'); select.disabled = !reasoningKind(c?.kind);
+  const modelId = $<HTMLSelectElement>('#participant-model').value, previous = select.value, changed = select.dataset.kind !== (c?.kind ?? ''); select.dataset.kind = c?.kind ?? '';
+  selectOptions(select, (c?.kind === 'deepseek' ? effortChoices(c, modelId) : effortOptions).map(o => ({ id: o.value, label: o.label })));
   const allowed: readonly string[] = c?.kind === 'codex-oauth' ? c.models.find(m => m.id === $<HTMLSelectElement>('#participant-model').value)?.reasoningEfforts ?? [] : effortOptions.map(e => e.value);
-  for (const option of select.options) option.disabled = !allowed.includes(option.value);
-  if (c?.kind === 'codex-oauth' && !allowed.includes(select.value)) select.value = effortOptions.filter(e => allowed.includes(e.value)).at(-1)?.value ?? '';
-  $('#participant-effort-note').textContent = c?.kind === 'browser' ? '기존 dot·Muse의 모델과 사고 깊이는 원래 서비스에서 조절합니다.' : c?.kind === 'codex-oauth' ? '이 계정의 모델 목록에서 확인한 사고 깊이만 선택합니다. Extra high를 지원하면 기본으로 사용합니다.' : gptKind(c?.kind) ? '기본 Extra high. 모델이 지원하지 않는 값은 오류로 표시합니다.' : '이 연결에는 GPT 사고 깊이 요청 설정을 사용하지 않습니다.';
+  for (const option of select.options) option.disabled = c?.kind !== 'deepseek' && !allowed.includes(option.value);
+  if (c?.kind === 'deepseek' && (changed || !select.value)) select.value = 'default';
+  else if (c?.kind === 'codex-oauth' && (changed || !allowed.includes(previous))) select.value = effortOptions.filter(e => allowed.includes(e.value)).at(-1)?.value ?? '';
+  else if (gptKind(c?.kind) && (changed || !allowed.includes(previous))) select.value = 'xhigh';
+  const source = c?.models.find(m => m.id === modelId)?.reasoningSource;
+  $('#participant-effort-note').textContent = c?.kind === 'deepseek' ? source ? `제공처 기본값은 요청을 덮어쓰지 않습니다. ${source === 'catalog' ? '실제 모델 목록' : '제공처 공식 문서'}에서 확인한 값만 선택합니다.` : '사고 설정 지원 정보가 없어 제공처 기본값만 표시합니다. 연결 카드에서 모델 확인을 눌러 주세요.' : c?.kind === 'browser' ? '기존 dot·Muse의 모델과 사고 깊이는 원래 서비스에서 조절합니다.' : c?.kind === 'codex-oauth' ? '이 계정의 모델 목록에서 확인한 사고 깊이만 선택합니다. Extra high를 지원하면 기본으로 사용합니다.' : gptKind(c?.kind) ? '기본 Extra high. 모델이 지원하지 않는 값은 오류로 표시합니다.' : '이 연결은 제공처의 기본 사고 설정을 사용합니다.';
 }
 function control(body: Record<string, unknown>): Promise<unknown> { if (!current) return Promise.resolve(); return api(`/api/discussions/${current.id}/control`, { expectedRevision: current.revision, ...body }).then(refresh); }
 function renderDiscussion(): void {
@@ -181,10 +195,10 @@ function renderDiscussion(): void {
   const members = $('#member-status'); members.replaceChildren();
   for (const p of d.members) { const context = d.contexts.find(c => c.participantId === p.id)!; const card = node('article', '', 'member-card'); const head = node('div', '', 'inline'); head.append(node('span', p.kind === 'fake' ? 'F' : gptKind(p.kind) ? 'G' : p.kind === 'deepseek' ? 'D' : p.label.slice(0, 1), 'avatar'), node('span', p.label, 'name'));
     card.append(head, node('div', `${d.excludedIds.includes(p.id) ? '참여 제외 · ' : ''}${p.modelId} · 문맥 ${context.generation}`, 'small muted'));
-    if (gptKind(p.kind)) {
-      card.append(node('p', '사고 깊이 · ' + effortLabel(p.reasoningEffort ?? 'xhigh'), 'small muted'));
+    if (reasoningKind(p.kind)) {
+      card.append(node('p', '사고 깊이 · ' + effortLabel(savedEffort(p)), 'small muted'));
       card.append(button('사고 깊이 변경', () => { if (!['paused', 'blocked'].includes(d.status)) { announce('토의를 일시정지하고 현재 발언이 끝난 뒤 변경하세요.', true); return; }
-        modal('이 토의의 사고 깊이', [{ name: 'reasoningEffort', label: '사고 깊이', options: p.kind === 'codex-oauth' ? effortOptions.filter(e => state?.connections.find(c => c.id === p.connectionId)?.models.find(m => m.id === p.modelId)?.reasoningEfforts?.some(v => v === e.value)) : effortOptions, value: p.reasoningEffort ?? 'xhigh' }], values => control({ action: 'configure_participant', participantId: p.id, ...values }), '완료된 발언은 보존하고 이후 발언부터 적용합니다.'); }));
+        modal('이 토의의 사고 깊이', [{ name: 'reasoningEffort', label: '사고 깊이', options: effortChoices(state?.connections.find(c => c.id === p.connectionId), p.modelId), value: savedEffort(p) }], values => control({ action: 'configure_participant', participantId: p.id, ...values }), '완료된 발언은 보존하고 이후 발언부터 적용합니다.'); }));
     }
     const job = state?.jobs.filter(j => j.discussionId === d.id && d.tasks.some(t => t.id === j.taskId && t.participantId === p.id)).at(-1); const toolState = job?.status ?? context.observation.tool;
     card.append(node('div', `연결 ${states[context.observation.connection] ?? context.observation.connection} / 응답 ${states[context.observation.response] ?? context.observation.response}\n도구 ${states[toolState] ?? toolState} / 업무 ${states[d.status] ?? d.status}`, 'observations')); members.append(card); }
@@ -243,7 +257,7 @@ function renderRecords(target: HTMLElement, d: Discussion): void {
 }
 function renderConnections(): void {
   if (!state) return; const target = $('#connections-list'); target.replaceChildren();
-  for (const c of state.connections) { const service = c.kind === 'deepseek' ? ({ deepseek: 'DeepSeek 공식 API', coralbricks: 'CoralBricks · DeepSeek', river: 'River · DeepSeek' }[c.apiService ?? 'deepseek']) : c.kind === 'codex-oauth' ? 'GPT · 기기 코드 연결 (Codex)' : c.kind;
+  for (const c of state.connections) { const service = c.kind === 'deepseek' ? ({ deepseek: 'DeepSeek 공식 API', coralbricks: 'CoralBricks · DeepSeek', river: 'River · DeepSeek' }[c.apiService ?? 'deepseek']) : c.kind === 'codex-oauth' ? 'GPT · 기기 코드 연결 (Codex)' : c.kind === 'anthropic' ? 'Anthropic · Claude API' : c.kind;
     const card = node('article', '', 'connection-card'); card.append(node('h3', c.label), badge(c.status), node('p', `${service}${c.email ? ` · ${c.email}` : ''}`, 'muted'), node('p', `${c.models.length}개 모델${c.error ? ` · ${errors[c.error] ?? c.error}` : ''}`, 'small'));
     if (c.modelError) card.append(node('p', `모델 조회 HTTP ${c.modelError.httpStatus}${c.modelError.providerCode ? ' · ' + c.modelError.providerCode : ''}`, 'small muted'));
     if (c.apiService === 'coralbricks' && c.error === 'coralbricks_verification_required') {
@@ -256,7 +270,7 @@ function renderConnections(): void {
       if (c.expectedEmail || c.email) await start(c.expectedEmail || c.email!);
       else modal('로그인할 GPT 계정 확인', [{ name: 'expectedEmail', label: '웹 GPT 계정 이메일', email: true }], async values => { await start(values.expectedEmail!); }, '등록된 계정 ID는 유지합니다. dot과 다른 계정의 이메일을 입력하세요.');
     }), button('이 계정 로그아웃', async () => { const result = await api<{ revoked: boolean }>(`/api/connections/${c.id}/logout`, {}); announce(result.revoked ? '계정 연결을 해제했습니다.' : '로컬 인증 정보를 지웠습니다. 원격 폐기 여부는 확인하지 못했습니다.'); await refresh(); }));
-    if (c.kind === 'deepseek') row.append(button('API 키 갱신', () => modal('DeepSeek API 키 갱신', [{ name: 'key', label: '새 API 키', secret: true }], async values => { await api(`/api/connections/${c.id}/credential`, values); await refresh(); })));
+    if (c.kind === 'deepseek' || c.kind === 'anthropic') row.append(button('API 키 갱신', () => modal(`${service} 키 갱신`, [{ name: 'key', label: '새 API 키', secret: true }], async values => { await api(`/api/connections/${c.id}/credential`, values); await refresh(); })));
     if (c.kind === 'browser' && c.browser) { const browserBinding = c.browser; row.append(button('기존 대화 다시 찾기', async () => {
       $<HTMLDetailsElement>('#browser-connection-panel').open = true; await loadBrowserPages(); $<HTMLSelectElement>('#browser-discovery-connection').value = c.id; invalidateDiscovery(); $('#browser-discovery-form').scrollIntoView();
     }), button('페이지·선택자 갱신', () => { const form = $<HTMLFormElement>('#browser-form'); const owner = form.closest('details')!; owner.open = true; $<HTMLDetailsElement>('#browser-connection-panel').open = true;
@@ -278,13 +292,13 @@ function renderConnections(): void {
   const participants = $('#participants-list'); participants.replaceChildren();
   for (const p of state.participants.filter(p => p.kind !== 'fake')) {
     const connection = state.connections.find(c => c.id === p.connectionId); const card = node('article', '', 'connection-card');
-    card.append(node('h3', p.label), node('p', '계정 · ' + (connection?.email ?? connection?.browser?.accountLabel ?? connection?.label ?? '연결 삭제됨 · 이전 대화 기록 보존'), 'small muted'), node('p', p.modelId + (gptKind(p.kind) ? ' · ' + effortLabel(p.reasoningEffort ?? 'xhigh') : ''), 'small'));
+    card.append(node('h3', p.label), node('p', '계정 · ' + (connection?.email ?? connection?.browser?.accountLabel ?? connection?.label ?? '연결 삭제됨 · 이전 대화 기록 보존'), 'small muted'), node('p', p.modelId + (reasoningKind(p.kind) ? ' · ' + effortLabel(savedEffort(p)) : ''), 'small'));
     card.append(button('토커 설정 변경', () => { if (connection?.status !== 'connected') { announce('먼저 해당 계정을 로그인하고 모델을 확인해 주세요.', true); return; }
       const form = $<HTMLFormElement>('#participant-form'); let hidden = form.elements.namedItem('participantId') as HTMLInputElement | null;
       if (!hidden) { hidden = node('input'); hidden.type = 'hidden'; hidden.name = 'participantId'; form.append(hidden); } hidden.value = p.id;
       $<HTMLSelectElement>('#participant-connection').value = p.connectionId!; updateModels(); $<HTMLSelectElement>('#participant-model').value = p.modelId;
       (form.elements.namedItem('label') as HTMLInputElement).value = p.label; (form.elements.namedItem('role') as HTMLInputElement).value = p.role;
-      $<HTMLSelectElement>('#participant-effort').value = p.reasoningEffort ?? 'xhigh'; updateEffort(); $('#participant-save').textContent = '토커 설정 저장'; $('#participant-edit-cancel').hidden = false; form.scrollIntoView({ behavior: 'smooth' });
+      $<HTMLSelectElement>('#participant-effort').value = savedEffort(p); updateEffort(); $('#participant-save').textContent = '토커 설정 저장'; $('#participant-edit-cancel').hidden = false; form.scrollIntoView({ behavior: 'smooth' });
     })); participants.append(card);
   }
   $('#browser-state').textContent = `${state.capabilities.browserConfigured ? 'Chrome 명령 설정됨' : 'Chrome 명령 미설정'} · ${state.browserPaused ? '수동 조작 중 · 자동 입력 잠김' : '자동 입력 가능'} · ${state.capabilities.noVncConfigured ? '화면 연결 설정됨' : '화면 연결 미설정'}`;
@@ -375,6 +389,7 @@ form('#discussion-form', async values => { const participantIds = [...document.q
 form('#oauth-form', async values => { await showOAuth(await api('/api/connections/oauth', values)); await refresh(); });
 form('#codex-oauth-form', startDevice);
 form('#deepseek-form', async (values, el) => { try { await api('/api/connections/deepseek', values); await refresh(); } finally { (el.elements.namedItem('key') as HTMLInputElement).value = ''; } });
+form('#anthropic-form', async (values, el) => { try { await api('/api/connections/anthropic', values); await refresh(); } finally { (el.elements.namedItem('key') as HTMLInputElement).value = ''; } });
 function clearParticipantEdit(): void { $('#participant-form').querySelector('[name=participantId]')?.remove(); $<HTMLFormElement>('#participant-form').reset(); $('#participant-save').textContent = '참여자 등록'; $('#participant-edit-cancel').hidden = true; updateModels(); }
 form('#participant-form', async values => { const { participantId, ...settings } = values; await api(participantId ? '/api/participants/' + participantId : '/api/participants', settings); clearParticipantEdit(); announce(participantId ? '설정을 저장했습니다. 새 토의부터 적용합니다.' : '참여자를 등록했습니다.'); await refresh(); });
 $('#participant-edit-cancel').addEventListener('click', clearParticipantEdit);

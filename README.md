@@ -54,6 +54,8 @@ GPT의 **별도 로그인 창 열기**는 앱 안에 서버 Chrome 화면을 표
 
 dot 계정과 웹 GPT OAuth 계정은 분리된 로그인 창에서 선택합니다. OAuth GPT 사고 깊이는 기본 Extra high이며 토커 설정에서 나중에 바꿀 수 있습니다. 모든 토커는 이전 라운드의 긴 전체 답변을 읽고 각자 재분석해 다시 발언합니다. 기본 검토 2회이며 예산 안에서 1~8회를 선택합니다. [구현과 검증 범위](docs/implementation/talker-settings-rounds-20261030.md)를 확인하세요.
 
+DeepSeek는 모델 확인 후 제공처 기본값·None·Low·High·Max 중 실제 지원 값을 선택하고 나중에 바꿀 수 있습니다. Anthropic은 `참여자와 연결 → Anthropic · Claude API`에서 키와 필요한 Workspace ID로 연결합니다. 구독 OAuth는 공식 외부 앱 지원 확인까지 보류합니다. [사용 절차](docs/operations-runbook.md#deepseek-사고-깊이--anthropic-api-2026-10-31-보완)와 [fixture/실계정 검증 범위](docs/implementation/deepseek-reasoning-anthropic-20261031.md)를 확인하세요.
+
 현재 한 작업실에서 활성 토의 1개, provider 발언 1개를 순차 실행합니다. 요청 수·활성 시간·보고된 토큰·검증 과제·Codex 실행 수를 제한합니다. 사용량을 제공하지 않은 연결은 미확인 횟수로 표시하며 가격을 임의 추정하지 않습니다.
 
 일시정지는 다음 전송을 막고 현재 응답을 기록합니다. 토의 취소가 이미 전송된 원격 작업의 취소를 뜻하지는 않습니다. Codex 중단은 실행 화면에서 요청하고 실제 종료 event를 기다립니다. 불확실한 전송과 재시작 중이던 실행은 자동 재전송하지 않습니다.
