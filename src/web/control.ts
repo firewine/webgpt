@@ -183,7 +183,8 @@ function control(body: Record<string, unknown>): Promise<unknown> { if (!current
 function renderDiscussion(): void {
   if (!current) return; const d = current;
   $('#discussion-title').textContent = d.topic; $('#discussion-meta').textContent = `DISCUSSION / REVISION ${d.revision} · ${time(d.createdAt)}`;
-  const stateLine = $('#discussion-state'); stateLine.replaceChildren(badge(d.status), node('span', `요청 ${d.used.requests}/${d.limits.maxRequests} · 토큰 ${d.used.inputTokens + d.used.outputTokens} · 사용량 미제공 ${d.used.unknownUsage}회`, 'small muted'));
+  const unknownUsage = Math.max(d.used.unknownUsage, d.turns.filter(t => t.dispatchStartedAt && !['prepared', 'running'].includes(t.status) && t.usage === null).length);
+  const stateLine = $('#discussion-state'); stateLine.replaceChildren(badge(d.status), node('span', `요청 ${d.used.requests}/${d.limits.maxRequests} · 토큰 ${d.used.inputTokens + d.used.outputTokens} · 사용량 미확인 ${unknownUsage}회`, 'small muted'));
   if (d.reason) stateLine.append(node('span', errors[d.reason] ?? d.reason, 'small muted'));
   const track = $('#phase-track'); track.replaceChildren(); const order = Object.keys(phases) as Phase[];
   for (const [index, phase] of order.entries()) track.append(node('div', `${String(index + 1).padStart(2, '0')} ${phases[phase]}`, `phase-step ${phase === d.phase ? 'current' : index < order.indexOf(d.phase) ? 'past' : ''}`));
@@ -213,10 +214,10 @@ function renderTimeline(target: HTMLElement, d: Discussion): void {
   if (!d.turns.length) target.append(node('div', '참여자의 첫 제안을 기다리고 있습니다.', 'empty'));
   for (const t of d.turns) {
     const card = node('article', '', 'turn'); const head = node('header', '', 'turn-header'); const who = node('div', '', 'inline'); who.append(node('strong', labelFor(t.participantId)), node('span', `${phases[t.phase]} · ${t.round}회`, 'muted')); head.append(who, badge(t.status));
-    card.append(head, node('div', (t.reply?.text ?? t.text) || '응답을 기다리고 있습니다…', 'reply'));
+    card.append(head, node('div', (t.reply?.text ?? t.text) || (t.status === 'failed' ? '완료된 응답이 없습니다. 실패 기록을 확인해 주세요.' : t.status === 'unconfirmed' ? '응답 수신 여부를 원래 요청과 대조해야 합니다.' : '응답을 기다리고 있습니다…'), 'reply'));
     if (t.reply?.uncertainty.length) card.append(node('div', t.reply.uncertainty.join('\n'), 'uncertainty'));
     if (t.reply?.reviews.length) { const reviews = node('div'); for (const r of t.reply.reviews) reviews.append(node('p', `${r.stance === 'challenge' ? '반론' : r.stance === 'support' ? '지지' : '미확인'} · ${d.claims.find(c => c.id === r.claimId)?.text ?? r.claimId}\n${r.reason}`, 'small')); card.append(reviews); }
-    card.append(node('footer', `revision ${t.revision} · 문맥 ${t.generation} · ${time(t.startedAt)}${t.reasoningEffort ? ' · 요청 사고 깊이 ' + effortLabel(t.reasoningEffort) : ''}${t.error ? ` · ${t.error}` : ''}`));
+    card.append(node('footer', `revision ${t.revision} · 문맥 ${t.generation} · ${time(t.startedAt)}${t.reasoningEffort ? ' · 요청 사고 깊이 ' + effortLabel(t.reasoningEffort) : ''}${t.error ? ` · ${t.error}` : ''}${t.providerFinishReason ? ' · ' + ({ stop: '제공처 stop 수신 · 스트림 완료 미확정', length: '응답 출력 한도 도달', content_filter: '제공처 필터로 종료', tool_calls: '도구 호출로 종료', function_call: '함수 호출로 종료', other: '제공처의 기타 종료' }[t.providerFinishReason]) : ''}`));
     card.append(details('원본 응답과 수신 기록', JSON.stringify({ turnId: t.id, receipt: t.receipt, usage: t.usage, evidenceIds: t.evidenceIds, promptDigest: t.promptDigest, raw: t.text }, null, 2), t.id)); target.append(card);
   }
 }

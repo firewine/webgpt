@@ -4,6 +4,7 @@ import type { Store } from './store.js';
 import type { Checkpoint, Discussion, DiscussionTurn, Evidence, Phase, Task, WorkspaceState } from './model.js';
 import { AppError, code, digest, id, integer, now, object, string, strings } from './util.js';
 import { parseReply, promptFor } from './prompts.js';
+import { failureObservation } from '../connections/completion-failure.js';
 import { reasoningEffort, participantReasoning, oauthKind } from './settings.js';
 import type { LocalMaterials } from './materials.js';
 import { DispatchCoordinator, budgetReason } from './dispatch.js';
@@ -338,6 +339,8 @@ export class DiscussionEngine {
         }
       } else {
         turn.status = uncertain ? 'unconfirmed' : 'failed'; turn.error = code(failure); task.status = uncertain ? 'unconfirmed' : 'failed'; task.reason = turn.error;
+        Object.assign(turn, failureObservation(failure));
+        if (turn.usage) { d.used.inputTokens += turn.usage.input; d.used.outputTokens += turn.usage.output; } else if (turn.dispatchStartedAt) d.used.unknownUsage++;
         if (d.status !== 'cancelled') { d.status = 'blocked'; d.reason = turn.error; }
       }
       if (context.generation === turn.generation) context.observation = { ...context.observation, response: turn.status, work: d.status, observedAt: now(), reason: turn.error };

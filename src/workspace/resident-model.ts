@@ -1,4 +1,4 @@
-import type { Context, Member, StructuredReply } from './model.js';
+import type { Context, Member, StructuredReply, ProviderFinishReason } from './model.js';
 import type { SeatAssignment, WorkTask, WorkAttempt, WorkJobLink } from './work-model.js';
 import type { WikiPage, WikiVersion, WikiCitation, WikiSnapshot, ResidentGrant } from './wiki-model.js';
 export type { SeatAssignment, WorkTask, WorkAttempt, WorkReportV1, WorkReviewV1, WorkJobLink } from './work-model.js';
@@ -52,6 +52,7 @@ export interface ResidentTurn {
   wikiCitations?: WikiSnapshot[];
   proposalResults?: { index: number; status: 'applied' | 'not_run'; taskId?: string; pageId?: string; conflictId?: string; intentId?: string; reason?: string }[];
   dispatchStartedAt?: string;
+  providerFinishReason?: ProviderFinishReason;
 }
 export interface DispatchLease {
   id: string; ownerKind: 'topic' | 'resident' | 'work'; ownerAttemptId: string;

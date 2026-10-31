@@ -109,6 +109,10 @@ OAuth GPT 사고 깊이는 기본 Extra high이며 Low/Medium/High로 변경할 
 
 Anthropic 구독 OAuth는 [승인된 범위](./reviews/deepseek-anthropic-impact-20261031.md)에 따라 보류했다. API 연결은 Claude 웹의 기존 대화/기억을 가져오지 않으며 사고 깊이 별도 설정도 이번 범위에 없다. Messages 응답의 완료/원문·receipt와 제공된 usage만 사용한다. 출력 한도 4,096토큰이며 중도 종료·`max_tokens`를 정상 완료로 표시하거나 자동 재전송하지 않는다. 장문 실제 추론 적합성·요금/계정 권한은 아직 검증하지 않았다. [구현·검사·복귀 기록](./implementation/deepseek-reasoning-anthropic-20261031.md)을 참조한다.
 
+### DeepSeek 응답 실패 진단
+
+DeepSeek가 `response_not_completed`로 중단되면 receipt/원래 요청을 보존하고 원인을 확인한다. 새 진단 빌드는 제공처의 종료 reason과 실제 보고 usage를 실패에도 남긴다. `length`는 출력 한도 도달, `content_filter`·`tool_calls` 등은 별도 종료 신호이며 정상 완료가 아니다. EOF/미완료 stream은 미확정으로 대조한다. 기존 기록에 이유/usage가 없으면 추정해 채우지 않는다. [실계정 부분 실패·진단 보강](./implementation/phase8-real-api-20261031.md)을 따른다. 기본 출력4,096과 사고 값을 자동으로 바꾸지 않으며 출력 한도 설정 추가는 별도 승인 대상이다.
+
 ### dot·Muse
 
 서버 Chrome에서 실제 기존 agent 대화를 연다. `참여자와 연결 → dot·Muse의 기존 대화 연결 → 연결할 페이지 찾기`에서 페이지·프로필과 서비스를 직접 선택한다. 이미 등록한 대화는 `기존 대화 다시 찾기` 또는 갱신할 기존 연결을 선택한다. `읽기 전용 확인` 결과의 URL·계정 식별 문구·대화 ID를 원래 화면과 대조한 뒤 확인 체크와 연결 이름으로 저장한다. 탐지 중 입력·클릭·모델 호출은 없다. 후보가 여러 개이거나 draft/busy·기존 계정/thread가 다르면 저장하지 않는다.

@@ -10,6 +10,7 @@ import { deepSeekEndpoint, deepSeekService, deepSeekReasoning, deepSeekThinking 
 import { Anthropic } from './anthropic.js';
 import { readCodexJson, type CodexOAuth } from './codex-oauth.js';
 import { modelCatalogError } from './model-catalog-error.js';
+import { CompletionFailure } from './completion-failure.js';
 
 export interface Completion { text: string; receipt: string | null; usage: { input: number; output: number } | null }
 export interface Hooks { dispatched(): void; receipt(id: string): void; delta(text: string): void }
@@ -90,7 +91,7 @@ export class Providers {
       }
       throw new AppError(res.status === 401 || res.status === 403 ? 'auth_required' : res.status === 429 ? 'usage_limit' : 'provider_http_error', 502, res.status >= 500);
     }
-    let text = ''; let receipt: string | null = null; let usage: Completion['usage'] = null; let completed = false; let done = false;
+    let text = ''; let receipt: string | null = null; let usage: Completion['usage'] = null; let completed = false; let done = false; let finishReason: unknown = null;
     try {
       for await (const data of sse(res)) {
         if (data === '[DONE]') { done = true; continue; }
@@ -113,12 +114,19 @@ export class Providers {
             const choice = object(entry); if (choice.index !== 0) continue;
             const delta = choice.delta ? object(choice.delta) : {};
             if (typeof delta.content === 'string') { text += delta.content; hooks.delta(delta.content); }
-            if (choice.finish_reason === 'stop') completed = true;
-            else if (choice.finish_reason !== null && choice.finish_reason !== undefined) throw new AppError('response_not_completed', 502);
+            if (choice.finish_reason !== null && choice.finish_reason !== undefined) {
+              if (finishReason !== null && finishReason !== choice.finish_reason) throw new AppError('stream_unconfirmed', 502, true);
+              finishReason = choice.finish_reason; completed = finishReason === 'stop';
+            }
           }
         }
       }
-    } catch (error) { if (error instanceof AppError) throw error; throw new AppError('stream_unconfirmed', 502, true); }
+    } catch (error) {
+      if (!oauth && (finishReason !== null || usage !== null) && (!(error instanceof AppError) || ['stream_unconfirmed', 'response_not_completed'].includes(error.code))) throw new CompletionFailure(error instanceof AppError && error.code === 'response_not_completed' ? 'response_not_completed' : 'stream_unconfirmed', finishReason, usage, !(error instanceof AppError) || error.uncertain);
+      if (error instanceof AppError) throw error; throw new AppError('stream_unconfirmed', 502, true);
+    }
+    if (!oauth && finishReason !== null && finishReason !== 'stop') throw new CompletionFailure(done ? 'response_not_completed' : 'stream_unconfirmed', finishReason, usage, !done);
+    if (!oauth && (!completed || !done)) throw new CompletionFailure('stream_unconfirmed', finishReason, usage, true);
     if (!completed || (!oauth && !done)) throw new AppError('stream_unconfirmed', 502, true);
     if (!text.trim()) throw new AppError('empty_response', 502);
     return { text, receipt, usage };

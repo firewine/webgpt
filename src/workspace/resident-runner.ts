@@ -13,6 +13,7 @@ import type { WorkExecutionBridge } from './work-execution.js';
 import type { Wiki } from './wiki.js';
 import { assertWikiSnapshots, contextWiki, rememberWiki, wikiHistoryAllowed } from './wiki-policy.js';
 import { ResidentFocus, topicPolicy } from './resident-focus.js';
+import { failureObservation } from '../connections/completion-failure.js';
 
 type Emit = Parameters<Parameters<Store['transact']>[0]>[1];
 const LIVE = ['prepared', 'running', 'unconfirmed'];
@@ -160,6 +161,7 @@ export class ResidentRunner {
       if (outcome.result) this.accept(state, room, turn, outcome.result, emit);
       else {
         turn.status = outcome.uncertain ? 'unconfirmed' : 'failed'; turn.error = code(outcome.failure);
+        Object.assign(turn, failureObservation(outcome.failure));
         const member = room.members.find(m => m.participantId === turn.participantId);
         if (turn.error === 'dispatch_scope_changed') { turn.status = 'stale'; turn.proposalsStatus = 'stale'; }
         else if (member) member.blockedReason = turn.error;
