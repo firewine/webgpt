@@ -195,6 +195,22 @@ R8-D 실수락은 사용자가 연결 화면에서 GPT2계정 OAuth·DeepSeek·d
 
 이번 읽기 전용 운영 점검에서는 OAuth auth_required·browser 연결1로 dot/Muse 두 연결 미충족·DeepSeek/Codex 미등록·상주 flag off/미이관 상태를 확인했다. 이를 실패를 숨기기 위한 초기화·모의 계정 치환으로 해결하지 않는다. 준비 전 R8-D는 NOT_RUN이며 미확인 gate를 PASS로 바꾸지 않는다. 복귀는 새 예약을 막고 원래 실행을 대조한 뒤 flag off/read-only로 전환하며, Wiki/commands/영수증을 지우거나 옛 DB를 덮어쓰지 않는다.
 
+### 실계정 통합 검증 전 준비 상태
+
+`npm run doctor`의 `readiness`는 실행 중인 **로컬 앱의 기록된 상태만** 읽는다. 등록된 키가 이미 있어야 하며 새 키/토커/방을 생성하거나 모델·Chrome 대화·Codex job을 실행하지 않는다. 연결 수와 실제 준비된 토커 수, 중단 토의, 상주 설정·browser 수동 잠금·읽기 전용 실행 세션을 구분한다. `UNVERIFIED_BY_DOCTOR`는 이 명령으로 실제 계정·thread·응답·실행 성공을 검증하지 않았다는 뜻이다. `recordedPrerequisitesMet`도 실계정 수락/유료 호출 승인이 아니다.
+
+| `readiness`의 미준비 코드 | 다음 조치 |
+| --- | --- |
+| `two_gpt_participants_required` / `deepseek_participant_required` | 연결과 모델을 선택해 토커를 등록. GPT 두 토커는 서로 다른 계정인지 직접 확인 |
+| `distinct_gpt_identities_require_confirmation` | 같은 계정의 중복 등록/토커를 2계정으로 세지 않고 검증된 identity를 대조 |
+| `existing_discussion_requires_owner_action` | 기존 토의의 원문·미확정/receipt를 확인한 뒤 소유자가 이어가기 또는 취소 선택. 진단은 자동 취소/재전송하지 않음 |
+| `resident_feature_disabled` / `room_members_budget_and_pacing_required` | 상주 기능·멤버·예산·속도를 소유자가 명시 설정. 미정 U1/U2의 기본값을 임의 채우지 않음 |
+| `dot_and_muse_connections_required` / `browser_manual_control_active` | dot/Muse 각각 원래 대화를 등록·확인하고 수동 작업이 끝났을 때 기존 화면의 자동 입력 재개 사용 |
+| `workspace_roots_required` / `ready_read_only_binding_required` | 허용 root와 실제 호스트의 유휴 Codex thread를 확인한 후 읽기 전용으로 등록. 실제 쓰기 gate와 분리 |
+| `existing_execution_requires_reconciliation` | 원래 job/thread/승인/결과를 대조. 새 job으로 반복하지 않음 |
+
+키가 없거나 앱이 실행되지 않으면 원인 코드만 반환한다. 인증 전에 `/health`가 웹쫀쿠 workspace인지 확인하며 다른 서비스면 `unexpected_local_service`로 중단한다. 고정 loopback 주소만 사용하고 redirect를 거절해 owner 키가 다른 주소로 전달되지 않게 한다. 출력에는 계정 이메일·토커 이름·대화/모델 원문·thread/approval 내용·키를 포함하지 않는다. `configMatchesService`가 false이면 `.env`의 로컬 설정과 실행 중 서비스의 기록된 활성 설정이 일치하는지 확인한다. [2026-10-31 실제 준비 상태·격리 검사](./implementation/phase8-live-preflight-20261031.md)를 참조한다.
+
 ## 4. Codex 실행
 
 Codex 로그인은 서버의 실행 OS 사용자 환경에서 별도로 완료한다. `WJ_WORKSPACE_ROOTS` 안의 Git 작업 디렉터리와 기존 Codex thread ID를 UI에서 등록한다. `.git` branch, canonical cwd, host, OS user와 thread metadata를 확인한다. 코드 수정은 main/master가 아닌 작업 브랜치에서만 허용된다.
