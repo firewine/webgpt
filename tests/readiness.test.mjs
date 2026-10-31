@@ -54,9 +54,11 @@ test('a port used by another local service never receives the owner key', async 
 
 test('readiness refuses redirects and bounds or sanitizes state/error responses without exposing the owner key', async t => {
   let forwarded = 0; const trap = createServer((req, res) => { forwarded++; res.end('{}'); }); trap.listen(0, '127.0.0.1'); await once(trap, 'listening'); t.after(() => new Promise(resolve => trap.close(resolve)));
-  const redirect = createServer((req, res) => { res.writeHead(302, { Location: `http://127.0.0.1:${trap.address().port}/collect` }); res.end(); }); redirect.listen(0, '127.0.0.1'); await once(redirect, 'listening'); t.after(() => new Promise(resolve => redirect.close(resolve)));
+  let validHealth = false, authorizedState = false;
+  const redirect = createServer((req, res) => { if (validHealth && req.url === '/health') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ status: 'ok', service: 'webjjoku', mode: 'workspace', persistence: 'sqlite' })); return; } if (req.url === '/api/state') authorizedState = req.headers.authorization === 'Bearer ' + ownerKey; res.writeHead(302, { Location: `http://127.0.0.1:${trap.address().port}/collect` }); res.end(); }); redirect.listen(0, '127.0.0.1'); await once(redirect, 'listening'); t.after(() => new Promise(resolve => redirect.close(resolve)));
   const config = { accessToken: ownerKey, stateDir: '/unused', residentEnabled: false, workspaceRoots: [] };
   assert.equal((await readReadiness(config, { port: redirect.address().port })).reason, 'local_state_unavailable'); assert.equal(forwarded, 0);
+  validHealth = true; assert.equal((await readReadiness(config, { port: redirect.address().port })).reason, 'local_state_unavailable'); assert.equal(authorizedState, true); assert.equal(forwarded, 0);
   for (const response of [new Response('x'.repeat(1_000_001)), new Response('{"PRIVATE_SECRET":"'+ownerKey+'"}'), new Response('PRIVATE_UPSTREAM_ERROR',{status:401})]) {
     const r = await readReadiness(config, { port: 4090, request: async url => url.endsWith('/health') ? Response.json({ status: 'ok', service: 'webjjoku', mode: 'workspace', persistence: 'sqlite' }) : response }); assert.equal(r.status, 'unavailable'); assert.doesNotMatch(JSON.stringify(r), /PRIVATE_|fixture-only-private-owner-access/); assert.equal(r.modelCalls, 0);
   }
