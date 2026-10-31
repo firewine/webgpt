@@ -1,8 +1,8 @@
 # 상주 운영 단계별 변경·이관·수락·롤백
 
-> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-30 PR #20 사용자 병합 후 페이즈 6 구현/검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
+> **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-31 PR #21 사용자 병합 후 페이즈 7 구현/검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
 
-설계 근거 C와 계획 P는 [개정 요약](./plan-revision-20261030.md)으로 고정한다. 구현 순서·상태는 맨 위 링크의 SSOT를 따른다. R1~R4는 아래 계약으로 구현하고 [R1 증거](./implementation/phase1-resident-foundation-20261030.md)·[R2 증거](./implementation/phase2-resident-runtime-20261030.md)·[R3 증거](./implementation/phase3-chatroom-gui-20261030.md)·[R4 증거](./implementation/phase4-browser-discovery-20261030.md)를 남겼다. R3-E의 실제 기기 부분과 R4-D 실계정 왕복은 UNVERIFIED이며 자동 검사와 구분한다. R5/R6는 아래 구현 대응과 [R5 증거](./implementation/phase5-open-work-queue-20261030.md)·[R6 증거](./implementation/phase6-work-execution-20261030.md)를 따른다. R7/R8의 새 타입·파일·심볼·endpoint·검사는 아직 **제안**이다. 아래 원 설계의 제안 표기는 이력을 유지하며 구현 판정은 각 증거를 따른다. 기존 파일/심볼의 E 근거표는 C 기준이며 실계정/DOM/운영 호스트 적합성은 UNVERIFIED다.
+설계 근거 C와 계획 P는 [개정 요약](./plan-revision-20261030.md)으로 고정한다. 구현 순서·상태는 맨 위 링크의 SSOT를 따른다. R1~R4는 아래 계약으로 구현하고 [R1 증거](./implementation/phase1-resident-foundation-20261030.md)·[R2 증거](./implementation/phase2-resident-runtime-20261030.md)·[R3 증거](./implementation/phase3-chatroom-gui-20261030.md)·[R4 증거](./implementation/phase4-browser-discovery-20261030.md)를 남겼다. R3-E의 실제 기기 부분과 R4-D 실계정 왕복은 UNVERIFIED이며 자동 검사와 구분한다. R5/R6는 아래 구현 대응과 [R5 증거](./implementation/phase5-open-work-queue-20261030.md)·[R6 증거](./implementation/phase6-work-execution-20261030.md)를 따른다. R7의 실제 타입·파일·심볼·endpoint·검사는 아래 구현 대응과 [R7 증거](./implementation/phase7-shared-wiki-20261031.md)에 기록했다. R8는 아직 **제안**이다. 아래 원 설계의 제안 표기는 이력을 유지하며 구현 판정은 각 증거를 따른다. 기존 파일/심볼의 E 근거표는 C 기준이며 실계정/DOM/운영 호스트 적합성은 UNVERIFIED다.
 
 ## 1. 공통 변경·검증 원칙
 
@@ -163,15 +163,19 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 
 새 resident grant/intent는 contextGeneration도 확인한다. 새 actor 등록/재접속/인계 후 옛 generation 또는 세대 필드 없는 신규 형식 grant를 허용하지 않는다. 인계 후 필요한 새 grant는 같은 승인 scope의 정규 발급 경로를 쓰고 권한을 넓히거나 token을 방에 노출하지 않는다. 과거 resident fixture에 세대가 빠진 grant는 폐기 상태로 보존하며 기존 discussion grant를 이 규칙으로 재해석하지 않는다.
 
-| 수락 ID | 숫자·증거 | 방법(후속 실행) |
+**구현 대응:** 실제 `wiki-model.ts`·`Wiki`와 순수 `wiki-policy.ts`가 기존 Store transaction 위에 Wiki CAS·출처 검사·자동 보고 투영을 제공한다. `WorkQueue.finishTurn/finishExecution`은 수락한 새 보고와 같은 transaction에서 reported Wiki 버전·알림을 한 번만 기록한다. 원래 attempt의 범위·제목·generation을 사용하고 stale 결과는 게시하지 않는다. 기본 최신 버전 자동 선택 또는 명시 pin을 `ResidentRunner`·`WorkQueue.claimState`·`DiscussionEngine.create`에 snapshot으로 고정한다. 전송 직전 scope/과거 Wiki history 권한을 다시 검사하며 provider complete·topic parser·Codex RPC/격리는 변경하지 않는다.
+
+`ResidentMcp`는 별도 `residentGrants`에 room/project/actor·seat version·epoch·generation·identity·도구·만료·hash만 저장한다. 기존 `/mcp`에 새 형식 분기만 추가해 8개 `resident_*` 도구를 명시 grant로 제한한다. 신규 grant 없이는 기존 도구 목록·키 의미가 그대로다. owner API·기존 SSE와 실제 `WikiView`를 연결했으며 원문/이력/충돌·폐기·pin·권한 발급/회수를 제공한다. 신규 SQL 테이블·Store 계약·계정/개인 기억 이식은 없다. R7 gate 숫자와 R8 순서는 변경하지 않았다.
+
+| 수락 ID | 숫자·증거 | 실행 증거 |
 | --- | --- | --- |
-| R7-A | 사용자/AI 같은 baseVersion 2편집→1개 채택·1개 409, 원문/과거 인용 digest 동일 | 제안 `node --test tests/resident-wiki.test.mjs` |
-| R7-B | 같은 edit/report ID 20회→Wiki version/방 알림 각각1; reported를 verified로 자칭해도 승격0 | Wiki/Room journal fixture |
-| R7-C | 비공개 초안·타 방 자료·타 계정 context·폐기 grant의 조회/편집/claim/action 수락0 | 제안 `tests/resident-mcp.test.mjs`+기존 workspace-http scope 검사 |
-| R7-D | 다음 2발언/업무가 동일 pinned page/version/digest/sourceRefs 인용, 이후 수정으로 과거 입력 변경0 | context snapshot/입출력 fixture |
-| R7-E | 기존 도구 목록/응답/토론 grant 권한 변화0, 추가 grant 없이는 resident 도구0 | /mcp tools/list/call 호환 fixture |
-| R7-F | Wiki HTML/script/javascript링크·비공개/임의 URL 참조 4종에서 코드 실행/권한 확대/보호 URL fetch 0 | 제안 browser Wiki 렌더+기존 source 경계 fixture |
-| R7-G | 옛 세대/세대 누락 2종×room 발화/work claim/wiki edit 3도구→수락0, 기존 discussion grant 응답 변화0 | 제안 resident-grant 세대 검사·기존 MCP 회귀 |
+| R7-A | 사용자/AI 같은 baseVersion 2편집→1개 채택·1개 409, 원문/과거 인용 digest 동일 | PASS · resident-wiki HTTP/CAS와 browser stale 폼→명시 조정 |
+| R7-B | 같은 edit/report ID 20회→Wiki version/방 알림 각각1; reported를 verified로 자칭해도 승격0 | PASS · Wiki/Room journal·SQL event 실패 원자성 |
+| R7-C | 비공개 초안·타 방 자료·타 계정 context·폐기 grant의 조회/편집/claim/action 수락0 | PASS · resident-mcp·resident-wiki·기존 HTTP scope 회귀 |
+| R7-D | 다음 2발언/업무가 동일 pinned page/version/digest/sourceRefs 인용, 이후 수정으로 과거 입력 변경0 | PASS · turn/WorkAttempt/topic snapshot·자동 최신 선택·과대 신규 입력과 기존 claim 분리 |
+| R7-E | 기존 도구 목록/응답/토론 grant 권한 변화0, 추가 grant 없이는 resident 도구0 | PASS · /mcp tools/list/call 호환·기존 workspace-http/connection 회귀 |
+| R7-F | Wiki HTML/script/javascript링크·비공개/임의 URL 참조 4종에서 코드 실행/권한 확대/보호 URL fetch 0 | PASS · 실제 Chrome inert 렌더·네트워크 카운터/출처 거절·기존 source 회귀 |
+| R7-G | 옛 세대/세대 누락 2종×room 발화/work claim/wiki edit 3도구→수락0, 기존 discussion grant 응답 변화0 | PASS · HTTP/이미 잡은 grant 6종·기존 MCP 회귀 |
 
 **롤백:** 신규 grant 회수·resident 도구/편집/모델 예약 차단 후 G0. Wiki·버전·tombstone·출처·충돌은 read-only로 남기고 delete/폴더 덮어쓰기/old backup restore하지 않는다. 기존 /mcp owner/토론 기능은 그대로 제공한다.
 

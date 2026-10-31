@@ -21,6 +21,8 @@ import { ResidentRunner } from './resident-runner.js';
 import { FakeResidentCompletion } from './resident-fake.js';
 import { WorkQueue } from './work-queue.js';
 import { WorkExecutionBridge, validateWorkExecutionState } from './work-execution.js';
+import { Wiki, validateWikiState } from './wiki.js';
+import { ResidentMcp } from './resident-mcp.js';
 
 export class Workspace {
   readonly store: Store; readonly vault: Vault; readonly oauth: OAuthService; readonly browser: BrowserBridge;
@@ -32,10 +34,12 @@ export class Workspace {
   readonly dispatch: DispatchCoordinator; readonly residentRunner: ResidentRunner;
   readonly workQueue: WorkQueue;
   readonly workExecution: WorkExecutionBridge;
+  readonly wiki: Wiki;
+  readonly residentMcp: ResidentMcp;
   constructor(readonly config: WorkspaceConfig, fakeDelay = 80, options: { residentProvider?: Pick<Providers, 'complete'>; residentClock?: () => number; residentAutoSchedule?: boolean } = {}) {
     this.store = new Store(config.stateDir);
     this.dispatch = new DispatchCoordinator(config.residentEnabled);
-    try { this.resident = new ResidentStore(this.store, config.residentEnabled); validateWorkExecutionState(this.store.read(), this.store); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); }
+    try { this.resident = new ResidentStore(this.store, config.residentEnabled); validateWikiState(this.store.read()); validateWorkExecutionState(this.store.read(), this.store); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); this.wiki = new Wiki(this.store, config.residentEnabled); }
     catch (error) { this.store.close(); throw error; }
     this.vault = new Vault(join(config.stateDir, 'credentials'));
     const accessPath = join(config.stateDir, 'access-token');
@@ -51,6 +55,7 @@ export class Workspace {
     this.browser = new BrowserBridge(this.store, config.chromeCommand);
     this.browserDiscovery = new BrowserDiscovery(this.browser);
     this.providers = new Providers(this.store, this.vault, this.oauth, this.browser, fetch, fakeDelay);
+    this.workQueue.wiki = this.wiki;
     this.dispatch.workGuard = (state, turn) => this.workQueue.canDispatch(state, turn);
     this.engine = new DiscussionEngine(this.store, this.providers, config, undefined, this.dispatch);
     this.materials = new LocalMaterials(config.materialRoots, [config.stateDir, config.chromeProfileDir]);
@@ -63,8 +68,9 @@ export class Workspace {
     this.codex.beforeDispatch = (state, job) => this.dispatch.validateToolDispatch(state, job);
     this.residentRunner = new ResidentRunner(this.store, this.resident, this.dispatch,
       options.residentProvider ?? new FakeResidentCompletion(this.providers, fakeDelay), this.engine, config.turnTimeoutMs,
-      { work: this.workQueue, execution: this.workExecution, ...(options.residentClock ? { clock: options.residentClock } : {}), ...(options.residentAutoSchedule !== undefined ? { autoSchedule: options.residentAutoSchedule } : {}) });
+      { work: this.workQueue, wiki: this.wiki, execution: this.workExecution, ...(options.residentClock ? { clock: options.residentClock } : {}), ...(options.residentAutoSchedule !== undefined ? { autoSchedule: options.residentAutoSchedule } : {}) });
     this.resident.dispatchAvailable = true;
+    this.residentMcp = new ResidentMcp(this);
     this.codex.onProgress = () => { this.engine.kick(); this.residentRunner.kick(); };
   }
   start(): void { this.workExecution.recover(); this.residentRunner.recover(); this.codex.recover(); this.engine.recover(); this.residentRunner.start(); }

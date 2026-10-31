@@ -7,6 +7,7 @@ import { parseReply, promptFor } from './prompts.js';
 import { reasoningEffort } from './settings.js';
 import type { LocalMaterials } from './materials.js';
 import { DispatchCoordinator, budgetReason } from './dispatch.js';
+import { contextWiki, visibleRoomMessages } from './wiki-policy.js';
 
 interface Executor { submit(input: { bindingId: string; prompt: string; requestId: string; discussionId: string; taskId: string; revision: number; maxDurationMs?: number }): string; kick?(): void }
 export class DiscussionEngine {
@@ -88,8 +89,9 @@ export class DiscussionEngine {
       if (roomId) {
         const room = state.resident?.rooms.find(r => r.id === roomId);
         if (!room || !room.desiredOn || room.topicLink || budgetReason(room)) throw new AppError('room_focus_not_ready', 409);
-        const publicText = state.resident!.messages.filter(m => m.roomId === roomId && m.visibility === 'room_public').map(m => ({ id: m.id, authorId: m.authorId, text: m.text }));
-        const material = JSON.stringify({ roomPublicMessages: publicText });
+        const publicText = visibleRoomMessages(state, room, participantIds).map(m => ({ id: m.id, authorId: m.authorId, text: m.text }));
+        d.wikiCitations = contextWiki(state, room, participantIds);
+        const material = JSON.stringify({ roomPublicMessages: publicText, wiki: d.wikiCitations });
         d.roomMaterial = { text: material, digest: digest(material) };
         if (d.tasks.some(t => promptFor(d, t).length > 180_000)) throw new AppError('focus_material_requires_selection', 409);
         d.roomId = roomId; room.topicLink = d.id; room.epoch++; room.version++; room.updatedAt = now();
@@ -279,7 +281,7 @@ export class DiscussionEngine {
       }
       const turn: DiscussionTurn = { id: id('turn'), taskId, participantId: participant.id, revision: d.revision, generation: context.generation,
         phase: task.phase, round: task.round, status: 'prepared', prompt, promptDigest: digest(prompt), text: '', reply: null,
-        startedAt: now(), finishedAt: null, receipt: null, error: null, usage: null,
+        startedAt: now(), finishedAt: null, receipt: null, error: null, usage: null, ...(d.wikiCitations ? { wikiCitations: structuredClone(d.wikiCitations) } : {}),
         ...(participant.kind === 'openai-oauth' ? { reasoningEffort: reasoningEffort(participant.reasoningEffort) } : {}),
         evidenceIds: d.evidence.filter(e => e.revision === d.revision && (task.phase !== 'independent' || e.kind === 'user_material')).map(e => e.id) };
       const denied = this.dispatch.reserve(state, { requestId: turn.id, kind: 'topic', participantId: participant.id, generation: turn.generation, roomId: d.roomId ?? null });

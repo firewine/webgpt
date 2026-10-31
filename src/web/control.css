@@ -314,3 +314,4 @@ dialog { max-height: calc(100dvh - 20px); overflow-y: auto; background: var(--pa
 [data-theme=dark] .phase-track, [data-theme=dark] .task { background: var(--paper); }
 [data-theme=dark] .phase-step.current { background: var(--accent-soft); color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+.wiki-body{white-space:pre-wrap;overflow-wrap:anywhere;max-height:55vh;overflow:auto}#wiki-detail>button{margin:.25rem}#wiki-detail>div>button{display:block;margin:.25rem 0;max-width:100%;overflow-wrap:anywhere}#resident-grant-token{white-space:pre-wrap;overflow-wrap:anywhere}

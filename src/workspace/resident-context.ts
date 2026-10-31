@@ -4,6 +4,7 @@ import type { Store } from './store.js';
 import { usageFor } from './dispatch.js';
 import { publicRoomData } from './resident-prompts.js';
 import { AppError, digest, id, integer, now, object, string } from './util.js';
+import { contextWiki } from './wiki-policy.js';
 
 export function roomContext(room: Room, participantId: string): RoomContext {
   room.contexts ??= [];
@@ -44,7 +45,7 @@ export function prepareCheckpoint(state: WorkspaceState, room: Room, participant
     messages: data.messages.map(m => ({ id: m.id, sourceId: m.sourceId, sequence: m.sequence, authorId: m.authorId,
       text: m.text.slice(0, 1500), truncated: m.text.length > 1500, digest: digest(m.text) })), claims: data.claims, notes: data.notes, evidenceRefs: data.evidence,
     pendingWork: state.resident!.workItems.map(record).filter(w => w.roomId === room.id && w.visibility !== 'owner_only').map(w => ({ id: w.id, status: w.status })),
-    wikiVersions: state.resident!.wikiVersions.map(record).filter(w => w.roomId === room.id && w.visibility === 'room_public').map(w => ({ pageId: w.pageId, version: w.version, digest: w.digest })),
+    wikiVersions: contextWiki(state, room, [participantId]).map(({ body: _body, title: _title, epistemicStatus: _status, ...ref }) => ref),
     unresolvedTurns: state.resident!.turns.filter(t => ['prepared', 'running', 'unconfirmed'].includes(t.status)).map(t => ({ id: t.id, participantId: t.participantId })),
     budgets: room.budgets, used: usageFor(room), basisCursor });
   if (text.length > 80_000) throw new AppError('checkpoint_requires_selection', 409);
@@ -63,6 +64,7 @@ export function rotateResidentContext(store: Store, enabled: boolean, roomId: st
     const cp = prepareCheckpoint(state, room, pid, store.cursor());
     state.resident!.contextCheckpoints.push(cp); context.generation = cp.toGeneration; context.checkpointId = cp.id;
     context.lastSeenSequence = cp.basisSequence; context.history = [{ role: 'user', content: cp.text }];
+    context.wikiHistoryRefs = []; delete context.wikiIdentityDigest;
     emit({ type: 'resident.context_rotated', discussionId: null, data: { roomId, participantId: pid, checkpointId: cp.id, generation: context.generation } });
     return { checkpointId: cp.id, generation: context.generation, digest: cp.digest };
   }, { id: 'resident:context:' + key, input: { roomId, body } });

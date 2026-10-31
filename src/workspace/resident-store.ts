@@ -177,5 +177,5 @@ function isCount(value: unknown, min = 0): boolean { return typeof value === 'nu
 function requiredInteger(value: unknown, min: number, max: number): number { if (value === undefined) throw new AppError('room_settings_required'); return integer(value, min, min, max); }
 function messageMetadata(m: RoomMessage): Omit<RoomMessage, 'text'> {
   return { id: m.id, roomId: m.roomId, sequence: m.sequence, sourceKind: m.sourceKind, sourceId: m.sourceId,
-    authorId: m.authorId, replyTo: m.replyTo, mentions: [...m.mentions], visibility: m.visibility, createdAt: m.createdAt };
+    authorId: m.authorId, replyTo: m.replyTo, mentions: [...m.mentions], visibility: m.visibility, createdAt: m.createdAt, ...(m.wikiCitations ? { wikiCitations: structuredClone(m.wikiCitations) } : {}) };
 }

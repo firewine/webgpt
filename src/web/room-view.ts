@@ -2,6 +2,7 @@ import type { Connection, Member, CodexJob, Discussion, MaterialPackage } from '
 import type { RoomSummary, RoomMessage, ResidentTurn, ResidentCheckpoint } from '../workspace/resident-model.js';
 import type { ResidentStatusProjection } from '../workspace/resident-status.js';
 import type { WorkTask, WorkAttempt, SeatAssignment, WorkJobLink } from '../workspace/work-model.js';
+import { WikiView } from './wiki-view.js';
 type WorkItem = Omit<WorkTask, 'reports' | 'reviews'> & { reportCount: number; reviewCount: number };
 type WorkSnapshot = { items: WorkItem[]; seats: SeatAssignment[]; executions: { taskId: string; attemptId: string; codexJobId: string | null; status: string; reported: boolean; error: string | null }[]; nextAfter: number; hasMore: boolean; cursor: number; enabled: boolean };
 
@@ -91,7 +92,9 @@ export class RoomView {
   private seatEditVersion = 0;
   private boardTab = ['workspace', 'usage', 'activity'].includes(stored('boardTab') ?? '') ? stored('boardTab')! : 'workspace';
   private boardClosed = stored('boardClosed') === 'true';
+  private readonly wiki: WikiView;
   constructor(private readonly deps: Dependencies) {
+    this.wiki = new WikiView({ api: deps.api, refresh: deps.refresh, report: deps.report, closeDrawers: () => this.closeDrawers() });
     this.on('#room-power', async () => { if (!this.detail) return; await this.control(this.detail.room.desiredOn ? 'off' : 'on'); });
     this.on('#room-wake', () => this.control('wake'));
     this.on('#room-settings', () => this.settings());
@@ -149,7 +152,7 @@ export class RoomView {
   private setBoardClosed(closed: boolean): void { this.boardClosed = closed; save('boardClosed', String(closed)); $('#view-room').classList.toggle('board-closed', closed); $('#room-panel-toggle').setAttribute('aria-expanded', String(innerWidth >= 1280 && !closed)); }
   setActive(active: boolean): void {
     const entering = active && !this.active;
-    if (!active && this.active) { this.rememberPosition(); this.closeDrawers(); }
+    if (!active && this.active) { this.rememberPosition(); this.closeDrawers(); void this.wiki.update(null); }
     this.active = active; $('#workspace').classList.toggle('room-mode', active);
     $('#room-member-panel').hidden = !active;
     $(active ? '#room-theme-slot' : '#theme-home').append($('#theme-toggle'));
@@ -161,6 +164,7 @@ export class RoomView {
     $('#room-raw').replaceChildren(); $('#room-members').replaceChildren(); $('#room-status').replaceChildren(); $('#room-records').replaceChildren();
     this.topic = null; this.topicKey = ''; this.topicUnavailable = false; $('#room-result-content').replaceChildren(); delete $('#room-result-content').dataset.signature; this.renderTopic();
     this.work = null; this.workOffset = 0; $('#work-items').replaceChildren(); $('#work-detail').replaceChildren();
+    void this.wiki.update(null);
     this.replyTo = null; this.mentions.clear(); this.uncertain = false; this.sending = false; this.panelsSignature = ''; this.restoreOnShow = true; this.loaded = false; this.renderReply();
   }
   async refresh(snapshot: RoomSnapshot): Promise<void> {
@@ -203,6 +207,7 @@ export class RoomView {
     this.turns = turns;
     await this.loadTopic();
     this.work = await this.deps.api<WorkSnapshot>(this.path(`/work?after=${this.workOffset}&limit=50`));
+    await this.wiki.update({ roomId: this.roomId, version: this.detail!.room.version, epoch: this.detail!.room.epoch, enabled: this.detail!.enabled, scopes: this.scopeChoices(), sources: [...this.messages.values()].map(m => ({ id: m.id, label: this.name(m.authorId) + ' · ' + m.preview.slice(0, 90) })), participants: this.snapshot!.participants.filter(p => this.detail!.room.members.some(m => m.participantId === p.id)).map(p => ({ id: p.id, label: p.label, generation: this.detail!.contexts.find(c => c.participantId === p.id)?.generation ?? 1, seatVersion: this.work!.seats.find(s => s.participantId === p.id)?.version ?? 0 })) });
     this.render(); this.loaded = true; this.applyPosition(anchor);
     if (this.active) { if (this.restoreOnShow) this.restorePosition(); requestAnimationFrame(() => this.markRead()); }
   }
@@ -435,6 +440,7 @@ export class RoomView {
         const actions = el('div', '', 'message-actions');
         actions.append(this.btn('답장', () => { this.replyTo = m.id; save(this.roomId + '.reply', m.id); this.renderReply(); $('#room-text').focus(); }), this.btn('원문·근거', () => this.raw(m)));
         if (this.snapshot?.resident.enabled) actions.append(this.btn('일감 만들기', () => this.workForm(undefined, m.id)));
+        for (const ref of m.wikiCitations ?? []) actions.append(this.btn('Wiki 인용 v' + ref.version, () => this.wiki.open(ref.pageId, ref.version)));
         row.append(actions); this.rows.set(m.id, row);
       }
       if (previous ? previous.nextElementSibling !== row : target.firstElementChild !== row) target.insertBefore(row, previous ? previous.nextElementSibling : target.firstChild);
@@ -616,7 +622,7 @@ export class RoomView {
     finally { submit.disabled = false; }
   }
   private drawer(dialogId: string, panel: string, slot: string): void { $(slot).append($(panel)); $(panel).hidden = false; const d = $<HTMLDialogElement>(dialogId); if (!d.open) d.showModal(); if (panel === '#room-panel') $('#room-panel-toggle').setAttribute('aria-expanded', 'true'); }
-  private closeDrawers(): void { for (const id of ['#room-members-dialog', '#room-panel-dialog', '#room-settings-dialog', '#room-result-dialog', '#work-form-dialog', '#work-seat-dialog', '#work-detail-dialog']) { const d = $<HTMLDialogElement>(id); if (d.open) d.close(); } }
+  private closeDrawers(): void { for (const id of ['#room-members-dialog', '#room-panel-dialog', '#room-settings-dialog', '#room-result-dialog', '#work-form-dialog', '#work-seat-dialog', '#work-detail-dialog', '#wiki-form-dialog', '#wiki-detail-dialog', '#resident-grant-dialog']) { const d = $<HTMLDialogElement>(id); if (d.open) d.close(); } }
   private navigate(view: 'connections' | 'execution' | 'discussion'): void { this.closeDrawers(); this.deps.openView(view); }
 }
 function localDate(value: string): string { const d = new Date(value); return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); }

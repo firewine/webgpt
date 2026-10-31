@@ -1,12 +1,13 @@
 import type { Context, Member, StructuredReply } from './model.js';
 import type { SeatAssignment, WorkTask, WorkAttempt, WorkJobLink } from './work-model.js';
+import type { WikiPage, WikiVersion, WikiCitation, WikiSnapshot, ResidentGrant } from './wiki-model.js';
 export type { SeatAssignment, WorkTask, WorkAttempt, WorkReportV1, WorkReviewV1, WorkJobLink } from './work-model.js';
 export type ResidentUsage = { input: number; output: number } | null;
 
 export interface RoomMember { participantId: string; enabled: boolean; blockedReason?: string | null }
 export interface RoomBudget { maxRequests: number; maxTokens: number; maxToolJobs: number; deadlineAt: string }
 export interface RoomPacing { minIntervalMs: number; idleNudgeMs: number; passBackoffMs: number; sleepAfterPasses: number }
-export interface RoomContext { participantId: string; generation: number; history: Context['history']; checkpointId: string | null; lastSeenSequence: number }
+export interface RoomContext { participantId: string; generation: number; history: Context['history']; checkpointId: string | null; lastSeenSequence: number; wikiHistoryRefs?: WikiCitation[]; wikiIdentityDigest?: string }
 export interface BudgetEntry { requestId: string; kind: 'topic' | 'resident' | 'work'; reservedAt: string; settledAt: string | null; usage: ResidentUsage; error: string | null }
 export interface ResidentReply extends StructuredReply {
   version: 1; action: 'say' | 'pass'; replyTo: string | null; mentions: string[];
@@ -21,6 +22,7 @@ export interface Room {
   pacing?: RoomPacing | null; contexts?: RoomContext[]; ledger?: BudgetEntry[]; toolReservations?: string[];
   reason?: string | null; passCount?: number; nextMemberIndex?: number; lastCompletedAt?: string | null;
   seats?: SeatAssignment[];
+  wikiPins?: WikiCitation[];
   lastMessageSequence: number; createdAt: string; updatedAt: string;
 }
 export interface RoomMessage {
@@ -28,6 +30,7 @@ export interface RoomMessage {
   sourceKind: 'user' | 'room' | 'topic' | 'work' | 'wiki' | 'system'; sourceId: string | null;
   authorId: string; text: string; replyTo: string | null; mentions: string[];
   visibility: 'room_public' | 'owner_only' | 'topic_round'; createdAt: string;
+  wikiCitations?: WikiCitation[];
 }
 export interface ResidentTurn {
   id: string; roomId: string; participantId: string; generation: number; epoch: number;
@@ -38,7 +41,8 @@ export interface ResidentTurn {
   messageId: string | null; proposalsStatus: 'none' | 'not_run' | 'stale' | 'applied';
   workAttemptId?: string;
   workSeatVersion?: number;
-  proposalResults?: { index: number; status: 'applied' | 'not_run'; taskId?: string; reason?: string }[];
+  wikiCitations?: WikiSnapshot[];
+  proposalResults?: { index: number; status: 'applied' | 'not_run'; taskId?: string; pageId?: string; conflictId?: string; reason?: string }[];
   dispatchStartedAt?: string;
 }
 export interface DispatchLease {
@@ -59,8 +63,9 @@ export interface ResidentStateV1 {
   claims?: RoomClaim[];
   workSchemaVersion?: 1;
   workExecutionSchemaVersion?: 1;
+  wikiSchemaVersion?: 1;
   contextCheckpoints: ResidentCheckpoint[]; workItems: WorkTask[]; workAttempts: WorkAttempt[];
-  wikiPages: unknown[]; wikiVersions: unknown[]; jobLinks: WorkJobLink[]; residentGrants: unknown[];
+  wikiPages: WikiPage[]; wikiVersions: WikiVersion[]; jobLinks: WorkJobLink[]; residentGrants: ResidentGrant[];
 }
 export interface RoomSummary {
   id: string; title: string; version: number; epoch: number; desiredOn: boolean;
