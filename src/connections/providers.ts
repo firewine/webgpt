@@ -8,6 +8,7 @@ import { sse } from './stream.js';
 import { reasoningEffort, reasoningEfforts, modelEffort, oauthKind } from '../workspace/settings.js';
 import { deepSeekEndpoint, deepSeekService } from './deepseek-services.js';
 import { readCodexJson, type CodexOAuth } from './codex-oauth.js';
+import { modelCatalogError } from './model-catalog-error.js';
 
 export interface Completion { text: string; receipt: string | null; usage: { input: number; output: number } | null }
 export interface Hooks { dispatched(): void; receipt(id: string): void; delta(text: string): void }
@@ -28,7 +29,7 @@ export class Providers {
     if (c.kind === 'codex-oauth' && (!version || !/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(version) || /^0\.0\.0(?:$|[-+])/.test(version))) throw new AppError('codex_version_required', 409);
     const url = c.kind === 'codex-oauth' ? 'https://chatgpt.com/backend-api/codex/models?client_version=' + encodeURIComponent(version!) : c.kind === 'openai-oauth' ? 'https://api.openai.com/v1/models' : deepSeekEndpoint(c.apiService, 'models');
     const res = await this.request(url, { redirect: 'error', signal: AbortSignal.timeout(20_000), headers: { Authorization: `Bearer ${token}`, ...(codex ? { 'ChatGPT-Account-Id': codex.accountId } : {}) } });
-    if (!res.ok) throw new AppError(res.status === 401 ? 'auth_required' : 'model_discovery_failed', 502);
+    if (!res.ok) throw await modelCatalogError(res, c.kind === 'deepseek' ? deepSeekService(c.apiService) : undefined);
     const body = c.kind === 'codex-oauth' ? await readCodexJson(res, 4_000_000) : object(await res.json()); const items = oauthKind(c.kind) ? body.models : body.data;
     if (!Array.isArray(items)) throw new AppError('invalid_model_catalog', 502);
     const models = items.map(object).filter(x => !oauthKind(c.kind) || x.visibility === 'list').map(x => ({

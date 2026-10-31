@@ -20,6 +20,7 @@ export interface Connection {
   status: 'connected' | 'auth_required' | 'unverified' | 'error';
   models: ModelChoice[]; clientId?: string; subject?: string; email?: string; expectedEmail?: string;
   browser?: BrowserBinding; lastCheckedAt?: string; error?: string;
+  modelError?: { httpStatus: number; providerCode?: string };
   apiService?: DeepSeekService;
   accountId?: string;
   deviceSignin?: { attemptId: string; status: 'starting' | 'pending' | 'completed' | 'failed' | 'cancelled' | 'expired' | 'interrupted' };
@@ -115,6 +116,7 @@ export interface WorkspaceState {
   grants: { id: string; hash: string; discussionId: string; participantId: string; tools: string[]; revoked: boolean }[];
   browserPaused: boolean;
   materialPackages?: MaterialPackage[];
+  connectionCleanup?: string[];
   resident?: ResidentStateV1;
 }
 export interface DurableEvent { id: number; type: string; discussionId: string | null; at: string; data: unknown }

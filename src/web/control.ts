@@ -30,6 +30,9 @@ const errors: Record<string, string> = { authentication_required: '접속 키를
   signin_pending: '이미 시작한 로그인이 있습니다. 서버 Chrome 화면에서 진행해 주세요.', signin_account_pending: '진행 중 로그인과 다른 계정을 지정했습니다. 기존 로그인을 마치거나 이 계정을 로그아웃한 뒤 다시 시작해 주세요.',
   account_email_required: '로그인할 웹 GPT 계정 이메일을 입력해 주세요.', invalid_account_email: '웹 GPT 계정 이메일을 확인해 주세요.',
   invalid_api_service: 'API 제공처를 다시 선택해 주세요.', deepseek_model_unavailable: '이 API 키에서 사용 가능한 DeepSeek 모델을 찾지 못했습니다. 제공처의 모델 권한을 확인해 주세요.',
+  coralbricks_verification_required: 'CoralBricks에서 계정 검증을 위한 결제수단 등록을 요구합니다. 공식 사이트에서 검증 후 모델 확인을 다시 눌러 주세요.',
+  model_access_denied: '제공처가 모델 조회 권한을 거절했습니다. 해당 계정의 모델·앱 접근 권한을 확인해 주세요.', model_rate_limited: '제공처의 조회 한도에 도달했습니다. 잠시 후 다시 확인해 주세요.', provider_credits_required: '제공처의 잔액이 부족합니다. 공식 사이트에서 사용 한도를 확인해 주세요.', model_catalog_not_found: '제공처의 모델 조회 주소를 찾지 못했습니다.', model_provider_unavailable: '제공처 서버가 모델 목록을 반환하지 못했습니다. 잠시 후 다시 확인해 주세요.', model_discovery_failed: '모델 목록을 확인하지 못했습니다. 연결 카드의 오류와 제공처 상태를 확인해 주세요.',
+  connection_in_use: '이 연결이 참여 중인 방을 끄고 진행 중인 토의를 완료하거나 취소한 뒤 삭제해 주세요.', connection_not_found: '이미 삭제됐거나 찾을 수 없는 연결입니다. 연결 목록을 다시 확인해 주세요.', connection_cleanup_failed: '연결은 해제됐지만 서버의 인증 파일 정리가 끝나지 않았습니다. 같은 삭제 요청을 다시 확인해 주세요.',
   wiki_version_conflict: '다른 편집이 먼저 반영됐습니다. 내 입력은 Wiki 변경 기록의 충돌 제안으로 보존했습니다.', wiki_sources_required: 'Wiki의 근거가 된 공개 원문을 선택해 주세요.', wiki_source_not_public: '같은 방과 허용 범위의 공개 출처만 참조할 수 있습니다.', wiki_context_requires_handoff: '이전 Wiki 맥락의 접근 범위가 바뀌었습니다. 원래 기록을 보존하고 문맥 인계 후 다시 시작하세요.', resident_scope_changed: '역할·문맥 세대·방 상태가 바뀌었습니다. 최신 기록으로 범위를 다시 확인하세요.', wiki_context_requires_selection: '고정한 Wiki 원문이 입력 한도를 넘습니다. 고정 문서를 줄여 주세요.', invalid_grant_expiry: '접근 권한의 만료 시각을 현재부터 7일 이내로 정해 주세요.',
   work_execution_scope_changed: '방·역할·업무 버전이 바뀌어 이 실행의 승인을 보류했습니다. 원래 실행과 현재 배정을 확인하세요.', work_execution_immutable_input: '업무 실행의 입력은 고정돼 있습니다. 실행을 대조한 뒤 반려·새 시도로 변경 내용을 남겨 주세요.', work_execution_link_required: '원래 업무 입력과 실행의 연결을 확인할 수 없습니다. 새 실행을 만들지 말고 원래 기록을 대조하세요.', work_write_safety_unverified: '저장소의 비밀·링크·출력 경계 검증 전에는 쓰기 업무를 실행할 수 없습니다.', room_tool_budget_exhausted: '방의 실행 한도나 현재 진행 상태를 확인해 주세요.',
   work_version_conflict: '다른 화면에서 업무 배정이나 일감이 바뀌었습니다. 새 기록을 확인한 뒤 다시 수정하세요.', work_not_ready: '완료 조건·의존성·허용 범위를 확인해 주세요.', work_room_not_ready: '방을 켜고 진행 한도와 현재 토론 상태를 확인해 주세요.', work_slot_or_scope_unavailable: '선택한 참여자의 업무 범위나 사용 중인 슬롯을 확인해 주세요.', work_source_not_public: '같은 방에 공개된 발언만 일감 근거로 사용할 수 있습니다.', work_dependency_cycle: '선행 일감이 서로를 기다리는 순환입니다. 의존성을 바꿔 주세요.', work_attempt_requires_reconciliation: '진행 중이거나 미확정인 업무를 먼저 대조해 주세요.', work_report_conflict: '현재 보고가 바뀌었습니다. 최신 산출물에서 다시 검토해 주세요.', work_scope_not_found: '이 방 또는 등록한 작업 공간만 범위로 선택할 수 있습니다.', work_action_not_authorized: '배정된 역할과 업무 범위가 이 동작을 허용하지 않습니다.', work_independent_review_required: '산출물 작성자와 다른 검토자가 필요합니다.',
@@ -241,7 +244,11 @@ function renderRecords(target: HTMLElement, d: Discussion): void {
 function renderConnections(): void {
   if (!state) return; const target = $('#connections-list'); target.replaceChildren();
   for (const c of state.connections) { const service = c.kind === 'deepseek' ? ({ deepseek: 'DeepSeek 공식 API', coralbricks: 'CoralBricks · DeepSeek', river: 'River · DeepSeek' }[c.apiService ?? 'deepseek']) : c.kind === 'codex-oauth' ? 'GPT · 기기 코드 연결 (Codex)' : c.kind;
-    const card = node('article', '', 'connection-card'); card.append(node('h3', c.label), badge(c.status), node('p', `${service}${c.email ? ` · ${c.email}` : ''}`, 'muted'), node('p', `${c.models.length}개 모델${c.error ? ` · ${c.error}` : ''}`, 'small'));
+    const card = node('article', '', 'connection-card'); card.append(node('h3', c.label), badge(c.status), node('p', `${service}${c.email ? ` · ${c.email}` : ''}`, 'muted'), node('p', `${c.models.length}개 모델${c.error ? ` · ${errors[c.error] ?? c.error}` : ''}`, 'small'));
+    if (c.modelError) card.append(node('p', `모델 조회 HTTP ${c.modelError.httpStatus}${c.modelError.providerCode ? ' · ' + c.modelError.providerCode : ''}`, 'small muted'));
+    if (c.apiService === 'coralbricks' && c.error === 'coralbricks_verification_required') {
+      const link = node('a', 'CoralBricks 계정 검증 페이지 열기 ↗'); link.href = 'https://www.coralbricks.ai/organization/billing'; link.target = '_blank'; link.rel = 'noopener noreferrer'; card.append(link);
+    }
     if (c.browser?.thread) card.append(node('p', `연결된 대화 ID: ${c.browser.thread.value}`, 'small muted'));
     const row = node('div', '', 'toolbar'); row.append(button('모델 확인', async () => { await api(`/api/connections/${c.id}/models`, {}); await refresh(); }));
     if (c.kind === 'openai-oauth') row.append(button('다시 로그인', async () => {
@@ -258,12 +265,20 @@ function renderConnections(): void {
         const input = form.elements.namedItem(key) as HTMLInputElement | null; if (input) { if (input.type === 'checkbox') input.checked = value === true; else input.value = String(value); }
       } owner.scrollIntoView({ behavior: 'smooth' }); })); }
     if (c.kind === 'codex-oauth') row.append(button('기기 코드 로그인', async () => { await startDevice({ label: c.label, expectedEmail: c.expectedEmail ?? c.email ?? '', connectionId: c.id }); }), button('이 계정 로그아웃', async () => { await api(`/api/connections/${c.id}/logout`, {}); announce('로컬 연결을 해제했습니다. 원격 인증 폐기 여부는 확인하지 못했습니다.'); await refresh(); }));
+    row.append(button('연결 삭제', () => {
+      const requestId = crypto.randomUUID();
+      modal(`연결 삭제 · ${c.label}`, [], async () => {
+        await api(`/api/connections/${c.id}/remove`, {}, requestId);
+        if (deviceLogin?.connectionId === c.id) closeDeviceScreen();
+        await refresh(); announce('연결과 이 서버의 인증 정보를 삭제했습니다. 기존 대화와 토커 기록은 보존했습니다.');
+      }, `${service} · ${c.email ?? c.label} 연결을 목록에서 지우고 이 서버의 인증 정보를 삭제합니다. 기존 대화·토커·원래 Chrome 대화는 보존됩니다. 외부 서비스의 로그인 권한 폐기는 확인하지 않습니다. 사용 중이거나 미확정 응답이 있으면 삭제할 수 없습니다.`, '삭제');
+    }, 'danger'));
     card.append(row); target.append(card); }
   if (!state.connections.length) target.append(node('p', '등록된 실제 계정이 없습니다. 모의 참여자로 전체 흐름을 먼저 확인할 수 있습니다.', 'small muted'));
   const participants = $('#participants-list'); participants.replaceChildren();
   for (const p of state.participants.filter(p => p.kind !== 'fake')) {
     const connection = state.connections.find(c => c.id === p.connectionId); const card = node('article', '', 'connection-card');
-    card.append(node('h3', p.label), node('p', '계정 · ' + (connection?.email ?? connection?.browser?.accountLabel ?? connection?.label ?? '연결 확인 필요'), 'small muted'), node('p', p.modelId + (gptKind(p.kind) ? ' · ' + effortLabel(p.reasoningEffort ?? 'xhigh') : ''), 'small'));
+    card.append(node('h3', p.label), node('p', '계정 · ' + (connection?.email ?? connection?.browser?.accountLabel ?? connection?.label ?? '연결 삭제됨 · 이전 대화 기록 보존'), 'small muted'), node('p', p.modelId + (gptKind(p.kind) ? ' · ' + effortLabel(p.reasoningEffort ?? 'xhigh') : ''), 'small'));
     card.append(button('토커 설정 변경', () => { if (connection?.status !== 'connected') { announce('먼저 해당 계정을 로그인하고 모델을 확인해 주세요.', true); return; }
       const form = $<HTMLFormElement>('#participant-form'); let hidden = form.elements.namedItem('participantId') as HTMLInputElement | null;
       if (!hidden) { hidden = node('input'); hidden.type = 'hidden'; hidden.name = 'participantId'; form.append(hidden); } hidden.value = p.id;
@@ -341,7 +356,8 @@ function renderJobs(): void {
 }
 type Field = { name: string; label: string; multiline?: boolean; required?: boolean; secret?: boolean; email?: boolean; options?: { value: string; label: string }[]; value?: string };
 let modalAction: ((values: Record<string, string>) => Promise<unknown>) | null = null;
-function modal(title: string, fields: Field[], action: (values: Record<string, string>) => Promise<unknown>, note?: string): void {
+function modal(title: string, fields: Field[], action: (values: Record<string, string>) => Promise<unknown>, note?: string, submitLabel = '적용'): void {
+  $<HTMLButtonElement>('#action-form button[type=submit]').textContent = submitLabel;
   $('#action-title').textContent = title; const target = $('#action-fields'); target.replaceChildren(); if (note) target.append(node('p', note, 'small muted'));
   for (const field of fields) { const label = node('label', field.label); const input = field.options ? node('select') : field.multiline ? node('textarea') : node('input'); input.name = field.name; input.required = field.required !== false; if (input instanceof HTMLTextAreaElement) input.rows = 6; else if (input instanceof HTMLInputElement && field.secret) { input.type = 'password'; input.autocomplete = 'off'; }
     if (input instanceof HTMLSelectElement && field.options) selectOptions(input, field.options.map(o => ({ id: o.value, label: o.label }))); if (field.value !== undefined) input.value = field.value; label.append(input); target.append(label); }

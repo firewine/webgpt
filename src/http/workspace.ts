@@ -184,8 +184,9 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     }
     if (path === '/api/connections/deepseek') { json(res, 201, { id: await app.addDeepSeek(input) }); return; }
     if (path === '/api/connections/browser') { json(res, 201, { id: await app.addBrowser(input) }); return; }
-    const connectionPath = /^\/api\/connections\/([\w-]+)\/(models|logout|credential)$/.exec(path);
+    const connectionPath = /^\/api\/connections\/([\w-]+)\/(models|logout|credential|remove)$/.exec(path);
     if (connectionPath) {
+      if (connectionPath[2] === 'remove') { if (Object.keys(input).length) throw new AppError('invalid_input'); json(res, 200, app.removeConnection(connectionPath[1]!, command(req))); return; }
       if (connectionPath[2] === 'models') await app.refreshModels(connectionPath[1]!);
       else if (connectionPath[2] === 'credential') await app.replaceKey(connectionPath[1]!, string(input.key, 4096));
       else { app.assertConnectionIdle(connectionPath[1]!); const c = app.store.read().connections.find(c => c.id === connectionPath[1]);
