@@ -34,6 +34,8 @@ engine.create는 transaction 밖에서 원래 requestId/input으로 호출한다
 
 ## 3. R8 수락
 
+2026-10-31 후속 실측: PR #29 병합 버전 적용 뒤 [같은 토의 재검증](./phase8-continuation-20261031.md)은 추가6응답을 모두 완료해 총12요청·PARTIAL/예산 소진이다. 3인 검토2라운드·검증2개까지 진행했고 수정/종합은 미실행이다. 보고 token123,013과100,000 soft limit의1회 초과23,013·원래 실패 usage UNKNOWN을 분리 기록했다. 기존 gate의 전체 판정은 유지하고 API continuation 증거만 추가했다.
+
 2026-10-31 추가 실측: 별도 승인된 GPT2+CoralBricks 토의의 [API 부분 검증](./phase8-real-api-20261031.md)은 6요청·완료5/실패1이다. 실제 초기3응답과 GPT 상호 검토2·기록/dispatch/HTTPS는 확인했지만 DeepSeek 재검토에서 중단됐다. 실패 이후의 검증/수정/종합과 dot/Muse/Codex를 포함한 원래 R8-D 전체는 실행하지 않았다. 아래 gate의 원문/전체 판정은 완화하지 않고 부분 증거를 분리한다.
 
 | Gate | 결과·검증 방법 |
