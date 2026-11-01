@@ -1,5 +1,7 @@
 # 웹쫀쿠 개발 실행 순서
 
+> **2026-11-01 공식 dot 연결 개정·개발 승인:** WJ-006의 dot 기본 경로를 일반 ChatGPT browser에서 공식 private plugin/MCP Events로 정정한다. Muse browser와 WJ-013의 기존 도구/grant 의미는 유지한다. D0 계정/인증/왕복→D1 영속 연결→D2 Events/outbox→D3 기존 provider/대조→D4 UI/운영→D5 기존50 gate/실계정 수락 순서이며 새 R9는 없다. D0 이전에 D1 이후를 완료로 표시하지 않는다. [영향·총량·복귀](./reviews/dot-official-mcp-events-impact-20261101.md)·[현재 SSOT](./development-plan.md)·[D0 기록](./implementation/dot-mcp-events-d0-20261101.md). OAuth/공개 ingress 등 확대는 별도 보고·승인한다.
+
 > **2026-11-01 주제별 채팅 통합 승인:** R3 GUI 통합 보완/R8 회귀를 A계획→B주제 목록/shell→C말풍선/전체 AI/기존 제어→D검사·증거로 수행한다. 기존 R1~R8 순서·50 gate와 provider/Store/Codex 계약을 유지한다. 추가 backend 접점은 목록 roomId metadata·새 정적 view asset이며 새 schema/토의 이관은 없다. [승인 범위·후속 영향·검증·복귀](./reviews/topic-chat-ui-impact-20261101.md). 실제 완료 여부는 [페이즈 SSOT](./development-plan.md)를 따른다.
 
 

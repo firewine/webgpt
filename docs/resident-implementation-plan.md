@@ -1,5 +1,7 @@
 # 상주 운영 단계별 변경·이관·수락·롤백
 
+> **2026-11-01 공식 dot 연결 개정·개발 승인:** [D0~D5 승인 범위](./reviews/dot-official-mcp-events-impact-20261101.md)를 R1 additive 상태/이관→R2 provider·대조→R3 연결 UI→R4 native dot 분리→R5 업무·R6 Codex·R7 Wiki 권한 소비→R8 통합 회귀에 반영한다. 실제 순서는 [SSOT](./development-plan.md)를 따른다. Muse의 현재 browser binding/profile/thread·초안/receipt 가드는 유지한다. dot의 일반 ChatGPT `/c/...` 요구는 공식 연결로 대체하며 기존 browser 기록을 자동 승격하지 않는다. complete/transaction/단일 lease·예산/승인/미확정·50 gate는 유지한다. 추가 OAuth 등 확대는 별도 영향 보고·승인 대상이다. 현재 D0 진행 중이며 D1 이후는 관문 대기다.
+
 > **2026-11-01 주제별 채팅 통합 승인:** R3의 별도 토의 화면 기본 진입/복귀 결정을 주제별 채팅 shell로 대체한다. 기존 상세 제어는 drawer/dialog로 재사용하며 G0 뒤 동일 ID 원문/상세 보기로 복귀할 수 있다. R8에서 독립3+방 연결2 주제 표시, 전환20회 POST/외부 호출0, 4폭/2탭/SSE·공개 경계·승인/복구를 추가 회귀한다. 원래 gate의 숫자·안전 기준·실계정 미검증은 유지한다. [승인 범위·후속 영향·검증·복귀](./reviews/topic-chat-ui-impact-20261101.md). 실제 완료 여부는 [페이즈 SSOT](./development-plan.md)를 따른다.
 
 
@@ -106,7 +108,7 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 | R4-A | 2서비스×정상/구버전DOM/다중후보/thread변경/기존초안 10종 fixture에서 전송 0·목표 불명확 자동저장 0 | 제안 `tests/browser-discovery.test.mjs`·DOM fixture(모두 제안) |
 | R4-B | 정상 후보→기존 probe→binding 저장, advanced 선택자 필수 입력 0개 | browser 온보딩 화면/기존 API fixture |
 | R4-C | account/thread 불일치·draft·busy에서 실제 send 0, 기존 selector/receipt 회귀 통과 | 기존 bridge 검사+제안 discovery 검사 |
-| R4-D | 실제 dot/Muse 각 1개 기존 대화에서 profile/identity/thread·왕복 확인 | 후속 사용자 허용된 계정·화면·receipt 기록, 현재 UNVERIFIED |
+| R4-D | 실제 dot 1개는 공식 plugin·Events→MCP 입력 조회/응답 제출, Muse 1개는 기존 profile/identity/thread·왕복 확인 | D0~D5와 사용자 허용된 계정·화면·receipt 기록. dot native 경로 UNVERIFIED, Muse의 기존 thread 기준 유지 |
 
 **롤백:** discovery UI/preset 비활성, 기존 수동 폼과 이미 검증된 binding으로 돌아간다. 이전 selector 버전도 보존하고 probe 실패 시 자동 입력만 차단한다. Chrome/profile/원래 대화/작성 중 초안을 초기화하지 않는다.
 
@@ -195,7 +197,7 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 | R8-A | 3모의 참여자·1방 on→사용자 추가 지시 없이 자유 대화→업무1 pickup→결과/반려1회→재작업/완료→Wiki1갱신→다음 발화 인용→topic1회→같은 방 복귀 | PASS(fixture) · 명시 허용 뒤 모의3인 전체 흐름, owner focus0·topic1·복귀1. 실계정 별도 |
 | R8-B | 8단계별 crash/off/budget/scope negative gate 전부 PASS, provider 동시≤1·중복 외부 start0·비공개 유출0 | PASS · 전체 회귀+Wiki 실제 SIGKILL3·수락 manifest |
 | R8-C | 4viewport·2탭·새로고침/재접속 후 이력·읽기 위치·예산/승인·단일dispatch 유지 | PASS(Chrome fixture) · 2탭/4폭·SSE/읽기 위치·중복 승인409·job/turn1 |
-| R8-D | 실제 GPT2계정+DeepSeek, dot/Muse 각각 기존 thread 포함 흐름. 실제 읽기 Codex와 허용된 쓰기 gate 별도 | 사용자 허용 뒤 receipt/카탈로그·stream/usage·검사·화면 기록. 현재 전부 UNVERIFIED |
+| R8-D | 실제 GPT2계정+DeepSeek, dot은 공식 plugin·Events 왕복/후속 맥락, Muse는 기존 thread 포함 흐름. 실제 읽기 Codex와 허용된 쓰기 gate 별도 | 사용자 허용 뒤 receipt/카탈로그·stream/usage·검사·화면 기록. 기존 gate 수준 유지, native dot 실계정 왕복은 NOT_RUN |
 | R8-E | G0→flag off/legacy 화면 복귀→다시 resident on에서 기존/새 원문·commands/receipt 누락0·재전송0 | PASS(fixture) · 동일 DB flag off/re-enable·legacy paused·각100tick 호출0 |
 | R8-F | 1,000메시지/100업무/100Wiki fixture에서 /api/state 새 raw 본문 노출0·history limit=50 초과0·본문 원문 누락0, state transaction 비용 측정값 기록 | PASS(fixture) · 50개 요청 page·모든 원문/상태 bytes/12개 transaction·heap JSON. 실제 장기 호스트 UNVERIFIED |
 | R8-G | ready/review 업무·Wiki·규칙·예산 actor 인계1회+중복 등록2회 뒤 원래 ID/예산 보존·확정 report의 다른 담당자 리뷰 가능, task/job 재전송0·새 scope 확대0 | PASS(fixture) · 인계/같은 명령2·room 멤버 중복 등록2·예산/ID·다른 리뷰·옛 grant 거절 |

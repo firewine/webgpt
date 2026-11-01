@@ -1,5 +1,7 @@
 # 웹쫀쿠 참여자·OAuth·API 연결 계획
 
+> **2026-11-01 공식 dot 연결 개정·개발 승인:** dot은 공식 private plugin·MCP Events와 요청별 조회/응답 도구로 연결한다. 일반 GPT OAuth 또는 ChatGPT `/c/...`를 dot으로 간주하지 않는다. Muse는 현재 Chrome 대화 연결을 유지한다. [승인안](./reviews/dot-official-mcp-events-impact-20261101.md)·[단계 SSOT](./development-plan.md)·[D0 증거](./implementation/dot-mcp-events-d0-20261101.md)를 따르며 native dot의 계정/인증·구독·왕복이 통과되기 전 연결 성공으로 표시하지 않는다. 추가 OAuth는 별도 영향 보고·승인 대상이다.
+
 | 항목 | 값 |
 | --- | --- |
 | 상태 | v0.2 — OAuth/API/browser adapter 구현·fixture PASS, 실계정 검증 NOT_RUN |
@@ -12,7 +14,7 @@
 
 ## 1. 참여자는 연결 방식과 별개다
 
-2026-11-01 승인 보완: 참여자 등록에서 일반 GPT(OAuth)/dot(확인된 기존 ChatGPT 대화)를 명시 선택한다. 기존 연결 picker·읽기 전용 탐지·확인과 새 participant/history 경계를 재사용하며, dot 가능 여부를 OAuth 성공/계정 이름만으로 추정하지 않는다. 미연결이면 이유와 연결 경로를 표시한다. API key kind만 승인된 일일 합산 사용량에 포함하고 GPT OAuth/browser의 usage·receipt는 기록하되 사용량 한도에서는 제외한다. [승인 범위·이관·R1~R8 영향](./reviews/api-daily-budget-impact-20261031.md)을 따른다.
+2026-11-01 승인 보완: 참여자 등록에서 일반 GPT(OAuth)/공식 dot을 명시 선택한다. 기존 일반 GPT picker/history와 Muse 탐지·확인은 재사용하고, dot은 실제 공식 plugin과 인증된 principal·owner pairing을 확인한다. OAuth 성공/계정 이름이나 기존 ChatGPT 대화 URL로 dot 가능 여부를 추정하지 않는다. 미연결이면 이유와 연결 경로를 표시한다. API key kind만 승인된 일일 합산 사용량에 포함하고 GPT/dot/Muse의 알려진 usage·receipt는 기록하되 채팅 사용량 한도에서는 제외한다. [이전 API 정책](./reviews/api-daily-budget-impact-20261031.md)의 잘못된 dot browser 전제는 위 공식 dot 승인안으로 정정했다.
 
 웹쫀쿠의 기본 단위는 `Participant`다. 사용자가 토론마다 참여자를 선택하고 각 참여자에 역할·모델·맥락을 배정한다. dot이나 Muse를 필수 진행자·상위 관리자로 고정하지 않는다. 진행 순서와 검증 과제의 배정은 Core가 관리한다.
 
@@ -20,7 +22,7 @@
 | --- | --- | --- |
 | GPT 계정 A | Sign in with ChatGPT OAuth + ChatGPT plan usage + Responses | 웹쫀쿠의 해당 참여자 대화 이력 |
 | GPT 계정 B | A와 분리된 OAuth 등록·동의·토큰·모델 목록 | B 전용 대화 이력 |
-| dot(may) | 서버 Chrome의 기존 dot 대화; 검증 후 공식 MCP/이벤트 병행 | 실제 dot의 기존 맥락 + 웹쫀쿠 주제·발언 참조 |
+| dot(may) | 공식 private plugin + Secure MCP Tunnel + MCP Events, D0부터 검증. 지원 인증은 실제 계정에서 확인 | native dot의 기존 맥락 유지 + 해당 turn에 허용된 웹쫀쿠 입력/발언 참조. 기억 가져오기 아님 |
 | Muse | 서버 Chrome의 기존 Muse 대화; 공식 Connector는 별도 검증 | 실제 Muse의 기존 맥락 + 웹쫀쿠 주제·발언 참조 |
 | DeepSeek | 서버에서 보관하는 API key + 공식 대화 API | 웹쫀쿠의 해당 참여자 대화 이력 |
 | Anthropic / Claude API | 연결별 API key + 인증된 모델 목록 + Messages API. 구현·fixture PASS, 실계정 NOT_RUN·구독 OAuth 보류 | 웹쫀쿠의 해당 참여자 대화 이력 |
@@ -76,7 +78,7 @@ OSS OAuth의 loopback callback은 **로그인 브라우저가 실행되는 컴�
 
 ## 3. dot·Muse: 기존 에이전트를 참여자로 연결
 
-dot과 Muse는 각자의 실제 기존 agent·대화에 연결한다. 일반 GPT OAuth 모델을 dot으로 이름만 바꿔 연결 성공으로 표시하지 않는다. 로그인된 Ubuntu Chrome의 서비스별 adapter로 전송·관측하며 대화를 보존한다. 공식 MCP/이벤트 연결은 검증 후 같은 turn 계약에 추가한다.
+dot은 실제 native agent의 공식 plugin·이벤트 구독·입력 조회·답변 제출을 같은 turn 계약에 연결한다. 일반 GPT OAuth 모델이나 웹 대화를 dot으로 이름만 바꿔 성공으로 표시하지 않는다. Muse는 로그인된 Ubuntu Chrome의 기존 서비스 adapter로 전송·관측하며 대화/profile/thread와 초안을 보존한다. 두 경로로 같은 turn을 이중 전송하지 않는다.
 
 브라우저 계정·프로필·agent·대화 식별과 OAuth의 account registration은 서로 다른 binding이다. 같은 계정이라는 이유만으로 대화 맥락이나 credential을 섞지 않는다. dot·Muse가 토론에 포함되지 않아도 OAuth GPT와 API 모델만으로 새 토론을 시작할 수 있다.
 
