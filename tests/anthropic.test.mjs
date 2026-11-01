@@ -83,6 +83,7 @@ test('Anthropic and DeepSeek Max complete the original structured topic engine w
   const id = f.app.engine.create({ ...topic, participantIds: [claude, deepseek] }, 'mixed'); await until(() => f.app.discussion(id).discussion.status === 'completed', 10000); const discussion = f.app.discussion(id).discussion;
   assert.ok(discussion.turns.some(t => t.participantId === claude && t.receipt === 'msg_fixture')); assert.ok(discussion.turns.filter(t => t.participantId === deepseek).every(t => t.reasoningEffort === 'max')); assert.equal(discussion.used.unknownUsage, 0); assert.equal(discussion.evidence.some(e => e.status === 'observed'), false);
   assert.ok(sends.slice(0, 2).every(s => s.body.messages.length === (s.anthropic ? 1 : 2))); assert.equal(f.app.store.read().jobs.length, 0);
+  f.app.configureApiDaily({ expectedVersion: 0, maxRequests: 100, maxTokens: 1000000 }, 'fixture-api-policy');
   const room = f.app.resident.snapshot().rooms[0].id; const control = b => f.app.resident.control(room, { ...b, expectedVersion: f.app.resident.room(room).room.version }, crypto.randomUUID());
   control({ action: 'configure', budgets: budget(Date.now()), pacing }); control({ action: 'set_member', participantId: claude, enabled: true }); control({ action: 'on' }); await f.app.residentRunner.tick(); const turn = f.app.store.read().resident.turns[0]; assert.equal(turn.status, 'completed'); assert.equal(turn.participant.kind, 'anthropic'); assert.equal(turn.reply.text, '공개 원문에 대한 독립적인 재분석');
 });

@@ -17,12 +17,15 @@ async function setup(f, maxRequests = 6) {
   return { root, control };
 }
 
-test('owner HTTP -> automatic room loop -> six fake responses -> durable budget stop and raw lookup', async t => {
+test('owner HTTP -> automatic loop ignores archived limits -> explicit off after six responses and durable raw lookup', async t => {
   const f = await workspace(t, { residentEnabled: true }); let external = 0;
   f.app.providers.complete = async () => { external++; throw new Error('real provider must not replace the fake'); };
-  const { root, control } = await setup(f);
+  const { root, control } = await setup(f, 1);
+  f.app.store.transact(s => { s.resident.rooms[0].budgets.deadlineAt = new Date(0).toISOString(); });
+  const unsubscribe = f.app.store.subscribe(e => { if (e.type !== 'resident.turn_finished' || f.app.store.read().resident.turns.length !== 6) return;
+    const r = f.app.store.read().resident.rooms[0]; f.app.resident.control(r.id, { action: 'off', expectedVersion: r.version }, 'explicit-off-after-six'); }); t.after(unsubscribe);
   await f.api(root + '/messages', { text: '각자 분석해 이야기해 주세요.' }); await control({ action: 'on' });
-  await until(() => f.app.store.read().resident.rooms[0].observedStatus === 'budget_exhausted');
+  await until(() => f.app.store.read().resident.rooms[0].observedStatus === 'off');
   let list = await (await f.api(root + '/turns?after=0&limit=100')).json(); assert.equal(list.turns.length, 6); assert.equal(list.hasMore, false); assert.equal(external, 0);
   const turn = (await (await f.api(root + '/turns/' + list.turns[0].id)).json()).turn;
   assert.match(turn.reply.text, /모의/); assert.equal(turn.promptDigest, digest(turn.prompt));

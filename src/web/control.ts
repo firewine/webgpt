@@ -63,7 +63,7 @@ const errors: Record<string, string> = { authentication_required: '접속 키를
   checkpoint_requires_selection: '체크포인트가 허용 크기를 넘었습니다. 기존 문맥은 보존됩니다. 원본을 내려받아 확인해 주세요.', session_busy: 'Codex 세션에 실행 중인 작업이 있습니다.',
   rpc_disconnected: '도구 연결이 끊겼습니다. 실행 결과를 확인한 후 다시 진행해 주세요.', rpc_unconfirmed: '도구 응답이 미확인입니다. 자동으로 재전송하지 않았습니다.',
   request_unconfirmed: '요청 결과를 확인하지 못했습니다. 기록을 새로 확인해 주세요. 자동으로 재전송하지 않았습니다.', procedure_completed: '토의 절차가 완료되었습니다.', budget_exhausted: '설정한 진행 한도에 도달했습니다.',
-  room_settings_required: '방 설정에서 진행 한도와 대화 속도를 직접 지정해 주세요.', room_members_required: '발언에 참여할 멤버를 선택해 주세요.', room_version_conflict: '다른 방 설정이 반영됐습니다. 갱신된 상태를 확인하고 다시 적용해 주세요.', room_configuration_requires_off: '방을 끄고 진행 중·미확정 응답을 대조한 뒤 설정을 바꿀 수 있습니다.', resident_disabled: '상주 기능이 꺼져 있습니다.', room_requests_exhausted: '방의 누적 요청 한도에 도달했습니다.', room_tokens_exhausted: '방의 보고 토큰 한도에 도달했습니다.', room_deadline_exhausted: '방의 종료 시각에 도달했습니다.', resident_account_change_requires_new_participant: '기존 상주 이력이 있는 토커의 계정을 바꿀 때는 새 참여자로 등록해 주세요.',
+  invalid_tool_deadline: '도구 실행 종료 시각을 현재보다 뒤로 지정해 주세요.', room_settings_required: '방의 대화 속도 설정을 확인해 주세요.', room_members_required: '발언에 참여할 멤버를 선택해 주세요.', room_version_conflict: '다른 방 설정이 반영됐습니다. 갱신된 상태를 확인하고 다시 적용해 주세요.', room_configuration_requires_off: '방을 끄고 진행 중·미확정 응답을 대조한 뒤 설정을 바꿀 수 있습니다.', resident_disabled: '상주 기능이 꺼져 있습니다.', resident_account_change_requires_new_participant: '기존 상주 이력이 있는 토커의 계정을 바꿀 때는 새 참여자로 등록해 주세요.',
   participant_excluded: '일부 참여자를 제외한 결과입니다.', user_cancelled: '사용자가 토의를 취소했습니다.', partial_unstructured_reply: '일부 응답의 형식을 확인하지 못했습니다.' };
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, text = '', className = ''): HTMLElementTagNameMap[K] { const n = document.createElement(tag); n.textContent = text; n.className = className; return n; }
 function button(text: string, action: () => Promise<unknown> | unknown, className = ''): HTMLButtonElement {
@@ -146,7 +146,7 @@ const roomView = new RoomView({ api, refresh, report, openView: showView,
   openDiscussion: async id => { selected = id; localStorage.setItem('wj.discussion', id); showView('discussion'); await refresh(); },
   startFocus: roomId => { focusRoomId = roomId; selected = ''; current = null; showView('discussion'); render(); $('#topic').focus(); },
 });
-function dailyFocus(): boolean { return state?.resident.rooms.some(r => r.id === focusRoomId && r.budgetMode === 'api-daily') ?? false; }
+function dailyFocus(): boolean { return state?.resident.rooms.some(r => r.id === focusRoomId) ?? false; }
 function renderFocusBudget(): void {
   const daily = dailyFocus();
   for (const key of ['maxRequests', 'maxMinutes']) { const input = $<HTMLInputElement>(`#discussion-form [name=${key}]`); input.disabled = daily; input.closest('label')!.hidden = daily; }

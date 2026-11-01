@@ -116,11 +116,11 @@ test('R3 quick member changes wait for the first confirmed refresh and keep sepa
   finally { clearInterval(ticker); await page.unroute('**/api/state'); }
 });
 
-test('R3 room settings require explicit values and preserve ledger; focus and uncertain recovery stay in existing APIs', { timeout: 90000 }, async t => {
+test('R3 room starts without a global quota and settings preserve ledger; focus and uncertain recovery stay in existing APIs', { timeout: 90000 }, async t => {
   const f = await workspace(t, { residentEnabled: true }, { residentAutoSchedule: false }); const browser = await launch(t); const { page, errors } = await open(browser, f);
-  await page.locator('#room-power').click(); await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('방 설정')); assert.equal(f.app.store.read().resident.rooms[0].desiredOn, false);
-  await page.locator('#room-settings').click(); assert.equal(await page.locator('#room-settings-form [name=maxRequests]').inputValue(), '');
-  const values = { maxRequests: '30', maxTokens: '100000', maxToolJobs: '0', deadlineAt: new Date(Date.now() + 86400000).toISOString().slice(0, 16), minInterval: '5', idleNudge: '120', passBackoff: '15', sleepAfterPasses: '3' };
+  await page.locator('#room-power').click(); await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('멤버')); assert.equal(f.app.store.read().resident.rooms[0].desiredOn, false);
+  await page.locator('#room-settings').click(); assert.equal(await page.locator('#room-settings-form [name=maxRequests]').count(), 0);
+  const values = { minInterval: '5', idleNudge: '120', passBackoff: '15', sleepAfterPasses: '3' };
   for (const [key, value] of Object.entries(values)) await page.locator(`#room-settings-form [name=${key}]`).fill(value);
   await page.getByRole('button', { name: '설정 저장', exact: true }).click(); await page.waitForFunction(() => !document.querySelector('#room-settings-dialog').open);
   for (const p of ['A', 'B']) await page.getByRole('checkbox', { name: `모의 참여자 ${p} 발언 참여` }).check();
@@ -132,7 +132,7 @@ test('R3 room settings require explicit values and preserve ledger; focus and un
   assert.equal(f.app.store.read().resident.rooms[0].topicLink, null);
   await page.locator('#room-power').click(); await page.waitForFunction(() => document.querySelector('#room-state').textContent === '꺼짐');
   const r = f.app.store.read().resident.rooms[0]; const count = r.ledger.length;
-  await page.locator('#room-settings').click(); await page.locator('#room-settings-form [name=maxRequests]').fill('40'); await page.getByRole('button', { name: '설정 저장', exact: true }).click(); await page.waitForFunction(() => !document.querySelector('#room-settings-dialog').open); assert.equal(f.app.store.read().resident.rooms[0].ledger.length, count);
+  await page.locator('#room-settings').click(); await page.locator('#room-settings-form [name=minInterval]').fill('40'); await page.getByRole('button', { name: '설정 저장', exact: true }).click(); await page.waitForFunction(() => !document.querySelector('#room-settings-dialog').open); assert.equal(f.app.store.read().resident.rooms[0].ledger.length, count);
   f.app.store.transact((s, emit) => { const r = s.resident.rooms[0]; const p = s.participants[0];
     s.resident.turns.push({ id: 'uncertain-fixture', roomId: r.id, participantId: p.id, participant: p, status: 'unconfirmed', generation: r.contexts?.find(c => c.participantId === p.id)?.generation ?? 1, epoch: r.epoch, prompt: 'fixture', promptDigest: digest('fixture'), history: [], basisSequence: r.lastMessageSequence, text: '', receipt: 'original-receipt', reply: null, usage: null, startedAt: new Date().toISOString(), finishedAt: null, error: 'fixture_unconfirmed', repairOf: null, messageId: null, proposalsStatus: 'none' });
     emit({ type: 'resident.recovery_blocked', discussionId: null, data: { roomId: r.id, turnId: 'uncertain-fixture' } });
@@ -172,8 +172,8 @@ test('R3: lost POST response retains draft and blocks resend; stale settings can
   await page.waitForFunction(() => document.querySelector('#room-send-state').textContent.includes('미확인'));
   assert.equal(await page.locator('#room-send').isDisabled(), true); await page.locator('#room-text').press('Enter'); assert.equal(f.app.store.read().resident.messages.length, 2);
   await page.locator('#room-settings').click(); const first = f.app.store.read().resident.rooms[0]; f.app.resident.control(first.id, { action: 'configure', expectedVersion: first.version, budgets: budget(Date.now(), 20), pacing }, 'other-tab-setting');
-  await page.waitForFunction(() => document.querySelector('#room-usage').textContent.includes('/ 20'));
-  const values = { maxRequests: '9', maxTokens: '1000', maxToolJobs: '0', deadlineAt: new Date(Date.now() + 86400000).toISOString().slice(0, 16), minInterval: '2', idleNudge: '20', passBackoff: '10', sleepAfterPasses: '2' };
+  await page.waitForFunction(() => document.querySelector('#room-pacing').textContent.includes('0.001초'));
+  const values = { minInterval: '2', idleNudge: '20', passBackoff: '10', sleepAfterPasses: '2' };
   for (const [key, value] of Object.entries(values)) await page.locator(`#room-settings-form [name=${key}]`).fill(value);
   await page.getByRole('button', { name: '설정 저장', exact: true }).click(); await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('다른 방 설정'));
   assert.equal(f.app.store.read().resident.rooms[0].budgets.maxRequests, 20); assert.equal(await page.locator('#room-settings-dialog').evaluate(n => n.open), true); assert.deepEqual(errors, []);

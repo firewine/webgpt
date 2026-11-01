@@ -56,7 +56,7 @@ export function projectReadiness(state, config) {
   if (enabledRooms) topicIssues.push('resident_room_is_on');
   const roomIssues = [];
   if (!state.resident.enabled) roomIssues.push('resident_feature_disabled');
-  if (!state.resident.rooms.some(r => (r?.budgetMode === 'api-daily' || r?.budgets) && r?.pacing && Array.isArray(r.members) && r.members.some(m => m?.enabled === true && participants.some(p => p.id === m.participantId)))) roomIssues.push('room_members_budget_and_pacing_required');
+  if (!state.resident.rooms.some(r => Array.isArray(r?.members) && r.members.some(m => m?.enabled === true && participants.some(p => p.id === m.participantId)))) roomIssues.push('room_members_required');
   const browserCount = connected.filter(c => c.kind === 'browser').length;
   const browserIssues = [];
   if (browserCount < 2) browserIssues.push('dot_and_muse_connections_required');

@@ -15,7 +15,7 @@ import { assertWikiSnapshots, contextWiki, rememberWiki, wikiHistoryAllowed } fr
 import { ResidentFocus, topicPolicy } from './resident-focus.js';
 import { failureObservation } from '../connections/completion-failure.js';
 import { snapshotMember } from './settings.js';
-import { dailyRoom, participantWait, nextApiDay } from './api-usage.js';
+import { participantWait, nextApiDay } from './api-usage.js';
 
 type Emit = Parameters<Parameters<Store['transact']>[0]>[1];
 const LIVE = ['prepared', 'running', 'unconfirmed'];
@@ -87,8 +87,8 @@ export class ResidentRunner {
     if (!this.started || this.stopping || !this.resident.enabled || this.options.autoSchedule === false) return;
     const state = this.store.read();
     if (unresolvedProvider(state) || state.resident?.dispatchLeases.some(l => l.state !== 'released') || state.jobs.some(j => j.status === 'reconciling') || state.discussions.some(d => ['running', 'paused', 'blocked'].includes(d.status))) return;
-    const times = (state.resident?.rooms ?? []).filter(r => r.desiredOn && r.observedStatus === 'on' && !r.topicLink && (!dailyRoom(r) || r.nextEligibleAt !== null))
-      .map(r => dailyRoom(r) ? Date.parse(r.nextEligibleAt!) : Math.min(r.nextEligibleAt ? Date.parse(r.nextEligibleAt) : this.clock(), r.budgets ? Date.parse(r.budgets.deadlineAt) : this.clock()));
+    const times = (state.resident?.rooms ?? []).filter(r => r.desiredOn && r.observedStatus === 'on' && !r.topicLink && r.nextEligibleAt !== null)
+      .map(r => Date.parse(r.nextEligibleAt!));
     if (!times.length) return;
     this.timer = setTimeout(() => { this.timer = null; this.kick(); }, Math.max(1, Math.min(2_147_483_647, Math.min(...times) - this.clock()))); this.timer.unref();
   }
@@ -107,16 +107,16 @@ export class ResidentRunner {
           state.discussions.some(d => ['running', 'paused', 'blocked'].includes(d.status))) return null;
       if (room.nextEligibleAt && Date.parse(room.nextEligibleAt) > this.clock()) return null;
       const work = this.options.work?.prepareTurn(state, room, emit, this.clock());
-      if (work) return { turn: work, remainingMs: dailyRoom(room) ? this.timeoutMs : Date.parse(room.budgets!.deadlineAt) - this.clock() };
+      if (work) return { turn: work, remainingMs: this.timeoutMs };
       const candidates = room.members.filter(m => m.enabled && !m.blockedReason).map(m => state.participants.find(p => p.id === m.participantId)).filter(p => p !== undefined);
       const members = candidates.filter(p => !participantWait(state, room, p, this.clock()));
-      if (!members.length && dailyRoom(room) && candidates.length) {
+      if (!members.length && candidates.length) {
         const reasons = candidates.map(p => participantWait(state, room, p, this.clock()));
         room.reason = reasons.includes('api_daily_exhausted') ? 'api_daily_exhausted' : reasons[0] ?? 'no_eligible_members';
         room.nextEligibleAt = reasons.includes('api_daily_exhausted') ? new Date(nextApiDay(this.clock())).toISOString() : null;
         return null;
       }
-      if (!members.length) { room.observedStatus = 'blocked'; room.reason = 'no_eligible_members'; room.nextEligibleAt = null;
+      if (!members.length) { room.observedStatus = 'blocked'; room.reason ??= 'no_eligible_members'; room.nextEligibleAt = null;
         emit({ type: 'resident.status_changed', discussionId: null, data: { roomId: room.id, status: room.observedStatus, reason: room.reason } }); return null; }
       const repair = state.resident!.turns.find(t => !t.workAttemptId && t.roomId === room.id && t.epoch === room.epoch && t.error === 'format_invalid' && !t.repairOf &&
         members.some(m => m.id === t.participantId) && roomContext(room, t.participantId).generation === t.generation && !state.resident!.turns.some(r => r.repairOf === t.id));
@@ -151,7 +151,7 @@ export class ResidentRunner {
       if (denied) return null;
       state.resident!.turns.push(turn); room.nextMemberIndex = (index + 1) % members.length;
       emit({ type: 'resident.turn_prepared', discussionId: null, data: { roomId: room.id, turnId: turn.id, participantId: turn.participantId } });
-      return { turn, remainingMs: dailyRoom(room) ? this.timeoutMs : Date.parse(room.budgets!.deadlineAt) - this.clock() };
+      return { turn, remainingMs: this.timeoutMs };
     });
     if (!captured) return;
     this.abort = new AbortController();
@@ -176,7 +176,7 @@ export class ResidentRunner {
         const member = room.members.find(m => m.participantId === turn.participantId);
         if (turn.error === 'dispatch_scope_changed') { turn.status = 'stale'; turn.proposalsStatus = 'stale'; }
         else if (member) member.blockedReason = turn.error.startsWith('api_daily_') ? null : turn.error;
-        room.observedStatus = room.desiredOn ? dailyRoom(room) && !outcome.uncertain ? 'on' : 'blocked' : 'off'; room.reason = turn.error;
+        room.observedStatus = room.desiredOn ? !outcome.uncertain && room.members.some(m => m.enabled && !m.blockedReason) ? 'on' : 'blocked' : 'off'; room.reason = turn.error;
         room.nextEligibleAt = room.observedStatus === 'on' ? new Date(this.clock() + room.pacing!.minIntervalMs).toISOString() : null;
       }
       this.options.work?.finishTurn(state, room, turn, emit);

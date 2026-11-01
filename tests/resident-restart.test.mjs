@@ -52,6 +52,7 @@ for (const stage of ['before_prepared_commit', 'prepared', 'dispatched', 'receip
     await killAt(directory, stage); const f = runtime(directory);
     try {
       f.runner.recover(); const before = f.store.read().resident;
+      if (stage === 'before_prepared_commit') { await f.runner.tick(); assert.equal(f.calls(), 1); f.store.transact(s => { s.resident.rooms[0].desiredOn = false; s.resident.rooms[0].observedStatus = 'off'; }); }
       for (let i = 0; i < 100; i++) await f.runner.tick();
       if (stage === 'before_prepared_commit') {
         assert.equal(before.turns.length, 0); assert.equal(before.rooms[0].ledger?.length ?? 0, 0); assert.equal(f.calls(), 1);

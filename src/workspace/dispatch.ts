@@ -1,10 +1,10 @@
 import type { Completion, CompletionInput, Providers } from '../connections/providers.js';
 import type { WorkspaceState, CodexJob, Member } from './model.js';
-import type { Room, ResidentTurn } from './resident-model.js';
+import type { Room, RoomToolBudget, ResidentTurn } from './resident-model.js';
 import { AppError, now } from './util.js';
 import type { Store } from './store.js';
 import { assertWikiSnapshots, wikiHistoryAllowed } from './wiki-policy.js';
-import { dailyRoom, reserveApiUsage, claimApiUsage, settleApiUsage } from './api-usage.js';
+import { reserveApiUsage, claimApiUsage, settleApiUsage } from './api-usage.js';
 
 const bounded = (v: unknown, min: number, max: number): boolean => typeof v === 'number' && Number.isSafeInteger(v) && v >= min && v <= max;
 export function validBudget(value: unknown): boolean {
@@ -17,6 +17,15 @@ export function validPacing(value: unknown): boolean {
   const v = value as Record<string, unknown>;
   return bounded(v.minIntervalMs, 1, 3_600_000) && bounded(v.idleNudgeMs, 1, 86_400_000) && bounded(v.passBackoffMs, 1, 86_400_000) && bounded(v.sleepAfterPasses, 1, 100);
 }
+export function validToolBudget(value: unknown): value is RoomToolBudget {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  return bounded(v.maxToolJobs, 0, 100) && typeof v.deadlineAt === 'string' && Number.isFinite(Date.parse(v.deadlineAt));
+}
+export function toolBudget(room: Room): RoomToolBudget | null {
+  if (room.toolBudget !== undefined) return room.toolBudget;
+  return room.budgets ? { maxToolJobs: room.budgets.maxToolJobs, deadlineAt: room.budgets.deadlineAt } : null;
+}
 
 export function usageFor(room: Room) {
   const entries = room.ledger ?? [];
@@ -24,18 +33,13 @@ export function usageFor(room: Room) {
     outputTokens: entries.reduce((n, e) => n + (e.usage?.output ?? 0), 0),
     unknownUsage: entries.filter(e => e.usage === null).length, toolJobs: room.toolReservations?.length ?? 0 };
 }
-export function budgetReason(room: Room, clock = Date.now()): string | null {
+export function budgetReason(room: Room, _clock?: number): string | null {
   if (!room.pacing || !validPacing(room.pacing)) return 'room_settings_required';
-  if (dailyRoom(room)) return null;
-  if (!room.budgets || !validBudget(room.budgets)) return 'room_settings_required';
-  const used = usageFor(room);
-  if (Date.parse(room.budgets.deadlineAt) <= clock || used.requests >= room.budgets.maxRequests ||
-      used.inputTokens + used.outputTokens >= room.budgets.maxTokens) return 'budget_exhausted';
   return null;
 }
 export function toolBudgetReason(room: Room, clock = Date.now()): string | null {
-  if (!room.budgets || !validBudget(room.budgets) || Date.parse(room.budgets.deadlineAt) <= clock) return 'room_tool_budget_exhausted';
-  return dailyRoom(room) ? null : budgetReason(room, clock);
+  const b = toolBudget(room);
+  return !validToolBudget(b) || Date.parse(b.deadlineAt) <= clock ? 'room_tool_budget_exhausted' : null;
 }
 export function unresolvedProvider(state: WorkspaceState): boolean {
   return state.discussions.some(d => d.turns.some(t => ['prepared', 'running', 'unconfirmed'].includes(t.status))) ||
@@ -55,7 +59,7 @@ export class DispatchCoordinator {
       const history = room?.contexts?.find(c => c.participantId === turn.participantId);
       if (room && history && !wikiHistoryAllowed(state, room, history)) return false;
       if ('workAttemptId' in turn && turn.workAttemptId && (!this.workGuard || !this.workGuard(state, turn))) return false;
-      if (room && (!this.residentEnabled || !room.desiredOn || budgetReason({ ...room, ledger: (room.ledger ?? []).filter(e => e.requestId !== input.requestId) }) ||
+      if (room && (!this.residentEnabled || !room.desiredOn || budgetReason(room) ||
           lease?.ownerKind === 'resident' && ('epoch' in turn && turn.epoch !== room.epoch || room.contexts?.find(c => c.participantId === turn.participantId)?.generation !== turn.generation))) return false;
       turn.dispatchStartedAt = now();
       if (lease) { lease.invokedAt = turn.dispatchStartedAt; lease.state = 'running'; }
@@ -106,15 +110,15 @@ export class DispatchCoordinator {
     if (!room) return;
     if (!this.residentEnabled || !room.desiredOn || toolBudgetReason(room)) throw new AppError('room_tool_budget_exhausted', 409);
     if (room.toolReservations?.includes(requestId)) return;
-    if (usageFor(room).toolJobs >= room.budgets!.maxToolJobs) throw new AppError('room_tool_budget_exhausted', 409);
+    if (usageFor(room).toolJobs >= toolBudget(room)!.maxToolJobs) throw new AppError('room_tool_budget_exhausted', 409);
     (room.toolReservations ??= []).push(requestId);
   }
   validateToolDispatch(state: WorkspaceState, job: CodexJob): void {
     const discussion = state.discussions.find(d => d.id === job.discussionId); if (!discussion?.roomId) return;
     const room = state.resident?.rooms.find(r => r.id === discussion.roomId);
     const slot = room?.toolReservations?.indexOf(job.requestId) ?? -1;
-    if (!this.residentEnabled || !room || !room.desiredOn || toolBudgetReason(room) || slot < 0 || slot >= room.budgets!.maxToolJobs) throw new AppError('room_tool_scope_changed', 409);
-    job.maxDurationMs = Math.max(1, Math.min(job.maxDurationMs, Date.parse(room.budgets!.deadlineAt) - Date.now()));
+    if (!this.residentEnabled || !room || !room.desiredOn || toolBudgetReason(room) || slot < 0 || slot >= toolBudget(room)!.maxToolJobs) throw new AppError('room_tool_scope_changed', 409);
+    job.maxDurationMs = Math.max(1, Math.min(job.maxDurationMs, Date.parse(toolBudget(room)!.deadlineAt) - Date.now()));
   }
 }
 export function classifyFailure(error: unknown, dispatched: boolean): boolean { return dispatched && (!(error instanceof AppError) || error.uncertain); }

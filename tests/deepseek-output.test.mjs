@@ -63,6 +63,7 @@ test('topic/global edits preserve old and active snapshots; output-only configur
 
 test('resident and work use the existing Member snapshot; later settings never rewrite the original WorkAttempt input/digest', async t => {
   const f = await connect(await workFixture(t, { on: false })); const pid = f.create();
+  f.app.configureApiDaily({ expectedVersion: f.app.store.read().apiUsage?.version ?? 0, maxRequests: 100, maxTokens: 1000000 }, 'fixture-api-policy');
   for (const id of ['fake-a', 'fake-b']) f.control({ action: 'set_member', participantId: id, enabled: false });
   f.control({ action: 'set_member', participantId: pid, enabled: true }); f.q.seat(f.roomId, { participantId: pid, expectedVersion: 0, role: 'specialist', enabled: true, kinds: ['analysis'], scopeRefs: ['room:' + f.roomId] }, crypto.randomUUID()); f.control({ action: 'on' });
   let release; const held = new Promise(resolve => { release = resolve; }); t.after(release);

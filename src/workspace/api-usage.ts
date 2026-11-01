@@ -6,7 +6,9 @@ type Usage = { input: number; output: number } | null;
 const formatter = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
 export const apiDay = (clock = Date.now()): string => formatter.format(new Date(clock));
 export const nextApiDay = (clock = Date.now()): number => Date.parse(apiDay(clock) + 'T00:00:00+09:00') + 86_400_000;
-export const dailyRoom = (room: Room | undefined): boolean => room?.budgetMode === 'api-daily';
+// All resident rooms use API-only chat quotas. The old mode is retained solely
+// as readable history; it cannot re-enable a room-wide chat stop.
+export const dailyRoom = (room: Room | undefined): boolean => !!room;
 export const meteredApi = (member: Member | undefined): boolean => member?.kind === 'deepseek' || member?.kind === 'anthropic';
 const count = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
 const date = (v: unknown): boolean => typeof v === 'string' && Number.isFinite(Date.parse(v));
