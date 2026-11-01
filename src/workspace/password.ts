@@ -12,7 +12,7 @@ export function validatePasswordState(state: WorkspaceState): void {
 }
 export function passwordValue(value: unknown): string {
   if (typeof value !== 'string' || value.length > 1024) throw new AppError('invalid_password');
-  const password = value.normalize('NFC'); if ([...password].length < 15 || [...password].length > 128) throw new AppError('invalid_password');
+  const password = value.normalize('NFC'); if ([...password].length < 6 || [...password].length > 128) throw new AppError('invalid_password');
   return password;
 }
 export function confirmedPassword(value: unknown, confirmation: unknown): string {

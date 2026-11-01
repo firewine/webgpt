@@ -45,7 +45,7 @@ const phases: Record<Phase, string> = { independent: '초기안', cross_review: 
 const states: Record<string, string> = { running: '진행 중', paused: '일시정지', blocked: '확인 필요', completed: '완료', partial: '부분 완료', cancelled: '취소',
   prepared: '전송 준비', pending: '대기', failed: '실패', unconfirmed: '결과 미확인', stale: '이전 조건의 응답', connected: '연결됨', auth_required: '로그인 필요', unverified: '미확인', error: '연결 오류',
   observed: '자료 관측됨', reported: '참여자 보고', not_run: '미실행', queued: '실행 대기', blocked_approval: '승인 대기', reconciling: '실행 확인 필요', interrupted: '중단됨', ready: '준비됨', fixture: '모의', not_applicable: '해당 없음', waiting: '대기' };
-const errors: Record<string, string> = { authentication_required: '비밀번호를 확인해 주세요.', password_mismatch: '두 비밀번호가 일치하지 않습니다.', invalid_password: '비밀번호는 15~128자로 입력하세요. 한글과 공백도 사용할 수 있습니다.', password_setup_not_authorized: '최초 설정 링크를 서버에서 열거나 기존 소유자 로그인으로 접속해 주세요.', password_setup_changed: '설정이 먼저 변경됐거나 링크가 만료됐습니다. 새 설정 링크를 열어 주세요.', password_already_set: '이미 비밀번호가 설정돼 있습니다. 비밀번호로 로그인하거나 서버에서 재설정 링크를 여세요.', password_verification_failed: '현재 비밀번호를 확인해 주세요.', login_rate_limited: '잠시 후 다시 시도해 주세요. 연속 시도 또는 다른 로그인 처리가 진행 중입니다.', root_workflow_busy: '진행 중인 토의를 먼저 완료하거나 취소해 주세요.', two_participants_required: '참여자를 2명 이상 선택해 주세요.',
+const errors: Record<string, string> = { authentication_required: '비밀번호를 확인해 주세요.', password_mismatch: '두 비밀번호가 일치하지 않습니다.', invalid_password: '비밀번호는 6~128자로 입력하세요. 한글과 공백도 사용할 수 있습니다.', password_setup_not_authorized: '최초 설정 링크를 서버에서 열거나 기존 소유자 로그인으로 접속해 주세요.', password_setup_changed: '설정이 먼저 변경됐거나 링크가 만료됐습니다. 새 설정 링크를 열어 주세요.', password_already_set: '이미 비밀번호가 설정돼 있습니다. 비밀번호로 로그인하거나 서버에서 재설정 링크를 여세요.', password_verification_failed: '현재 비밀번호를 확인해 주세요.', login_rate_limited: '잠시 후 다시 시도해 주세요. 연속 시도 또는 다른 로그인 처리가 진행 중입니다.', root_workflow_busy: '진행 중인 토의를 먼저 완료하거나 취소해 주세요.', two_participants_required: '참여자를 2명 이상 선택해 주세요.',
   api_daily_not_configured: 'API 일일 한도를 먼저 저장해 주세요. GPT 대화는 계속할 수 있습니다.', api_daily_exhausted: 'API 일일 한도에 도달했습니다. 다음 KST 자정까지 API만 기다립니다.', api_daily_version_conflict: '다른 화면에서 API 한도가 바뀌었습니다. 창을 닫고 최신 한도를 다시 확인하세요.', api_daily_policy_requires_idle: '진행·미확정 API 발언을 먼저 확인한 뒤 한도를 변경하세요.', dot_existing_chat_required: 'dot은 확인한 기존 ChatGPT 대화에만 연결할 수 있습니다.',
   invalid_output_limit: '출력 한도는 512~32,768 범위의 정수로 지정하세요.', output_limit_requires_deepseek: '출력 한도 설정은 DeepSeek 연결에서 지원합니다.', output_limit_not_supported: '모델 목록이 보고한 최대 출력을 넘었습니다. 출력 한도를 직접 조절해 주세요.', participant_output_requires_idle: '진행·미확정 발언을 먼저 확인한 뒤 출력 한도를 변경하세요.',
   device_login_unavailable: 'ChatGPT 보안 설정 또는 workspace에서 기기 코드 로그인을 허용해 주세요.', device_login_expired: '기기 코드가 만료됐습니다. 같은 계정에서 새 로그인을 시작해 주세요.', device_login_interrupted: '서버가 재시작됐거나 이전 요청이 끝났습니다. 같은 계정에서 다시 시작해 주세요.', device_login_start_failed: '기기 코드를 받지 못했습니다. 연결 상태를 확인해 주세요.', device_login_poll_failed: '로그인 승인 상태를 확인하지 못했습니다.', codex_version_required: '설정한 Codex 실행 파일의 버전을 확인하지 못했습니다.', codex_refresh_failed: '이 계정의 인증을 갱신하지 못했습니다. 연결 상태를 확인해 주세요.',
@@ -99,12 +99,12 @@ function renderLogin(): void {
   $<HTMLInputElement>('#login-password').autocomplete = setup ? 'new-password' : 'current-password';
   $('#login-confirm-label').hidden = !setup; const confirmation = $<HTMLInputElement>('#login-confirm'); confirmation.disabled = !setup; confirmation.required = setup;
   $<HTMLButtonElement>('#login-submit').disabled = !allowed; $('#login-submit').textContent = setup ? '비밀번호 설정하고 시작' : '작업실 열기';
-  $('#login-note').textContent = setup ? '새 비밀번호와 바로 아래 확인란에 같은 비밀번호를 입력하세요. 15~128자, 한글·공백을 사용할 수 있습니다.' : '이 작업실에 설정한 비밀번호를 입력하세요. 로그인은 12시간 유지됩니다.';
+  $('#login-note').textContent = setup ? '새 비밀번호와 바로 아래 확인란에 같은 비밀번호를 입력하세요. 6~128자, 한글·공백을 사용할 수 있습니다.' : '이 작업실에 설정한 비밀번호를 입력하세요. 로그인은 12시간 유지됩니다.';
   $('#login-setup-help').hidden = allowed;
 }
 function checkPasswords(password: string, confirmation: string): void {
   if (password !== confirmation) throw new Error('password_mismatch');
-  const count = [...password.normalize('NFC')].length; if (count < 15 || count > 128) throw new Error('invalid_password');
+  const count = [...password.normalize('NFC')].length; if (count < 6 || count > 128) throw new Error('invalid_password');
 }
 function form(id: string, handler: (data: Record<string, string>, form: HTMLFormElement) => Promise<unknown>): void {
   $(id).addEventListener('submit', event => { event.preventDefault(); const el = event.currentTarget as HTMLFormElement; const submit = el.querySelector<HTMLButtonElement>('button[type=submit], button:not([type])'); if (submit) submit.disabled = true;
