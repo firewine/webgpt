@@ -1,5 +1,8 @@
 # 웹쫀쿠 능동 토론·상호 검증 계획
 
+> **2026-11-01 주제별 채팅 통합 승인:** 주제 토론의 기본 화면은 채팅방 아래 주제별 대화다. 독립 토의/방 focus의 엔진·JSON·라운드 공개·수정/재개 의미와 원래 room scope는 보존한다. 목록 선택은 GET만 수행하며 실행을 유발하지 않는다. 과거 토의도 같은 목록에 보이고 상세 비교/근거/승인/복구는 주제 보조 화면에서 제공한다. [승인 범위·후속 영향·검증·복귀](./reviews/topic-chat-ui-impact-20261101.md). 실제 완료 여부는 [페이즈 SSOT](./development-plan.md)를 따른다.
+
+
 > **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 현재 승인 범위와 결과는 위 SSOT를 따른다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
 
 > 지정 코드 C=8f81d861b3f170ef2024b90d9eeba56ce34f0f79, 계획 P=8db0f42f499f674c66c3a0df0a4d8e0f25fb216e를 고정한 개정이다. 먼저 [1쪽 요약·기준 차이·근거](./plan-revision-20261030.md), [104항목 판정](./reviews/plan-decision-register-20261030.md), [운영 계약](./company-workflow-plan.md), [8단계 변경·이관·수락·롤백](./resident-implementation-plan.md)을 읽는다. backend 재사용이 기본이며 구현 상태는 위 SSOT, 실계정·DOM·호스트 적합성은 별도 검증 전 UNVERIFIED다. 과거 PASS 보고를 이번 실행 결과로 승계하지 않는다. 계획 개정 당시에는 문서만 수정했다. 현재 구현 지시는 위 SSOT가 관리하며 실계정·배포는 별도 범위다. 개발 시 [디자인 패턴 지침](./development-guidelines.md)의 작은 Adapter/DI·명시 상태 전이·기존 transaction·coordinator/CAS·검사/롤백 기준을 함께 적용한다.

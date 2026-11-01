@@ -3,6 +3,7 @@ import type { RoomSummary, RoomMessage, ResidentTurn, ResidentCheckpoint } from 
 import type { ResidentStatusProjection } from '../workspace/resident-model.js';
 import type { WorkTask, WorkAttempt, SeatAssignment, WorkJobLink } from '../workspace/work-model.js';
 import { WikiView } from './wiki-view.js';
+import { topicPublishedTurns, unregisteredConnections } from './topic-chat-view.js';
 type WorkItem = Omit<WorkTask, 'reports' | 'reviews'> & { reportCount: number; reviewCount: number };
 type WorkSnapshot = { items: WorkItem[]; seats: SeatAssignment[]; executions: { taskId: string; attemptId: string; codexJobId: string | null; status: string; reported: boolean; error: string | null }[]; nextAfter: number; hasMore: boolean; cursor: number; enabled: boolean };
 
@@ -22,7 +23,7 @@ type Dependencies = {
   api: <T>(path: string, body?: unknown, requestId?: string) => Promise<T>;
   refresh: () => Promise<void>; report: (error: unknown) => void;
   openView: (view: 'connections' | 'execution' | 'discussion') => void;
-  openDiscussion: (id: string) => Promise<void>; startFocus: (roomId: string) => void;
+  openDiscussion: (id: string) => Promise<void>; startFocus: (roomId: string) => void; setupConnection: (id: string) => void;
 };
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.querySelector<T>(id)!;
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text = '', cls = ''): HTMLElementTagNameMap[K] { const n = document.createElement(tag); n.textContent = text; n.className = cls; return n; }
@@ -44,23 +45,14 @@ Object.assign(workReasons, { work_execution_binding_required: 'Codex 업무에 �
 // Match the existing focus publication boundary. A completed speaker alone does
 // not publish an unfinished round, a retry, or a previous topic revision.
 export function publishedTopicResults(d: Discussion): Discussion['turns'] {
-  const results: Discussion['turns'] = [];
-  for (const phase of ['synthesis', 'summary_review'] as const) {
-    const rounds = new Set(d.turns.filter(t => t.revision === d.revision && t.phase === phase).map(t => t.round));
-    for (const round of rounds) {
-      const tasks = d.tasks.filter(t => t.revision === d.revision && t.phase === phase && t.round === round);
-      const members = [...new Set(tasks.map(t => t.participantId))];
-      if (!members.length || tasks.some(t => ['pending', 'running', 'unconfirmed'].includes(t.status))) continue;
-      const turns = members.map(pid => d.turns.findLast(t => t.revision === d.revision && t.phase === phase && t.round === round && t.participantId === pid && t.status === 'completed' && t.reply));
-      if (turns.every(t => !!t)) results.push(...turns.filter((t): t is Discussion['turns'][number] => !!t));
-    }
-  }
-  return results;
+  return topicPublishedTurns(d).filter(t => t.phase === 'synthesis' || t.phase === 'summary_review');
 }
 
 // One client for the existing owner API/SSE lifecycle. This view never dispatches
 // on render/reconnect, probes capabilities, or owns a second EventSource.
 export class RoomView {
+  private selectedTopic: Discussion | null = null;
+  private inTopic = false;
   private snapshot: RoomSnapshot | null = null;
   private detail: RoomDetail | null = null;
   private roomId = '';
@@ -135,7 +127,7 @@ export class RoomView {
     this.selectBoardTab(this.boardTab); this.setBoardClosed(this.boardClosed);
     this.on('#room-mention-add', () => this.addMention($<HTMLSelectElement>('#room-mention-select').value));
     for (const b of document.querySelectorAll<HTMLButtonElement>('[data-close-drawer]')) b.addEventListener('click', () => b.closest('dialog')?.close());
-    $('#room-members-dialog').addEventListener('close', () => { $('.sidebar').insertBefore($('#room-member-panel'), $('.sidebar-heading:not(#room-member-panel .sidebar-heading)')); });
+    $('#room-members-dialog').addEventListener('close', () => { $('.sidebar').insertBefore($('#room-member-panel'), $('.sidebar > footer')); });
     $('#room-panel-dialog').addEventListener('close', () => { $('#view-room').append($('#room-panel')); $('#room-panel-toggle').setAttribute('aria-expanded', String(innerWidth >= 1280 && !this.boardClosed)); });
     window.addEventListener('resize', () => { if (innerWidth > 900) this.closeDrawers(); });
     $('#room-timeline').addEventListener('scroll', () => { clearTimeout(this.scrollTimer); this.scrollTimer = window.setTimeout(() => { this.rememberPosition(); this.markRead(); }, 100); });
@@ -167,7 +159,15 @@ export class RoomView {
     $(active ? '#room-theme-slot' : '#theme-home').append($('#theme-toggle'));
     if (entering) requestAnimationFrame(() => { if (this.loaded) { this.restorePosition(); this.markRead(); } });
   }
+  setSelectedTopic(discussion: Discussion | null, selecting = !!discussion): void {
+    if (selecting && !this.inTopic) this.rememberPosition();
+    const returning = this.inTopic && !selecting; this.selectedTopic = discussion; this.inTopic = selecting;
+    if (returning) { this.restoreOnShow = true; requestAnimationFrame(() => { if (!this.inTopic && this.active && this.loaded) { this.restorePosition(); this.markRead(); } }); }
+  }
+  closeNavigation(): void { this.closeDrawers(); }
   clear(): void {
+    this.selectedTopic = null;
+    this.inTopic = false;
     this.closeDrawers(); this.detail = null; this.snapshot = null; this.roomId = ''; this.messages.clear(); this.originals.clear(); this.rows.clear(); this.noticeIds.clear(); this.turns = [];
     $('#room-messages').replaceChildren(); $('#room-notices').replaceChildren(); $('#room-text').textContent = ''; $<HTMLTextAreaElement>('#room-text').value = '';
     $('#room-raw').replaceChildren(); $('#room-members').replaceChildren(); $('#room-status').replaceChildren(); $('#room-records').replaceChildren();
@@ -509,19 +509,20 @@ export class RoomView {
     return { bottom: target.scrollHeight - target.scrollTop - target.clientHeight < 55, id: first?.dataset.messageId ?? null, offset: first ? first.getBoundingClientRect().top - rect.top : 0 };
   }
   private applyPosition(value: ReturnType<RoomView['position']>): void {
+    if (this.inTopic) return;
     const target = $('#room-timeline'); if (value.bottom) target.scrollTop = target.scrollHeight;
     else if (value.id) { const row = this.rows.get(value.id); if (row) target.scrollTop += row.getBoundingClientRect().top - target.getBoundingClientRect().top - value.offset; }
   }
-  private rememberPosition(): void { if (!this.active || !this.roomId || this.restoreOnShow) return; save(this.roomId + '.anchor', JSON.stringify(this.position())); }
+  private rememberPosition(): void { if (!this.active || this.inTopic || !this.roomId || this.restoreOnShow) return; save(this.roomId + '.anchor', JSON.stringify(this.position())); }
   private restorePosition(): void {
-    if (!this.restoreOnShow || !this.active) return; this.restoreOnShow = false;
+    if (!this.restoreOnShow || !this.active || this.inTopic) return; this.restoreOnShow = false;
     try { const saved = JSON.parse(stored(this.roomId + '.anchor') ?? 'null') as ReturnType<RoomView['position']> | null;
       if (saved && typeof saved.bottom === 'boolean' && typeof saved.offset === 'number') { this.applyPosition(saved); return; }
     } catch { /* A broken local cursor cannot alter server state. */ }
     const target = $('#room-timeline'); target.scrollTop = target.scrollHeight;
   }
   private markRead(): void {
-    if (!this.active || document.hidden || !this.detail || this.restoreOnShow) return;
+    if (!this.active || this.inTopic || document.hidden || !this.detail || this.restoreOnShow) return;
     const rect = $('#room-timeline').getBoundingClientRect();
     for (const row of this.rows.values()) { const head = row.querySelector('.message-head')!.getBoundingClientRect(); if (head.bottom > rect.top && head.top < rect.bottom) this.read = Math.max(this.read, Number(row.dataset.sequence)); }
     save(this.roomId + '.read', String(this.read)); this.unread();
@@ -541,7 +542,7 @@ export class RoomView {
   }
   private renderPanels(): void {
     const d = this.detail!; const s = this.snapshot!; const r = d.room;
-    const signature = JSON.stringify([r, s.apiDaily, d.contexts, d.status.members, s.participants, s.connections, s.jobs, s.materialPackages, this.turns, this.topicKey, this.work]);
+    const signature = JSON.stringify([r, this.selectedTopic?.id, this.selectedTopic?.excludedIds, s.apiDaily, d.contexts, d.status.members, s.participants, s.connections, s.jobs, s.materialPackages, this.turns, this.topicKey, this.work]);
     if (signature === this.panelsSignature) return; this.panelsSignature = signature;
     this.renderMembers(s, r.members, d.status.members); this.renderWork();
     const usage = $('#room-usage'); usage.replaceChildren();
@@ -550,7 +551,8 @@ export class RoomView {
     usage.append(el('p', `도구 ${r.used?.toolJobs ?? 0} / ${r.toolBudget?.maxToolJobs ?? 0} · 도구 종료 ${date(r.toolBudget?.deadlineAt ?? null)}`, 'small muted'));
     if (r.nextEligibleAt) usage.append(el('p', '다음 발언 가능 ' + date(r.nextEligibleAt), 'small muted'));
     const focus = $('#room-focus'); focus.replaceChildren(); const topic = s.discussions.find(t => t.id === r.topicLink);
-    if (topic) focus.append(el('p', topic.topic), this.btn('토론·비교·검증 열기', () => { this.closeDrawers(); return this.deps.openDiscussion(topic.id); }));
+    if (this.selectedTopic) focus.append(el('p', this.selectedTopic.topic), el('p', '선택한 주제의 상세 정보입니다. 작업큐·Wiki는 방 전체에서 공유합니다.', 'small muted'), this.btn('주제의 비교·근거·제어', () => this.deps.openDiscussion(this.selectedTopic!.id)));
+    else if (topic) focus.append(el('p', topic.topic), this.btn('토론·비교·검증 열기', () => { this.closeDrawers(); return this.deps.openDiscussion(topic.id); }));
     else focus.append(el('p', this.topic ? '자유 대화로 복귀 · 마지막 주제와 결과는 대화 상단에 보존합니다.' : '자유 대화 · 상단에서 주제를 정하면 검토·검증·종합을 이어갑니다.', 'small muted'));
     const statuses = $('#room-status'); statuses.replaceChildren();
     for (const c of d.status.members) { const card = el('section', '', 'status-card'); card.append(el('h3', this.name(c.participantId) + ` · 문맥 ${c.generation}${c.previousGeneration ? ' · 이전 세대 응답' : ''}`));
@@ -579,15 +581,20 @@ export class RoomView {
     if (!records.children.length) records.append(el('p', '미확정 발언이나 인계 기록이 없습니다.', 'small muted'));
   }
   private renderMembers(s: RoomSnapshot, roomMembers: RoomSummary['members'], statuses: ResidentStatusProjection['members']): void {
-    const members = $('#room-members'); members.replaceChildren(); $('#room-member-count').textContent = String(s.participants.length);
+    const missing = unregisteredConnections(s.participants, s.connections);
+    const members = $('#room-members'); members.replaceChildren(); $('#room-member-count').textContent = String(s.participants.length + missing.length);
+    $('#room-member-scope').textContent = this.selectedTopic ? '현재 주제 참여 여부를 표시합니다. 토글은 자유 대화 설정이며 진행 중 주제의 참여자를 바꾸지 않습니다.' : '토글은 자유 대화 참여 설정입니다.';
     const select = $<HTMLSelectElement>('#room-mention-select'); const selected = select.value; select.replaceChildren(el('option', '@ 참여자')); select.options[0]!.value = '';
     for (const p of s.participants) {
-      const m = roomMembers.find(m => m.participantId === p.id); const card = el('article', '', 'room-member'); card.dataset.tone = this.tone(p.id);
+      const m = roomMembers.find(m => m.participantId === p.id); const card = el('article', '', 'room-member'); card.dataset.tone = this.tone(p.id); card.dataset.participantId = p.id;
       const status = statuses.find(c => c.participantId === p.id); const info = el('div', '', 'member-info'); const name = el('div', '', 'member-name');
       name.append(el('strong', p.label), el('span', p.kind === 'fake' ? '모의' : ['openai-oauth', 'codex-oauth'].includes(p.kind) ? 'GPT' : p.kind === 'deepseek' || p.kind === 'anthropic' ? 'API' : '웹', 'member-kind')); info.append(name);
       info.append(el('small', p.kind === 'fake' ? '외부 모델 호출 없음' : (s.connections.find(c => c.id === p.connectionId)?.label ?? '연결 미확인'), 'member-account'));
       if (['openai-oauth', 'codex-oauth', 'deepseek'].includes(p.kind)) info.append(el('small', '사고 깊이 · ' + (p.reasoningEffort ?? (p.kind === 'deepseek' ? '제공처 기본값' : 'xhigh')), 'member-account'));
       if (p.kind === 'deepseek') info.append(el('small', '출력 한도 · ' + (p.maxOutputTokens ?? 4096).toLocaleString('ko-KR') + '토큰', 'member-account'));
+      const connection = s.connections.find(c => c.id === p.connectionId);
+      if (p.kind !== 'fake' && connection?.status !== 'connected') info.append(el('small', connection ? connection.status === 'auth_required' ? '로그인 필요' : '연결 확인 필요 · ' + (connection.error ?? connection.status) : '연결 삭제됨 · 기록 보존', 'member-connection-error'));
+      if (this.selectedTopic) info.append(el('small', this.selectedTopic.members.some(m => m.id === p.id) ? this.selectedTopic.excludedIds.includes(p.id) ? '이 주제 참여 제외' : '이 주제 참여자' : '이 주제 미참여', 'member-topic-status'));
       const reason = m?.blockedReason ?? status?.response.reason;
       const state = m?.blockedReason ? '확인 필요 · ' + workReason(m.blockedReason) : status ? label(status.response.state) + (reason ? ' · ' + (waitReasons[reason] ?? reason) : '') : '미참여';
       info.append(el('small', state, 'member-observed')); info.title = `${p.label}\n${p.modelId}\n${p.role}\n${state}`;
@@ -596,6 +603,13 @@ export class RoomView {
       card.append(this.avatar(p.id), info, toggleLabel); members.append(card);
       if (m) { const option = el('option', p.label); option.value = p.id; select.append(option); }
     }
+    for (const connection of missing) {
+      const card = el('article', '', 'room-member unregistered-member'); card.dataset.connectionId = connection.id;
+      const info = el('div', '', 'member-info'); info.append(el('strong', connection.label), el('small', connection.status !== 'connected' ? '연결 확인 필요 · ' + (connection.error ?? connection.status) : connection.models.length ? '모델 선택·토커 등록 필요' : '모델 확인 필요', 'member-observed'));
+      info.append(this.btn(connection.status === 'connected' && connection.models.length ? '토커 만들기' : '연결 확인', () => this.deps.setupConnection(connection.id)));
+      card.append(el('span', Array.from(connection.label)[0] ?? '?', 'avatar'), info); members.append(card);
+    }
+    if (!s.participants.length && !missing.length) members.append(el('p', 'AI 계정을 연결하고 토커를 등록해 주세요.', 'small muted'));
     select.value = selected;
   }
   private async raw(m: Message): Promise<void> {

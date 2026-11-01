@@ -82,10 +82,10 @@ test('board keyboard navigation, collapse, theme and reply draft survive UI navi
   assert.equal(f.app.store.cursor(), before); assert.equal(f.calls(), 0); assert.deepEqual(posts, []); assert.deepEqual(errors, []);
 });
 
-test('feature off keeps legacy default and shows a read-only chat design without enabling anything', { timeout: 30000 }, async t => {
+test('feature off keeps the chat shell and legacy topic records readable without enabling anything', { timeout: 30000 }, async t => {
   const f = await workspace(t); const browser = await launch(t); const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await context.request.post(f.url + '/api/login', { data: { token: ownerKey }, headers: { Origin: f.url } }); const page = await context.newPage();
-  await page.goto(f.url); await page.locator('#composer').waitFor(); await page.locator('[data-view=room]').click(); await page.locator('#room-disabled').waitFor();
+  await page.goto(f.url); await page.locator('#view-room').waitFor(); await page.locator('#room-disabled').waitFor();
   assert.equal(await page.locator('#room-send').isDisabled(), true); assert.equal(f.app.store.read().resident, undefined); assert.equal(await page.locator('#room-text').isVisible(), true);
   await page.locator('#room-member-toggle').click(); assert.equal(await page.locator('#room-power').isDisabled(), true); assert.equal(await page.locator('#room-settings').isDisabled(), true); await page.locator('#room-members-dialog').getByRole('button', { name: '닫기', exact: true }).click();
   await page.locator('[data-view=connections]').click(); await page.locator('#oauth-form').waitFor(); const title = await page.locator('#view-connections h1').evaluate(n => parseFloat(getComputedStyle(n).fontSize)); assert.ok(title <= 25);

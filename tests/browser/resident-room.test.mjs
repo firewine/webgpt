@@ -1,3 +1,4 @@
+import { openExistingTopic, closeTopicDetails } from './topic-ui.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -43,8 +44,8 @@ test('R3-A/D: four viewports expose room, participant toggles, reference board, 
     await panel(page, 'usage'); assert.equal(await page.locator('#room-usage').isVisible(), true); await page.locator('[data-board-tab=activity]').click();
     await page.locator('#room-jobs button').click(); await page.getByRole('button', { name: '이번 요청 승인', exact: true }).waitFor();
     assert.equal(await page.getByRole('button', { name: '거절', exact: true }).isVisible(), true);
-    await page.locator('#history button').first().click(); await page.getByRole('button', { name: '원본과 복구', exact: true }).click(); assert.match(await page.locator('#discussion-content').textContent(), /체크포인트 적용/);
-    await page.locator('[data-view=connections]').click(); assert.equal(await page.locator('#oauth-form').isVisible(), true); assert.equal(await page.locator('#deepseek-form').isVisible(), true); await page.getByText('dot·Muse의 기존 대화 연결', { exact: true }).click(); await page.getByText('고급 연결 · 선택자 직접 입력', { exact: true }).click(); assert.equal(await page.locator('#browser-form').isVisible(), true);
+    await openExistingTopic(page); await page.getByRole('button', { name: '원본과 복구', exact: true }).click(); assert.match(await page.locator('#discussion-content').textContent(), /체크포인트 적용/);
+    await closeTopicDetails(page); await page.locator('[data-view=connections]').click(); assert.equal(await page.locator('#oauth-form').isVisible(), true); assert.equal(await page.locator('#deepseek-form').isVisible(), true); await page.getByText('dot·Muse의 기존 대화 연결', { exact: true }).click(); await page.getByText('고급 연결 · 선택자 직접 입력', { exact: true }).click(); assert.equal(await page.locator('#browser-form').isVisible(), true);
     await page.locator('[data-view=room]').click(); await page.locator('#room-panel').evaluate(n => { n.scrollTop = 0; }); await page.screenshot({ path: `test-results/resident/R3/room-${width}.png` });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.deepEqual(errors, []); await context.close();
@@ -127,7 +128,7 @@ test('R3 room starts without a global quota and settings preserve ledger; focus 
   await page.locator('#room-power').click(); await page.waitForFunction(() => document.querySelector('#room-state').textContent.includes('상주 중'));
   await page.locator('#room-focus-new').click(); await page.locator('#topic').fill('방 안에서 검토하는 작은 주제'); await page.getByRole('button', { name: /토의 시작/ }).click();
   await page.waitForFunction(() => document.querySelector('#discussion-state .badge')?.textContent === '완료');
-  await f.app.residentRunner.tick(); await page.locator('[data-view=room]').click(); await page.waitForFunction(() => document.querySelectorAll('.room-message').length > 0);
+  await f.app.residentRunner.tick(); await page.locator('#chat-free').click(); await page.waitForFunction(() => document.querySelectorAll('.room-message').length > 0);
   await page.waitForFunction(() => document.querySelector('#room-focus').textContent.includes('자유 대화'));
   assert.equal(f.app.store.read().resident.rooms[0].topicLink, null);
   await page.locator('#room-power').click(); await page.waitForFunction(() => document.querySelector('#room-state').textContent === '꺼짐');
