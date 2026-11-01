@@ -3,7 +3,7 @@ import type { Store } from './store.js';
 import type { WorkspaceState, CodexJob } from './model.js';
 import type { WorkAttempt, WorkJobLink, WorkTask, WorkReportV1, WorkExecutionEvidence } from './work-model.js';
 import type { WorkQueue } from './work-queue.js';
-import { budgetReason, usageFor } from './dispatch.js';
+import { toolBudgetReason, usageFor } from './dispatch.js';
 import { artifactChecks, taskWorker, workRoom } from './work-policy.js';
 import { AppError, code, digest, id, now } from './util.js';
 import { assertWikiSnapshots, visibleRoomMessages } from './wiki-policy.js';
@@ -98,7 +98,7 @@ export class WorkExecutionBridge {
     if (b.allowWrite) return 'work_write_safety_unverified';
     const slot = r.toolReservations?.indexOf(l.input.requestId) ?? -1;
     if (!r.budgets || phase !== 'intent' && (slot < 0 || slot >= r.budgets.maxToolJobs)) return 'room_tool_budget_exhausted';
-    if (phase !== 'result' && (r.observedStatus !== 'on' || budgetReason(r) || Date.parse(l.scope.deadlineAt) <= Date.now())) return 'room_tool_budget_exhausted';
+    if (phase !== 'result' && (r.observedStatus !== 'on' || toolBudgetReason(r) || Date.parse(l.scope.deadlineAt) <= Date.now())) return 'room_tool_budget_exhausted';
     return null;
   }
   recover(): void {

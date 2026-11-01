@@ -1,14 +1,8 @@
 import type { DurableEvent, WorkspaceState } from './model.js';
+import { participantWait } from './api-usage.js';
 
-export interface ResidentStatusAxis { state: string; observedAt: string | null; source: string; reason: string | null }
-export interface ResidentStatusProjection {
-  members: {
-    participantId: string; generation: number; previousGeneration: boolean;
-    connection: ResidentStatusAxis; response: ResidentStatusAxis; tool: ResidentStatusAxis; work: ResidentStatusAxis;
-    lastSpeechAt: string | null; lastProgressAt: string | null;
-  }[];
-  notices: { id: string; eventId: number; roomId: string; at: string; text: string }[];
-}
+import type { ResidentStatusAxis, ResidentStatusProjection } from './resident-model.js';
+export type { ResidentStatusAxis, ResidentStatusProjection } from './resident-model.js';
 
 // Read-only, explicit public projection. Neither raw responses, private material,
 // commands, account identities nor owner capability reports cross this boundary.
@@ -34,10 +28,12 @@ export function projectResidentStatus(state: WorkspaceState, roomId: string, eve
     const workAttempt = state.resident!.workAttempts.filter(a => a.roomId === roomId && a.participantId === member.participantId).at(-1);
     const workTask = workAttempt && state.resident!.workItems.find(t => t.id === workAttempt.taskId);
     const activity = job?.activities.at(-1);
+    const waiting = participant && member.enabled ? participantWait(state, room, participant) : null;
     return {
       participantId: member.participantId, generation, previousGeneration,
       connection: axis(participant?.kind === 'fake' ? 'fixture' : connection?.status ?? 'unknown', connection?.lastCheckedAt ?? null, 'connection', connection?.error ?? null),
-      response: observation ? axis(observation.response, observation.observedAt, observation.source, observation.reason)
+      response: waiting && !['prepared', 'running', 'unconfirmed'].includes(turn?.status ?? '') ? axis('waiting', null, 'dispatch_policy', waiting)
+        : observation ? axis(observation.response, observation.observedAt, observation.source, observation.reason)
         : axis(turn ? previousGeneration ? 'stale' : turn.status : 'unknown', observed?.at ?? turn?.finishedAt ?? turn?.startedAt ?? null, turn ? 'resident_turn' : 'unobserved', turn?.error ?? member.blockedReason ?? null),
       tool: job ? axis(job.status, activity?.observedAt ?? job.finishedAt ?? job.createdAt, 'codex_job', job.error)
         : observation ? axis(observation.tool, observation.observedAt, observation.source, observation.reason) : axis('unknown', null, 'unobserved'),

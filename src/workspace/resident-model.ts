@@ -25,6 +25,7 @@ export interface Room {
   desiredOn: boolean; observedStatus: 'off' | 'on' | 'sleeping' | 'blocked' | 'budget_exhausted';
   members: RoomMember[]; legacyDiscussionIds: string[]; topicLink: string | null;
   budgets: RoomBudget | null; nextEligibleAt: string | null;
+  budgetMode?: 'legacy' | 'api-daily';
   pacing?: RoomPacing | null; contexts?: RoomContext[]; ledger?: BudgetEntry[]; toolReservations?: string[];
   reason?: string | null; passCount?: number; nextMemberIndex?: number; lastCompletedAt?: string | null;
   seats?: SeatAssignment[];
@@ -78,10 +79,21 @@ export interface ResidentStateV1 {
   wikiPages: WikiPage[]; wikiVersions: WikiVersion[]; jobLinks: WorkJobLink[]; residentGrants: ResidentGrant[];
 }
 export interface RoomSummary {
+  budgetMode?: 'legacy' | 'api-daily';
   id: string; title: string; version: number; epoch: number; desiredOn: boolean;
   observedStatus: Room['observedStatus']; members: RoomMember[]; legacyDiscussionIds: string[];
   topicLink: string | null; lastMessageSequence: number; createdAt: string; updatedAt: string;
   budgets?: RoomBudget | null; pacing?: RoomPacing | null; reason?: string | null;
   autoTopic?: boolean;
   nextEligibleAt?: string | null; used?: { requests: number; inputTokens: number; outputTokens: number; unknownUsage: number; toolJobs: number };
+}
+
+export interface ResidentStatusAxis { state: string; observedAt: string | null; source: string; reason: string | null }
+export interface ResidentStatusProjection {
+  members: {
+    participantId: string; generation: number; previousGeneration: boolean;
+    connection: ResidentStatusAxis; response: ResidentStatusAxis; tool: ResidentStatusAxis; work: ResidentStatusAxis;
+    lastSpeechAt: string | null; lastProgressAt: string | null;
+  }[];
+  notices: { id: string; eventId: number; roomId: string; at: string; text: string }[];
 }

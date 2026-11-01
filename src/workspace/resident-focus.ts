@@ -5,6 +5,7 @@ import type { DiscussionEngine } from './engine.js';
 import { AppError, code, digest, integer, now, object, string, strings } from './util.js';
 import { budgetReason, unresolvedProvider, usageFor } from './dispatch.js';
 import { participantIdentity, contextWiki, visibleRoomMessages, assertWikiSnapshots } from './wiki-policy.js';
+import { dailyRoom, participantWait } from './api-usage.js';
 
 type Emit = Parameters<Parameters<Store['transact']>[0]>[1];
 const hash = (v: unknown) => digest(JSON.stringify(v));
@@ -14,7 +15,7 @@ export function topicPolicy(s: WorkspaceState, r: Room): string {
     const p = s.participants.find(p => p.id === m.participantId); const c = s.connections.find(c => c.id === p?.connectionId);
     return { p, generation: r.contexts?.find(c => c.participantId === m.participantId)?.generation ?? 1,
       connection: c ? { status: c.status, subject: c.subject, browser: c.browser } : null };
-  }), browserPaused: s.browserPaused });
+  }), browserPaused: s.browserPaused, ...(dailyRoom(r) ? { budgetMode: r.budgetMode, apiPolicyVersion: s.apiUsage?.version ?? 0 } : {}) });
 }
 function basis(s: WorkspaceState, r: Room, pids: string[]): string {
   return hash({ messages: visibleRoomMessages(s, r, pids), wiki: contextWiki(s, r, pids) });
@@ -57,12 +58,13 @@ export class ResidentFocus {
         if (Object.keys(b).some(k => !['topic', 'criteria', 'maxRounds', 'sourceMessageIds'].includes(k))) throw new AppError('invalid_topic_proposal');
         const pids = r.members.filter(m => m.enabled && !m.blockedReason).map(m => m.participantId);
         if (pids.length < 2 || pids.length > 8) throw new AppError('two_participants_required');
+        for (const pid of pids) { const member = s.participants.find(p => p.id === pid); const wait = member && participantWait(s, r, member, clock); if (wait) throw new AppError(wait, 409); }
         const sources = strings(b.sourceMessageIds, 20); const visible = visibleRoomMessages(s, r, pids);
         if (!sources.length || sources.some(id => !visible.some(m => m.id === id && m.sequence <= turn.basisSequence))) throw new AppError('topic_source_not_public', 403);
         const reason = budgetReason(r, clock); if (reason) throw new AppError(reason, 409);
-        const used = usageFor(r); const requests = Math.min(200, r.budgets!.maxRequests - used.requests);
-        const tokens = Math.min(1_000_000, r.budgets!.maxTokens - used.inputTokens - used.outputTokens);
-        const activeMs = Math.min(7_200_000, Date.parse(r.budgets!.deadlineAt) - clock);
+        const used = usageFor(r); const requests = dailyRoom(r) ? 200 : Math.min(200, r.budgets!.maxRequests - used.requests);
+        const tokens = dailyRoom(r) ? 1_000_000 : Math.min(1_000_000, r.budgets!.maxTokens - used.inputTokens - used.outputTokens);
+        const activeMs = dailyRoom(r) ? 7_200_000 : Math.min(7_200_000, Date.parse(r.budgets!.deadlineAt) - clock);
         if (requests < 3 * pids.length || tokens < 1000 || activeMs < 5000) throw new AppError('auto_topic_budget_insufficient', 409);
         const input: TopicIntent['input'] = { topic: string(b.topic, 5000), criteria: string(b.criteria, 2000), participantIds: pids,
           limits: { maxRequests: requests, maxTokens: tokens, maxActiveMs: activeMs, maxRounds: integer(b.maxRounds, 2, 1, 8), maxVerificationTasks: 0, maxToolJobs: 0 } };
@@ -87,6 +89,7 @@ export class ResidentFocus {
         if (!r || !r.desiredOn || !r.autoTopic) denied = 'auto_topic_not_allowed';
         else if (r.epoch !== i.epoch || topicPolicy(s, r) !== i.policyDigest) denied = 'auto_topic_scope_changed';
         else denied = budgetReason(r, clock);
+        if (!denied && r) for (const pid of i.input.participantIds) { const p = s.participants.find(p => p.id === pid); const wait = p && participantWait(s, r, p, clock); if (wait) { denied = wait; break; } }
         if (!denied && r && basis(s, r, i.input.participantIds) !== i.basisDigest) denied = 'auto_topic_context_changed';
       } catch (e) { if (!(e instanceof AppError)) throw e; denied = code(e); }
       if (denied) { this.finish(i.id, null, denied); continue; }

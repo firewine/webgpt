@@ -4,7 +4,8 @@ import type { Room, ResidentTurn } from './resident-model.js';
 import { snapshotMember } from './settings.js';
 import type { WorkTask, WorkAttempt, WorkKind, WorkRole, WorkReportV1, WorkReviewV1 } from './work-model.js';
 import { AppError, code, digest, id, integer, now, object, string } from './util.js';
-import { DispatchCoordinator, budgetReason, unresolvedProvider } from './dispatch.js';
+import { DispatchCoordinator, budgetReason, toolBudgetReason, unresolvedProvider } from './dispatch.js';
+import { participantWait } from './api-usage.js';
 import { roomContext } from './resident-context.js';
 import { WORK_POLICIES, WORK_LIVE, acceptance, artifactChecks, checkReferences, onlyWork, readyReason, seatAllows, slotAvailable, taskWorker, uniqueWork, validateWorkState, workRoom } from './work-policy.js';
 import type { ExecutionReadiness } from './work-policy.js';
@@ -147,9 +148,9 @@ export class WorkQueue {
     }
   }
   private claimState(s: WorkspaceState, r: Room, t: WorkTask, pid: string, purpose: WorkAttempt['purpose'], emit: Emit): WorkAttempt {
-    if (!r.desiredOn || budgetReason(r) || r.topicLink) throw new AppError('work_room_not_ready', 409);
+    if (!r.desiredOn || budgetReason(r) || t.kind === 'codex' && purpose === 'work' && toolBudgetReason(r) || r.topicLink) throw new AppError('work_room_not_ready', 409);
     if (purpose === 'work' && (t.status !== 'ready' || this.ready(s, r, t)) || purpose === 'review' && t.status !== 'review') throw new AppError('work_not_ready', 409);
-    const seat = taskWorker(s, r, t, pid, purpose === 'work' ? 'claim' : 'review');
+    const seat = taskWorker(s, r, t, pid, purpose === 'work' ? 'claim' : 'review', true);
     if (!seat || !slotAvailable(s, pid)) throw new AppError('work_slot_or_scope_unavailable', 409);
     const context = roomContext(r, pid);
     if (!wikiHistoryAllowed(s, r, context)) throw new AppError('wiki_context_requires_handoff', 409);
@@ -168,7 +169,7 @@ export class WorkQueue {
   private claimAvailable(s: WorkspaceState, r: Room, t: WorkTask, purpose: WorkAttempt['purpose'], emit: Emit): WorkAttempt | null {
     const author = t.reports.find(report => report.id === t.currentReportId)?.authorId;
     const candidates = (purpose === 'work' ? t.allowedParticipantIds : r.members.map(m => m.participantId)).filter(pid =>
-      (purpose !== 'review' || pid !== author) && taskWorker(s, r, t, pid, purpose === 'work' ? 'claim' : 'review') && slotAvailable(s, pid));
+      (purpose !== 'review' || pid !== author) && taskWorker(s, r, t, pid, purpose === 'work' ? 'claim' : 'review', true) && slotAvailable(s, pid));
     let reason: string | null = null;
     for (const pid of candidates) {
       try { return this.claimState(s, r, t, pid, purpose, emit); }
@@ -185,7 +186,7 @@ export class WorkQueue {
     return !!seat && seat.version === a.seatVersion && assertWikiSnapshots(s, r.id, [a.participantId], a.input.wikiCitations) && a.providerTurnId === turn.id && a.inputDigest === digest(JSON.stringify(a.input)) && a.providerPromptDigest === turn.promptDigest && digest(turn.prompt) === a.providerPromptDigest && (a.purpose !== 'review' || t.reports.find(report => report.id === t.currentReportId)?.digest === a.reportDigest);
   }
   claimExecution(s: WorkspaceState, r: Room, emit: Emit, clock: number): WorkAttempt | null {
-    if (!this.enabled || !r.desiredOn || r.observedStatus !== 'on' || r.topicLink || budgetReason(r, clock) || unresolvedProvider(s) || s.resident!.dispatchLeases.some(l => l.state !== 'released') || s.jobs.some(j => j.status === 'reconciling')) return null;
+    if (!this.enabled || !r.desiredOn || r.observedStatus !== 'on' || r.topicLink || toolBudgetReason(r, clock) || unresolvedProvider(s) || s.resident!.dispatchLeases.some(l => l.state !== 'released') || s.jobs.some(j => j.status === 'reconciling')) return null;
     this.refresh(s, r, emit);
     const existing = s.resident!.workAttempts.find(a => a.roomId === r.id && a.purpose === 'work' && a.input.kind === 'codex' && a.status === 'claimed' && !s.resident!.jobLinks.some(l => l.attemptId === a.id));
     if (existing) return existing;
@@ -217,13 +218,20 @@ export class WorkQueue {
   }
   prepareTurn(s: WorkspaceState, r: Room, emit: Emit, clock: number): ResidentTurn | null {
     if (!this.enabled || !r.desiredOn || r.topicLink || budgetReason(r, clock) || unresolvedProvider(s) || s.resident!.dispatchLeases.some(l => l.state !== 'released')) return null;
+    for (const a of s.resident!.workAttempts.filter(a => a.roomId === r.id && a.status === 'claimed' && !a.providerTurnId && (a.input.kind === 'analysis' || a.purpose === 'review'))) {
+      const p = s.participants.find(p => p.id === a.participantId); const reason = p && participantWait(s, r, p, clock); if (!reason) continue;
+      a.status = 'failed'; a.reported = true; a.finishedAt = now(); a.error = reason;
+      const t = this.task(s, r.id, a.taskId);
+      if (a.purpose === 'work' && t.currentAttemptId === a.id) { t.status = 'backlog'; t.claimantId = null; t.currentAttemptId = null; t.version++; }
+      this.changed(r, emit, 'candidate_waiting', { taskId: t.id, attemptId: a.id, reason });
+    }
     this.refresh(s, r, emit);
     let a = s.resident!.workAttempts.find(a => a.roomId === r.id && a.status === 'claimed' && !a.providerTurnId && (a.input.kind !== 'codex' || a.purpose === 'review'));
     if (!a) {
       const ordered = s.resident!.workItems.filter(t => t.roomId === r.id).sort((a, b) => b.priority - a.priority || a.updatedAt.localeCompare(b.updatedAt) || a.createdAt.localeCompare(b.createdAt));
       for (const t of ordered) {
         const purpose = t.status === 'review' ? 'review' : t.status === 'ready' && t.kind !== 'codex' ? 'work' : null; if (!purpose) continue;
-        if (purpose === 'review' && s.resident!.workAttempts.some(a => a.taskId === t.id && a.purpose === 'review' && a.reportDigest === t.reports.find(p => p.id === t.currentReportId)?.digest)) continue;
+        if (purpose === 'review' && s.resident!.workAttempts.some(a => a.taskId === t.id && a.purpose === 'review' && a.reportDigest === t.reports.find(p => p.id === t.currentReportId)?.digest && !(a.reported && a.status === 'failed' && !a.providerTurnId))) continue;
         const claimed = this.claimAvailable(s, r, t, purpose, emit);
         if (claimed) { a = claimed; break; }
       }
@@ -242,7 +250,7 @@ export class WorkQueue {
       status: 'prepared', prompt, promptDigest: digest(prompt), history: structuredClone(context.history), basisSequence: r.lastMessageSequence, text: '', receipt: null, reply: null, usage: null, startedAt: now(), finishedAt: null, error: null, repairOf: null, messageId: null, proposalsStatus: 'none', workAttemptId: a.id, workSeatVersion: a.seatVersion, wikiCitations: a.input.wikiCitations ?? [] };
     a.providerTurnId = requestId; a.providerPromptDigest = turn.promptDigest;
     if (!this.canDispatch(s, turn)) { a.providerTurnId = null; a.providerPromptDigest = null; a.status = 'stale'; a.error = 'work_scope_changed'; t.status = 'blocked'; t.reason = a.error; return null; }
-    const denied = this.dispatch.reserve(s, { requestId, kind: 'work', participantId: participant.id, generation: context.generation, roomId: r.id }, clock);
+    const denied = this.dispatch.reserve(s, { requestId, kind: 'work', participantId: participant.id, participant: turn.participant, generation: context.generation, roomId: r.id }, clock);
     if (denied) { a.providerTurnId = null; a.providerPromptDigest = null; return null; }
     a.status = 'running'; if (a.purpose === 'work') t.status = 'running'; s.resident!.turns.push(turn);
     emit({ type: 'resident.turn_prepared', discussionId: null, data: { roomId: r.id, turnId: turn.id, attemptId: a.id, taskId: t.id } }); return turn;

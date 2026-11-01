@@ -134,6 +134,7 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     if (get && path === '/api/browser/snapshot') { json(res, 200, { text: await app.browser.snapshot(integer(Number(url.searchParams.get('pageId')), 0, 0, 1_000_000)) }); return; }
     if (req.method !== 'POST') throw new AppError('not_found', 404);
     const input = object(await body(req));
+    if (path === '/api/api-daily') { json(res, 200, app.configureApiDaily(input, command(req))); return; }
     if (wikiPath && !wikiPath[3]) { const result = app.wiki.edit(wikiPath[1]!, { ...input, ...(wikiPath[2] ? { pageId: wikiPath[2] } : {}) }, command(req)); json(res, result.status === 'conflict' ? 409 : 200, { ...result, ...(result.status === 'conflict' ? { error: { code: 'wiki_version_conflict' } } : {}) }); return; }
     const wikiPins = /^\/api\/rooms\/([\w-]+)\/wiki-pins$/.exec(path);
     if (wikiPins) { json(res, 200, app.wiki.pin(wikiPins[1]!, input, command(req))); return; }

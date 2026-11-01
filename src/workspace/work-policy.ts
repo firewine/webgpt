@@ -2,6 +2,7 @@ import type { WorkspaceState } from './model.js';
 import type { Room } from './resident-model.js';
 import type { SeatAssignment, WorkAction, WorkRole, WorkTask, WorkAcceptance, WorkCheck } from './work-model.js';
 import { budgetReason } from './dispatch.js';
+import { participantWait } from './api-usage.js';
 import { AppError, object, string, strings } from './util.js';
 
 export const WORK_POLICIES: Readonly<Record<WorkRole, readonly WorkAction[]>> = {
@@ -29,8 +30,11 @@ export function seatAllows(state: WorkspaceState, room: Room, pid: string, actio
   if (participant.kind !== 'fake' && !state.connections.some(c => c.id === participant.connectionId && c.kind === participant.kind && c.status === 'connected')) return null;
   return seat;
 }
-export function taskWorker(state: WorkspaceState, room: Room, task: WorkTask, pid: string, action: 'claim' | 'review'): SeatAssignment | null {
+export function taskWorker(state: WorkspaceState, room: Room, task: WorkTask, pid: string, action: 'claim' | 'review', checkAvailability = false): SeatAssignment | null {
   const seat = seatAllows(state, room, pid, action, task.kind, task.authorizedScopeRef);
+  const p = state.participants.find(p => p.id === pid);
+  // Dispatch availability does not revoke a completed report/review's scope.
+  if (checkAvailability && p && !(action === 'claim' && task.kind === 'codex') && participantWait(state, room, p)) return null;
   if (!seat || action === 'claim' && (!task.allowedParticipantIds.includes(pid) || task.requiredRole && seat.role !== task.requiredRole)) return null;
   return seat;
 }
@@ -51,7 +55,7 @@ export function readyReason(state: WorkspaceState, room: Room, task: WorkTask, c
   if (task.kind === 'codex') { const reason = execution ? execution(state, task) : 'work_execution_phase_pending'; if (reason) return reason; }
   const reason = budgetReason(room, clock); if (reason) return reason;
   if (task.dependencies.some(id => !state.resident!.workItems.some(t => t.id === id && t.roomId === room.id && t.status === 'done'))) return 'work_dependency_pending';
-  if (!task.allowedParticipantIds.some(pid => taskWorker(state, room, task, pid, 'claim'))) return 'work_scope_not_authorized';
+  if (!task.allowedParticipantIds.some(pid => taskWorker(state, room, task, pid, 'claim', true))) return 'work_scope_not_authorized';
   return null;
 }
 export function checkReferences(state: WorkspaceState, room: Room, task: Pick<WorkTask, 'id' | 'sourceMessageIds' | 'dependencies' | 'allowedParticipantIds' | 'authorizedScopeRef'>): void {

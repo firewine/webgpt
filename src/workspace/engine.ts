@@ -9,6 +9,7 @@ import { reasoningEffort, participantReasoning, participantOutput, snapshotMembe
 import type { LocalMaterials } from './materials.js';
 import { DispatchCoordinator, budgetReason } from './dispatch.js';
 import { contextWiki, visibleRoomMessages } from './wiki-policy.js';
+import { dailyRoom, participantWait } from './api-usage.js';
 
 interface Executor { submit(input: { bindingId: string; prompt: string; requestId: string; discussionId: string; taskId: string; revision: number; maxDurationMs?: number }): string; kick?(): void }
 export class DiscussionEngine {
@@ -24,6 +25,7 @@ export class DiscussionEngine {
 
   recover(): void {
     this.store.transact((state, emit) => {
+      this.dispatch.recover(state);
       for (const d of state.discussions) {
         for (const job of state.jobs.filter(j => j.discussionId === d.id && j.taskId)) {
           const task = d.tasks.find(t => t.id === job.taskId); if (task && !task.jobId) { task.jobId = job.id; if (task.status === 'pending') task.status = 'running'; }
@@ -90,6 +92,7 @@ export class DiscussionEngine {
       if (roomId) {
         const room = state.resident?.rooms.find(r => r.id === roomId);
         if (!room || !room.desiredOn || room.topicLink || budgetReason(room)) throw new AppError('room_focus_not_ready', 409);
+        if (dailyRoom(room)) { for (const p of members) { const wait = participantWait(state, room, p); if (wait) throw new AppError(wait, 409); } d.budgetMode = 'api-daily'; }
         const publicText = visibleRoomMessages(state, room, participantIds).map(m => ({ id: m.id, authorId: m.authorId, text: m.text }));
         d.wikiCitations = contextWiki(state, room, participantIds);
         const material = JSON.stringify({ roomPublicMessages: publicText, wiki: d.wikiCitations });
@@ -211,10 +214,10 @@ export class DiscussionEngine {
       if (!d || unresolved(state)) return;
       const members = activeMembers(d);
       if (!members.length) { this.finish(d.id, 'partial', 'all_participants_unavailable'); continue; }
-      if (d.used.activeMs >= d.limits.maxActiveMs || d.used.inputTokens + d.used.outputTokens >= d.limits.maxTokens || d.used.requests >= d.limits.maxRequests) {
+      if (d.budgetMode !== 'api-daily' && (d.used.activeMs >= d.limits.maxActiveMs || d.used.inputTokens + d.used.outputTokens >= d.limits.maxTokens || d.used.requests >= d.limits.maxRequests)) {
         this.finish(d.id, 'partial', 'budget_exhausted'); continue;
       }
-      if (!['synthesis', 'summary_review'].includes(d.phase) && d.used.requests >= d.limits.maxRequests - members.length) {
+      if (d.budgetMode !== 'api-daily' && !['synthesis', 'summary_review'].includes(d.phase) && d.used.requests >= d.limits.maxRequests - members.length) {
         this.store.transact((s, emit) => { const current = findDiscussion(s, d.id);
           for (const task of current.tasks) if (task.status === 'pending') task.status = 'cancelled';
           current.reason = 'budget_exhausted'; this.schedule(current, 'synthesis', 1);
@@ -239,13 +242,17 @@ export class DiscussionEngine {
         if (d.tasks.some(t => t.revision === d.revision && t.status === 'pending')) { this.finish(d.id, 'partial', 'dependency_blocked'); continue; }
         this.advance(d.id); continue;
       }
+      if (d.budgetMode === 'api-daily' && d.roomId) {
+        const room = state.resident?.rooms.find(r => r.id === d.roomId), member = d.members.find(p => p.id === task.participantId);
+        const wait = room && member && participantWait(state, room, member); if (wait) { this.finish(d.id, 'partial', wait); continue; }
+      }
       if (task.phase === 'verification' && !d.evidence.some(e => e.taskId === task.id)) {
         const delegated = task.method === 'codex' && !task.jobId && d.executionBindingId && d.members.some(p => p.id === task.participantId && p.kind === 'browser')
           && state.grants.some(g => !g.revoked && g.discussionId === d.id && g.participantId === task.participantId && g.tools.includes('codex_send'));
         if (delegated) { if (!await this.turn(d.id, task.id)) return; continue; }
         if (task.method === 'codex' && !task.jobId && d.executionBindingId && this.executor && d.used.toolJobs < d.limits.maxToolJobs) {
           this.store.transact(s => this.dispatch.reserveTool(s, d.id, task.id));
-          const jobId = this.executor.submit({ bindingId: d.executionBindingId, requestId: task.id, discussionId: d.id, taskId: task.id, revision: d.revision, maxDurationMs: Math.max(1, d.limits.maxActiveMs - d.used.activeMs),
+          const jobId = this.executor.submit({ bindingId: d.executionBindingId, requestId: task.id, discussionId: d.id, taskId: task.id, revision: d.revision, maxDurationMs: d.budgetMode === 'api-daily' ? this.options.turnTimeoutMs : Math.max(1, d.limits.maxActiveMs - d.used.activeMs),
             prompt: `토론 검증 과제입니다. 등록된 작업 공간과 기존 권한 안에서 수행하고 실제 입력·검사·출력·실패·미실행 항목을 기록하세요.\n주제: ${d.topic}\n조건: ${d.criteria}\n검증할 것: ${task.question}\n관련 주장: ${JSON.stringify(d.claims.filter(c => task.claimIds.includes(c.id)))}` });
           this.store.transact((s, emit) => { const current = findDiscussion(s, d.id); const currentTask = current.tasks.find(t => t.id === task.id)!;
             currentTask.jobId = jobId; currentTask.status = 'running'; current.used.toolJobs++;
@@ -289,10 +296,11 @@ export class DiscussionEngine {
         ...(oauthKind(participant.kind) ? { reasoningEffort: reasoningEffort(participant.reasoningEffort) } : participant.kind === 'deepseek' && participant.reasoningEffort !== undefined ? { reasoningEffort: participant.reasoningEffort } : {}),
         ...(participant.kind === 'deepseek' ? { maxOutputTokens: participant.maxOutputTokens! } : {}),
         evidenceIds: d.evidence.filter(e => e.revision === d.revision && (task.phase !== 'independent' || e.kind === 'user_material')).map(e => e.id) };
-      const denied = this.dispatch.reserve(state, { requestId: turn.id, kind: 'topic', participantId: participant.id, generation: turn.generation, roomId: d.roomId ?? null });
+      const denied = this.dispatch.reserve(state, { requestId: turn.id, kind: 'topic', participantId: participant.id, participant, generation: turn.generation, roomId: d.roomId ?? null });
       if (denied) {
-        if (denied === 'budget_exhausted' || denied === 'room_settings_required') {
-          d.status = 'partial'; d.reason = 'room_' + denied;
+        if (denied === 'budget_exhausted' || denied === 'room_settings_required' || denied.startsWith('api_daily_')) {
+          d.status = 'partial'; d.reason = denied.startsWith('api_daily_') ? denied : 'room_' + denied;
+          if (denied.startsWith('api_daily_')) for (const pending of d.tasks) if (pending.status === 'pending') pending.status = 'cancelled';
           emit({ type: 'discussion.phase', discussionId, data: { phase: d.phase, status: d.status, reason: d.reason } });
         }
         return null;
@@ -301,7 +309,7 @@ export class DiscussionEngine {
       context.observation = { ...context.observation, response: 'prepared', work: 'running', observedAt: now(), reason: null };
       emit({ type: 'turn.prepared', discussionId, data: { turnId: turn.id, participantId: participant.id, phase: task.phase } });
       const room = state.resident?.rooms.find(r => r.id === d.roomId);
-      return { turn, participant, history: structuredClone(context.history), remaining: Math.min(d.limits.maxActiveMs - d.used.activeMs, room?.budgets ? Date.parse(room.budgets.deadlineAt) - Date.now() : Infinity) };
+      return { turn, participant, history: structuredClone(context.history), remaining: d.budgetMode === 'api-daily' ? this.options.turnTimeoutMs : Math.min(d.limits.maxActiveMs - d.used.activeMs, room?.budgets ? Date.parse(room.budgets.deadlineAt) - Date.now() : Infinity) };
     });
     if (!captured) return false;
     const start = Date.now(); this.abort = new AbortController();
@@ -334,7 +342,7 @@ export class DiscussionEngine {
           this.applyReply(d, turn);
           if (!turn.reply) {
             turn.error = 'format_invalid';
-            if (task.reason !== 'format_retry' && d.used.requests < d.limits.maxRequests - activeMembers(d).length) {
+            if (task.reason !== 'format_retry' && (d.budgetMode === 'api-daily' || d.used.requests < d.limits.maxRequests - activeMembers(d).length)) {
               const repair = taskFor(d, task.participantId, task.phase, task.round); repair.claimIds = task.claimIds; repair.reason = 'format_retry';
               repair.question = task.question; d.tasks.push(repair);
             } else d.reason = 'partial_unstructured_reply';
@@ -361,7 +369,7 @@ export class DiscussionEngine {
     this.store.transact((state, emit) => {
       const d = findDiscussion(state, discussionId); const members = activeMembers(d);
       if (d.phase === 'independent') this.schedule(d, 'cross_review', 1);
-      else if (d.phase === 'cross_review' && d.round < d.limits.maxRounds && d.used.requests + members.length < d.limits.maxRequests - members.length * 2) this.schedule(d, 'cross_review', d.round + 1);
+      else if (d.phase === 'cross_review' && d.round < d.limits.maxRounds && (d.budgetMode === 'api-daily' || d.used.requests + members.length < d.limits.maxRequests - members.length * 2)) this.schedule(d, 'cross_review', d.round + 1);
       else if (d.phase === 'cross_review') {
         d.phase = 'verification'; d.round = 1;
         const reviews = d.turns.filter(t => t.revision === d.revision && t.reply).flatMap(t => t.reply!.reviews);
