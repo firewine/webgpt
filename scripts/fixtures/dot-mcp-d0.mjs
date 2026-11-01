@@ -13,7 +13,7 @@ import { publicAddress } from '../../dist/server/connections/sources.js';
 const digest = text => createHash('sha256').update(text).digest('hex');
 const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
 const safeFailure = error => ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ABORT_ERR', 'CERT_HAS_EXPIRED', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'].includes(error?.code) ? error.code
-  : ['callback_not_allowed', 'callback_dns_timeout', 'callback_too_large', 'invalid_signing_key', 'probe_not_in_scope', 'single_subscription_only', 'invalid_ttl', 'challenge_failed'].includes(error?.message) ? error.message : 'unclassified_failure';
+  : ['callback_not_allowed', 'callback_dns_timeout', 'callback_too_large', 'invalid_signing_key', 'probe_not_in_scope', 'single_subscription_only', 'invalid_ttl', 'challenge_failed', 'current_request_required', 'subscription_required', 'subscription_expired'].includes(error?.message) ? error.message : 'unclassified_failure';
 function destination(raw) {
   const url = new URL(raw);
   if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.port && url.port !== '443') throw new Error('callback_not_allowed'); return url;
@@ -51,7 +51,7 @@ export function createDotD0Fixture({ send = postPublicWebhook, clock = Date.now 
   const probeId = 'd0_' + randomBytes(12).toString('hex'); const requestId = 'turn_' + randomBytes(12).toString('hex');
   const eventId = 'event_' + randomBytes(12).toString('hex'); const occurredAt = new Date(clock()).toISOString();
   let subscription = null; let attemptId = null; let accepted = null; let deliveryAttempted = false;
-  let subscribeRequests = 0; let unsubscribeRequests = 0; let deliveryStatus = 'NOT_RUN'; let sequence = 0;
+  let subscribeRequests = 0; let unsubscribeRequests = 0; let initializedNotifications = 0; let deliveryStatus = 'NOT_RUN'; let sequence = 0;
   const observations = [];
   const observe = (phase, details = {}) => { observations.push({ sequence: ++sequence, phase, ...details }); if (observations.length > 16) observations.shift(); };
   const eventName = 'webjjoku.turn_requested';
@@ -67,11 +67,11 @@ export function createDotD0Fixture({ send = postPublicWebhook, clock = Date.now 
   };
   async function handle(message) {
     if (!object(message) || message.jsonrpc !== '2.0' || typeof message.method !== 'string') return { jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid request' } };
-    if (message.id === undefined) return null;
+    if (message.id === undefined) { if (message.method === 'notifications/initialized') initializedNotifications++; return null; }
     const reply = result => ({ jsonrpc: '2.0', id: message.id, result });
     try {
       const p = message.params ?? {}; if (!object(p)) throw new Error('invalid_params');
-      if (message.method === 'initialize') return reply({ protocolVersion: '2025-06-18', capabilities: { tools: {}, events: {} }, serverInfo: { name: 'webjjoku-dot-D0-SYNTHETIC-ONLY', version: '0.3.0' },
+      if (message.method === 'initialize') return reply({ protocolVersion: '2025-06-18', capabilities: { tools: {}, events: {} }, serverInfo: { name: 'webjjoku-dot-D0-SYNTHETIC-ONLY', version: '0.4.0' },
         instructions: 'Disposable synthetic connection test only. No workspace access. Monitor webjjoku.turn_requested for the advertised probeId; use dot_turn_get, claim, then submit one short test reply. Do not use other apps or tools.' });
       if (message.method === 'ping') return reply({});
       if (message.method === 'tools/list') return reply({ tools: toolNames.map(name => ({ name, description: 'D0 synthetic probe only: ' + name + '. Not a real chat room or task.',
@@ -106,10 +106,14 @@ export function createDotD0Fixture({ send = postPublicWebhook, clock = Date.now 
         const allowed = Object.keys(inputSchema(p.name).properties); if (Object.keys(args).some(k => !allowed.includes(k))) throw new Error('probe_not_in_scope');
         let value;
         if (p.name === 'dot_turn_get') value = { probeId, requestId, syntheticOnly: true, replyAccepted: !!accepted, receipt: accepted?.receipt ?? null,
-          diagnostics: { subscribeRequests, unsubscribeRequests, subscription: !subscription ? 'NONE' : subscription.expiresAt <= clock() ? 'EXPIRED' : 'ACTIVE', deliveryStatus, observations: observations.map(o => ({ ...o })) },
-          instruction: 'Submit one short D0 connection test reply. Do not include personal information or perform other work.' };
+          diagnostics: { initializedNotifications, subscribeRequests, unsubscribeRequests, subscription: !subscription ? 'NONE' : subscription.expiresAt <= clock() ? 'EXPIRED' : 'ACTIVE', deliveryStatus, observations: observations.map(o => ({ ...o })) },
+          nextAction: accepted ? 'STOP_MONITORING' : !subscription || subscription.expiresAt <= clock() ? 'SUBSCRIBE' : 'WAIT_FOR_EVENT',
+          event: { name: eventName, arguments: { probeId } },
+          instruction: accepted ? 'Reply accepted. Stop this synthetic monitoring task.' : !subscription || subscription.expiresAt <= clock() ? 'First create a native MCP event monitoring task for event.name with event.arguments. Do not claim or submit before subscription. If event monitoring is unavailable, stop and report that fact; do not replace it with scheduled polling.' : 'Wait for the event-triggered task. In that run, call dot_turn_get for the current requestId, then claim and submit one short synthetic reply. Do not include personal information.' };
         else {
-          if (args.requestId !== requestId || !subscription || subscription.expiresAt <= clock()) throw new Error('probe_not_in_scope');
+          if (args.requestId !== requestId) throw new Error('current_request_required');
+          if (!subscription) throw new Error('subscription_required');
+          if (subscription.expiresAt <= clock()) throw new Error('subscription_expired');
           if (p.name === 'dot_turn_claim') { attemptId ??= randomBytes(24).toString('base64url'); value = { requestId, attemptId, syntheticOnly: true }; }
           else {
             if (!attemptId || args.attemptId !== attemptId || typeof args.text !== 'string' || !args.text.trim() || args.text.length > 2000) throw new Error('probe_not_in_scope');
@@ -122,9 +126,10 @@ export function createDotD0Fixture({ send = postPublicWebhook, clock = Date.now 
       return { jsonrpc: '2.0', id: message.id, error: { code: -32601, message: 'Method not supported' } };
     } catch (error) {
       if (['events/subscribe', 'events/unsubscribe'].includes(message.method)) observe('REQUEST_REJECTED', { method: message.method, reason: safeFailure(error) });
+      if (message.method === 'tools/call' && toolNames.includes(message.params?.name)) observe('TOOL_REJECTED', { tool: message.params.name, reason: safeFailure(error) });
       const code = error?.message === 'challenge_failed' ? -32015 : -32602;
       // Never reflect callback URLs, keys, arbitrary input or native reply text.
-      return { jsonrpc: '2.0', id: message.id, error: { code, message: code === -32015 ? 'CallbackEndpointError' : 'D0 request not accepted', ...(code === -32015 ? { data: { reason: 'challenge_failed' } } : {}) } };
+      return { jsonrpc: '2.0', id: message.id, error: { code, message: code === -32015 ? 'CallbackEndpointError' : 'D0 request not accepted', data: { reason: safeFailure(error) } } };
     }
   }
   async function deliver() {

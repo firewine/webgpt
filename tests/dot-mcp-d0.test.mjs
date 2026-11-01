@@ -59,10 +59,13 @@ test('D0 synthetic stdio process advertises the fixture contract without workspa
   const child = spawn(process.execPath, [new URL('../scripts/fixtures/dot-mcp-d0.mjs', import.meta.url).pathname], { stdio: ['pipe', 'pipe', 'pipe'], env: {} });
   const output = []; const errors = []; child.stdout.on('data', chunk => output.push(chunk)); child.stderr.on('data', chunk => errors.push(chunk));
   const closed = new Promise((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
-  child.stdin.end(['initialize', 'tools/list', 'events/list'].map((method, id) => JSON.stringify({ jsonrpc: '2.0', id, method })).join('\n') + '\n');
+  child.stdin.end([{ jsonrpc: '2.0', id: 0, method: 'initialize' }, { jsonrpc: '2.0', method: 'notifications/initialized' },
+    { jsonrpc: '2.0', id: 1, method: 'tools/list' }, { jsonrpc: '2.0', id: 2, method: 'events/list' },
+    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'dot_turn_get', arguments: {} } }].map(value => JSON.stringify(value)).join('\n') + '\n');
   assert.equal(await closed, 0); const replies = Buffer.concat(output).toString('utf8').trim().split('\n').map(line => JSON.parse(line));
-  assert.deepEqual(replies.map(r => r.id), [0, 1, 2]); assert.equal(replies[0].result.serverInfo.name, 'webjjoku-dot-D0-SYNTHETIC-ONLY');
+  assert.deepEqual(replies.map(r => r.id), [0, 1, 2, 3]); assert.equal(replies[0].result.serverInfo.name, 'webjjoku-dot-D0-SYNTHETIC-ONLY');
   assert.equal(replies[1].result.tools.length, 3); assert.equal(replies[2].result.events.length, 1); assert.equal(Buffer.concat(errors).toString('utf8'), '');
+  const info = JSON.parse(replies[3].result.content[0].text); assert.equal(info.diagnostics.initializedNotifications, 1); assert.equal(info.diagnostics.subscribeRequests, 0);
 });
 
 test('D0 read-only diagnostics distinguish verified callback, webhook receipt and accepted native reply', async () => {
@@ -119,4 +122,16 @@ test('D0 catalogs survive process identity changes while handlers reject an earl
   assert.ok((await rpc(after.fixture, 'events/subscribe', after.params)).result);
   assert.ok((await call(after.fixture, 'dot_turn_claim', { requestId: before.info.requestId })).error);
   assert.ok((await call(after.fixture, 'dot_turn_claim', { requestId: after.info.requestId })).attemptId);
+});
+
+test('D0 explains subscription-before-reply and distinguishes missing subscription from a stale request', async () => {
+  const f = await setup(); assert.equal(f.info.nextAction, 'SUBSCRIBE'); assert.deepEqual(f.info.event, { name: f.params.name, arguments: f.params.arguments });
+  assert.equal((await call(f.fixture, 'dot_turn_claim', { requestId: f.info.requestId })).error.data.reason, 'subscription_required');
+  assert.equal((await call(f.fixture, 'dot_turn_claim', { requestId: 'turn_' + '0'.repeat(24) })).error.data.reason, 'current_request_required');
+  const rejected = await call(f.fixture, 'dot_turn_get'); assert.equal(rejected.replyAccepted, false); assert.equal(rejected.diagnostics.subscribeRequests, 0);
+  assert.ok(rejected.diagnostics.observations.some(o => o.phase === 'TOOL_REJECTED' && o.reason === 'subscription_required'));
+  await rpc(f.fixture, 'events/subscribe', f.params); assert.equal((await call(f.fixture, 'dot_turn_get')).nextAction, 'WAIT_FOR_EVENT');
+  await f.fixture.deliver(); const claim = await call(f.fixture, 'dot_turn_claim', { requestId: f.info.requestId });
+  await call(f.fixture, 'dot_turn_submit', { requestId: f.info.requestId, attemptId: claim.attemptId, text: 'synthetic test' });
+  assert.equal((await call(f.fixture, 'dot_turn_get')).nextAction, 'STOP_MONITORING');
 });

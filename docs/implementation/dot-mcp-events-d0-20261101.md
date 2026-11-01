@@ -22,15 +22,15 @@
 | 전용 Tunnel profile | PASS | 실제 Platform 터널 ID로 보정해 private profile에만 기록. `sample_mcp_stdio_local`·합성 fixture·file key reference·loopback ephemeral admin 포트, 0600. 기존 profile/key backup 보존 |
 | 최종 read-only 준비 상태 | BLOCKED / exit2 | `npm run doctor:dot`: installed=true, 이 프로세스의 ID/key·검사용 scoped grant 부재. native 성공·추가 권한을 추정하지 않음. D0 합성 stdio fixture는 별도 경로이며 운영 앱 grant가 필요하지 않음 |
 | 현재 MCP의 Events/응답 계약 | NOT_AVAILABLE(격리 HTTP 관측) | 실제 임시 앱의 scoped legacy grant로 initialize/tools/list/events/list 확인: tools-only, Events/전용 응답 도구 없음. 기존 result_submit은 근거 제출임을 유지 |
-| 새 D0 점검 도구·합성 fixture | PASS(fixture) | 11/02 `node --test tests/dot-preflight.test.mjs tests/dot-mcp-d0.test.mjs`: 15검사 PASS. 실제 stdio child·challenge/서명·일회 이벤트·중복/범위·진단 비밀 비노출·고정 catalog/현재 ID 대조 포함 |
-| 전체 Node/정적 검사 | PASS | 11/02 격리 checkout에서 `npm run check`: strict TypeScript·빌드·Node374 PASS, fail0/skip0. 이전 e446c6a의369검사와 구별 |
+| 새 D0 점검 도구·합성 fixture | PASS(fixture) | 11/02 `node --test tests/dot-preflight.test.mjs tests/dot-mcp-d0.test.mjs`: 16검사 PASS. 실제 stdio child·challenge/서명·일회 이벤트·중복/범위·진단 비밀 비노출·고정 catalog/현재 ID 대조·등록 전 답변 거부/단계 안내 포함 |
+| 전체 Node/정적 검사 | PASS | 11/02 격리 checkout에서 `npm run check`: strict TypeScript·빌드·Node375 PASS, fail0/skip0. 이전 e446c6a의369검사와 구별 |
 | GitHub CI | PASS(코드 head e446c6a) | [run41311295483](https://github.com/firewine/webgpt/actions/runs/41311295483): Node369·browser62 PASS, 양쪽 fail0/skip0, 설치 Codex contract 성공. fixture CI와 native dot 실계정을 구별 |
 | 로컬 browser GUI 검사 | NOT_RUN(이번 변경) | 제품 GUI/src 변경 없음. 위 browser62는 이번 GitHub CI의 실행 결과이며 로컬 재실행·실기기 성공을 뜻하지 않음 |
 | runtime key 로컬 입력 | PASS(보관만) | 사용자 직접 입력한 파일이 해당 사용자 소유·private/nonempty임을 확인. 값은 출력/commit하지 않음. 키 존재를 터널 접근 권한 성공으로 표시하지 않음 |
 | tunnel-client doctor | PASS(로컬 설정)/SKIP(원격 확인) | `--explain`의 profile/key reference/실행 파일·ephemeral health bind 확인. stdio MCP 원격·OAuth metadata는 SKIP, optional Codex plugin도 SKIP. 실제 control-plane 인증을 검증한 결과가 아님 |
 | 실제 Tunnel control plane | PASS(대상 보정 후) | 초기403/401은 원래 ID 대상의 결과. 실제 Platform 터널 ID를 복사해 보정한 뒤 같은 새 전용 key로 metadata 조회 exit0·org/이름 일치·workspace association1·polling 성공을 확인. 초기 key의 권한은 재검증하지 않음 |
 | 실제 dot 도구/Events 발견·조회 | PASS | 사용자 화면에 get/claim/submit 도구3·event1 표시, 실제 dot의 get 사용자 보고와 진단 목적 read-only get 성공. Codex가 claim/submit을 대신 호출하지 않음 |
-| 실제 dot·Events·MCP 결과 왕복 | FAIL(초기 감시 등록)/후속 확인 대기 | 초기2회 작업 서비스 오류, 서버 `events/subscribe` 응답 전달 지표409. 내부 callback 원인은 당시 UNVERIFIED. 후속 schema cache 충돌을 수정했고 새 probe의 감시/이벤트/응답 수락은 아직 미완료 |
+| 실제 dot·Events·MCP 결과 왕복 | FAIL(초기 감시 등록)/후속 확인 대기 | 작업 서비스 오류·`events/subscribe` transport409·후속 child 도달0 관측. callback에 들어갔다는 증거 없음. schema cache 오류/안내 보완 및 설치 CLI의 공식 초기화 shim 적용 후 실제 notification1 확인. native 감시/이벤트/응답/종료는 여전히 미완료 |
 
 전체 검사는 `/tmp/webjjoku-dot-d0-validation-20261101`의 독립 checkout과 임시 DB/모의 provider에서 수행했다. 빌드 스크립트가 `dist/`를 삭제/재생성하므로 운영 저장소의 `dist/`에서 검사하지 않았다. 실제 운영 `webjjoku`·desktop 서비스 재시작/배포는 하지 않았다.
 
@@ -42,7 +42,7 @@
 - `tests/dot-preflight.test.mjs`: 실제 격리 HTTP 앱과 응답 fixture로6경계 검증.
 - `package.json`: `npm run doctor:dot` 추가. 앱 빌드/서비스 시작과 독립적으로 실행한다.
 - `scripts/fixtures/dot-mcp-d0.mjs::createDotD0Fixture/postPublicWebhook/signedWebhook`: 실제 dot의 기능 검증용 **합성 데이터 전용** stdio MCP 서버. 운영 Workspace/키/Chrome/대화/도구를 읽거나 변경할 경로가 없다.
-- `tests/dot-mcp-d0.test.mjs`: 실제 stdio 프로세스와 이벤트/응답·서명·권한·진단·catalog 회귀9개. 준비 점검6개와 합쳐15개다.
+- `tests/dot-mcp-d0.test.mjs`: 실제 stdio 프로세스와 이벤트/응답·서명·권한·진단·catalog/단계 안내 회귀10개. 준비 점검6개와 합쳐16개다.
 
 D0 점검/fixture 코드와 검사 합계는4파일이며 package script/계획·증거 문서는 별도다. 최초385줄에서 진단·고정 schema 회귀를 보강했으며350~500줄 추정 범위 안이다. 승인된 D0 최소 왕복 범위 안의 오류 수정이며 전체 기본안40~52파일·2,700~4,200줄 범위를 확대하지 않는다. 이후 production Events/재시작/identity/grant 구현을 이 fixture가 대신하지 않는다.
 
@@ -126,7 +126,7 @@ D0 fixture를 private custom MCP plugin으로 연결할 때만 합성/no-auth �
 
 11/01 밤 사용자가 실제 Platform Tunnels의 `ubuntu_dot` 행에서 전체 ID를 복사해 제공했다. 처음 제공한 외부 연결용 형태의 ID와 달랐고, **실제 Platform ID만 보정한 뒤 동일한 새 전용 runtime key로 metadata 조회가 성공**했다. 이름/조직 일치·ChatGPT workspace association1개와 polling 성공을 확인했다. profile/key backup을 보존했다. 초기 key는 이 실제 터널에 재시험하지 않았으므로 그 key도 허용됐을 것이라고 쓰지 않는다. ID/조직/개인 계정은 공개 문서에 기록하지 않는다.
 
-사용자가 ChatGPT에 `ubuntu_dot`을 등록하고 도구3개와 `webjjoku.turn_requested`1개가 보이는 화면을 제공했다. 실제 dot은 get 이후 이벤트 감시 등록 단계에서 작업 서비스 오류를2회 보고했다. 서버는 `events/subscribe`2회의 response delivery 지표409와 `response already fulfilled or unknown request`를 남겼다. 이는 **구독 응답 전달의 상태이며 callback POST가409였다는 증거가 아니다.** 원래 fixture에 내부 진단이 없어 당시 challenge/서명/HTTP 실패 원인은 UNVERIFIED다. 이벤트 전송·답변 수락 영수증도 확인되지 않았다.
+사용자가 ChatGPT에 `ubuntu_dot`을 등록하고 도구3개와 `webjjoku.turn_requested`1개가 보이는 화면을 제공했다. 실제 dot은 get 이후 이벤트 감시 등록 단계에서 작업 서비스 오류를2회 보고했다. 서버는 `events/subscribe`2회의 `tunnel_service_status=409` 지표와 `response already fulfilled or unknown request` 경고를 남겼다. §9의 설치본 소스 대조 결과 이 지표는 **forwarding transport의 상태이며 callback이나 원격 response POST의 HTTP 상태가 아니다.** 원래 fixture에 내부 진단이 없어 당시 challenge/서명/HTTP 실패 원인은 UNVERIFIED다. 이벤트 전송·답변 수락 영수증도 확인되지 않았다.
 
 사용자는 첫 작업 미등록과, 조회 목록에 두 번째 작업이 없고 ID/상태를 확인할 수 없다는 결과를 제공했다. Codex의 별도 read-only get은 syntheticOnly=true·replyAccepted=false를 확인했다. 두 번째 등록을 취소 완료로 간주하거나 자동 재구독/재전송하지 않았다. private0600 종료 receipt에 원래 probe/request·미확인 상태를 보존하고 해당 D0 runtime만 SIGINT로 종료했다. 운영 앱은 PID4089462로 active/running이었다.
 
@@ -138,4 +138,26 @@ fixture0.3.0을 새 D0 runtime으로 시작하고 read-only get의 진단·구�
 
 새 감시 성공·native 응답 수락·감시 종료는 아직 UNVERIFIED다. 새 plugin의 catalog에서 임시 ID enum이 제거됐는지를 먼저 확인하고 그 뒤 한 번만 실제 감시를 진행한다. 실패하면 get의 진단으로 대조하며 자동 재시도하지 않는다. 실제 dot이 아닌 Codex의 read-only get을 native 참여자의 완료 증거로 사용하지 않는다.
 
-검증 방법/결과: 격리 checkout에서15관련 검사 PASS, `npm run check`의 TypeScript·빌드·Node374 PASS(fail0/skip0). 진단 HTTP401/잘못된 challenge/DNS 오류·16개 제한/비밀 비노출·불명확 전송의 재전송0·재시작 전후 catalog 동일/이전 ID 거절을 추가 검증했다. browser62/Codex contract는 이전 CI의 결과이며 이 수정본의 재실행으로 표시하지 않는다. 운영 `dist/`·서비스/Serve·Muse는 바꾸지 않았다. 추가 OAuth·공개 ingress·제품 계약/수락 완화·D1 구현도 없다. rollback은 합성 runtime만 중지하고 종료 receipt·원래 기록을 보존하는 것이며 운영 데이터 초기화는 필요하지 않다.
+검증 방법/결과: 격리 checkout에서16관련 검사 PASS, `npm run check`의 TypeScript·빌드·Node375 PASS(fail0/skip0). 진단 HTTP401/잘못된 challenge/DNS 오류·16개 제한/비밀 비노출·불명확 전송의 재전송0·재시작 전후 catalog 동일/이전 ID 거절·구독 전 답변 거부/단계 안내를 추가 검증했다. browser62/Codex contract는 이전 CI의 결과이며 이 수정본의 재실행으로 표시하지 않는다. 운영 `dist/`·서비스/Serve·Muse는 바꾸지 않았다. 추가 OAuth·공개 ingress·제품 계약/수락 완화·D1 구현도 없다. rollback은 합성 runtime만 중지하고 종료 receipt·원래 기록을 보존하는 것이며 운영 데이터 초기화는 필요하지 않다.
+
+## 8. 사용 예제 대조와 등록 전 답변 오류
+
+사용자는 별도 검사 plugin 등록 완료와 조회 성공을 보고했으나 확인 요청은 `-32602 D0 request not accepted`, 답변 미제출이었다. 직후 get은 subscribeRequests0·subscription NONE·delivery NOT_RUN·replyAccepted=false였고 runtime 경고도 없었다. 구독 요청은 도달하지 않았다. 당시0.3.0 오류만으로 어떤 write 도구/인자가 거절됐는지는 확정하지 않는다.
+
+사용자의 예제 조사 요청에 따라 공식 Events/metadata 갱신 절차와 실제 dot-probe 작성자의 [고정 commit](https://github.com/rokrokss/recly/commit/edb2765d5498c792e43d898946d149ae6ba36303)을 정적으로 대조했다. 실제 이벤트 기동 뒤 read tool로 내용을 가져와 처리한 보고를 현재 get→claim→submit 흐름에 대응시켰다. 공개 HTTP/OAuth/Funnel 코드는 복사/실행하지 않았다. [공식 갱신 절차](https://developers.openai.com/plugins/deploy/connect-chatgpt#refresh-metadata)에 있는 새 대화 단계도 안내에 반영했다. 외부 사례의 성공을 현재 계정의 성공으로 표시하지 않는다.
+
+fixture0.4.0의 get은 현재 단계 `SUBSCRIBE/WAIT_FOR_EVENT/STOP_MONITORING`과 event.name/arguments를 반환한다. 기존 get의 무조건적인 답변 제출 안내를 등록 우선으로 정정했다. write는 현재 request와 active subscription 검사를 계속 사용하고 `current_request_required/subscription_required/subscription_expired`를 안전하게 구별한다. 거절된 허용 도구명/안전한 분류만 최근 관측에 남긴다. 스키마 형태는0.3.0과 같고 임시 ID를 enum에 다시 넣지 않았다.
+
+교체 전 get으로 감시/전송0·미수락을 확인하고 private 종료 receipt를 남겼다. D0 runtime만0.4.0으로 교체한 뒤 read-only get의 nextAction SUBSCRIBE·구독0을 확인했다. 운영 서비스/Muse는 유지했다. [검사 절차](../dot-mcp-d0-test.md)의 단일 요청을 실제 dot에 보내 native 감시 작업 생성부터 대조한다. 계정의 구독 기능 미노출이나 작업 서비스 오류가 계속되면 원래 상태/오류를 남기며 자동 polling·임의 callback·추가 OAuth로 우회하지 않는다. **이 기록 시점의 native 전체 왕복은 미완료다.**
+
+## 9. native 구독 child 도달0·stdio 초기화 보완
+
+단일 요청 후에도 사용자가 native 감시 등록의 작업 서비스 오류를 보고했다. 직후 fixture get은 subscribeRequests0·subscription NONE·delivery NOT_RUN·미수락이었다. 반면 CLI 지표에는 `events/subscribe`2회/`events/unsubscribe`2회의 transport409와 `server/discover`/tools/call200이 있었다. 따라서 당시 callback 오류로 단정할 수 없고, 적어도 fixture의 구독 handler에 도달하기 전 단계에서 실패한 것이다. 원래 task ID/등록 상태는 불명확하므로 취소 완료로 표시하지 않는다.
+
+설치 v0.0.19의 build commit과 release tag를 대조한 뒤 공식 소스를 정적으로 읽었다. [`serialized_forwarding_transport.go`](https://github.com/openai/tunnel-client/blob/01d67bb4da0d8359b808b4761f8db171ab682cd7/pkg/mcpclient/serialized_forwarding_transport.go#L397)의 stdio guard는 initialize 성공+notifications/initialized를 요구하고, 준비되지 않은 legacy operational call을 **child에 쓰지 않고** HTTP409/JSON-RPC-32002/`mcp_initialization_required`로 반환한다. [`processor.go`](https://github.com/openai/tunnel-client/blob/01d67bb4da0d8359b808b4761f8db171ab682cd7/pkg/dispatcher/internal/processor.go#L604)는 이 transport status를 latency 지표에 기록한다. 앞의409를 원격 POST 반환 상태로 읽었던 해석을 이 근거로 정정한다. 원래 오류 payload는 당시 보존되지 않았으므로 이전 오류의 정확한 code까지 확인했다고 쓰지 않는다.
+
+실제 설치본 `run --help`와 공식 [설정](https://github.com/openai/tunnel-client/blob/01d67bb4da0d8359b808b4761f8db171ab682cd7/docs/configuration.md)의 `--mcp.stdio-send-initialized-notification`을 확인했다. 공식 lifecycle/초기화 guard를 유지하면서 성공한 initialize 뒤 notification을 보내는 옵션이다. source의 `stdio_initialization_test.go`도 이 수명 순서를 다룬다. SDK/CLI를 패치하거나 guard를 끄지 않았다. 공개 소스를 제품으로 복사/실행하지 않았고 새 OAuth/네트워크 노출도 없다.
+
+미등록/미전송을 get으로 대조해 private 종료 receipt를 보존한 후 D0만 해당 옵션과 debug 로그로 재시작했다. raw HTTP unsafe logging은 꺼 두고 로그는 private0600에 남겼다. fixture get에 단순 `initializedNotifications` 수신 횟수를 추가했으며 실제 stdio child 검사에서 응답/notification의 구별을 확인했다. 운영자의 원격 read-only get 경로에서 **initializedNotifications1·get 성공·polling 정상·구독0·미수락**을 관측했다. 재시작 직후 첫 read-only 조회의 일시 오류 뒤 다음 조회는 성공했다. native dot 자체의 초기화/전체 왕복 성공으로 확대 해석하지 않는다.
+
+현재는 초기화 누락과 맞는 증상에 공식 보완을 적용한 상태이며 native 재검증 결과를 기다린다. 이전 실패 원인 확정이나 D0 PASS로 표시하지 않는다. native 호출이 계속 실패하면 같은 프로세스를 유지해 safe debug의 RPC code와 get 관측을 대조한다. user/model/event 재전송은 자동으로 하지 않는다. 이번 변화는 승인된 D0 오류 진단/수정 범위이며 전체 단계·추가 OAuth·D1 이후 수락을 바꾸지 않는다.
