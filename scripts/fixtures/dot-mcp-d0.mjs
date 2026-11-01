@@ -12,6 +12,8 @@ import { publicAddress } from '../../dist/server/connections/sources.js';
 // This is not the production grant/identity/restart/approval implementation.
 const digest = text => createHash('sha256').update(text).digest('hex');
 const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
+const safeFailure = error => ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ABORT_ERR', 'CERT_HAS_EXPIRED', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'].includes(error?.code) ? error.code
+  : ['callback_not_allowed', 'callback_dns_timeout', 'callback_too_large', 'invalid_signing_key', 'probe_not_in_scope', 'single_subscription_only', 'invalid_ttl', 'challenge_failed'].includes(error?.message) ? error.message : 'unclassified_failure';
 function destination(raw) {
   const url = new URL(raw);
   if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.port && url.port !== '443') throw new Error('callback_not_allowed'); return url;
@@ -49,9 +51,14 @@ export function createDotD0Fixture({ send = postPublicWebhook, clock = Date.now 
   const probeId = 'd0_' + randomBytes(12).toString('hex'); const requestId = 'turn_' + randomBytes(12).toString('hex');
   const eventId = 'event_' + randomBytes(12).toString('hex'); const occurredAt = new Date(clock()).toISOString();
   let subscription = null; let attemptId = null; let accepted = null; let deliveryAttempted = false;
+  let subscribeRequests = 0; let unsubscribeRequests = 0; let deliveryStatus = 'NOT_RUN'; let sequence = 0;
+  const observations = [];
+  const observe = (phase, details = {}) => { observations.push({ sequence: ++sequence, phase, ...details }); if (observations.length > 16) observations.shift(); };
   const eventName = 'webjjoku.turn_requested';
   const toolNames = ['dot_turn_get', 'dot_turn_claim', 'dot_turn_submit'];
-  const inputSchema = name => ({ type: 'object', properties: name === 'dot_turn_get' ? {} : { requestId: { type: 'string', enum: [requestId] },
+  // Catalogs can outlive a disposable process. Keep schemas stable; enforce the
+  // current probe/request identity in handlers rather than baking it into enums.
+  const inputSchema = name => ({ type: 'object', properties: name === 'dot_turn_get' ? {} : { requestId: { type: 'string', pattern: '^turn_[0-9a-f]{24}$', description: 'Current requestId from dot_turn_get; do not cache.' },
     ...(name === 'dot_turn_submit' ? { attemptId: { type: 'string' }, text: { type: 'string', minLength: 1, maxLength: 2000 } } : {}) },
     required: name === 'dot_turn_get' ? [] : name === 'dot_turn_submit' ? ['requestId', 'attemptId', 'text'] : ['requestId'], additionalProperties: false });
   const checkSubscription = params => {
@@ -64,15 +71,17 @@ export function createDotD0Fixture({ send = postPublicWebhook, clock = Date.now 
     const reply = result => ({ jsonrpc: '2.0', id: message.id, result });
     try {
       const p = message.params ?? {}; if (!object(p)) throw new Error('invalid_params');
-      if (message.method === 'initialize') return reply({ protocolVersion: '2025-06-18', capabilities: { tools: {}, events: {} }, serverInfo: { name: 'webjjoku-dot-D0-SYNTHETIC-ONLY', version: '0.1.0' },
+      if (message.method === 'initialize') return reply({ protocolVersion: '2025-06-18', capabilities: { tools: {}, events: {} }, serverInfo: { name: 'webjjoku-dot-D0-SYNTHETIC-ONLY', version: '0.3.0' },
         instructions: 'Disposable synthetic connection test only. No workspace access. Monitor webjjoku.turn_requested for the advertised probeId; use dot_turn_get, claim, then submit one short test reply. Do not use other apps or tools.' });
       if (message.method === 'ping') return reply({});
       if (message.method === 'tools/list') return reply({ tools: toolNames.map(name => ({ name, description: 'D0 synthetic probe only: ' + name + '. Not a real chat room or task.',
         inputSchema: inputSchema(name), annotations: { readOnlyHint: name === 'dot_turn_get', destructiveHint: false, idempotentHint: true, openWorldHint: false } })) });
       if (message.method === 'events/list') return reply({ events: [{ name: eventName, description: 'One synthetic D0 turn, isolated from all real workspace data.', delivery: ['webhook'],
-        inputSchema: { type: 'object', properties: { probeId: { type: 'string', enum: [probeId] } }, required: ['probeId'], additionalProperties: false },
+        inputSchema: { type: 'object', properties: { probeId: { type: 'string', pattern: '^d0_[0-9a-f]{24}$', description: 'Current probeId from dot_turn_get; do not cache.' } }, required: ['probeId'], additionalProperties: false },
         payloadSchema: { type: 'object', properties: { probeId: { type: 'string' }, requestId: { type: 'string' } }, required: ['probeId', 'requestId'], additionalProperties: false } }] });
       if (message.method === 'events/subscribe') {
+        subscribeRequests++;
+        observe('SUBSCRIBE_RECEIVED', { eventMatches: p.name === eventName, probeMatches: p.arguments?.probeId === probeId, webhookMode: p.delivery?.mode === 'webhook', signingKeyPresent: typeof p.delivery?.secret === 'string' });
         checkSubscription(p);
         const id = 'sub_' + digest(JSON.stringify(['D0-synthetic-service-principal', p.delivery.url, eventName, { probeId }])).slice(0, 32);
         if (subscription && subscription.id !== id) throw new Error('single_subscription_only');
@@ -81,31 +90,38 @@ export function createDotD0Fixture({ send = postPublicWebhook, clock = Date.now 
         const challenge = randomBytes(32).toString('base64url');
         let response;
         const envelope = signedWebhook(p.delivery.secret, 'verification_' + randomBytes(12).toString('hex'), Math.floor(clock() / 1000), { type: 'verification', challenge }, id);
-        try { response = await send(p.delivery.url, envelope); } catch { throw new Error('challenge_failed'); }
+        observe('CALLBACK_STARTED');
+        try { response = await send(p.delivery.url, envelope); } catch (error) { observe('CALLBACK_FAILED', { reason: safeFailure(error) }); throw new Error('challenge_failed'); }
         const returned = typeof response.body?.challenge === 'string' ? Buffer.from(response.body.challenge) : Buffer.alloc(0); const expected = Buffer.from(challenge);
-        if (response.status < 200 || response.status >= 300 || returned.length !== expected.length || !timingSafeEqual(returned, expected)) throw new Error('challenge_failed');
+        const challengeMatches = returned.length === expected.length && timingSafeEqual(returned, expected);
+        observe('CALLBACK_RETURNED', { httpStatus: response.status, challengePresent: typeof response.body?.challenge === 'string', challengeMatches });
+        if (response.status < 200 || response.status >= 300 || !challengeMatches) throw new Error('challenge_failed');
         subscription = { id, url: p.delivery.url, secret: p.delivery.secret, expiresAt: clock() + Math.min(ttl, 600_000) };
+        observe('SUBSCRIPTION_ACTIVE');
         return reply({ id, refreshBefore: new Date(subscription.expiresAt).toISOString(), cursor: null, truncated: false });
       }
-      if (message.method === 'events/unsubscribe') { checkSubscription(p); if (subscription?.url !== p.delivery.url) throw new Error('probe_not_in_scope'); subscription = null; return reply({}); }
+      if (message.method === 'events/unsubscribe') { unsubscribeRequests++; observe('UNSUBSCRIBE_RECEIVED'); checkSubscription(p); if (subscription?.url !== p.delivery.url) throw new Error('probe_not_in_scope'); subscription = null; observe('UNSUBSCRIBED'); return reply({}); }
       if (message.method === 'tools/call') {
         const args = p.arguments ?? {}; if (!toolNames.includes(p.name) || !object(args)) throw new Error('unknown_tool');
         const allowed = Object.keys(inputSchema(p.name).properties); if (Object.keys(args).some(k => !allowed.includes(k))) throw new Error('probe_not_in_scope');
         let value;
-        if (p.name === 'dot_turn_get') value = { probeId, requestId, syntheticOnly: true, replyAccepted: !!accepted, instruction: 'Submit one short D0 connection test reply. Do not include personal information or perform other work.' };
+        if (p.name === 'dot_turn_get') value = { probeId, requestId, syntheticOnly: true, replyAccepted: !!accepted, receipt: accepted?.receipt ?? null,
+          diagnostics: { subscribeRequests, unsubscribeRequests, subscription: !subscription ? 'NONE' : subscription.expiresAt <= clock() ? 'EXPIRED' : 'ACTIVE', deliveryStatus, observations: observations.map(o => ({ ...o })) },
+          instruction: 'Submit one short D0 connection test reply. Do not include personal information or perform other work.' };
         else {
           if (args.requestId !== requestId || !subscription || subscription.expiresAt <= clock()) throw new Error('probe_not_in_scope');
           if (p.name === 'dot_turn_claim') { attemptId ??= randomBytes(24).toString('base64url'); value = { requestId, attemptId, syntheticOnly: true }; }
           else {
             if (!attemptId || args.attemptId !== attemptId || typeof args.text !== 'string' || !args.text.trim() || args.text.length > 2000) throw new Error('probe_not_in_scope');
             const textDigest = digest(args.text); if (accepted && accepted.digest !== textDigest) throw new Error('idempotency_conflict');
-            accepted ??= { receipt: 'd0_reply_' + randomBytes(12).toString('hex'), digest: textDigest }; value = { accepted: true, ...accepted, syntheticOnly: true };
+            if (!accepted) { accepted = { receipt: 'd0_reply_' + randomBytes(12).toString('hex'), digest: textDigest }; observe('REPLY_ACCEPTED'); } value = { accepted: true, ...accepted, syntheticOnly: true };
           }
         }
         return reply({ content: [{ type: 'text', text: JSON.stringify(value) }], isError: false });
       }
       return { jsonrpc: '2.0', id: message.id, error: { code: -32601, message: 'Method not supported' } };
     } catch (error) {
+      if (['events/subscribe', 'events/unsubscribe'].includes(message.method)) observe('REQUEST_REJECTED', { method: message.method, reason: safeFailure(error) });
       const code = error?.message === 'challenge_failed' ? -32015 : -32602;
       // Never reflect callback URLs, keys, arbitrary input or native reply text.
       return { jsonrpc: '2.0', id: message.id, error: { code, message: code === -32015 ? 'CallbackEndpointError' : 'D0 request not accepted', ...(code === -32015 ? { data: { reason: 'challenge_failed' } } : {}) } };
@@ -115,8 +131,12 @@ export function createDotD0Fixture({ send = postPublicWebhook, clock = Date.now 
     if (!subscription || subscription.expiresAt <= clock() || deliveryAttempted) return { status: 'NOT_SENT', nativeReply: accepted ? 'ACCEPTED' : 'NOT_RUN' };
     deliveryAttempted = true;
     const event = { eventId, name: eventName, timestamp: occurredAt, data: { probeId, requestId }, cursor: null };
-    const result = await send(subscription.url, signedWebhook(subscription.secret, eventId, Math.floor(clock() / 1000), event, subscription.id));
-    return { status: result.status >= 200 && result.status < 300 ? 'WEBHOOK_RECEIVED' : 'DELIVERY_UNCONFIRMED', nativeReply: accepted ? 'ACCEPTED' : 'NOT_RUN' };
+    observe('DELIVERY_STARTED');
+    try {
+      const result = await send(subscription.url, signedWebhook(subscription.secret, eventId, Math.floor(clock() / 1000), event, subscription.id));
+      deliveryStatus = result.status >= 200 && result.status < 300 ? 'WEBHOOK_RECEIVED' : 'DELIVERY_UNCONFIRMED'; observe(deliveryStatus, { httpStatus: result.status });
+    } catch (error) { deliveryStatus = 'DELIVERY_UNCONFIRMED'; observe('DELIVERY_FAILED', { reason: safeFailure(error) }); }
+    return { status: deliveryStatus, nativeReply: accepted ? 'ACCEPTED' : 'NOT_RUN' };
   }
   return { handle, deliver };
 }

@@ -6,7 +6,7 @@
 
 | 보완 단계 | 승인 범위 | 현재 상태 |
 | --- | --- | --- |
-| D0 | 대상 dot의 private plugin·Tunnel·지원 인증·Events→입력 조회→응답 제출 검증 | 터널 권한/연결 범위 확인 대기. 도구/합성10·Node369/CI browser62 확인. 기존 key·새 전용 key·조직 명시 시도 모두 metadata403·poll401 `tunnel_use_forbidden`. D0 runtime 중지, 실제 Organization/ChatGPT workspace association·발급 주체 권한은 UNVERIFIED, native 왕복 NOT_RUN |
+| D0 | 대상 dot의 private plugin·Tunnel·지원 인증·Events→입력 조회→응답 제출 검증 | 진행 중/전체 미완료. 실제 Platform 터널 ID로 보정 후 metadata·polling·도구3/Events1 발견·get PASS. 첫 native 감시2회는 작업 서비스 오류, 응답 제출 NOT_RUN. 재시작 ID를 schema enum에 고정한 오류 수정(고정 schema+서버 현재 ID 대조 유지)·진단 추가. 격리15·전체 Node374 PASS(11/02), browser62는 이전 CI 결과. 서버0.3.0 확인 후에도 dot의 이전 schema 잔류를 관측했고 새 감시는0회. 캐시 분리/새 metadata 확인 대기. D1 이후 대기 |
 | D1 | additive dot kind·identity/grant·영속 namespace·이관 | D0 대기 / NOT_RUN |
 | D2 | Events 구독·callback 검증/서명·영속 outbox | D0/D1 대기 / NOT_RUN |
 | D3 | 기존 provider·topic·상주 발화·응답 대조·복구 결합 | D0~D2 대기 / NOT_RUN |

@@ -1,12 +1,12 @@
 # 공식 dot 연결 D0 — 준비 상태·계약 점검
 
-2026-11-01 KST. 기준 main `ce8d9717ca34a77f458f47a8eb2f98cc793b2fcf`(PR #35), 작업 브랜치 `codex/dot-mcp-events-d0-20261101`. [사용자 승인 범위](../reviews/dot-official-mcp-events-impact-20261101.md)·[SSOT](../development-plan.md)를 따른다. **D0는 터널 권한 확인 대기이며 native dot 이벤트 왕복은 NOT_RUN이다. D1 이후 종속 구현은 착수하지 않았다.**
+2026-11-01 KST 작성·11-02 후속 검사. 기준 main `ce8d9717ca34a77f458f47a8eb2f98cc793b2fcf`(PR #35), 작업 브랜치 `codex/dot-mcp-events-d0-20261101`. [사용자 승인 범위](../reviews/dot-official-mcp-events-impact-20261101.md)·[SSOT](../development-plan.md)를 따른다. **Platform 터널 대상 보정 후 연결·도구 발견·조회는 PASS다. native 감시 등록 오류와 schema cache 충돌을 관측했으며 전체 이벤트/응답 왕복은 미완료다. 최신 경과는 §7을 따른다. D1 이후 종속 구현은 착수하지 않았다.**
 
 ## 1. 승인 반영과 보존
 
 사용자는 계획 개정·개발을 승인하고 D0부터 시작하도록 지시했다. dot을 일반 ChatGPT `/c/...`·browser와 분리하고 Muse의 현재 연결을 유지한다. SSOT와 연결·토의·실행 순서·living design·운영/수락 계획을 이 방향으로 개정했다. R4-D/R8-D의 잘못된 dot 기존 thread 전제만 공식 dot 왕복으로 정정하며, Muse 원래 thread와 기존50 gate의 수준은 유지한다.
 
-기존 Providers.complete·Store transaction·공통 dispatch·토의/상주 parser·원문/ID·승인·미확정 대조·API 일일 한도는 변경하지 않았다. 제품 `src/` 변경은 없다. 새 API 연결·모델·운영 참여자/모의 참여자·토의/방을 생성하지 않았다. 사용자가 만든 추적되지 않은35파일은 private manifest와 대조해 보존 여부를 확인한다. 구현/점검 중 실제 model calls0·subscriptions0·conversation mutations0이다.
+기존 Providers.complete·Store transaction·공통 dispatch·토의/상주 parser·원문/ID·승인·미확정 대조·API 일일 한도는 변경하지 않았다. 제품 `src/` 변경은 없다. 새 API 연결·모델·운영 참여자/모의 참여자·토의/방을 생성하지 않았다. 사용자가 만든 추적되지 않은35파일은 private manifest와 대조해 보존 여부를 확인한다. 운영 모델 API 호출0·운영 토의/방 변경0이다. 사용자가 실제 dot에 요청한 합성 감시 시도는 §7에 별도로 기록한다.
 
 ## 2. 환경/실행 증거와 판정
 
@@ -19,17 +19,18 @@
 | Muse/기존 browser binding | 보존 확인 | 실제 `/api/state`에서 browser binding1개를 읽고 ID+binding digest를 private 임시 receipt에 기록·최종 대조. 개인 계정·대화·URL은 공개 문서에 복사하지 않음 |
 | 초기 Tunnel 도구/설정 | BLOCKED(초기 점검) | 초기 PATH에 tunnel-client 없음. 전용 `tunnel.env`/grant 파일과 프로세스에 제공된 runtime key/tunnel ID 없음. 다른 위치에 키가 전혀 없다는 주장은 아님 |
 | 공식 Tunnel 도구 설치 | PASS | 공식 latest release v0.0.19 Linux amd64 zip의 게시 SHA256과 다운로드 해시 일치 확인. 사용자 전용 경로에 설치하고 기존 도구를 덮어쓰지 않음. 아래 버전/경로 참조 |
-| 전용 Tunnel profile | PASS(로컬 구성) | 사용자가 제공한 ID를 private profile에만 기록. `sample_mcp_stdio_local`·합성 fixture·file key reference·loopback ephemeral admin 포트, 0600. 실제 권한 결과는 아래 FAIL_PERMISSION이며 설정 성공과 구별 |
+| 전용 Tunnel profile | PASS | 실제 Platform 터널 ID로 보정해 private profile에만 기록. `sample_mcp_stdio_local`·합성 fixture·file key reference·loopback ephemeral admin 포트, 0600. 기존 profile/key backup 보존 |
 | 최종 read-only 준비 상태 | BLOCKED / exit2 | `npm run doctor:dot`: installed=true, 이 프로세스의 ID/key·검사용 scoped grant 부재. native 성공·추가 권한을 추정하지 않음. D0 합성 stdio fixture는 별도 경로이며 운영 앱 grant가 필요하지 않음 |
 | 현재 MCP의 Events/응답 계약 | NOT_AVAILABLE(격리 HTTP 관측) | 실제 임시 앱의 scoped legacy grant로 initialize/tools/list/events/list 확인: tools-only, Events/전용 응답 도구 없음. 기존 result_submit은 근거 제출임을 유지 |
-| 새 D0 점검 도구·합성 fixture | PASS(fixture) | `node --test tests/dot-preflight.test.mjs tests/dot-mcp-d0.test.mjs`: 10검사 PASS. 실제 stdio child process·challenge/서명·일회 이벤트·중복 응답/회수/범위 경계 포함 |
-| 전체 Node/정적 검사 | PASS | 격리 checkout에서 `npm run check`: strict TypeScript·빌드·Node369 PASS, fail0/skip0 |
+| 새 D0 점검 도구·합성 fixture | PASS(fixture) | 11/02 `node --test tests/dot-preflight.test.mjs tests/dot-mcp-d0.test.mjs`: 15검사 PASS. 실제 stdio child·challenge/서명·일회 이벤트·중복/범위·진단 비밀 비노출·고정 catalog/현재 ID 대조 포함 |
+| 전체 Node/정적 검사 | PASS | 11/02 격리 checkout에서 `npm run check`: strict TypeScript·빌드·Node374 PASS, fail0/skip0. 이전 e446c6a의369검사와 구별 |
 | GitHub CI | PASS(코드 head e446c6a) | [run41311295483](https://github.com/firewine/webgpt/actions/runs/41311295483): Node369·browser62 PASS, 양쪽 fail0/skip0, 설치 Codex contract 성공. fixture CI와 native dot 실계정을 구별 |
 | 로컬 browser GUI 검사 | NOT_RUN(이번 변경) | 제품 GUI/src 변경 없음. 위 browser62는 이번 GitHub CI의 실행 결과이며 로컬 재실행·실기기 성공을 뜻하지 않음 |
 | runtime key 로컬 입력 | PASS(보관만) | 사용자 직접 입력한 파일이 해당 사용자 소유·private/nonempty임을 확인. 값은 출력/commit하지 않음. 키 존재를 터널 접근 권한 성공으로 표시하지 않음 |
 | tunnel-client doctor | PASS(로컬 설정)/SKIP(원격 확인) | `--explain`의 profile/key reference/실행 파일·ephemeral health bind 확인. stdio MCP 원격·OAuth metadata는 SKIP, optional Codex plugin도 SKIP. 실제 control-plane 인증을 검증한 결과가 아님 |
-| 실제 Tunnel control plane | FAIL_PERMISSION | 기존 key·새 전용 key·사용자 제공 Organization 명시 시도에서 모두 metadata403 Forbidden·poll401 `tunnel_use_forbidden`. 모델 API 호출0, 각 D0 runtime만 SIGINT로 종료. native 메시지/구독 없음 |
-| 실제 dot·Events·MCP 결과 왕복 | NOT_RUN | 계정의 Tunnel 선택 가능만으로 D0 전체를 통과시키지 않음 |
+| 실제 Tunnel control plane | PASS(대상 보정 후) | 초기403/401은 원래 ID 대상의 결과. 실제 Platform 터널 ID를 복사해 보정한 뒤 같은 새 전용 key로 metadata 조회 exit0·org/이름 일치·workspace association1·polling 성공을 확인. 초기 key의 권한은 재검증하지 않음 |
+| 실제 dot 도구/Events 발견·조회 | PASS | 사용자 화면에 get/claim/submit 도구3·event1 표시, 실제 dot의 get 사용자 보고와 진단 목적 read-only get 성공. Codex가 claim/submit을 대신 호출하지 않음 |
+| 실제 dot·Events·MCP 결과 왕복 | FAIL(초기 감시 등록)/후속 확인 대기 | 초기2회 작업 서비스 오류, 서버 `events/subscribe` 응답 전달 지표409. 내부 callback 원인은 당시 UNVERIFIED. 후속 schema cache 충돌을 수정했고 새 probe의 감시/이벤트/응답 수락은 아직 미완료 |
 
 전체 검사는 `/tmp/webjjoku-dot-d0-validation-20261101`의 독립 checkout과 임시 DB/모의 provider에서 수행했다. 빌드 스크립트가 `dist/`를 삭제/재생성하므로 운영 저장소의 `dist/`에서 검사하지 않았다. 실제 운영 `webjjoku`·desktop 서비스 재시작/배포는 하지 않았다.
 
@@ -41,9 +42,9 @@
 - `tests/dot-preflight.test.mjs`: 실제 격리 HTTP 앱과 응답 fixture로6경계 검증.
 - `package.json`: `npm run doctor:dot` 추가. 앱 빌드/서비스 시작과 독립적으로 실행한다.
 - `scripts/fixtures/dot-mcp-d0.mjs::createDotD0Fixture/postPublicWebhook/signedWebhook`: 실제 dot의 기능 검증용 **합성 데이터 전용** stdio MCP 서버. 운영 Workspace/키/Chrome/대화/도구를 읽거나 변경할 경로가 없다.
-- `tests/dot-mcp-d0.test.mjs`: 실제 stdio 프로세스와 이벤트/응답·서명·권한 fixture4개. 준비 점검6개와 합쳐 신규10개다.
+- `tests/dot-mcp-d0.test.mjs`: 실제 stdio 프로세스와 이벤트/응답·서명·권한·진단·catalog 회귀9개. 준비 점검6개와 합쳐15개다.
 
-D0 점검/fixture 코드와 검사 합계는 실제385줄·4파일이며 package script/계획·증거 문서는 별도다. 초안의 D0 150~250줄 추정은 점검 도구와 합성 fixture를 합쳐350~500줄로 보정했다. 승인된 D0 최소 왕복 범위 안의 구현이며 전체 기본안40~52파일·2,700~4,200줄 범위를 확대하지 않는다. 이후 production Events/재시작/identity/grant 구현을 이 fixture가 대신하지 않는다.
+D0 점검/fixture 코드와 검사 합계는4파일이며 package script/계획·증거 문서는 별도다. 최초385줄에서 진단·고정 schema 회귀를 보강했으며350~500줄 추정 범위 안이다. 승인된 D0 최소 왕복 범위 안의 오류 수정이며 전체 기본안40~52파일·2,700~4,200줄 범위를 확대하지 않는다. 이후 production Events/재시작/identity/grant 구현을 이 fixture가 대신하지 않는다.
 
 ```sh
 npm run doctor:dot
@@ -115,8 +116,26 @@ D0 fixture를 private custom MCP plugin으로 연결할 때만 합성/no-auth �
 
 공식 CLI `admin --json tunnels get`을 **새 runtime key만** 사용해 읽기 전용으로 실행한 결과도 `GET /v1/tunnels/<원래ID>`에서403이었다. admin key·생성/수정 API는 사용하지 않았다. 사용자가 제공한 Organization을 `--control-plane.organization-id`로 명시한 세 번째 시도도 동일한403/401이었다. 실제 ID/조직 ID·key·개인정보는 공개 기록에 넣지 않았다.
 
-두 번째 시도에서 `/healthz`·`/readyz`는200이었지만 `commands_poll_cycles_total=10`, `commands_poll_errors_total=10`, `commands_poll_last_successful_timestamp_seconds=0`을 관측했다. 즉 local ready는 OpenAI가 이 터널을 허용했거나 실제 native 요청을 받았다는 증거가 아니다. 세 번째 시도도 권한 실패 확인 뒤 종료했다. 현재 D0 터널 프로세스는 실행하지 않는다.
+두 번째 시도에서 `/healthz`·`/readyz`는200이었지만 `commands_poll_cycles_total=10`, `commands_poll_errors_total=10`, `commands_poll_last_successful_timestamp_seconds=0`을 관측했다. 즉 local ready는 OpenAI가 이 터널을 허용했거나 실제 native 요청을 받았다는 증거가 아니다. 세 번째 시도도 권한 실패 확인 뒤 종료했다. 이 단락은 대상 ID 보정 전의 이력이며 최신 D0 runtime은 §7을 따른다.
 
 원래 터널·키를 삭제하거나 조직/워크스페이스 연결·역할을 임의 변경하지 않았다. 실제 허용된 Organization/ChatGPT workspace 목록과 발급 주체의 조직 수준 Read+Use를 대조해야 한다. [공식 Tunnel 권한 안내](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)는 조직 수준 Read+Use와 workspace association을 별도로 요구하며 역할 반영에 최대30분이 걸릴 수 있다고 안내한다. 서버 응답만으로 조직 불일치·권한 누락·연결 매핑 중 하나를 원인으로 확정하지 않으며, 권한 실패를 추가 OAuth나 인증 해제로 우회하지 않는다.
 
-실제 dot 구독/응답은 계속 NOT_RUN이다. 성공하면 그 시점의 native/도구/event 증거를 추가하고 D0를 판정한다. 도구 설치/profile/doctor 성공 자체를 터널·계정 연결 완료로 표시하지 않는다. [draft PR36](https://github.com/firewine/webgpt/pull/36)은 이 미완료 경계를 명시한다.
+이 시점까지 실제 dot 구독/응답은 NOT_RUN이었다. 대상 보정과 실제 시도 이후 판정은 아래 §7을 따른다. 도구 설치/profile/doctor 성공 자체를 터널·계정 연결 완료로 표시하지 않는다. [draft PR36](https://github.com/firewine/webgpt/pull/36)은 이 미완료 경계를 명시한다.
+
+## 7. 실제 Platform 터널 보정·native 등록 실패·D0 진단/스키마 수정
+
+11/01 밤 사용자가 실제 Platform Tunnels의 `ubuntu_dot` 행에서 전체 ID를 복사해 제공했다. 처음 제공한 외부 연결용 형태의 ID와 달랐고, **실제 Platform ID만 보정한 뒤 동일한 새 전용 runtime key로 metadata 조회가 성공**했다. 이름/조직 일치·ChatGPT workspace association1개와 polling 성공을 확인했다. profile/key backup을 보존했다. 초기 key는 이 실제 터널에 재시험하지 않았으므로 그 key도 허용됐을 것이라고 쓰지 않는다. ID/조직/개인 계정은 공개 문서에 기록하지 않는다.
+
+사용자가 ChatGPT에 `ubuntu_dot`을 등록하고 도구3개와 `webjjoku.turn_requested`1개가 보이는 화면을 제공했다. 실제 dot은 get 이후 이벤트 감시 등록 단계에서 작업 서비스 오류를2회 보고했다. 서버는 `events/subscribe`2회의 response delivery 지표409와 `response already fulfilled or unknown request`를 남겼다. 이는 **구독 응답 전달의 상태이며 callback POST가409였다는 증거가 아니다.** 원래 fixture에 내부 진단이 없어 당시 challenge/서명/HTTP 실패 원인은 UNVERIFIED다. 이벤트 전송·답변 수락 영수증도 확인되지 않았다.
+
+사용자는 첫 작업 미등록과, 조회 목록에 두 번째 작업이 없고 ID/상태를 확인할 수 없다는 결과를 제공했다. Codex의 별도 read-only get은 syntheticOnly=true·replyAccepted=false를 확인했다. 두 번째 등록을 취소 완료로 간주하거나 자동 재구독/재전송하지 않았다. private0600 종료 receipt에 원래 probe/request·미확인 상태를 보존하고 해당 D0 runtime만 SIGINT로 종료했다. 운영 앱은 PID4089462로 active/running이었다.
+
+`createDotD0Fixture`에 메모리 진단을 추가했다. `dot_turn_get`은 subscribe/unsubscribe 횟수·구독 NONE/ACTIVE/EXPIRED·일회 delivery 상태·accepted receipt와 최근16개 관측만 반환한다. 콜백 시작/실패·HTTP 숫자 상태·challenge 존재/일치 boolean·허용된 오류 분류를 구별한다. URL·서명 키·claim token·응답 원문·임의 예외 문구는 반사하지 않는다. 응답이 불명확한 이벤트는 deliveryAttempted를 유지해 조회나 재호출로 재전송되지 않는다. fixture의 무영속/10분/합성 전용 한계와 기존 SSRF·서명 검증은 유지한다.
+
+11/02 첫 진단 probe에서 사용자가 **현재 get ID와 감시 schema에 남은 이전 ID의 불일치**를 보고했다. get으로 실제 subscribeRequests0·subscription NONE·replyAccepted=false를 대조했다. 원인은 fixture의 임시 probe/request ID를 discovery schema의 enum에 고정한 구현이다. tool/event catalog를 재시작 전후 동일한 형식 schema로 고쳤고, 요청 handler에서 현재 probe/request를 정확히 대조하는 범위 검사는 유지했다. 과거 schema에 맞추려고 이전 ID를 재사용하거나 서버 범위를 완화하지 않았다. 이 미등록 probe도 private receipt를 보존해 종료했다.
+
+fixture0.3.0을 새 D0 runtime으로 시작하고 read-only get의 진단·구독0/전송 NOT_RUN을 확인했다. 사용자가 앱 도구 갱신 후에도 실제 dot의 감시 schema가 이전 ID만 허용한다고 보고했다. 감시·claim/submit은 실행하지 않았다. 로컬 `/health/mcp`는 실제 실행 서버 버전0.3.0·child running·initialize 성공을 확인했다. 한편 현재 Codex에 노출된 `ubuntu_dot` claim/submit 도구 정의도 여전히 이전 requestId의 literal type이었다. **실행 서버와 소비자 discovery snapshot의 불일치**까지 확인했으며 캐시가 어느 계층에 있는지는 UNVERIFIED다. 서버를 또 재시작하거나 옛 ID를 수락하지 않고 현재 probe를 유지한다. 같은 private Tunnel에 별도 D0 검사 plugin을 등록해 이전 snapshot과 분리하고 새 metadata를 확인하는 것이 다음 진단이다. 신규 OAuth·새 key·새 Tunnel·공개 ingress는 필요하지 않다.
+
+새 감시 성공·native 응답 수락·감시 종료는 아직 UNVERIFIED다. 새 plugin의 catalog에서 임시 ID enum이 제거됐는지를 먼저 확인하고 그 뒤 한 번만 실제 감시를 진행한다. 실패하면 get의 진단으로 대조하며 자동 재시도하지 않는다. 실제 dot이 아닌 Codex의 read-only get을 native 참여자의 완료 증거로 사용하지 않는다.
+
+검증 방법/결과: 격리 checkout에서15관련 검사 PASS, `npm run check`의 TypeScript·빌드·Node374 PASS(fail0/skip0). 진단 HTTP401/잘못된 challenge/DNS 오류·16개 제한/비밀 비노출·불명확 전송의 재전송0·재시작 전후 catalog 동일/이전 ID 거절을 추가 검증했다. browser62/Codex contract는 이전 CI의 결과이며 이 수정본의 재실행으로 표시하지 않는다. 운영 `dist/`·서비스/Serve·Muse는 바꾸지 않았다. 추가 OAuth·공개 ingress·제품 계약/수락 완화·D1 구현도 없다. rollback은 합성 runtime만 중지하고 종료 receipt·원래 기록을 보존하는 것이며 운영 데이터 초기화는 필요하지 않다.

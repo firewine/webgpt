@@ -64,3 +64,59 @@ test('D0 synthetic stdio process advertises the fixture contract without workspa
   assert.deepEqual(replies.map(r => r.id), [0, 1, 2]); assert.equal(replies[0].result.serverInfo.name, 'webjjoku-dot-D0-SYNTHETIC-ONLY');
   assert.equal(replies[1].result.tools.length, 3); assert.equal(replies[2].result.events.length, 1); assert.equal(Buffer.concat(errors).toString('utf8'), '');
 });
+
+test('D0 read-only diagnostics distinguish verified callback, webhook receipt and accepted native reply', async () => {
+  const f = await setup(); assert.equal(f.info.diagnostics.subscribeRequests, 0);
+  await rpc(f.fixture, 'events/subscribe', f.params);
+  const active = await call(f.fixture, 'dot_turn_get'); assert.equal(active.diagnostics.subscription, 'ACTIVE'); assert.equal(active.replyAccepted, false);
+  assert.deepEqual(active.diagnostics.observations.at(-2), { sequence: 3, phase: 'CALLBACK_RETURNED', httpStatus: 200, challengePresent: true, challengeMatches: true });
+  await f.fixture.deliver(); const received = await call(f.fixture, 'dot_turn_get'); assert.equal(received.diagnostics.deliveryStatus, 'WEBHOOK_RECEIVED'); assert.equal(received.replyAccepted, false);
+  const claim = await call(f.fixture, 'dot_turn_claim', { requestId: f.info.requestId });
+  const reply = await call(f.fixture, 'dot_turn_submit', { requestId: f.info.requestId, attemptId: claim.attemptId, text: 'synthetic-only' });
+  const accepted = await call(f.fixture, 'dot_turn_get'); assert.equal(accepted.receipt, reply.receipt); assert.equal(accepted.replyAccepted, true);
+  for (const sensitive of [secret, f.params.delivery.url, claim.attemptId, 'synthetic-only']) assert.equal(JSON.stringify(accepted).includes(sensitive), false);
+  assert.equal(active.diagnostics.observations.length, 4); // A prior read stays a snapshot.
+});
+
+test('D0 diagnostics retain sanitized network failure and do not invent an active subscription', async () => {
+  const f = createDotD0Fixture({ send: async url => { throw Object.assign(new Error(url + secret), { code: 'ENOTFOUND' }); } });
+  const info = await call(f, 'dot_turn_get');
+  const params = { name: 'webjjoku.turn_requested', arguments: { probeId: info.probeId }, delivery: { mode: 'webhook', url: 'https://private-callback.example.test/opaque', secret } };
+  assert.equal((await rpc(f, 'events/subscribe', params)).error.code, -32015);
+  const result = await call(f, 'dot_turn_get'); assert.equal(result.diagnostics.subscription, 'NONE'); assert.equal(result.diagnostics.deliveryStatus, 'NOT_RUN');
+  assert.ok(result.diagnostics.observations.some(o => o.phase === 'CALLBACK_FAILED' && o.reason === 'ENOTFOUND'));
+  for (const sensitive of [params.delivery.url, secret, 'opaque']) assert.equal(JSON.stringify(result).includes(sensitive), false);
+});
+
+test('D0 diagnostics distinguish callback rejection from wrong challenge and bound untrusted observations', async () => {
+  for (const status of [401, 200]) {
+    const f = createDotD0Fixture({ send: async () => ({ status, body: { challenge: 'wrong' } }) }); const info = await call(f, 'dot_turn_get');
+    const params = { name: 'webjjoku.turn_requested', arguments: { probeId: info.probeId }, delivery: { mode: 'webhook', url: 'https://callback.example.test/private', secret } };
+    assert.equal((await rpc(f, 'events/subscribe', params)).error.code, -32015);
+    const d = (await call(f, 'dot_turn_get')).diagnostics; assert.ok(d.observations.some(o => o.phase === 'CALLBACK_RETURNED' && o.httpStatus === status && o.challengeMatches === false));
+    for (let n = 0; n < 30; n++) await rpc(f, 'events/subscribe', { ...params, arguments: { probeId: 'untrusted-private-text' } });
+    const bounded = await call(f, 'dot_turn_get'); assert.equal(bounded.diagnostics.subscribeRequests, 31); assert.equal(bounded.diagnostics.observations.length, 16); assert.equal(JSON.stringify(bounded).includes('untrusted-private-text'), false);
+  }
+});
+
+test('D0 failed event delivery remains unconfirmed and a read or retry cannot resend it', async () => {
+  let eventCalls = 0; const f = createDotD0Fixture({ send: async (_url, envelope) => {
+    const body = JSON.parse(envelope.body); if (body.type === 'verification') return { status: 200, body: { challenge: body.challenge } };
+    eventCalls++; throw Object.assign(new Error(secret), { code: 'ETIMEDOUT' });
+  } }); const info = await call(f, 'dot_turn_get');
+  await rpc(f, 'events/subscribe', { name: 'webjjoku.turn_requested', arguments: { probeId: info.probeId }, delivery: { mode: 'webhook', url: 'https://callback.example.test/events', secret } });
+  assert.equal((await f.deliver()).status, 'DELIVERY_UNCONFIRMED'); const result = await call(f, 'dot_turn_get');
+  assert.equal(result.replyAccepted, false); assert.ok(result.diagnostics.observations.some(o => o.phase === 'DELIVERY_FAILED' && o.reason === 'ETIMEDOUT'));
+  assert.equal((await f.deliver()).status, 'NOT_SENT'); assert.equal(eventCalls, 1);
+});
+
+test('D0 catalogs survive process identity changes while handlers reject an earlier probe and request', async () => {
+  const before = await setup(); const after = await setup(); assert.notEqual(before.info.probeId, after.info.probeId);
+  for (const method of ['tools/list', 'events/list']) assert.deepEqual((await rpc(before.fixture, method)).result, (await rpc(after.fixture, method)).result);
+  const catalog = (await rpc(after.fixture, 'events/list')).result.events[0];
+  assert.ok(new RegExp(catalog.inputSchema.properties.probeId.pattern).test(after.info.probeId));
+  assert.ok((await rpc(after.fixture, 'events/subscribe', { ...after.params, arguments: { probeId: before.info.probeId } })).error); assert.equal(after.sent.length, 0);
+  assert.ok((await rpc(after.fixture, 'events/subscribe', after.params)).result);
+  assert.ok((await call(after.fixture, 'dot_turn_claim', { requestId: before.info.requestId })).error);
+  assert.ok((await call(after.fixture, 'dot_turn_claim', { requestId: after.info.requestId })).attemptId);
+});
