@@ -28,6 +28,7 @@ import { Wiki, validateWikiState } from './wiki.js';
 import { ResidentMcp } from './resident-mcp.js';
 import { validateTopicIntents } from './resident-focus.js';
 import { apiUsageSummary, configureApiUsage, validateApiUsage, dailyRoom } from './api-usage.js';
+import { validatePasswordState } from './password.js';
 
 export class Workspace {
   readonly store: Store; readonly vault: Vault; readonly oauth: OAuthService; readonly browser: BrowserBridge;
@@ -45,7 +46,7 @@ export class Workspace {
   constructor(readonly config: WorkspaceConfig, fakeDelay = 80, options: { residentProvider?: Pick<Providers, 'complete'>; residentClock?: () => number; residentAutoSchedule?: boolean } = {}) {
     this.store = new Store(config.stateDir);
     this.dispatch = new DispatchCoordinator(config.residentEnabled);
-    try { validateApiUsage(this.store.read()); this.resident = new ResidentStore(this.store, config.residentEnabled); validateTopicIntents(this.store.read()); validateWikiState(this.store.read()); validateWorkExecutionState(this.store.read(), this.store); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); this.wiki = new Wiki(this.store, config.residentEnabled); }
+    try { validatePasswordState(this.store.read()); validateApiUsage(this.store.read()); this.resident = new ResidentStore(this.store, config.residentEnabled); validateTopicIntents(this.store.read()); validateWikiState(this.store.read()); validateWorkExecutionState(this.store.read(), this.store); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); this.wiki = new Wiki(this.store, config.residentEnabled); }
     catch (error) { this.store.close(); throw error; }
     this.vault = new Vault(join(config.stateDir, 'credentials'));
     try { for (const connectionId of this.store.read().connectionCleanup ?? []) this.cleanupConnection(connectionId); }

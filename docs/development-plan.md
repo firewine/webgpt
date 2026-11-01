@@ -2,6 +2,8 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
+2026-11-01 개인 비밀번호 로그인 승인: 사용자가 첫 설정의 **새 비밀번호/비밀번호 확인2칸**, 서버 보호 저장, 이후 기기에서 비밀번호1칸 로그인을 지정했다. [사전 영향·범위·R1~R8/복귀](./reviews/password-login-impact-20261101.md)에 따라 owner 인증/화면/설정·복구만 변경한다. 기존12시간 세션·Host/Origin·provider/대화·MCP/실행 승인·API/도구 한도는 유지한다. 예상18~24파일·700~1,200줄. [구현·검사 기록](./implementation/password-login-20261101.md): Node354·Chrome/MCP57 PASS. 실제 비밀번호 등록은 사용자 직접 입력이며 운영 비밀번호 변경·새 배포/실계정 호출은 미실행이다.
+
 2026-11-01 후속 사용자 지시: **상주방 전체 채팅 한도와 legacy/API 방식 선택을 제거**한다. API 일일 정책은 별도 설정으로 유지하고 GPT/dot/Muse 방 on·발언은 옛 누적 요청/토큰/만료 시각 때문에 막지 않는다. 속도 부재 시 기존 표준을 사용하고 도구 횟수/deadline·승인·미확정·원문 보호는 유지한다. [사전 영향·R1~R8/수락 변경·복귀 검토](./reviews/room-chat-limit-removal-20261101.md)를 기준으로 진행한다. 이는 아래 PR #31의 선택형 모드를 대체하는 명시 승인이다. 예상24~34파일·500~1,000줄. [구현·검사/운영 차단 해소 기록](./implementation/room-chat-limit-removal-20261101.md): Node345·Chrome/MCP54 PASS. 꺼진 운영 방은 기존 configure 명령으로 API 전용에 맞췄고 원문·멤버·API 정책/도구 권한은 보존했다. 새 바이너리 배포·방 on·실제 호출은 별도다.
 
 2026-11-01 API 일일 한도·일반 GPT/dot 선택 UI 개발 승인: 사용자가 [변경 검토서](./reviews/api-daily-budget-impact-20261031.md)의 범위를 승인했다. R8 보완으로 API key 참여자만 작업실 합산 KST 일일24회/보고20만 token 한도를 적용하고, owner가 선택한 새 상주 모드의 GPT OAuth/browser는 방의 채팅 횟수/token/종료 시각 제한에서 제외한다. API 대기 중 GPT 진행·혼합 주제 partial/같은 방 복귀와 기존 단일 dispatch·미확정 대조·도구 승인/실행 deadline·이력/50 gate를 공존시킨다. 일반 GPT/dot은 기존 연결/탐지/참여자 API를 재사용해 명시 선택하며 현재 일반 GPT를 dot으로 간주하지 않는다. 예상26~36파일·1,400~2,400줄, R1~R8 이관/수락/복귀는 검토서를 따른다. 기준 main은 PR #30 병합 `1b6c005e0b1b02162c3f294535219cd2757adeb9`. 기존 운영 방·데이터는 보존하며 배포/실제 호출은 별도다. [구현·검사 기록과 미검증 범위](./implementation/api-daily-gpt-choice-20261101.md)를 별도로 남긴다.

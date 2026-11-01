@@ -29,7 +29,25 @@ npm install --prefix "$HOME/.local/share/webjjoku/tools" @openai/codex@0.165.0 c
 
 `WJ_CHROME_BINARY`에 Chrome 실행 파일, `WJ_NOVNC_PORT=6080`, `WJ_CHROME_COMMAND`에 위 MCP 실행 파일과 `--browserUrl=http://127.0.0.1:9222`, `--no-usage-statistics`를 설정한다. `WJ_CODEX_COMMAND`에는 Codex 실행 파일과 `app-server`, `WJ_WORKSPACE_ROOTS`에는 실행할 저장소의 절대 경로를 넣는다. secret은 `.env`나 저장소에 두지 않고 UI 또는 별도 0600 환경 파일을 사용한다.
 
-`npm run access-token`은 소유자 키를 터미널에 표시하는 명시적 명령이다. 공개 CI나 공유 로그에서 실행하지 않는다. 기본 state 디렉터리 밖의 별도 키 관리가 필요할 때만 `WJ_ACCESS_TOKEN` 환경 변수를 쓴다.
+### 개인 비밀번호 로그인 (2026-11-01)
+
+웹 로그인은 **비밀번호**를 사용한다. 처음에는 **새 비밀번호**, 바로 아래 **비밀번호 확인**에 같은 값을 넣는다. 15~128자이며 한글·공백을 쓸 수 있고 복잡한 문자 조합을 강제하지 않는다. 서버에는 랜덤 salt와 scrypt 단방향 해시만 저장하며 비밀번호 원문·확인값을 기록하지 않는다. 이후에는 비밀번호1칸으로 로그인하고 기존12시간 cookie를 유지한다.
+
+이미 소유자로 로그인한 기기는 첫 설정 화면에서 바로 저장한다. 소유자 cookie가 없는 첫 기기는 서버 터미널에서 아래 명령을 실행하고 **출력된 비공개 링크**를 그 기기에서 연다. 앱 서비스가 갱신 버전으로 실행 중이어야 한다. 링크는10분/1회이며 새 링크를 만들면 이전 링크를 대체한다. 비밀번호나 링크를 채팅·공개 로그에 보내지 않는다. 비밀번호 자체는 URL/명령 인자에 넣지 않는다.
+
+```bash
+npm run password:setup
+```
+
+설정 완료 후 **비밀번호 변경**에서 현재 비밀번호·새 비밀번호·확인을 입력한다. 잊었으면 서버 소유자 터미널에서 아래 명령으로 재설정 링크를 연다. 임의 방문자가 첫 소유자를 선점하거나 DB 삭제로 비밀번호를 우회하지 않도록 기존 소유자 인증을 재사용한다.
+
+```bash
+npm run password:reset
+```
+
+설정/변경/재설정은 credential 세대를 바꾸고 이전 세션·미사용 링크를 폐기한다. 현재 기기는 새 cookie를 받고 다른 기기는 다시 로그인한다. 변경 창을 닫으면 입력은 비운다. 저장 응답을 잃으면 설정 상태를 다시 확인하고 로그인 화면으로 안내하며 비밀번호 쓰기를 자동 재전송하지 않는다. 링크가 주소에서 제거된 뒤 저장 전 새로고침했다면 원래 링크를 다시 열면 된다.
+
+`access-token` 파일과 `WJ_ACCESS_TOKEN`은 ops/readiness·서버 소유자 복구/기존 API 호환을 위해 보존한다. 웹 로그인에는 직접 입력하지 않는다. 명시적 `npm run access-token`은 이 관리 키를 터미널에 표시하므로 공개 CI/공유 로그에서 실행하지 않는다. provider OAuth·API key와 MCP grant는 별개다. 비밀번호 해시도 포함된 SQLite 백업은 계속 private하게 보관한다. [승인 범위](./reviews/password-login-impact-20261101.md)를 따른다.
 
 ## 2. 서비스와 private HTTPS
 

@@ -17,7 +17,11 @@ export async function storage(t) {
 export async function workspace(t, extra = {}, runtimeOptions = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'wj-app-')); const port = await unusedPort();
   const config = loadWorkspaceConfig({ WJ_STATE_DIR: directory, WJ_CHROME_PROFILE_DIR: join(directory, 'chrome'), WJ_ACCESS_TOKEN: ownerKey, WJ_PORT: String(port), WJ_PUBLIC_ORIGIN: `http://127.0.0.1:${port}` });
-  const app = new Workspace({ ...config, ...extra }, 2, runtimeOptions); const http = await createWorkspaceServer(app, () => {}); http.server.listen(port, '127.0.0.1'); await once(http.server, 'listening'); app.start();
+  const app = new Workspace({ ...config, ...extra }, 2, runtimeOptions);
+  // Existing provider/UI fixtures start with an already configured owner. Real
+  // scrypt setup/login is exercised separately with passwordUnset=true.
+  if (!runtimeOptions.passwordUnset) app.store.transact(s => { s.ownerPassword = { scheme: 'scrypt-v1', id: 'fixture-owner-password', salt: '11'.repeat(32), hash: '00'.repeat(64), changedAt: new Date().toISOString() }; });
+  const http = await createWorkspaceServer(app, () => {}); http.server.listen(port, '127.0.0.1'); await once(http.server, 'listening'); app.start();
   t.after(async () => { http.closeStreams(); await new Promise(resolve => { http.server.close(resolve); http.server.closeAllConnections(); }); await app.close(); await rm(directory, { recursive: true, force: true }); });
   const api = async (path, data, options = {}) => fetch(`${config.origin}${path}`, { headers: { Authorization: `Bearer ${ownerKey}`, ...(data === undefined ? {} : { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() }), ...(options.headers ?? {}) },
     ...(data === undefined ? {} : { method: 'POST', body: JSON.stringify(data) }), ...Object.fromEntries(Object.entries(options).filter(([k]) => k !== 'headers')) });

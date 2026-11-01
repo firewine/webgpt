@@ -54,6 +54,7 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     const get = req.method === 'GET' || req.method === 'HEAD';
     if (get && assets.has(path)) { const asset = assets.get(path)!; res.writeHead(200, { 'Content-Type': `${asset.type}; charset=utf-8` }); res.end(req.method === 'HEAD' ? undefined : asset.data); return; }
     if (get && path === '/health') { json(res, 200, { status: 'ok', service: 'webjjoku', mode: 'workspace', persistence: 'sqlite' }); return; }
+    if (get && path === '/api/auth') { access.origin(req, false); json(res, 200, access.status(req)); return; }
     if (path === '/mcp') {
       const grant = mcp.grant(req.headers.authorization); access.origin(req, false);
       if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); throw new AppError('method_not_allowed', 405); }
@@ -62,10 +63,15 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
       return;
     }
     if (path === '/api/login' && req.method === 'POST') {
-      const input = object(await body(req)); res.setHeader('Set-Cookie', access.login(req, string(input.token, 4096)));
+      res.setHeader('Set-Cookie', await access.login(req, await body(req)));
       json(res, 200, { authenticated: true }); return;
     }
+    if (path === '/api/password/setup' && req.method === 'POST') {
+      res.setHeader('Set-Cookie', await access.setup(req, await body(req))); json(res, 200, { authenticated: true }); return;
+    }
     access.require(req, !get);
+    if (path === '/api/password/setup-link' && req.method === 'POST') { json(res, 200, access.setupLink(req, await body(req))); return; }
+    if (path === '/api/password/change' && req.method === 'POST') { res.setHeader('Set-Cookie', await access.change(req, await body(req))); json(res, 200, { authenticated: true }); return; }
     if (path.startsWith('/browser/')) {
       if (!get || app.config.noVncPort === null || !app.store.read().browserPaused) throw new AppError('browser_manual_control_required', 403);
       res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'self'; base-uri 'self'");

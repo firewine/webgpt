@@ -17,6 +17,8 @@
     "check": "npm run typecheck && npm test",
     "test:browser": "npm run build && node --test tests/browser/*.test.mjs",
     "access-token": "node --env-file-if-exists=.env scripts/ops.mjs token",
+    "password:setup": "node --env-file-if-exists=.env scripts/ops.mjs password-setup",
+    "password:reset": "node --env-file-if-exists=.env scripts/ops.mjs password-reset",
     "doctor": "node --env-file-if-exists=.env scripts/ops.mjs doctor",
     "install:service": "node --env-file-if-exists=.env scripts/ops.mjs install",
     "serve:tailnet": "node --env-file-if-exists=.env scripts/ops.mjs serve",

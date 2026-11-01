@@ -16,6 +16,12 @@ try {
     else { await mkdir(config.stateDir, { recursive: true, mode: 0o700 }); const path = join(config.stateDir, 'access-token');
       try { await writeFile(path, randomBytes(32).toString('base64url'), { flag: 'wx', mode: 0o600, flush: true }); } catch (e) { if (e.code !== 'EEXIST') throw e; }
       await chmod(path, 0o600); console.log((await readFile(path, 'utf8')).trim()); }
+  } else if (action === 'password-setup' || action === 'password-reset') {
+    const token = config.accessToken ?? (await readFile(join(config.stateDir, 'access-token'), 'utf8')).trim();
+    const response = await fetch(`http://127.0.0.1:${process.env.WJ_PORT ?? '3000'}/api/password/setup-link`, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000), headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ reset: action === 'password-reset' }) });
+    if (!response.ok) throw new Error('Password link failed (' + response.status + '). Check that the updated workspace service is running.');
+    const result = await response.json(); if (typeof result.url !== 'string' || !result.url.startsWith(config.origin + '/#password-setup=')) throw new Error('Invalid password setup response');
+    console.log('Open this private one-time link within 10 minutes. Do not share it.'); console.log(result.url);
   } else if (action === 'doctor') {
     const checks = { node: { version: process.version, ok: Number(process.versions.node.split('.')[0]) === 24 }, server: { os: platform(), arch: arch(), origin: config.origin },
       capabilities: { sourceFetch: config.sourceFetch, chrome: !!config.chromeCommand, noVnc: config.noVncPort !== null, codexRoots: config.workspaceRoots.length, materialRoots: config.materialRoots.length, materials: 'read_only_snapshot' }, liveProviders: 'NOT_RUN' };
@@ -55,5 +61,5 @@ try {
     const database = new DatabaseSync(join(config.stateDir, 'workspace.sqlite'), { readOnly: true });
     try { await backup(database, target); await chmod(target, 0o600); } finally { database.close(); }
     console.log(`Created private state backup: ${target}. Provider tokens are excluded; reconnect accounts after recovery.`);
-  } else throw new Error('Usage: ops.mjs token | doctor | install | serve | backup [absolute-file]');
+  } else throw new Error('Usage: ops.mjs token | password-setup | password-reset | doctor | install | serve | backup [absolute-file]');
 } catch (error) { console.error(error instanceof Error ? error.message : 'Operation failed'); process.exitCode = 1; }
