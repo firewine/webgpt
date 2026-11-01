@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 import { workspace, ownerKey } from './workspace-helpers.mjs';
 import { validatePasswordState, passwordValue, createPassword, verifyPassword } from '../dist/server/workspace/password.js';
 
-const password = 'fixture private phrase 1234', replacement = 'fixture replacement phrase 5678';
+const password = 'short6', replacement = 'other6';
 const cookieOf = r => r.headers.get('set-cookie')?.split(';')[0];
 async function app(t, extra = {}) { return workspace(t, extra, { passwordUnset: true, residentAutoSchedule: false }); }
 async function post(f, path, body, cookie) { return fetch(f.url + path, { method: 'POST', headers: { Origin: f.app.config.origin, 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) }, body: JSON.stringify(body) }); }
@@ -15,7 +15,8 @@ async function setup(f) { const token = await link(f); const r = await post(f, '
 
 test('password policy supports Unicode/whitespace without trim and uses salted memory-hard verifiers', async () => {
   assert.equal(passwordValue('  한글 공백 암호 문장을 충분히 길게 작성  '), '  한글 공백 암호 문장을 충분히 길게 작성  ');
-  for (const invalid of ['', '12345678', 'x'.repeat(129), null]) assert.throws(() => passwordValue(invalid), /invalid_password/);
+  for (const invalid of ['', '12345', 'x'.repeat(129), null]) assert.throws(() => passwordValue(invalid), /invalid_password/);
+  assert.equal(passwordValue('123456'), '123456'); assert.equal(passwordValue('x'.repeat(128)).length, 128);
   const a = await createPassword(password), b = await createPassword(password); assert.notEqual(a.salt, b.salt); assert.notEqual(a.hash, b.hash); assert.equal(a.hash.length, 128);
   assert.equal(await verifyPassword(password, a), true); assert.equal(await verifyPassword(replacement, a), false);
 });

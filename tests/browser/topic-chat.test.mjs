@@ -32,7 +32,9 @@ async function setup(t, residentEnabled = true) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   await context.request.post(f.url + '/api/login', { data: { token: ownerKey }, headers: { Origin: f.url } });
   const page = await context.newPage(), errors = [], posts = []; page.on('pageerror', e => errors.push(e.message)); page.on('request', r => { if (r.method() === 'POST') posts.push(r.url()); });
-  await page.goto(f.url); await page.locator('#chat-free').waitFor(); return { ...f, ids, browser, context, page, errors, posts, calls: () => calls };
+  await page.goto(f.url); await page.locator('#chat-free').waitFor();
+  await page.waitForFunction(() => document.querySelectorAll('#history button').length === 5 && document.querySelectorAll('#room-members > article').length === 5);
+  return { ...f, ids, browser, context, page, errors, posts, calls: () => calls };
 }
 async function choose(page, index) { await page.locator('#history').getByRole('button', { name: '주제 ' + index, exact: true }).click(); await page.waitForFunction(i => document.querySelector('#topic-chat-title').textContent === '주제 ' + i && document.querySelector('#topic-chat-messages').textContent.includes('BODY-' + i), index); }
 async function navigation(page) { if (await page.locator('#room-member-toggle').isVisible()) await page.locator('#room-member-toggle').click(); }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { workspace, ownerKey, until } from '../workspace-helpers.mjs';
 
-const password = 'fixture private phrase 1234', nextPassword = 'fixture replacement phrase 5678';
+const password = 'short6', nextPassword = 'other6';
 async function browser(t) { const b = await chromium.launch({ headless: true, ...(process.env.WJ_TEST_CHROMIUM_EXECUTABLE ? { executablePath: process.env.WJ_TEST_CHROMIUM_EXECUTABLE } : {}) }); t.after(() => b.close()); return b; }
 async function pageFor(b, f, owner = false) { const c = await b.newContext(); if (owner) await c.request.post(f.url + '/api/login', { data: { token: ownerKey }, headers: { Origin: f.url } }); const page = await c.newPage(), errors = []; page.on('pageerror', e => errors.push(e.message)); return { page, errors }; }
 
@@ -12,6 +12,7 @@ test('password UI: first setup stacks password/confirmation, refuses mismatch wi
   page.on('request', r => { if (r.method() === 'POST' && r.url().includes('/api/password/setup')) posts.push(r.url()); }); await page.goto(f.url);
   await page.getByRole('heading', { name: '처음 비밀번호 설정', exact: true }).waitFor(); assert.equal(await page.locator('#login-form [name=token]').count(), 0); assert.equal(await page.locator('#login-password').getAttribute('autocomplete'), 'new-password');
   const first = await page.locator('#login-password').boundingBox(), second = await page.locator('#login-confirm').boundingBox(); assert.ok(second.y > first.y + first.height); assert.equal(await page.locator('#login-confirm').getAttribute('type'), 'password');
+  await page.locator('#login-password').fill('five5'); await page.locator('#login-confirm').fill('five5'); await page.locator('#login-submit').click(); await page.locator('#notice').filter({ hasText: '6~128자' }).waitFor(); assert.equal(posts.length, 0); assert.equal(f.app.store.read().ownerPassword, undefined);
   await page.locator('#login-password').fill(password); await page.locator('#login-confirm').fill(nextPassword); await page.locator('#login-submit').click(); await page.locator('#notice').filter({ hasText: '두 비밀번호가 일치하지 않습니다' }).waitFor(); assert.equal(posts.length, 0); assert.equal(f.app.store.read().ownerPassword, undefined);
   await page.locator('#login-confirm').fill(password); await page.locator('#login-submit').click(); await page.waitForFunction(() => !document.querySelector('#workspace').hidden); await page.locator('#notice').filter({ hasText: '비밀번호를 저장했습니다.' }).waitFor(); assert.equal(posts.length, 1); assert.equal(f.app.store.read().ownerPassword.scheme, 'scrypt-v1'); assert.equal(JSON.stringify(f.app.store.read()).includes(password), false);
   assert.equal(await page.locator('#login-password').inputValue(), ''); assert.equal(await page.locator('#login-confirm').inputValue(), '');
