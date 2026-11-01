@@ -15,11 +15,12 @@ import { assertWikiSnapshots, contextWiki, rememberWiki, wikiHistoryAllowed } fr
 import { ResidentFocus, topicPolicy } from './resident-focus.js';
 import { failureObservation } from '../connections/completion-failure.js';
 import { snapshotMember } from './settings.js';
+import { dailyRoom, participantWait, nextApiDay } from './api-usage.js';
 
 type Emit = Parameters<Parameters<Store['transact']>[0]>[1];
 const LIVE = ['prepared', 'running', 'unconfirmed'];
 const WAKE = new Set(['resident.room_changed', 'resident.message_created', 'resident.turn_finished', 'resident.reconciled', 'resident.context_rotated',
-  'turn.finished', 'discussion.phase', 'discussion.created', 'discussion.pause', 'discussion.resume', 'discussion.cancel', 'discussion.reconcile', 'browser.manual_control', 'resident.work_changed']);
+  'turn.finished', 'discussion.phase', 'discussion.created', 'discussion.pause', 'discussion.resume', 'discussion.cancel', 'discussion.reconcile', 'browser.manual_control', 'resident.work_changed', 'api_daily.configured', 'connection.models', 'participant.updated']);
 
 export class ResidentRunner {
   private started = false; private stopping = false; private queued = false; private pending = false;
@@ -34,6 +35,7 @@ export class ResidentRunner {
   recover(): void {
     if (!this.store.read().resident) return;
     this.store.transact((state, emit) => {
+      this.dispatch.recover(state);
       this.options.work?.recoverState(state);
       for (const turn of state.resident!.turns) if (['prepared', 'running'].includes(turn.status)) {
         turn.status = 'unconfirmed'; turn.error = 'restart_requires_reconciliation';
@@ -85,8 +87,8 @@ export class ResidentRunner {
     if (!this.started || this.stopping || !this.resident.enabled || this.options.autoSchedule === false) return;
     const state = this.store.read();
     if (unresolvedProvider(state) || state.resident?.dispatchLeases.some(l => l.state !== 'released') || state.jobs.some(j => j.status === 'reconciling') || state.discussions.some(d => ['running', 'paused', 'blocked'].includes(d.status))) return;
-    const times = (state.resident?.rooms ?? []).filter(r => r.desiredOn && r.observedStatus === 'on' && !r.topicLink)
-      .map(r => Math.min(r.nextEligibleAt ? Date.parse(r.nextEligibleAt) : this.clock(), r.budgets ? Date.parse(r.budgets.deadlineAt) : this.clock()));
+    const times = (state.resident?.rooms ?? []).filter(r => r.desiredOn && r.observedStatus === 'on' && !r.topicLink && (!dailyRoom(r) || r.nextEligibleAt !== null))
+      .map(r => dailyRoom(r) ? Date.parse(r.nextEligibleAt!) : Math.min(r.nextEligibleAt ? Date.parse(r.nextEligibleAt) : this.clock(), r.budgets ? Date.parse(r.budgets.deadlineAt) : this.clock()));
     if (!times.length) return;
     this.timer = setTimeout(() => { this.timer = null; this.kick(); }, Math.max(1, Math.min(2_147_483_647, Math.min(...times) - this.clock()))); this.timer.unref();
   }
@@ -105,8 +107,15 @@ export class ResidentRunner {
           state.discussions.some(d => ['running', 'paused', 'blocked'].includes(d.status))) return null;
       if (room.nextEligibleAt && Date.parse(room.nextEligibleAt) > this.clock()) return null;
       const work = this.options.work?.prepareTurn(state, room, emit, this.clock());
-      if (work) return { turn: work, remainingMs: Date.parse(room.budgets!.deadlineAt) - this.clock() };
-      const members = room.members.filter(m => m.enabled && !m.blockedReason).map(m => state.participants.find(p => p.id === m.participantId)).filter(p => p !== undefined);
+      if (work) return { turn: work, remainingMs: dailyRoom(room) ? this.timeoutMs : Date.parse(room.budgets!.deadlineAt) - this.clock() };
+      const candidates = room.members.filter(m => m.enabled && !m.blockedReason).map(m => state.participants.find(p => p.id === m.participantId)).filter(p => p !== undefined);
+      const members = candidates.filter(p => !participantWait(state, room, p, this.clock()));
+      if (!members.length && dailyRoom(room) && candidates.length) {
+        const reasons = candidates.map(p => participantWait(state, room, p, this.clock()));
+        room.reason = reasons.includes('api_daily_exhausted') ? 'api_daily_exhausted' : reasons[0] ?? 'no_eligible_members';
+        room.nextEligibleAt = reasons.includes('api_daily_exhausted') ? new Date(nextApiDay(this.clock())).toISOString() : null;
+        return null;
+      }
       if (!members.length) { room.observedStatus = 'blocked'; room.reason = 'no_eligible_members'; room.nextEligibleAt = null;
         emit({ type: 'resident.status_changed', discussionId: null, data: { roomId: room.id, status: room.observedStatus, reason: room.reason } }); return null; }
       const repair = state.resident!.turns.find(t => !t.workAttemptId && t.roomId === room.id && t.epoch === room.epoch && t.error === 'format_invalid' && !t.repairOf &&
@@ -125,6 +134,7 @@ export class ResidentRunner {
       const participant = members[index]!;
       if (participant.kind === 'browser' && state.browserPaused) { room.observedStatus = 'blocked'; room.reason = 'browser_manual_control';
         emit({ type: 'resident.status_changed', discussionId: null, data: { roomId: room.id, status: room.observedStatus, reason: room.reason } }); return null; }
+      room.reason = null;
       const context = roomContext(room, participant.id); let wikiCitations;
       try { wikiCitations = contextWiki(state, room, [participant.id]); }
       catch (e) { if (!(e instanceof AppError)) throw e; room.observedStatus = 'blocked'; room.reason = e.code; room.nextEligibleAt = null; emit({ type: 'resident.blocked', discussionId: null, data: { roomId: room.id, reason: e.code } }); return null; }
@@ -137,11 +147,11 @@ export class ResidentRunner {
         basisSequence: room.lastMessageSequence, text: '', receipt: null, reply: null, usage: null, startedAt: new Date(this.clock()).toISOString(), finishedAt: null,
         error: null, repairOf: repair?.id ?? null, messageId: null, proposalsStatus: 'none', workSeatVersion: room.seats?.find(s => s.participantId === participant.id)?.version ?? 0, wikiCitations,
         ...(room.autoTopic ? { topicPolicyDigest: topicPolicy(state, room) } : {}) };
-      const denied = this.dispatch.reserve(state, { requestId: turn.id, kind: 'resident', participantId: participant.id, generation: context.generation, roomId: room.id }, this.clock());
+      const denied = this.dispatch.reserve(state, { requestId: turn.id, kind: 'resident', participantId: participant.id, participant: turn.participant, generation: context.generation, roomId: room.id }, this.clock());
       if (denied) return null;
       state.resident!.turns.push(turn); room.nextMemberIndex = (index + 1) % members.length;
       emit({ type: 'resident.turn_prepared', discussionId: null, data: { roomId: room.id, turnId: turn.id, participantId: turn.participantId } });
-      return { turn, remainingMs: Date.parse(room.budgets!.deadlineAt) - this.clock() };
+      return { turn, remainingMs: dailyRoom(room) ? this.timeoutMs : Date.parse(room.budgets!.deadlineAt) - this.clock() };
     });
     if (!captured) return;
     this.abort = new AbortController();
@@ -165,8 +175,9 @@ export class ResidentRunner {
         Object.assign(turn, failureObservation(outcome.failure));
         const member = room.members.find(m => m.participantId === turn.participantId);
         if (turn.error === 'dispatch_scope_changed') { turn.status = 'stale'; turn.proposalsStatus = 'stale'; }
-        else if (member) member.blockedReason = turn.error;
-        room.observedStatus = room.desiredOn ? 'blocked' : 'off'; room.reason = turn.error; room.nextEligibleAt = null;
+        else if (member) member.blockedReason = turn.error.startsWith('api_daily_') ? null : turn.error;
+        room.observedStatus = room.desiredOn ? dailyRoom(room) && !outcome.uncertain ? 'on' : 'blocked' : 'off'; room.reason = turn.error;
+        room.nextEligibleAt = room.observedStatus === 'on' ? new Date(this.clock() + room.pacing!.minIntervalMs).toISOString() : null;
       }
       this.options.work?.finishTurn(state, room, turn, emit);
       this.dispatch.settle(state, turn.id, turn.usage, turn.error, turn.status === 'unconfirmed');

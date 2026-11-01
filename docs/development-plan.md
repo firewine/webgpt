@@ -2,6 +2,8 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
+2026-11-01 API 일일 한도·일반 GPT/dot 선택 UI 개발 승인: 사용자가 [변경 검토서](./reviews/api-daily-budget-impact-20261031.md)의 범위를 승인했다. R8 보완으로 API key 참여자만 작업실 합산 KST 일일24회/보고20만 token 한도를 적용하고, owner가 선택한 새 상주 모드의 GPT OAuth/browser는 방의 채팅 횟수/token/종료 시각 제한에서 제외한다. API 대기 중 GPT 진행·혼합 주제 partial/같은 방 복귀와 기존 단일 dispatch·미확정 대조·도구 승인/실행 deadline·이력/50 gate를 공존시킨다. 일반 GPT/dot은 기존 연결/탐지/참여자 API를 재사용해 명시 선택하며 현재 일반 GPT를 dot으로 간주하지 않는다. 예상26~36파일·1,400~2,400줄, R1~R8 이관/수락/복귀는 검토서를 따른다. 기준 main은 PR #30 병합 `1b6c005e0b1b02162c3f294535219cd2757adeb9`. 기존 운영 방·데이터는 보존하며 배포/실제 호출은 별도다. [구현·검사 기록과 미검증 범위](./implementation/api-daily-gpt-choice-20261101.md)를 별도로 남긴다.
+
 2026-10-31 상주방 설정 승인·표준 선택: 기존 DeepSeek 토커를 High로 변경하고 resident flag 활성화·기존 additive 이관·GPT2+Coral3명/방 내부 analysis 역할·초기 표준24요청/보고20만 token/60분/30초 간격을 저장했다. [설정·실제 UI·보존 기록](./implementation/phase8-resident-setup-20261031.md): 방 off·모델 호출0·기존12요청 partial/과거 Max 기록·다른 설정 보존. 초기 종료 시각은20:07:03 KST이며 자동 갱신/자동 주제 시작·Codex 권한은 추가하지 않았다. U1/U2의 이번 방 설정을 선택한 것이고 미래 기본값/장기 운영 정책은 미정으로 유지한다. 실계정 상주 흐름·R8-D 전체 수락은 미완료다.
 
 2026-10-31 PR #29 병합 후 R8 재검증: main `2f3ca34e454f07c294c7e6eaa87cf052b7c79475`에서 사용자가 서버 적용·테스트를 별도 승인했다. 병합 버전을 빌드/서비스 재시작하고 기존 토의의 DeepSeek만 Max/출력16,384로 설정해 **추가6요청 모두 완료, 총12요청에서 PARTIAL**이다. 상호 검토2라운드·검증2개까지 진행했으나 기존100,000 보고 token soft limit이 소진됐다. 보고 합계123,013·마지막1요청의23,013 초과를 숨기지 않으며 과거 실패 usage는 UNKNOWN이다. 이후 호출0·예산/원문/기존6turn·다른 계정/방/실행 보존을 [실제 재검증 기록](./implementation/phase8-continuation-20261031.md)에 남겼다. 수정/종합·실제 dot/Muse/상주 업무·Wiki/Codex/실기기와 R8-D 전체는 미완료다. src/기존 계약·50 gate를 바꾸거나 새 페이즈를 만들지 않았다.

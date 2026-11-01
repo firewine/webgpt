@@ -5,7 +5,7 @@ import type { DiscoveryPage, DiscoveryResult } from '../connections/browser-disc
 type Snapshot = { cursor: number; connections: Connection[]; participants: Member[]; discussions: Pick<Discussion, 'id' | 'topic' | 'status' | 'phase' | 'revision' | 'createdAt' | 'updatedAt'>[];
   bindings: ExecutionBinding[]; jobs: CodexJob[]; browserPaused: boolean; grants: { id: string; participantId: string; discussionId: string; revoked: boolean; tools: string[] }[];
   capabilities: { sourceFetch: boolean; browserConfigured: boolean; noVncConfigured: boolean; codexConfigured: boolean };
-  materialPackages: { id: string; label: string; createdAt: string; files: Omit<MaterialPackage['files'][number], 'text' | 'identity'>[] }[]; materialRoots: string[]; resident: RoomSnapshot['resident'] };
+  materialPackages: { id: string; label: string; createdAt: string; files: Omit<MaterialPackage['files'][number], 'text' | 'identity'>[] }[]; materialRoots: string[]; resident: RoomSnapshot['resident']; apiDaily: RoomSnapshot['apiDaily'] };
 type View = 'room' | 'discussion' | 'connections' | 'execution';
 const $ = <T extends HTMLElement = HTMLElement>(selector: string): T => document.querySelector<T>(selector)!;
 let state: Snapshot | null = null; let current: Discussion | null = null; let selected = localStorage.getItem('wj.discussion') ?? '';
@@ -36,6 +36,7 @@ const states: Record<string, string> = { running: '진행 중', paused: '일시�
   prepared: '전송 준비', pending: '대기', failed: '실패', unconfirmed: '결과 미확인', stale: '이전 조건의 응답', connected: '연결됨', auth_required: '로그인 필요', unverified: '미확인', error: '연결 오류',
   observed: '자료 관측됨', reported: '참여자 보고', not_run: '미실행', queued: '실행 대기', blocked_approval: '승인 대기', reconciling: '실행 확인 필요', interrupted: '중단됨', ready: '준비됨', fixture: '모의', not_applicable: '해당 없음', waiting: '대기' };
 const errors: Record<string, string> = { authentication_required: '접속 키를 확인해 주세요.', root_workflow_busy: '진행 중인 토의를 먼저 완료하거나 취소해 주세요.', two_participants_required: '참여자를 2명 이상 선택해 주세요.',
+  api_daily_not_configured: 'API 일일 한도를 먼저 저장해 주세요. GPT 대화는 계속할 수 있습니다.', api_daily_exhausted: 'API 일일 한도에 도달했습니다. 다음 KST 자정까지 API만 기다립니다.', api_daily_version_conflict: '다른 화면에서 API 한도가 바뀌었습니다. 창을 닫고 최신 한도를 다시 확인하세요.', api_daily_policy_requires_idle: '진행·미확정 API 발언을 먼저 확인한 뒤 한도를 변경하세요.', dot_existing_chat_required: 'dot은 확인한 기존 ChatGPT 대화에만 연결할 수 있습니다.',
   invalid_output_limit: '출력 한도는 512~32,768 범위의 정수로 지정하세요.', output_limit_requires_deepseek: '출력 한도 설정은 DeepSeek 연결에서 지원합니다.', output_limit_not_supported: '모델 목록이 보고한 최대 출력을 넘었습니다. 출력 한도를 직접 조절해 주세요.', participant_output_requires_idle: '진행·미확정 발언을 먼저 확인한 뒤 출력 한도를 변경하세요.',
   device_login_unavailable: 'ChatGPT 보안 설정 또는 workspace에서 기기 코드 로그인을 허용해 주세요.', device_login_expired: '기기 코드가 만료됐습니다. 같은 계정에서 새 로그인을 시작해 주세요.', device_login_interrupted: '서버가 재시작됐거나 이전 요청이 끝났습니다. 같은 계정에서 다시 시작해 주세요.', device_login_start_failed: '기기 코드를 받지 못했습니다. 연결 상태를 확인해 주세요.', device_login_poll_failed: '로그인 승인 상태를 확인하지 못했습니다.', codex_version_required: '설정한 Codex 실행 파일의 버전을 확인하지 못했습니다.', codex_refresh_failed: '이 계정의 인증을 갱신하지 못했습니다. 연결 상태를 확인해 주세요.',
   signin_pending: '이미 시작한 로그인이 있습니다. 서버 Chrome 화면에서 진행해 주세요.', signin_account_pending: '진행 중 로그인과 다른 계정을 지정했습니다. 기존 로그인을 마치거나 이 계정을 로그아웃한 뒤 다시 시작해 주세요.',
@@ -129,22 +130,29 @@ function render(): void {
   if (!state) return;
   $('#history-count').textContent = String(state.discussions.length); const history = $('#history'); history.replaceChildren();
   for (const d of state.discussions.toReversed()) { const b = button(d.topic, async () => { selected = d.id; localStorage.setItem('wj.discussion', selected); showView('discussion'); await refresh(); }, d.id === selected ? 'active' : ''); b.title = `${d.topic} · ${states[d.status]}`; history.append(b); }
-  const signature = JSON.stringify([state.participants, state.connections.map(c => [c.id, c.status, c.models]), state.bindings, state.discussions.map(d => [d.id, d.topic])]);
+  const signature = JSON.stringify([state.participants, state.connections.map(c => [c.id, c.status, c.models, c.browser?.discovery]), state.bindings, state.discussions.map(d => [d.id, d.topic])]);
   if (signature !== choiceSignature) {
     const picker = $('#participant-picker'); const checked = new Set([...picker.querySelectorAll<HTMLInputElement>('input:checked')].map(e => e.value)); const first = !choiceSignature; picker.replaceChildren();
     for (const p of state.participants) { const label = node('label', '', 'participant-option'); const check = node('input'); check.type = 'checkbox'; check.name = 'participantId'; check.value = p.id; check.checked = checked.has(p.id) || first && p.kind === 'fake';
       const text = node('span', p.label); text.append(node('small', p.kind === 'fake' ? '모의 · 외부 호출 없음' : p.modelId)); label.append(check, text); picker.append(label); }
-    selectOptions($('#participant-connection'), state.connections.filter(c => c.status === 'connected').map(c => ({ id: c.id, label: c.label }))); updateModels();
+    updateConnections();
     selectOptions($('#discussion-binding'), state.bindings, '연결 없이 진행'); selectOptions($('#job-binding'), state.bindings);
     selectOptions($('#grant-discussion'), state.discussions.map(d => ({ id: d.id, label: d.topic }))); choiceSignature = signature;
   }
   $('#composer').hidden = !!current; $('#discussion-detail').hidden = !current;
-  if (current) renderDiscussion(); renderConnections(); renderJobs(); renderMaterials(); showView(view);
+  if (current) renderDiscussion(); renderConnections(); renderJobs(); renderMaterials(); renderFocusBudget(); showView(view);
 }
 const roomView = new RoomView({ api, refresh, report, openView: showView,
   openDiscussion: async id => { selected = id; localStorage.setItem('wj.discussion', id); showView('discussion'); await refresh(); },
-  startFocus: roomId => { focusRoomId = roomId; selected = ''; current = null; showView('discussion'); render(); $('#discussion-mode').hidden = false; $('#discussion-mode').textContent = '이 채팅방 안에서 주제 토론을 시작합니다. 마치면 같은 방으로 돌아갑니다.'; $('#topic').focus(); },
+  startFocus: roomId => { focusRoomId = roomId; selected = ''; current = null; showView('discussion'); render(); $('#topic').focus(); },
 });
+function dailyFocus(): boolean { return state?.resident.rooms.some(r => r.id === focusRoomId && r.budgetMode === 'api-daily') ?? false; }
+function renderFocusBudget(): void {
+  const daily = dailyFocus();
+  for (const key of ['maxRequests', 'maxMinutes']) { const input = $<HTMLInputElement>(`#discussion-form [name=${key}]`); input.disabled = daily; input.closest('label')!.hidden = daily; }
+  $('#discussion-mode').hidden = !focusRoomId;
+  $('#discussion-mode').textContent = daily ? '같은 방의 API 일일 한도를 공유합니다. GPT/dot/Muse 채팅 한도는 제외하며 검토 라운드와 도구 한도·승인은 유지합니다. API 소진 시 부분 완료로 방에 돌아옵니다.' : '이 채팅방 안에서 주제 토론을 시작합니다. 마치면 같은 방으로 돌아갑니다.';
+}
 function renderMaterials(): void {
   if (!state) return;
   $('#material-roots').textContent = state.materialRoots.length ? '허용 경로: ' + state.materialRoots.join(', ') : '읽기 허용 경로가 없습니다. 서버의 WJ_MATERIAL_ROOTS에 공유할 파일·폴더를 지정하면 사용할 수 있습니다.';
@@ -170,6 +178,22 @@ async function browseMaterials(path: string): Promise<void> {
     }));
   }
 }
+function connectionMode(c: Connection): string {
+  if (gptKind(c.kind)) return 'gpt';
+  if (c.kind === 'browser' && c.browser?.discovery?.target === 'dot') {
+    try { const u = new URL(c.browser.url); if (u.hostname === 'chatgpt.com' && /\/c\/[^/]+\/?$/.test(u.pathname)) return 'dot'; } catch { /* An invalid stored URL is not a dot connection. */ }
+  }
+  return 'other';
+}
+function updateConnections(): void {
+  const mode = $<HTMLSelectElement>('#participant-mode').value;
+  const connections = state?.connections.filter(c => c.status === 'connected' && connectionMode(c) === mode) ?? [];
+  selectOptions($('#participant-connection'), connections.map(c => ({ id: c.id, label: `${c.label} · ${c.kind === 'browser' ? c.browser?.agentLabel ?? '기존 대화' : c.kind}` })), '연결 선택');
+  if (connections.length === 1) $<HTMLSelectElement>('#participant-connection').value = connections[0]!.id;
+  $('#participant-dot-connect').hidden = mode !== 'dot';
+  $('#participant-mode-note').textContent = mode === 'dot' ? '직접 확인한 기존 dot 대화만 표시합니다. 계정 이름·요금제로 dot 사용 가능 여부를 추정하지 않습니다. 일반 GPT와 문맥·역할·권한을 공유하지 않습니다.' : mode === 'gpt' ? '앱이 관리하는 일반 GPT 대화입니다. ChatGPT 웹·dot의 과거 기억을 가져오지 않습니다.' : 'API와 Muse 등 등록한 기존 연결을 선택합니다. dot으로 확인되지 않은 웹 연결은 이 목록에 남습니다.';
+  updateModels();
+}
 function updateModels(): void { const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); selectOptions($('#participant-model'), c?.models ?? []); updateEffort(); }
 function updateEffort(): void {
   const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); const select = $<HTMLSelectElement>('#participant-effort'); select.disabled = !reasoningKind(c?.kind);
@@ -189,7 +213,7 @@ function renderDiscussion(): void {
   if (!current) return; const d = current;
   $('#discussion-title').textContent = d.topic; $('#discussion-meta').textContent = `DISCUSSION / REVISION ${d.revision} · ${time(d.createdAt)}`;
   const unknownUsage = Math.max(d.used.unknownUsage, d.turns.filter(t => t.dispatchStartedAt && !['prepared', 'running'].includes(t.status) && t.usage === null).length);
-  const stateLine = $('#discussion-state'); stateLine.replaceChildren(badge(d.status), node('span', `요청 ${d.used.requests}/${d.limits.maxRequests} · 토큰 ${d.used.inputTokens + d.used.outputTokens} · 사용량 미확인 ${unknownUsage}회`, 'small muted'));
+  const stateLine = $('#discussion-state'); stateLine.replaceChildren(badge(d.status), node('span', `${d.budgetMode === 'api-daily' ? '요청 ' + d.used.requests + '회 · API 일일 공통 한도' : '요청 ' + d.used.requests + '/' + d.limits.maxRequests} · 토큰 ${d.used.inputTokens + d.used.outputTokens} · 사용량 미확인 ${unknownUsage}회`, 'small muted'));
   if (d.reason) stateLine.append(node('span', errors[d.reason] ?? d.reason, 'small muted'));
   const track = $('#phase-track'); track.replaceChildren(); const order = Object.keys(phases) as Phase[];
   for (const [index, phase] of order.entries()) track.append(node('div', `${String(index + 1).padStart(2, '0')} ${phases[phase]}`, `phase-step ${phase === d.phase ? 'current' : index < order.indexOf(d.phase) ? 'past' : ''}`));
@@ -197,7 +221,7 @@ function renderDiscussion(): void {
   if (d.status === 'running') controls.append(button('일시정지', () => control({ action: 'pause' })));
   if (['paused', 'blocked'].includes(d.status)) controls.append(button('이어가기', () => control({ action: 'resume' }), 'primary'));
   if (['running', 'paused', 'blocked'].includes(d.status)) controls.append(button('조건 보완', () => modal('토의 조건 보완', [{ name: 'text', label: '추가 조건', multiline: true }], values => control({ action: 'revise', ...values }))), button('토의 취소', () => modal('토의 취소', [], () => control({ action: 'cancel' }), '이미 전송된 응답과 Codex 실행은 기록에 남습니다. Codex 중단은 실행 화면에서 별도로 요청할 수 있습니다.')));
-  controls.append(node('span', `${(d.used.activeMs / 60000).toFixed(1)} / ${d.limits.maxActiveMs / 60000}분 · 실행 ${d.used.toolJobs}/${d.limits.maxToolJobs}`, 'small muted'));
+  controls.append(node('span', `${(d.used.activeMs / 60000).toFixed(1)}${d.budgetMode === 'api-daily' ? '분 경과' : ' / ' + d.limits.maxActiveMs / 60000 + '분'} · 실행 ${d.used.toolJobs}/${d.limits.maxToolJobs}`, 'small muted'));
   const members = $('#member-status'); members.replaceChildren();
   for (const p of d.members) { const context = d.contexts.find(c => c.participantId === p.id)!; const card = node('article', '', 'member-card'); const head = node('div', '', 'inline'); head.append(node('span', p.kind === 'fake' ? 'F' : gptKind(p.kind) ? 'G' : p.kind === 'deepseek' ? 'D' : p.label.slice(0, 1), 'avatar'), node('span', p.label, 'name'));
     card.append(head, node('div', `${d.excludedIds.includes(p.id) ? '참여 제외 · ' : ''}${p.modelId} · 문맥 ${context.generation}`, 'small muted'));
@@ -310,7 +334,7 @@ function renderConnections(): void {
     card.append(button('토커 설정 변경', () => { if (connection?.status !== 'connected') { announce('먼저 해당 계정을 로그인하고 모델을 확인해 주세요.', true); return; }
       const form = $<HTMLFormElement>('#participant-form'); let hidden = form.elements.namedItem('participantId') as HTMLInputElement | null;
       if (!hidden) { hidden = node('input'); hidden.type = 'hidden'; hidden.name = 'participantId'; form.append(hidden); } hidden.value = p.id;
-      $<HTMLSelectElement>('#participant-connection').value = p.connectionId!; updateModels(); $<HTMLSelectElement>('#participant-model').value = p.modelId;
+      $<HTMLSelectElement>('#participant-mode').value = connectionMode(connection); updateConnections(); $<HTMLSelectElement>('#participant-connection').value = p.connectionId!; updateModels(); $<HTMLSelectElement>('#participant-model').value = p.modelId;
       (form.elements.namedItem('label') as HTMLInputElement).value = p.label; (form.elements.namedItem('role') as HTMLInputElement).value = p.role;
       $<HTMLSelectElement>('#participant-effort').value = savedEffort(p); updateEffort(); $<HTMLInputElement>('#participant-output').value = p.maxOutputTokens?.toString() ?? ''; $('#participant-save').textContent = '토커 설정 저장'; $('#participant-edit-cancel').hidden = false; form.scrollIntoView({ behavior: 'smooth' });
     })); participants.append(card);
@@ -400,12 +424,12 @@ form('#discussion-form', async values => { const participantIds = [...document.q
   const materialPackageIds = [...document.querySelectorAll<HTMLInputElement>('#material-picker input:checked')].map(i => i.value);
   const targetRoom = focusRoomId;
   const result = await api<{ id?: string; discussionId?: string }>(targetRoom ? `/api/rooms/${targetRoom}/focus` : '/api/discussions', { topic: values.topic, criteria: values.criteria, materials: values.materials, materialPackageIds, participantIds, executionBindingId: values.executionBindingId || null,
-    limits: { maxRequests: Number(values.maxRequests), maxRounds: Number(values.maxRounds), maxActiveMs: Number(values.maxMinutes) * 60_000 } }); selected = (result.id ?? result.discussionId)!; focusRoomId = null; $('#discussion-mode').hidden = true; localStorage.setItem('wj.discussion', selected); if (targetRoom) showView('room'); await refresh(); });
+    limits: { maxRounds: Number(values.maxRounds), ...(dailyFocus() ? {} : { maxRequests: Number(values.maxRequests), maxActiveMs: Number(values.maxMinutes) * 60_000 }) } }); selected = (result.id ?? result.discussionId)!; focusRoomId = null; $('#discussion-mode').hidden = true; localStorage.setItem('wj.discussion', selected); if (targetRoom) showView('room'); await refresh(); });
 form('#oauth-form', async values => { await showOAuth(await api('/api/connections/oauth', values)); await refresh(); });
 form('#codex-oauth-form', startDevice);
 form('#deepseek-form', async (values, el) => { try { await api('/api/connections/deepseek', values); await refresh(); } finally { (el.elements.namedItem('key') as HTMLInputElement).value = ''; } });
 form('#anthropic-form', async (values, el) => { try { await api('/api/connections/anthropic', values); await refresh(); } finally { (el.elements.namedItem('key') as HTMLInputElement).value = ''; } });
-function clearParticipantEdit(): void { $('#participant-form').querySelector('[name=participantId]')?.remove(); $<HTMLFormElement>('#participant-form').reset(); $('#participant-save').textContent = '참여자 등록'; $('#participant-edit-cancel').hidden = true; updateModels(); }
+function clearParticipantEdit(): void { $('#participant-form').querySelector('[name=participantId]')?.remove(); $<HTMLFormElement>('#participant-form').reset(); $('#participant-save').textContent = '참여자 등록'; $('#participant-edit-cancel').hidden = true; updateConnections(); }
 form('#participant-form', async values => { const { participantId, ...settings } = values; await api(participantId ? '/api/participants/' + participantId : '/api/participants', { ...settings, ...(settings.maxOutputTokens !== undefined ? { maxOutputTokens: outputValue(settings.maxOutputTokens) } : {}) }); clearParticipantEdit(); announce(participantId ? '설정을 저장했습니다. 새 토의와 이후 상주 발언부터 적용합니다.' : '참여자를 등록했습니다.'); await refresh(); });
 $('#participant-edit-cancel').addEventListener('click', clearParticipantEdit);
 form('#browser-form', async (values, form) => {
@@ -433,6 +457,7 @@ form('#browser-discovery-form', async values => {
   const evidence = $('#browser-discovery-evidence'); evidence.replaceChildren();
   for (const text of [`프로필 · ${candidate.page.profile === 'default' ? '서버 기본 프로필' : candidate.page.profile}`, `주소 · ${candidate.page.url}`, `계정 식별 문구 · ${candidate.identityText ?? '확인 불가'}`, `에이전트 표시 · ${candidate.agentLabel ?? '확인 불가'}`, `대화 ID · ${candidate.threadValue ?? '확인 불가'}`, `관측 · ${time(candidate.observedAt)}`]) evidence.append(node('p', text));
   $('#browser-discovery-result').hidden = false; $('#browser-discovery-confirm-form').hidden = candidate.status !== 'ready';
+  $('#browser-dot-target').hidden = candidate.status !== 'ready' || new URL(candidate.page.url).hostname !== 'chatgpt.com';
   if (candidate.status === 'ready') {
     browserCandidate = candidate; browserDiscoveryConnection = values.connectionId ?? '';
     const existing = state?.connections.find(c => c.id === values.connectionId); ($<HTMLFormElement>('#browser-discovery-confirm-form').elements.namedItem('label') as HTMLInputElement).value = existing?.label ?? candidate.agentLabel ?? '';
@@ -440,7 +465,7 @@ form('#browser-discovery-form', async values => {
 });
 form('#browser-discovery-confirm-form', async values => {
   if (!browserCandidate?.id) throw new Error('browser_discovery_expired');
-  await api('/api/browser/discovery/confirm', { discoveryId: browserCandidate.id, label: values.label, confirmed: values.confirmed === 'on', ...(browserDiscoveryConnection ? { connectionId: browserDiscoveryConnection } : {}) });
+  await api('/api/browser/discovery/confirm', { discoveryId: browserCandidate.id, label: values.label, confirmed: values.confirmed === 'on', ...(values.dotTarget === 'on' ? { target: 'dot' } : {}), ...(browserDiscoveryConnection ? { connectionId: browserDiscoveryConnection } : {}) });
   invalidateDiscovery(); announce('기존 대화를 연결했습니다. 참여자를 등록해 방에 초대할 수 있습니다.'); await refresh();
 });
 form('#binding-form', async values => { await api('/api/bindings', { ...values, allowWrite: values.allowWrite === 'on' }); await refresh(); });
@@ -448,6 +473,12 @@ form('#job-form', async values => { await api('/api/jobs', values); await refres
 form('#grant-form', async values => { const tools = ['task_get', 'context_get', 'result_submit', 'capabilities_get', ...(values.codex === 'on' ? ['codex_send', 'codex_status', 'codex_result', 'codex_cancel'] : [])];
   const result = await api<{ id: string; token: string }>('/api/grants', { ...values, tools }); $('#grant-result').textContent = `한 번만 표시되는 접근 키입니다. 대화 본문에 붙여 넣지 마세요.\nMCP URL: ${location.origin}/mcp\nAuthorization: Bearer ${result.token}\nGrant: ${result.id}`; await refresh(); });
 $('#participant-connection').addEventListener('change', updateModels);
+$('#participant-mode').addEventListener('change', () => {
+  const mode = $<HTMLSelectElement>('#participant-mode').value;
+  if ($('#participant-form [name=participantId]')) { clearParticipantEdit(); $<HTMLSelectElement>('#participant-mode').value = mode; announce('대화 방식을 바꿀 때는 새 참여자로 등록합니다. 기존 기록과 업무 역할·권한은 원래 참여자에게 남습니다.'); }
+  updateConnections();
+});
+click('#participant-dot-connect', async () => { $<HTMLDetailsElement>('#browser-connection-panel').open = true; $<HTMLSelectElement>('#browser-discovery-preset').value = 'chatgpt-v1'; $<HTMLSelectElement>('#browser-discovery-connection').value = ''; invalidateDiscovery(); await loadBrowserPages(); $('#browser-discovery-form').scrollIntoView(); });
 $('#participant-model').addEventListener('change', updateEffort);
 for (const el of document.querySelectorAll<HTMLElement>('[data-view]')) el.addEventListener('click', () => showView(el.dataset.view as View));
 for (const el of document.querySelectorAll<HTMLElement>('[data-tab]')) el.addEventListener('click', () => { tab = el.dataset.tab!; renderDiscussion(); });

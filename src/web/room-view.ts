@@ -1,6 +1,6 @@
-import type { Connection, Member, CodexJob, Discussion, MaterialPackage } from '../workspace/model.js';
+import type { ApiDailySummary, Connection, Member, CodexJob, Discussion, MaterialPackage } from '../workspace/model.js';
 import type { RoomSummary, RoomMessage, ResidentTurn, ResidentCheckpoint } from '../workspace/resident-model.js';
-import type { ResidentStatusProjection } from '../workspace/resident-status.js';
+import type { ResidentStatusProjection } from '../workspace/resident-model.js';
 import type { WorkTask, WorkAttempt, SeatAssignment, WorkJobLink } from '../workspace/work-model.js';
 import { WikiView } from './wiki-view.js';
 type WorkItem = Omit<WorkTask, 'reports' | 'reviews'> & { reportCount: number; reviewCount: number };
@@ -16,6 +16,7 @@ export type RoomSnapshot = {
   discussions: Pick<Discussion, 'id' | 'topic' | 'status' | 'phase' | 'revision' | 'createdAt' | 'updatedAt'>[];
   materialPackages: { id: string; label: string; files: Omit<MaterialPackage['files'][number], 'text' | 'identity'>[] }[];
   resident: { enabled: boolean; rooms: RoomSummary[] };
+  apiDaily: ApiDailySummary;
 };
 type Dependencies = {
   api: <T>(path: string, body?: unknown, requestId?: string) => Promise<T>;
@@ -28,11 +29,14 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, text = '', cls = ''):
 function stored(key: string): string | null { try { return localStorage.getItem('wj.room.' + key); } catch { return null; } }
 function save(key: string, value: string): void { try { localStorage.setItem('wj.room.' + key, value); } catch { /* Display still works without browser storage. */ } }
 function date(value: string | null): string { return value ? new Date(value).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '관측 없음'; }
+function dateKst(value: string): string { return new Date(value).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'medium', hourCycle: 'h23' }); }
 const labels: Record<string, string> = { off: '꺼짐', on: '상주 중', sleeping: '휴면', blocked: '확인 필요', budget_exhausted: '진행 한도 소진', unknown: '미관측', not_run: '미실행', not_applicable: '해당 없음', unconfirmed: '응답 미확인', stale: '이전 세대', prepared: '전송 준비', running: '진행 중', paused: '일시정지', completed: '완료', partial: '부분 완료', cancelled: '취소', failed: '실패', fixture: '모의', connected: '연결됨', auth_required: '로그인 필요', queued: '실행 대기', blocked_approval: '승인 대기', reconciling: '대조 필요', interrupted: '중단', waiting: '응답 대기', ready: '준비됨', backlog: '조건 대기', claimed: '픽업됨', review: '독립 검토', rework: '재작업', done: '업무 완료', observed_pass: '관측 검사 통과', observed_fail: '관측 검사 실패', reported: '참여자 보고' };
 const label = (value: string): string => labels[value] ?? value;
 labels.not_sent = '미전송';
 const topicPhases: Record<Discussion['phase'], string> = { independent: '독립 초기안', cross_review: '상호 검토', verification: '근거 검증', revision: '수정안', synthesis: '종합안 작성', summary_review: '종합안 동료 검토' };
 const topicReasons: Record<string, string> = { procedure_completed: '예정된 토론 절차 완료', budget_exhausted: '진행 한도에 도달함', user_cancelled: '사용자가 토론을 취소함', participant_excluded: '일부 참여자가 제외됨', partial_unstructured_reply: '일부 응답의 형식을 확인하지 못함', restart_requires_reconciliation: '재시작 전 응답의 대조가 필요함' };
+const waitReasons: Record<string, string> = { api_daily_not_configured: 'API 일일 한도 미설정', api_daily_exhausted: 'API 일일 한도 소진 · 다음 KST 자정 대기', browser_manual_control: '서버 Chrome 수동 잠금', participant_not_ready: '계정 연결 확인 필요' };
+Object.assign(topicReasons, waitReasons);
 const workReasons: Record<string, string> = { work_source_required: '근거가 된 공개 발언을 선택해 주세요.', work_acceptance_required: '수용 기준이 필요합니다.', work_assignment_required: '허용 참여자와 범위를 정해 주세요.', work_execution_phase_pending: '실제 코드 실행은 페이즈 6 연결을 기다립니다.', work_dependency_pending: '선행 일감의 완료를 기다립니다.', work_scope_not_authorized: '해당 범위를 허용한 업무 역할이 필요합니다.', work_acceptance_not_observed: '수용 기준의 직접 확인이나 실제 근거가 필요합니다.', room_settings_required: '방의 진행 한도와 속도를 설정해 주세요.', budget_exhausted: '방의 진행 한도에 도달했습니다.', work_reconciliation_required: '원래 요청·응답을 대조해 주세요.', work_scope_or_report_changed: '배정·범위·보고가 바뀌어 결과를 보류했습니다.', owner_cancelled: '소유자가 취소했습니다.' };
 const workReason = (reason: string): string => workReasons[reason] ?? '추가 확인이 필요합니다. 원래 요청·응답에서 사유를 확인해 주세요.';
 Object.assign(workReasons, { work_execution_binding_required: 'Codex 업무에 등록된 작업 공간을 선택해 주세요.', execution_binding_not_ready: '등록한 Codex 세션 연결을 확인해 주세요.', work_write_safety_unverified: '저장소 비밀·링크·출력 가림 검증이 필요해 쓰기 업무를 보류합니다. 읽기 전용 연결을 사용할 수 있습니다.', room_tool_budget_exhausted: '실행 한도나 방의 현재 진행 상태를 확인해 주세요.', work_execution_scope_changed: '방·역할·업무 버전이 달라 원래 실행 결과를 보관하고 현재 업무 반영을 보류했습니다.', work_execution_binding_changed: '등록한 작업 공간·세션·권한이 달라 대조가 필요합니다.', work_execution_input_too_large: '원문과 재작업 입력이 실행기 한도를 넘었습니다. 원문을 보존하며 일감 범위를 조정해 주세요.' });
@@ -81,6 +85,7 @@ export class RoomView {
   private restoreOnShow = true;
   private panelsSignature = '';
   private settingsVersion = 0;
+  private apiSettingsVersion = 0;
   private controls: Promise<void> = Promise.resolve();
   private topic: Discussion | null = null;
   private topicKey = '';
@@ -99,6 +104,9 @@ export class RoomView {
     this.on('#room-power', async () => { if (!this.detail) return; await this.control(this.detail.room.desiredOn ? 'off' : 'on'); });
     this.on('#room-wake', () => this.control('wake'));
     this.on('#room-settings', () => this.settings());
+    this.on('#room-api-settings', () => this.apiSettings());
+    for (const id of ['#room-budget-mode', '#room-update-tools']) $(id).addEventListener('change', () => this.settingsFields());
+    $('#api-daily-form').addEventListener('submit', event => { event.preventDefault(); void this.saveApiSettings().catch(this.deps.report); });
     this.on('#room-more', () => this.loadOlder());
     this.on('#room-unread', () => this.jumpUnread());
     this.on('#room-latest', () => { const target = $('#room-timeline'); target.scrollTop = target.scrollHeight; this.markRead(); });
@@ -397,7 +405,7 @@ export class RoomView {
   private render(): void {
     const d = this.detail; if (!d || !this.snapshot) return; const room = d.room;
     $('#room-title').textContent = room.title;
-    $('#room-state').textContent = `${label(room.observedStatus)}${room.topicLink ? ' · 주제 토론 중' : ''}${room.reason ? ' · ' + room.reason : ''}`;
+    $('#room-state').textContent = `${label(room.observedStatus)}${room.topicLink ? ' · 주제 토론 중' : ''}${room.reason ? ' · ' + (waitReasons[room.reason] ?? room.reason) : ''}`;
     $('#room-state').dataset.state = room.observedStatus;
     $('#room-power').textContent = room.desiredOn ? '방 끄기' : '방 켜기'; $('#room-power').setAttribute('aria-pressed', String(room.desiredOn));
     $('#room-power').title = '방을 끄면 새 발언을 멈춥니다. 이미 시작한 Codex 실행은 실행 화면에서 별도로 중단합니다.';
@@ -533,11 +541,15 @@ export class RoomView {
   }
   private renderPanels(): void {
     const d = this.detail!; const s = this.snapshot!; const r = d.room;
-    const signature = JSON.stringify([r, d.contexts, d.status.members, s.participants, s.connections, s.jobs, s.materialPackages, this.turns, this.topicKey, this.work]);
+    const signature = JSON.stringify([r, s.apiDaily, d.contexts, d.status.members, s.participants, s.connections, s.jobs, s.materialPackages, this.turns, this.topicKey, this.work]);
     if (signature === this.panelsSignature) return; this.panelsSignature = signature;
     this.renderMembers(s, r.members, d.status.members); this.renderWork();
     const usage = $('#room-usage'); usage.replaceChildren();
-    if (!r.budgets) usage.append(el('p', '한도·속도 설정이 필요합니다.', 'small muted'));
+    if (r.budgetMode === 'api-daily') {
+      const a = this.snapshot?.apiDaily;
+      usage.append(el('p', 'API 일일 방식 · GPT/dot/Muse 대화 한도 제외', 'small'), el('p', a?.policy ? `API 요청 ${a.used.requests} (+예약 ${a.used.reserved}) / ${a.policy.maxRequests}\n보고 토큰 ${a.used.inputTokens + a.used.outputTokens} / ${a.policy.maxTokens}\n사용량 미제공 ${a.used.unknownUsage}회 · 다음 갱신 ${dateKst(a.nextResetAt)} (KST)` : 'API 일일 한도 미설정 · API만 대기', 'small pre-line'));
+      usage.append(el('p', `도구 ${r.used?.toolJobs ?? 0} / ${r.budgets?.maxToolJobs ?? 0} · 도구 종료 ${date(r.budgets?.deadlineAt ?? null)}`, 'small muted'));
+    } else if (!r.budgets) usage.append(el('p', '한도·속도 설정이 필요합니다.', 'small muted'));
     else { const used = r.used; usage.append(el('p', `요청 ${used?.requests ?? 0} / ${r.budgets.maxRequests}`, 'usage-number'), el('p', `보고 토큰 ${(used?.inputTokens ?? 0) + (used?.outputTokens ?? 0)} / ${r.budgets.maxTokens}\n사용량 미제공 ${used?.unknownUsage ?? 0}회 · 도구 ${used?.toolJobs ?? 0} / ${r.budgets.maxToolJobs}\n종료 ${date(r.budgets.deadlineAt)}`, 'small pre-line'));
       if (r.nextEligibleAt) usage.append(el('p', '다음 발언 가능 ' + date(r.nextEligibleAt), 'small muted'));
     }
@@ -580,7 +592,8 @@ export class RoomView {
       info.append(el('small', p.kind === 'fake' ? '외부 모델 호출 없음' : (s.connections.find(c => c.id === p.connectionId)?.label ?? '연결 미확인'), 'member-account'));
       if (['openai-oauth', 'codex-oauth', 'deepseek'].includes(p.kind)) info.append(el('small', '사고 깊이 · ' + (p.reasoningEffort ?? (p.kind === 'deepseek' ? '제공처 기본값' : 'xhigh')), 'member-account'));
       if (p.kind === 'deepseek') info.append(el('small', '출력 한도 · ' + (p.maxOutputTokens ?? 4096).toLocaleString('ko-KR') + '토큰', 'member-account'));
-      const state = m?.blockedReason ? '확인 필요 · ' + m.blockedReason : status ? label(status.response.state) : '미참여';
+      const reason = m?.blockedReason ?? status?.response.reason;
+      const state = m?.blockedReason ? '확인 필요 · ' + workReason(m.blockedReason) : status ? label(status.response.state) + (reason ? ' · ' + (waitReasons[reason] ?? reason) : '') : '미참여';
       info.append(el('small', state, 'member-observed')); info.title = `${p.label}\n${p.modelId}\n${p.role}\n${state}`;
       const toggleLabel = el('label', '', 'member-toggle'); const toggle = el('input'); toggle.type = 'checkbox'; toggle.checked = !!m?.enabled; toggle.disabled = !this.detail?.enabled; toggle.setAttribute('aria-label', p.label + ' 발언 참여');
       toggle.addEventListener('change', () => { toggle.disabled = true; void this.control('set_member', { participantId: p.id, enabled: toggle.checked }).catch(this.deps.report).finally(() => { toggle.disabled = !this.detail?.enabled; }); }); toggleLabel.append(toggle, el('span', '', 'toggle-track'));
@@ -619,19 +632,44 @@ export class RoomView {
   }
   private settings(): void {
     if (!this.detail) return; this.settingsVersion = this.detail.room.version; const form = $<HTMLFormElement>('#room-settings-form'); form.reset(); const { budgets: b, pacing: p } = this.detail.room;
-    const values = { maxRequests: b?.maxRequests, maxTokens: b?.maxTokens, maxToolJobs: b?.maxToolJobs, deadlineAt: b ? localDate(b.deadlineAt) : undefined, minInterval: p ? p.minIntervalMs / 1000 : undefined, idleNudge: p ? p.idleNudgeMs / 1000 : undefined, passBackoff: p ? p.passBackoffMs / 1000 : undefined, sleepAfterPasses: p?.sleepAfterPasses };
+    const values = { budgetMode: this.detail.room.budgetMode ?? 'legacy', maxRequests: b?.maxRequests, maxTokens: b?.maxTokens, maxToolJobs: b?.maxToolJobs, deadlineAt: b ? localDate(b.deadlineAt) : undefined, minInterval: p ? p.minIntervalMs / 1000 : undefined, idleNudge: p ? p.idleNudgeMs / 1000 : undefined, passBackoff: p ? p.passBackoffMs / 1000 : undefined, sleepAfterPasses: p?.sleepAfterPasses };
     for (const [key, value] of Object.entries(values)) (form.elements.namedItem(key) as HTMLInputElement).value = value === undefined ? '' : String(value);
     (form.elements.namedItem('autoTopic') as HTMLInputElement).checked = this.detail.room.autoTopic === true;
+    this.settingsFields();
     $<HTMLDialogElement>('#room-settings-dialog').showModal();
   }
   private async saveSettings(): Promise<void> {
     const form = $<HTMLFormElement>('#room-settings-form'); const submit = form.querySelector<HTMLButtonElement>('[type=submit]')!; if (submit.disabled) return; submit.disabled = true;
     const v = Object.fromEntries(new FormData(form)) as Record<string, string>;
-    try { await this.control('configure', { autoTopic: v.autoTopic === 'on', budgets: { maxRequests: Number(v.maxRequests), maxTokens: Number(v.maxTokens), maxToolJobs: Number(v.maxToolJobs), deadlineAt: new Date(v.deadlineAt!).toISOString() }, pacing: { minIntervalMs: Math.round(Number(v.minInterval) * 1000), idleNudgeMs: Math.round(Number(v.idleNudge) * 1000), passBackoffMs: Math.round(Number(v.passBackoff) * 1000), sleepAfterPasses: Number(v.sleepAfterPasses) } }, this.settingsVersion); $<HTMLDialogElement>('#room-settings-dialog').close(); }
+    const updateBudget = v.budgetMode !== 'api-daily' || $<HTMLInputElement>('#room-update-tools').checked;
+    try { await this.control('configure', { autoTopic: v.autoTopic === 'on', budgetMode: v.budgetMode,
+      ...(updateBudget ? { budgets: { maxRequests: Number(v.maxRequests ?? this.detail?.room.budgets?.maxRequests ?? 1), maxTokens: Number(v.maxTokens ?? this.detail?.room.budgets?.maxTokens ?? 1), maxToolJobs: Number(v.maxToolJobs), deadlineAt: new Date(v.deadlineAt!).toISOString() } } : {}),
+      pacing: { minIntervalMs: Math.round(Number(v.minInterval) * 1000), idleNudgeMs: Math.round(Number(v.idleNudge) * 1000), passBackoffMs: Math.round(Number(v.passBackoff) * 1000), sleepAfterPasses: Number(v.sleepAfterPasses) } }, this.settingsVersion); $<HTMLDialogElement>('#room-settings-dialog').close(); }
+    finally { submit.disabled = false; }
+  }
+  private settingsFields(): void {
+    const form = $<HTMLFormElement>('#room-settings-form'), daily = $<HTMLSelectElement>('#room-budget-mode').value === 'api-daily';
+    $('#room-update-tools-label').hidden = !daily;
+    for (const key of ['maxRequests', 'maxTokens', 'maxToolJobs', 'deadlineAt']) {
+      const input = form.elements.namedItem(key) as HTMLInputElement;
+      input.disabled = daily && (['maxRequests', 'maxTokens'].includes(key) || !$<HTMLInputElement>('#room-update-tools').checked);
+      input.required = !input.disabled; input.closest('label')!.hidden = input.disabled;
+    }
+  }
+  private apiSettings(): void {
+    const a = this.snapshot?.apiDaily; if (!a) return; this.apiSettingsVersion = a.version;
+    const form = $<HTMLFormElement>('#api-daily-form'); (form.elements.namedItem('maxRequests') as HTMLInputElement).value = String(a.policy?.maxRequests ?? 24); (form.elements.namedItem('maxTokens') as HTMLInputElement).value = String(a.policy?.maxTokens ?? 200000);
+    $('#api-daily-current').textContent = `${a.day} KST · 전송 ${a.used.requests}회 · 보고 ${a.used.inputTokens + a.used.outputTokens}토큰 · 미제공 ${a.used.unknownUsage}회\n과거 전송 시각 미기록 ${a.legacyUntracked}회 · 한도 변경은 사용량을 초기화하지 않습니다.`;
+    $<HTMLDialogElement>('#api-daily-dialog').showModal();
+  }
+  private async saveApiSettings(): Promise<void> {
+    const form = $<HTMLFormElement>('#api-daily-form'), submit = form.querySelector<HTMLButtonElement>('[type=submit]')!; if (submit.disabled) return; submit.disabled = true;
+    const v = Object.fromEntries(new FormData(form));
+    try { await this.deps.api('/api/api-daily', { expectedVersion: this.apiSettingsVersion, maxRequests: Number(v.maxRequests), maxTokens: Number(v.maxTokens) }); $<HTMLDialogElement>('#api-daily-dialog').close(); await this.deps.refresh(); }
     finally { submit.disabled = false; }
   }
   private drawer(dialogId: string, panel: string, slot: string): void { $(slot).append($(panel)); $(panel).hidden = false; const d = $<HTMLDialogElement>(dialogId); if (!d.open) d.showModal(); if (panel === '#room-panel') $('#room-panel-toggle').setAttribute('aria-expanded', 'true'); }
-  private closeDrawers(): void { for (const id of ['#room-members-dialog', '#room-panel-dialog', '#room-settings-dialog', '#room-result-dialog', '#work-form-dialog', '#work-seat-dialog', '#work-detail-dialog', '#wiki-form-dialog', '#wiki-detail-dialog', '#resident-grant-dialog']) { const d = $<HTMLDialogElement>(id); if (d.open) d.close(); } }
+  private closeDrawers(): void { for (const id of ['#api-daily-dialog', '#room-members-dialog', '#room-panel-dialog', '#room-settings-dialog', '#room-result-dialog', '#work-form-dialog', '#work-seat-dialog', '#work-detail-dialog', '#wiki-form-dialog', '#wiki-detail-dialog', '#resident-grant-dialog']) { const d = $<HTMLDialogElement>(id); if (d.open) d.close(); } }
   private navigate(view: 'connections' | 'execution' | 'discussion'): void { this.closeDrawers(); this.deps.openView(view); }
 }
 function localDate(value: string): string { const d = new Date(value); return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16); }

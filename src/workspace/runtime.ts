@@ -27,6 +27,7 @@ import { WorkExecutionBridge, validateWorkExecutionState } from './work-executio
 import { Wiki, validateWikiState } from './wiki.js';
 import { ResidentMcp } from './resident-mcp.js';
 import { validateTopicIntents } from './resident-focus.js';
+import { apiUsageSummary, configureApiUsage, validateApiUsage, dailyRoom } from './api-usage.js';
 
 export class Workspace {
   readonly store: Store; readonly vault: Vault; readonly oauth: OAuthService; readonly browser: BrowserBridge;
@@ -44,7 +45,7 @@ export class Workspace {
   constructor(readonly config: WorkspaceConfig, fakeDelay = 80, options: { residentProvider?: Pick<Providers, 'complete'>; residentClock?: () => number; residentAutoSchedule?: boolean } = {}) {
     this.store = new Store(config.stateDir);
     this.dispatch = new DispatchCoordinator(config.residentEnabled);
-    try { this.resident = new ResidentStore(this.store, config.residentEnabled); validateTopicIntents(this.store.read()); validateWikiState(this.store.read()); validateWorkExecutionState(this.store.read(), this.store); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); this.wiki = new Wiki(this.store, config.residentEnabled); }
+    try { validateApiUsage(this.store.read()); this.resident = new ResidentStore(this.store, config.residentEnabled); validateTopicIntents(this.store.read()); validateWikiState(this.store.read()); validateWorkExecutionState(this.store.read(), this.store); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); this.wiki = new Wiki(this.store, config.residentEnabled); }
     catch (error) { this.store.close(); throw error; }
     this.vault = new Vault(join(config.stateDir, 'credentials'));
     try { for (const connectionId of this.store.read().connectionCleanup ?? []) this.cleanupConnection(connectionId); }
@@ -90,10 +91,17 @@ export class Workspace {
       discussions: state.discussions.map(d => ({ id: d.id, topic: d.topic, status: d.status, phase: d.phase, revision: d.revision, createdAt: d.createdAt, updatedAt: d.updatedAt })),
       bindings: state.bindings, jobs: state.jobs.slice(-50), browserPaused: state.browserPaused,
       materialPackages: (state.materialPackages ?? []).map(materialMetadata), materialRoots: this.config.materialRoots,
-      resident: this.resident.snapshot(),
+      resident: this.resident.snapshot(), apiDaily: apiUsageSummary(state),
       capabilities: { sourceFetch: this.config.sourceFetch, browserConfigured: !!this.config.chromeCommand,
         noVncConfigured: this.config.noVncPort !== null, codexConfigured: this.config.workspaceRoots.length > 0 },
       grants: state.grants.map(({ hash: _hash, ...grant }) => grant) };
+  }
+  configureApiDaily(input: unknown, requestId: string) {
+    return this.store.transact((s, emit) => {
+      const result = configureApiUsage(s, input);
+      for (const r of s.resident?.rooms ?? []) if (dailyRoom(r) && r.desiredOn && r.reason?.startsWith('api_daily_') && ['on', 'sleeping'].includes(r.observedStatus)) { r.observedStatus = 'on'; r.reason = null; r.nextEligibleAt = now(); }
+      emit({ type: 'api_daily.configured', discussionId: null, data: { version: result.version } }); return result;
+    }, { id: 'api-daily:' + requestId, input });
   }
   discussion(discussionId: string) { return { discussion: findDiscussion(this.store.read(), discussionId), cursor: this.store.cursor() }; }
   prepareMaterials(input: unknown, requestId: string): string {
@@ -144,6 +152,12 @@ export class Workspace {
   }
   async confirmBrowser(input: unknown, requestId: string): Promise<string> {
     const body = object(input); const candidate = await this.browserDiscovery.resolve(body);
+    if (body.target !== undefined && body.target !== 'dot') throw new AppError('invalid_browser_target');
+    if (body.target === 'dot') {
+      const u = new URL(candidate.binding.url);
+      if (u.hostname !== 'chatgpt.com' || !/\/c\/[^/]+\/?$/.test(u.pathname)) throw new AppError('dot_existing_chat_required', 409);
+      candidate.binding.discovery!.target = 'dot';
+    }
     return this.addBrowser({ label: string(body.label, 80), ...(candidate.connectionId ? { connectionId: candidate.connectionId } : {}), binding: candidate.binding }, requestId, candidate.binding.discovery);
   }
   async addBrowser(input: unknown, requestId?: string, discovery?: BrowserBinding['discovery']): Promise<string> {
@@ -197,8 +211,11 @@ export class Workspace {
     this.store.transact((s, emit) => {
       const existing = existingId ? s.participants.find(p => p.id === existingId) : undefined;
       if (existingId && !existing) throw new AppError('participant_not_found', 404);
+      const target = s.connections.find(c => c.id === body.connectionId);
       if (existing && body.connectionId !== existing.connectionId && (s.resident?.rooms.some(r => r.contexts?.some(c => c.participantId === existing.id && c.history.length > 0)) ||
-          s.resident?.turns.some(t => t.participantId === existing.id && ['prepared', 'running', 'unconfirmed'].includes(t.status)))) throw new AppError('resident_account_change_requires_new_participant', 409);
+          s.resident?.turns.some(t => t.participantId === existing.id) ||
+          (existing.kind === 'browser' || target?.kind !== existing.kind) && s.discussions.some(d => d.members.some(m => m.id === existing.id)) ||
+          s.resident?.workAttempts.some(a => a.participantId === existing.id && !a.reported))) throw new AppError('resident_account_change_requires_new_participant', 409);
       const connection = s.connections.find(c => c.id === body.connectionId && c.status === 'connected');
       if (!connection) throw new AppError('connection_not_ready', 409);
       const modelId = string(body.modelId, 200); if (!connection.models.some(m => m.id === modelId)) throw new AppError('model_not_available', 409);

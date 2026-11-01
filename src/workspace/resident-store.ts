@@ -4,6 +4,7 @@ import type { Store } from './store.js';
 import { AppError, digest, id, integer, now, object, string, strings } from './util.js';
 import { budgetReason, usageFor, unresolvedProvider, validBudget, validPacing } from './dispatch.js';
 import { projectResidentStatus } from './resident-status.js';
+import { dailyRoom, ensureApiUsage } from './api-usage.js';
 
 const MIGRATION = 'resident:migration:v1';
 const COLLECTIONS = ['rooms', 'messages', 'turns', 'dispatchLeases', 'contextCheckpoints', 'workItems', 'workAttempts', 'wikiPages', 'wikiVersions', 'jobLinks', 'residentGrants'] as const;
@@ -18,7 +19,7 @@ export function readResident(state: WorkspaceState): ResidentStateV1 | null {
   const resident = raw as ResidentStateV1;
   if (!resident.migration || resident.migration.id !== 'resident-v1' || !isText(resident.migration.at) || !isCount(resident.migration.basisCursor) ||
       resident.rooms.some(room => !room || !isText(room.id) || !isText(room.title) || !isCount(room.version, 1) || !isCount(room.epoch, 1) ||
-        typeof room.desiredOn !== 'boolean' || room.autoTopic !== undefined && typeof room.autoTopic !== 'boolean' || !['off', 'on', 'sleeping', 'blocked', 'budget_exhausted'].includes(room.observedStatus) ||
+        typeof room.desiredOn !== 'boolean' || room.budgetMode !== undefined && !['legacy', 'api-daily'].includes(room.budgetMode) || room.autoTopic !== undefined && typeof room.autoTopic !== 'boolean' || !['off', 'on', 'sleeping', 'blocked', 'budget_exhausted'].includes(room.observedStatus) ||
         !Array.isArray(room.members) || room.members.some(m => !m || !isText(m.participantId) || typeof m.enabled !== 'boolean') ||
         !Array.isArray(room.legacyDiscussionIds) || !room.legacyDiscussionIds.every(isText) ||
         !(room.topicLink === null || isText(room.topicLink)) || !isCount(room.lastMessageSequence) || !isText(room.createdAt) || !isText(room.updatedAt) ||
@@ -87,7 +88,7 @@ export class ResidentStore {
   }
   control(roomId: string, input: unknown, requestId: string) {
     const body = object(input); const action = string(body.action, 40); const key = string(requestId, 200);
-    const fields = action === 'rename' ? ['title'] : action === 'set_member' ? ['participantId', 'enabled'] : action === 'configure' ? ['budgets', 'pacing', 'autoTopic'] : [];
+    const fields = action === 'rename' ? ['title'] : action === 'set_member' ? ['participantId', 'enabled'] : action === 'configure' ? ['budgets', 'pacing', 'autoTopic', 'budgetMode'] : [];
     only(body, ['action', 'expectedVersion', ...fields]);
     readResident(this.store.read());
     return this.store.transact((state, emit) => {
@@ -107,11 +108,16 @@ export class ResidentStore {
         if (room.desiredOn || state.resident!.turns.some(t => t.roomId === roomId && ['prepared', 'running', 'unconfirmed'].includes(t.status)) || state.resident!.dispatchLeases.some(l => l.roomId === roomId && l.state !== 'released')) throw new AppError('room_configuration_requires_off', 409);
         if (body.autoTopic !== undefined && typeof body.autoTopic !== 'boolean') throw new AppError('invalid_input');
         if (body.autoTopic !== undefined) room.autoTopic = body.autoTopic;
-        const budget = object(body.budgets); const pacing = object(body.pacing);
-        only(budget, ['maxRequests', 'maxTokens', 'maxToolJobs', 'deadlineAt']); only(pacing, ['minIntervalMs', 'idleNudgeMs', 'passBackoffMs', 'sleepAfterPasses']);
-        const deadlineAt = string(budget.deadlineAt, 100);
-        if (!Number.isFinite(Date.parse(deadlineAt)) || Date.parse(deadlineAt) <= Date.now() || new Date(deadlineAt).toISOString() !== deadlineAt) throw new AppError('invalid_room_deadline');
-        room.budgets = { maxRequests: requiredInteger(budget.maxRequests, 1, 10_000), maxTokens: requiredInteger(budget.maxTokens, 1, 100_000_000), maxToolJobs: requiredInteger(budget.maxToolJobs, 0, 100), deadlineAt };
+        if (body.budgetMode !== undefined) { if (!['legacy', 'api-daily'].includes(String(body.budgetMode))) throw new AppError('invalid_budget_mode'); if (body.budgetMode !== room.budgetMode) room.epoch++; room.budgetMode = body.budgetMode as 'legacy' | 'api-daily'; }
+        if (dailyRoom(room)) ensureApiUsage(state);
+        const pacing = object(body.pacing);
+        if (!dailyRoom(room) || body.budgets !== undefined) {
+          const budget = object(body.budgets); only(budget, ['maxRequests', 'maxTokens', 'maxToolJobs', 'deadlineAt']);
+          const deadlineAt = string(budget.deadlineAt, 100);
+          if (!Number.isFinite(Date.parse(deadlineAt)) || Date.parse(deadlineAt) <= Date.now() || new Date(deadlineAt).toISOString() !== deadlineAt) throw new AppError('invalid_room_deadline');
+          room.budgets = { maxRequests: requiredInteger(budget.maxRequests, 1, 10_000), maxTokens: requiredInteger(budget.maxTokens, 1, 100_000_000), maxToolJobs: requiredInteger(budget.maxToolJobs, 0, 100), deadlineAt };
+        }
+        only(pacing, ['minIntervalMs', 'idleNudgeMs', 'passBackoffMs', 'sleepAfterPasses']);
         room.pacing = { minIntervalMs: requiredInteger(pacing.minIntervalMs, 1, 3_600_000), idleNudgeMs: requiredInteger(pacing.idleNudgeMs, 1, 86_400_000), passBackoffMs: requiredInteger(pacing.passBackoffMs, 1, 86_400_000), sleepAfterPasses: requiredInteger(pacing.sleepAfterPasses, 1, 100) };
         // Counts and immutable request IDs survive every explicit budget update.
         changed = true; room.reason = null;
@@ -169,7 +175,7 @@ function summary(room: Room): RoomSummary {
   return { id: room.id, title: room.title, version: room.version, epoch: room.epoch, desiredOn: room.desiredOn,
     observedStatus: room.observedStatus, members: room.members.map(m => ({ participantId: m.participantId, enabled: m.enabled, ...(m.blockedReason ? { blockedReason: m.blockedReason } : {}) })),
     legacyDiscussionIds: [...room.legacyDiscussionIds], topicLink: room.topicLink, lastMessageSequence: room.lastMessageSequence,
-    createdAt: room.createdAt, updatedAt: room.updatedAt, budgets: room.budgets, pacing: room.pacing ?? null, autoTopic: room.autoTopic === true, reason: room.reason ?? null, nextEligibleAt: room.nextEligibleAt, used: usageFor(room) };
+    createdAt: room.createdAt, updatedAt: room.updatedAt, budgets: room.budgets, ...(room.budgetMode ? { budgetMode: room.budgetMode } : {}), pacing: room.pacing ?? null, autoTopic: room.autoTopic === true, reason: room.reason ?? null, nextEligibleAt: room.nextEligibleAt, used: usageFor(room) };
 }
 function only(body: Record<string, unknown>, allowed: string[]): void {
   if (Object.keys(body).some(key => !allowed.includes(key))) throw new AppError('invalid_room_fields');

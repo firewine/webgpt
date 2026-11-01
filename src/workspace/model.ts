@@ -14,7 +14,7 @@ export interface BrowserBinding {
   userSelector: string; assistantSelector: string; busySelector: string; readySelector: string;
   thread?: { selector: string; attribute: string; value: string; jsonKey?: string };
   sendAppearsAfterInput?: boolean;
-  discovery?: { presetVersion: string; observedAt: string; evidenceDigest: string; profile: string };
+  discovery?: { presetVersion: string; observedAt: string; evidenceDigest: string; profile: string; target?: 'dot' };
 }
 export interface Connection {
   id: string; kind: Exclude<ProviderKind, 'fake'>; label: string;
@@ -32,6 +32,21 @@ export interface Member {
   id: string; label: string; kind: ProviderKind; connectionId: string | null; modelId: string; role: string;
   reasoningEffort?: ReasoningEffort;
   maxOutputTokens?: number;
+}
+export interface ApiUsageEntry {
+  requestId: string; participantId: string; connectionId: string; kind: 'deepseek' | 'anthropic';
+  day: string; status: 'reserved' | 'running' | 'unconfirmed' | 'settled' | 'not_sent';
+  reservedAt: string; startedAt: string | null; finishedAt: string | null;
+  usage: { input: number; output: number } | null; error: string | null;
+}
+export interface ApiUsageState {
+  schemaVersion: 1; version: number; importedAt: string; legacyUntracked: number;
+  policy: { maxRequests: number; maxTokens: number } | null; entries: ApiUsageEntry[];
+}
+export interface ApiDailySummary {
+  enabled: boolean; version: number; timeZone: 'Asia/Seoul'; day: string; nextResetAt: string;
+  policy: ApiUsageState['policy']; importedAt: string | null; legacyUntracked: number;
+  used: { requests: number; reserved: number; inputTokens: number; outputTokens: number; unknownUsage: number };
 }
 export interface Observation {
   connection: string; response: string; tool: string; work: string;
@@ -98,6 +113,7 @@ export interface Discussion {
   materialPackageIds?: string[];
   roomId?: string;
   roomMaterial?: { text: string; digest: string };
+  budgetMode?: 'api-daily';
 }
 export interface ExecutionBinding {
   id: string; label: string; host: string; user: string; cwd: string; threadId: string;
@@ -123,6 +139,7 @@ export interface WorkspaceState {
   materialPackages?: MaterialPackage[];
   connectionCleanup?: string[];
   resident?: ResidentStateV1;
+  apiUsage?: ApiUsageState;
 }
 export interface DurableEvent { id: number; type: string; discussionId: string | null; at: string; data: unknown }
 export function initialState(hostId: string): WorkspaceState {
