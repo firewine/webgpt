@@ -34,7 +34,7 @@ test('pinned topic -> same-room discussion -> reviewed conclusion survives retur
     return { text: JSON.stringify(answer), receipt: 'topic-fixture-' + calls, usage: { input: 3, output: 5 } };
   };
   await page.goto(f.url); await page.locator('#room-focus-new').click(); await page.locator('#topic').fill(goal); await page.getByText('참고 자료와 진행 범위', { exact: true }).click(); await page.locator('#discussion-form [name=maxRounds]').selectOption('1');
-  await page.getByRole('button', { name: /토의 시작/ }).click(); await until(() => releases.has('fake-a'));
+  await page.getByRole('button', { name: /토의 시작/ }).click(); await until(() => releases.has('fake-a')); await page.locator('#topic-chat').waitFor(); await page.locator('#chat-free').click();
   await page.waitForFunction(() => !document.querySelector('#view-room').hidden && document.querySelector('#room-topic-title').textContent.includes('같은 주제'));
   assert.equal(f.posts.filter(p => p.endsWith('/focus')).length, 1); assert.match(await page.locator('#room-topic-progress').textContent(), /독립 초기안/);
   releases.get('fake-a')(); await until(() => releases.has('fake-b')); await f.app.residentRunner.tick();

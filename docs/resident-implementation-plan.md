@@ -1,5 +1,8 @@
 # 상주 운영 단계별 변경·이관·수락·롤백
 
+> **2026-11-01 주제별 채팅 통합 승인:** R3의 별도 토의 화면 기본 진입/복귀 결정을 주제별 채팅 shell로 대체한다. 기존 상세 제어는 drawer/dialog로 재사용하며 G0 뒤 동일 ID 원문/상세 보기로 복귀할 수 있다. R8에서 독립3+방 연결2 주제 표시, 전환20회 POST/외부 호출0, 4폭/2탭/SSE·공개 경계·승인/복구를 추가 회귀한다. 원래 gate의 숫자·안전 기준·실계정 미검증은 유지한다. [승인 범위·후속 영향·검증·복귀](./reviews/topic-chat-ui-impact-20261101.md). 실제 완료 여부는 [페이즈 SSOT](./development-plan.md)를 따른다.
+
+
 > **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-31 PR #22 사용자 병합 후 페이즈 8 통합 검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
 
 설계 근거 C와 계획 P는 [개정 요약](./plan-revision-20261030.md)으로 고정한다. 구현 순서·상태는 맨 위 링크의 SSOT를 따른다. R1~R4는 아래 계약으로 구현하고 [R1 증거](./implementation/phase1-resident-foundation-20261030.md)·[R2 증거](./implementation/phase2-resident-runtime-20261030.md)·[R3 증거](./implementation/phase3-chatroom-gui-20261030.md)·[R4 증거](./implementation/phase4-browser-discovery-20261030.md)를 남겼다. R3-E의 실제 기기 부분과 R4-D 실계정 왕복은 UNVERIFIED이며 자동 검사와 구분한다. R5/R6는 아래 구현 대응과 [R5 증거](./implementation/phase5-open-work-queue-20261030.md)·[R6 증거](./implementation/phase6-work-execution-20261030.md)를 따른다. R7의 실제 타입·파일·심볼·endpoint·검사는 아래 구현 대응과 [R7 증거](./implementation/phase7-shared-wiki-20261031.md)에 기록했다. R8의 통합/복구/부하 fixture와 남은 무인 전환/실환경 조건은 [R8 증거](./implementation/resident-acceptance.md)를 따른다. 아래 원 설계의 제안 표기는 이력을 유지하며 구현 판정은 각 증거를 따른다. 기존 파일/심볼의 E 근거표는 C 기준이며 실계정/DOM/운영 호스트 적합성은 UNVERIFIED다.

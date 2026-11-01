@@ -1,5 +1,6 @@
 import type { Connection, Member, Discussion, ExecutionBinding, CodexJob, DurableEvent, Phase, MaterialPackage, ProviderKind, DeviceSignin } from '../workspace/model.js';
 import { RoomView } from './room-view.js';
+import { TopicChatView } from './topic-chat-view.js';
 import type { RoomSnapshot } from './room-view.js';
 import type { DiscoveryPage, DiscoveryResult } from '../connections/browser-discovery-model.js';
 type Snapshot = { cursor: number; connections: Connection[]; participants: Member[]; discussions: Pick<Discussion, 'id' | 'topic' | 'status' | 'phase' | 'revision' | 'createdAt' | 'updatedAt'>[];
@@ -8,8 +9,9 @@ type Snapshot = { cursor: number; connections: Connection[]; participants: Membe
   materialPackages: { id: string; label: string; createdAt: string; files: Omit<MaterialPackage['files'][number], 'text' | 'identity'>[] }[]; materialRoots: string[]; resident: RoomSnapshot['resident']; apiDaily: RoomSnapshot['apiDaily'] };
 type View = 'room' | 'discussion' | 'connections' | 'execution';
 const $ = <T extends HTMLElement = HTMLElement>(selector: string): T => document.querySelector<T>(selector)!;
-let state: Snapshot | null = null; let current: Discussion | null = null; let selected = localStorage.getItem('wj.discussion') ?? '';
-let tab = 'timeline'; let view: View = 'discussion'; let stream: EventSource | null = null;
+let state: Snapshot | null = null; let current: Discussion | null = null; let selected = sessionStorage.getItem('wj.chat.selection') ?? localStorage.getItem('wj.chat.selection') ?? localStorage.getItem('wj.discussion') ?? '';
+let tab = 'timeline'; let view: View = 'room'; let stream: EventSource | null = null;
+let composingTopic = false;
 let viewChosen = false; let focusRoomId: string | null = null;
 type AuthStatus = { passwordConfigured: boolean; canSetup: boolean };
 let authStatus: AuthStatus | null = null; let authSequence = 0; let setupToken = '';
@@ -88,7 +90,7 @@ async function api<T>(path: string, body?: unknown, requestId: string = crypto.r
   if (!response.ok) { if (response.status === 401) lock(); throw new Error(result.error?.code ?? 'request_failed'); }
   return result;
 }
-function lock(load = true): void { stream?.close(); stream = null; roomView.clear(); closeDeviceScreen(); $('#device-code').textContent = ''; $<HTMLDialogElement>('#oauth-login-dialog').close(); $<HTMLDialogElement>('#password-dialog').close(); $<HTMLFormElement>('#password-change-form').reset(); $('#oauth-desktop').replaceChildren(); $('#oauth-result').replaceChildren(); $('#login').hidden = false; $('#workspace').hidden = true; if (load) { authStatus = null; void loadLogin().catch(report); } }
+function lock(load = true): void { stream?.close(); stream = null; topicChat.clear(); $<HTMLDialogElement>('#topic-details-dialog').close(); roomView.clear(); closeDeviceScreen(); $('#device-code').textContent = ''; $<HTMLDialogElement>('#oauth-login-dialog').close(); $<HTMLDialogElement>('#password-dialog').close(); $<HTMLFormElement>('#password-change-form').reset(); $('#oauth-desktop').replaceChildren(); $('#oauth-result').replaceChildren(); $('#login').hidden = false; $('#workspace').hidden = true; if (load) { authStatus = null; void loadLogin().catch(report); } }
 async function loadLogin(): Promise<void> { const sequence = ++authSequence; const result = await api<AuthStatus>('/api/auth'); if (sequence === authSequence) { authStatus = result; renderLogin(); } }
 function renderLogin(): void {
   const setup = !authStatus?.passwordConfigured || !!setupToken, allowed = !setup || !!setupToken || !!authStatus?.canSetup;
@@ -107,11 +109,16 @@ function checkPasswords(password: string, confirmation: string): void {
 function form(id: string, handler: (data: Record<string, string>, form: HTMLFormElement) => Promise<unknown>): void {
   $(id).addEventListener('submit', event => { event.preventDefault(); const el = event.currentTarget as HTMLFormElement; const submit = el.querySelector<HTMLButtonElement>('button[type=submit], button:not([type])'); if (submit) submit.disabled = true;
     const data = Object.fromEntries(new FormData(el).entries()) as Record<string, string>;
-    void handler(data, el).catch(report).finally(() => { if (submit) submit.disabled = false; if (id === '#login-form') renderLogin(); }); });
+    void handler(data, el).catch(report).finally(() => { if (submit) submit.disabled = false; if (id === '#login-form') renderLogin(); if (id === '#discussion-form') renderFocusBudget(); }); });
 }
-function showView(next: View): void { viewChosen = true; view = next; for (const id of ['room', 'discussion', 'connections', 'execution']) $(`#view-${id}`).hidden = id !== next;
-  roomView.setActive(next === 'room'); localStorage.setItem('wj.room.view', next);
-  for (const el of document.querySelectorAll<HTMLElement>('[data-view]')) el.classList.toggle('selected', el.dataset.view === next); }
+function showView(next: View): void {
+  if (next === 'discussion') { if (current) openTopicDetails(); else beginTopic(); return; }
+  viewChosen = true; view = next; for (const id of ['room', 'connections', 'execution']) $(`#view-${id}`).hidden = id !== next;
+  if (next !== 'room') $<HTMLDialogElement>('#topic-details-dialog').close();
+  roomView.setSelectedTopic(current, !!selected); roomView.setActive(next === 'room'); localStorage.setItem('wj.room.view', next);
+  for (const el of document.querySelectorAll<HTMLElement>('[data-view]')) el.classList.toggle('selected', el.dataset.view === next);
+  if (state) topicChat.render(state.discussions, current, next === 'room', selected);
+}
 function connect(): void {
   stream?.close(); stream = new EventSource(`/api/events?after=${cursor}`);
   stream.addEventListener('open', () => { $('#connection-status').textContent = '● 실시간 연결'; $('#connection-status').classList.add('online'); scheduleRefresh(); });
@@ -136,9 +143,9 @@ function refresh(): Promise<void> {
     // newly chosen topic. Discard that view rather than erase the user's choice.
     if (selection !== selected) { again = true; return; }
     state = snapshot; cursor = Math.max(cursor, state.cursor); current = discussion;
-    if (!viewChosen) { const saved = localStorage.getItem('wj.room.view'); view = saved && ['room', 'discussion', 'connections', 'execution'].includes(saved) ? saved as View : state.resident.enabled ? 'room' : 'discussion'; }
+    if (!viewChosen) { const saved = localStorage.getItem('wj.room.view'); view = saved && ['room', 'connections', 'execution'].includes(saved) ? saved as View : 'room'; }
     if (!current) selected = '';
-    $('#login').hidden = true; $('#workspace').hidden = false; render(); await roomView.refresh(state); if (!stream) connect();
+    $('#login').hidden = true; $('#workspace').hidden = false; render(); await roomView.refresh(state); topicChat.render(state.discussions, current, view === 'room', selected); if (!stream) connect();
   })().finally(() => { refreshTask = null; if (again) { again = false; scheduleRefresh(); } });
   return refreshTask;
 }
@@ -153,9 +160,7 @@ function selectOptions(select: HTMLSelectElement, options: { id: string; label: 
 }
 function render(): void {
   if (!state) return;
-  $('#history-count').textContent = String(state.discussions.length); const history = $('#history'); history.replaceChildren();
-  for (const d of state.discussions.toReversed()) { const b = button(d.topic, async () => { selected = d.id; localStorage.setItem('wj.discussion', selected); showView('discussion'); await refresh(); }, d.id === selected ? 'active' : ''); b.title = `${d.topic} · ${states[d.status]}`; history.append(b); }
-  const signature = JSON.stringify([state.participants, state.connections.map(c => [c.id, c.status, c.models, c.browser?.discovery]), state.bindings, state.discussions.map(d => [d.id, d.topic])]);
+  const signature = JSON.stringify([focusRoomId, state.participants, state.connections.map(c => [c.id, c.status, c.models, c.browser?.discovery]), state.bindings, state.discussions.map(d => [d.id, d.topic])]);
   if (signature !== choiceSignature) {
     const picker = $('#participant-picker'); const checked = new Set([...picker.querySelectorAll<HTMLInputElement>('input:checked')].map(e => e.value)); const first = !choiceSignature; picker.replaceChildren();
     for (const p of state.participants) { const label = node('label', '', 'participant-option'); const check = node('input'); check.type = 'checkbox'; check.name = 'participantId'; check.value = p.id; check.checked = checked.has(p.id) || first && p.kind === 'fake';
@@ -164,12 +169,35 @@ function render(): void {
     selectOptions($('#discussion-binding'), state.bindings, '연결 없이 진행'); selectOptions($('#job-binding'), state.bindings);
     selectOptions($('#grant-discussion'), state.discussions.map(d => ({ id: d.id, label: d.topic }))); choiceSignature = signature;
   }
-  $('#composer').hidden = !!current; $('#discussion-detail').hidden = !current;
+  $('#composer').hidden = !composingTopic; $('#discussion-detail').hidden = composingTopic || !current;
   if (current) renderDiscussion(); renderConnections(); renderJobs(); renderMaterials(); renderFocusBudget(); showView(view);
 }
+async function selectTopic(id: string): Promise<void> {
+  roomView.closeNavigation(); $<HTMLDialogElement>('#topic-details-dialog').close(); if (selected !== id) current = null; selected = id;
+  sessionStorage.setItem('wj.chat.selection', id); localStorage.setItem('wj.chat.selection', id); localStorage.setItem('wj.discussion', id); showView('room'); await refresh();
+}
+function openTopicDetails(next = tab): void {
+  if (!current) return; composingTopic = false; tab = next; render(); $('#topic-dialog-title').textContent = '주제의 비교·근거·제어';
+  $<HTMLDialogElement>('#topic-details-dialog').showModal();
+}
+function beginTopic(roomId?: string): void {
+  roomView.closeNavigation();
+  composingTopic = true; focusRoomId = roomId ?? (state?.resident.enabled ? state.resident.rooms[0]?.id ?? null : null);
+  $<HTMLFormElement>('#discussion-form').reset(); choiceSignature = ''; showView('room'); render();
+  $('#topic-dialog-title').textContent = '새 주제'; $<HTMLDialogElement>('#topic-details-dialog').showModal(); $('#topic').focus();
+}
 const roomView = new RoomView({ api, refresh, report, openView: showView,
-  openDiscussion: async id => { selected = id; localStorage.setItem('wj.discussion', id); showView('discussion'); await refresh(); },
-  startFocus: roomId => { focusRoomId = roomId; selected = ''; current = null; showView('discussion'); render(); $('#topic').focus(); },
+  openDiscussion: async id => { await selectTopic(id); openTopicDetails(); }, startFocus: beginTopic,
+  setupConnection: id => {
+    showView('connections'); clearParticipantEdit(); const c = state?.connections.find(c => c.id === id); if (!c) return;
+    $<HTMLSelectElement>('#participant-mode').value = connectionMode(c); updateConnections(); $<HTMLSelectElement>('#participant-connection').value = c.id; updateModels();
+    $<HTMLSelectElement>('#participant-model').dataset.explicitConnection = c.id; updateModels(); $<HTMLSelectElement>('#participant-model').value = ''; updateEffort();
+    $<HTMLInputElement>('#participant-form [name=label]').value = c.label;
+    if (c.status === 'connected' && c.models.length) $('#participant-form').scrollIntoView(); else [...document.querySelectorAll<HTMLElement>('#connections-list [data-connection-id]')].find(card => card.dataset.connectionId === c.id)?.scrollIntoView();
+  },
+});
+const topicChat = new TopicChatView({ select: selectTopic, details: openTopicDetails, report, control: action => control({ action }),
+  opinion: text => control({ action: 'revise', text }),
 });
 function dailyFocus(): boolean { return state?.resident.rooms.some(r => r.id === focusRoomId) ?? false; }
 function renderFocusBudget(): void {
@@ -177,6 +205,9 @@ function renderFocusBudget(): void {
   for (const key of ['maxRequests', 'maxMinutes']) { const input = $<HTMLInputElement>(`#discussion-form [name=${key}]`); input.disabled = daily; input.closest('label')!.hidden = daily; }
   $('#discussion-mode').hidden = !focusRoomId;
   $('#discussion-mode').textContent = daily ? '같은 방의 API 일일 한도를 공유합니다. GPT/dot/Muse 채팅 한도는 제외하며 검토 라운드와 도구 한도·승인은 유지합니다. API 소진 시 부분 완료로 방에 돌아옵니다.' : '이 채팅방 안에서 주제 토론을 시작합니다. 마치면 같은 방으로 돌아갑니다.';
+  const room = state?.resident.rooms.find(r => r.id === focusRoomId);
+  $<HTMLButtonElement>('#discussion-form .composer-bottom button').disabled = !!focusRoomId && (!room?.desiredOn || !!room.topicLink);
+  if (focusRoomId && !room?.desiredOn) $('#discussion-mode').textContent = '방을 켠 뒤 이 주제를 시작할 수 있습니다. 먼저 창을 닫고 방 설정을 확인하세요.';
 }
 function renderMaterials(): void {
   if (!state) return;
@@ -219,7 +250,7 @@ function updateConnections(): void {
   $('#participant-mode-note').textContent = mode === 'dot' ? '직접 확인한 기존 dot 대화만 표시합니다. 계정 이름·요금제로 dot 사용 가능 여부를 추정하지 않습니다. 일반 GPT와 문맥·역할·권한을 공유하지 않습니다.' : mode === 'gpt' ? '앱이 관리하는 일반 GPT 대화입니다. ChatGPT 웹·dot의 과거 기억을 가져오지 않습니다.' : 'API와 Muse 등 등록한 기존 연결을 선택합니다. dot으로 확인되지 않은 웹 연결은 이 목록에 남습니다.';
   updateModels();
 }
-function updateModels(): void { const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); selectOptions($('#participant-model'), c?.models ?? []); updateEffort(); }
+function updateModels(): void { const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); const select = $<HTMLSelectElement>('#participant-model'); selectOptions(select, c?.models ?? [], c && select.dataset.explicitConnection === c.id ? '모델을 선택하세요' : undefined); updateEffort(); }
 function updateEffort(): void {
   const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); const select = $<HTMLSelectElement>('#participant-effort'); select.disabled = !reasoningKind(c?.kind);
   const modelId = $<HTMLSelectElement>('#participant-model').value, previous = select.value, changed = select.dataset.kind !== (c?.kind ?? ''); select.dataset.kind = c?.kind ?? '';
@@ -320,7 +351,7 @@ function renderRecords(target: HTMLElement, d: Discussion): void {
 function renderConnections(): void {
   if (!state) return; const target = $('#connections-list'); target.replaceChildren();
   for (const c of state.connections) { const service = c.kind === 'deepseek' ? ({ deepseek: 'DeepSeek 공식 API', coralbricks: 'CoralBricks · DeepSeek', river: 'River · DeepSeek' }[c.apiService ?? 'deepseek']) : c.kind === 'codex-oauth' ? 'GPT · 기기 코드 연결 (Codex)' : c.kind === 'anthropic' ? 'Anthropic · Claude API' : c.kind;
-    const card = node('article', '', 'connection-card'); card.append(node('h3', c.label), badge(c.status), node('p', `${service}${c.email ? ` · ${c.email}` : ''}`, 'muted'), node('p', `${c.models.length}개 모델${c.error ? ` · ${errors[c.error] ?? c.error}` : ''}`, 'small'));
+    const card = node('article', '', 'connection-card'); card.dataset.connectionId = c.id; card.append(node('h3', c.label), badge(c.status), node('p', `${service}${c.email ? ` · ${c.email}` : ''}`, 'muted'), node('p', `${c.models.length}개 모델${c.error ? ` · ${errors[c.error] ?? c.error}` : ''}`, 'small'));
     if (c.modelError) card.append(node('p', `모델 조회 HTTP ${c.modelError.httpStatus}${c.modelError.providerCode ? ' · ' + c.modelError.providerCode : ''}`, 'small muted'));
     if (c.apiService === 'coralbricks' && c.error === 'coralbricks_verification_required') {
       const link = node('a', 'CoralBricks 계정 검증 페이지 열기 ↗'); link.href = 'https://www.coralbricks.ai/organization/billing'; link.target = '_blank'; link.rel = 'noopener noreferrer'; card.append(link);
@@ -458,12 +489,12 @@ form('#discussion-form', async values => { const participantIds = [...document.q
   const materialPackageIds = [...document.querySelectorAll<HTMLInputElement>('#material-picker input:checked')].map(i => i.value);
   const targetRoom = focusRoomId;
   const result = await api<{ id?: string; discussionId?: string }>(targetRoom ? `/api/rooms/${targetRoom}/focus` : '/api/discussions', { topic: values.topic, criteria: values.criteria, materials: values.materials, materialPackageIds, participantIds, executionBindingId: values.executionBindingId || null,
-    limits: { maxRounds: Number(values.maxRounds), ...(dailyFocus() ? {} : { maxRequests: Number(values.maxRequests), maxActiveMs: Number(values.maxMinutes) * 60_000 }) } }); selected = (result.id ?? result.discussionId)!; focusRoomId = null; $('#discussion-mode').hidden = true; localStorage.setItem('wj.discussion', selected); if (targetRoom) showView('room'); await refresh(); });
+    limits: { maxRounds: Number(values.maxRounds), ...(dailyFocus() ? {} : { maxRequests: Number(values.maxRequests), maxActiveMs: Number(values.maxMinutes) * 60_000 }) } }); selected = (result.id ?? result.discussionId)!; current = null; focusRoomId = null; composingTopic = false; $<HTMLDialogElement>('#topic-details-dialog').close(); $('#discussion-mode').hidden = true; localStorage.setItem('wj.discussion', selected); localStorage.setItem('wj.chat.selection', selected); sessionStorage.setItem('wj.chat.selection', selected); showView('room'); await refresh(); });
 form('#oauth-form', async values => { await showOAuth(await api('/api/connections/oauth', values)); await refresh(); });
 form('#codex-oauth-form', startDevice);
 form('#deepseek-form', async (values, el) => { try { await api('/api/connections/deepseek', values); await refresh(); } finally { (el.elements.namedItem('key') as HTMLInputElement).value = ''; } });
 form('#anthropic-form', async (values, el) => { try { await api('/api/connections/anthropic', values); await refresh(); } finally { (el.elements.namedItem('key') as HTMLInputElement).value = ''; } });
-function clearParticipantEdit(): void { $('#participant-form').querySelector('[name=participantId]')?.remove(); $<HTMLFormElement>('#participant-form').reset(); $('#participant-save').textContent = '참여자 등록'; $('#participant-edit-cancel').hidden = true; updateConnections(); }
+function clearParticipantEdit(): void { $('#participant-form').querySelector('[name=participantId]')?.remove(); $<HTMLFormElement>('#participant-form').reset(); delete $<HTMLSelectElement>('#participant-model').dataset.explicitConnection; $('#participant-save').textContent = '참여자 등록'; $('#participant-edit-cancel').hidden = true; updateConnections(); }
 form('#participant-form', async values => { const { participantId, ...settings } = values; await api(participantId ? '/api/participants/' + participantId : '/api/participants', { ...settings, ...(settings.maxOutputTokens !== undefined ? { maxOutputTokens: outputValue(settings.maxOutputTokens) } : {}) }); clearParticipantEdit(); announce(participantId ? '설정을 저장했습니다. 새 토의와 이후 상주 발언부터 적용합니다.' : '참여자를 등록했습니다.'); await refresh(); });
 $('#participant-edit-cancel').addEventListener('click', clearParticipantEdit);
 form('#browser-form', async (values, form) => {
@@ -516,7 +547,9 @@ click('#participant-dot-connect', async () => { $<HTMLDetailsElement>('#browser-
 $('#participant-model').addEventListener('change', updateEffort);
 for (const el of document.querySelectorAll<HTMLElement>('[data-view]')) el.addEventListener('click', () => showView(el.dataset.view as View));
 for (const el of document.querySelectorAll<HTMLElement>('[data-tab]')) el.addEventListener('click', () => { tab = el.dataset.tab!; renderDiscussion(); });
-$('#new-discussion').addEventListener('click', () => { focusRoomId = null; $('#discussion-mode').hidden = true; selected = ''; current = null; localStorage.removeItem('wj.discussion'); showView('discussion'); render(); $('#topic').focus(); });
+$('#new-discussion').addEventListener('click', () => beginTopic());
+$('#chat-new-topic').addEventListener('click', () => beginTopic());
+$('#topic-details-close').addEventListener('click', () => $<HTMLDialogElement>('#topic-details-dialog').close());
 function click(id: string, action: () => Promise<unknown>): void { $(id).addEventListener('click', () => { void action().catch(report); }); }
 const prepareButton = button('파일 읽고 자료 저장', async () => {
   const paths = $<HTMLTextAreaElement>('#material-paths').value.split('\n').map(p => p.trim()).filter(Boolean);

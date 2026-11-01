@@ -1,3 +1,4 @@
+import { openExistingTopic, closeTopicDetails } from './topic-ui.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
@@ -17,9 +18,9 @@ test('talker UI selects a separate account, edits default reasoning, and changes
   await page.waitForFunction(() => document.querySelector('#participants-list').textContent.includes('web-b@example.test'));
   const member = f.app.store.read().participants.find(p => p.kind === 'openai-oauth'); assert.equal(member.connectionId, 'web-b'); assert.equal(member.reasoningEffort, 'high');
   const did = f.app.engine.create({ ...topic, participantIds: ['fake-a', member.id] }, 'ui-settings-discussion'); f.app.engine.control(did, { action: 'pause', expectedRevision: 1 }, 'ui-settings-pause');
-  await page.reload(); await page.waitForFunction(() => !document.querySelector('#workspace').hidden); await page.locator('#history button').first().click();
+  await page.reload(); await page.waitForFunction(() => !document.querySelector('#workspace').hidden); await openExistingTopic(page);
   await page.getByRole('button', { name: '사고 깊이 변경' }).click(); await page.locator('#action-fields select').selectOption('medium'); await page.getByRole('button', { name: '적용', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('#member-status').textContent.includes('Medium'));
   assert.equal(f.app.store.read().discussions[0].members.find(p => p.id === member.id).reasoningEffort, 'medium'); assert.equal(f.app.store.read().participants.find(p => p.id === member.id).reasoningEffort, 'high');
-  await page.setViewportSize({ width: 390, height: 844 }); await page.locator('[data-view=connections]').click(); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await closeTopicDetails(page); await page.setViewportSize({ width: 390, height: 844 }); await page.locator('[data-view=connections]').click(); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
 });

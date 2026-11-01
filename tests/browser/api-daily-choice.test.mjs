@@ -1,3 +1,4 @@
+import { openNewTopic } from './topic-ui.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
@@ -38,7 +39,7 @@ test('room UI has only API daily quotas, separate tool settings and KST/CAS usag
   for (const participantId of ['fake-a', 'fake-b']) f.app.resident.control(roomId, { action: 'set_member', expectedVersion: f.app.store.read().resident.rooms[0].version, participantId, enabled: true }, crypto.randomUUID());
   f.app.resident.control(roomId, { action: 'on', expectedVersion: f.app.store.read().resident.rooms[0].version }, crypto.randomUUID());
   await page.locator('#room-focus-new').click(); assert.equal(await page.locator('#discussion-form [name=maxRequests]').isDisabled(), true); assert.equal(await page.locator('#discussion-form [name=maxMinutes]').isDisabled(), true); assert.match(await page.locator('#discussion-mode').innerText(), /API 일일 한도/);
-  await page.locator('#new-discussion').click(); assert.equal(await page.locator('#discussion-form [name=maxRequests]').isDisabled(), false);
+  await openNewTopic(page); assert.equal(await page.locator('#discussion-form [name=maxRequests]').isDisabled(), true);
   assert.equal(calls, 0); assert.deepEqual(f.app.store.read().discussions, original); assert.deepEqual(errors, []);
 });
 

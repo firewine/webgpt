@@ -89,7 +89,7 @@ export class Workspace {
   snapshot() {
     const state = this.store.read();
     return { cursor: this.store.cursor(), connections: state.connections, participants: state.participants,
-      discussions: state.discussions.map(d => ({ id: d.id, topic: d.topic, status: d.status, phase: d.phase, revision: d.revision, createdAt: d.createdAt, updatedAt: d.updatedAt })),
+      discussions: state.discussions.map(d => ({ id: d.id, topic: d.topic, roomId: d.roomId ?? null, status: d.status, phase: d.phase, revision: d.revision, createdAt: d.createdAt, updatedAt: d.updatedAt })),
       bindings: state.bindings, jobs: state.jobs.slice(-50), browserPaused: state.browserPaused,
       materialPackages: (state.materialPackages ?? []).map(materialMetadata), materialRoots: this.config.materialRoots,
       resident: this.resident.snapshot(), apiDaily: apiUsageSummary(state),
