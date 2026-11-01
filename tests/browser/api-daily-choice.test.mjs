@@ -10,14 +10,18 @@ async function open(t, f, width = 1440) {
   const page = await context.newPage(), errors = []; page.on('pageerror', e => errors.push(e.message)); await page.goto(f.url); await page.locator('#room-title').waitFor(); return { page, errors };
 }
 
-test('API daily UI opt-in, explicit defaults, KST usage and stale form conflict preserve edits and legacy records at desktop/mobile widths', { timeout: 60000 }, async t => {
+test('room UI has only API daily quotas, separate tool settings and KST/CAS usage while preserving expired legacy records', { timeout: 60000 }, async t => {
   const f = await workspace(t, { residentEnabled: true }, { residentAutoSchedule: false }); let calls = 0; f.app.providers.complete = async () => { calls++; throw new Error('No model calls in settings UI'); };
+  const archived = { maxRequests: 1, maxTokens: 1, maxToolJobs: 0, deadlineAt: new Date(0).toISOString() }; f.app.store.transact(s => { const r = s.resident.rooms[0]; r.budgets = archived; r.budgetMode = 'legacy'; });
   const original = structuredClone(f.app.store.read().discussions); const { page, errors } = await open(t, f);
-  await page.locator('#room-settings').click(); const form = page.locator('#room-settings-form'); assert.equal(await form.locator('[name=budgetMode]').inputValue(), 'legacy');
-  await form.locator('[name=budgetMode]').selectOption('api-daily'); assert.equal(await form.locator('[name=maxRequests]').isVisible(), false); assert.equal(await form.locator('[name=deadlineAt]').isDisabled(), true);
+  await page.locator('#room-settings').click(); const form = page.locator('#room-settings-form'); assert.equal(await form.locator('[name=budgetMode], [name=maxRequests], [name=maxTokens], [name=deadlineAt]').count(), 0);
+  assert.equal(await form.locator('[name=toolDeadlineAt]').isDisabled(), true); assert.equal(await form.locator('[name=minInterval]').inputValue(), '30');
   for (const [key, value] of Object.entries({ minInterval: '30', idleNudge: '300', passBackoff: '120', sleepAfterPasses: '3' })) await form.locator(`[name=${key}]`).fill(value);
   await form.getByRole('button', { name: '설정 저장', exact: true }).click(); await page.locator('#room-settings-dialog').waitFor({ state: 'hidden' });
-  assert.equal(f.app.store.read().resident.rooms[0].budgetMode, 'api-daily'); assert.equal(f.app.store.read().apiUsage.policy, null); assert.equal(f.app.store.read().resident.rooms[0].desiredOn, false);
+  assert.equal(f.app.store.read().resident.rooms[0].budgetMode, 'api-daily'); assert.deepEqual(f.app.store.read().resident.rooms[0].budgets, archived); assert.equal(f.app.store.read().apiUsage.policy, null); assert.equal(f.app.store.read().resident.rooms[0].desiredOn, false);
+  await page.locator('#room-settings').click(); await page.locator('#room-update-tools').check(); await form.locator('[name=maxToolJobs]').fill('2'); await form.locator('[name=toolDeadlineAt]').fill('2030-01-01T00:00');
+  await form.getByRole('button', { name: '설정 저장', exact: true }).click(); await page.locator('#room-settings-dialog').waitFor({ state: 'hidden' });
+  assert.equal(f.app.store.read().resident.rooms[0].toolBudget.maxToolJobs, 2); assert.equal(f.app.store.read().resident.rooms[0].toolBudget.deadlineAt, '2030-01-01T08:00:00.000Z'); assert.deepEqual(f.app.store.read().resident.rooms[0].budgets, archived);
   if (!await page.locator('#room-panel').isVisible()) await page.locator('#room-panel-toggle').click(); await page.locator('[data-board-tab=usage]').click();
   await page.locator('#room-api-settings').click(); const daily = page.locator('#api-daily-form'); assert.equal(await daily.locator('[name=maxRequests]').inputValue(), '24'); assert.equal(await daily.locator('[name=maxTokens]').inputValue(), '200000');
   assert.match(await daily.innerText(), /GPT·dot·Muse.*포함하지/);

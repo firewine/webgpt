@@ -105,7 +105,7 @@ export class RoomView {
     this.on('#room-wake', () => this.control('wake'));
     this.on('#room-settings', () => this.settings());
     this.on('#room-api-settings', () => this.apiSettings());
-    for (const id of ['#room-budget-mode', '#room-update-tools']) $(id).addEventListener('change', () => this.settingsFields());
+    $('#room-update-tools').addEventListener('change', () => this.settingsFields());
     $('#api-daily-form').addEventListener('submit', event => { event.preventDefault(); void this.saveApiSettings().catch(this.deps.report); });
     this.on('#room-more', () => this.loadOlder());
     this.on('#room-unread', () => this.jumpUnread());
@@ -413,7 +413,7 @@ export class RoomView {
     $('#room-wake').hidden = !room.desiredOn || room.observedStatus === 'on'; $<HTMLButtonElement>('#room-wake').disabled = !d.enabled;
     $('#room-disabled').hidden = d.enabled; $<HTMLButtonElement>('#room-send').disabled = !d.enabled || this.sending || this.uncertain;
     $<HTMLButtonElement>('#room-settings').disabled = !d.enabled;
-    $('#room-pacing').textContent = room.pacing ? `발언 간격 ${room.pacing.minIntervalMs / 1000}초\n연속 pass ${room.pacing.sleepAfterPasses}회 후 휴면\n참여자 주제 시작 ${room.autoTopic ? '허용' : '꺼짐'}` : '진행 한도와 대화 속도를 설정하세요.';
+    $('#room-pacing').textContent = room.pacing ? `발언 간격 ${room.pacing.minIntervalMs / 1000}초\n연속 pass ${room.pacing.sleepAfterPasses}회 후 휴면\n참여자 주제 시작 ${room.autoTopic ? '허용' : '꺼짐'}` : '방을 켜면 기본 간격30초·3회 pass 휴면을 사용합니다.';
     this.renderTopic(); this.renderMessages(); this.renderReply(); this.renderPanels(); this.unread();
     $('#room-more').hidden = !this.before;
     for (const n of d.status.notices) if (!this.noticeIds.has(n.id)) {
@@ -545,14 +545,10 @@ export class RoomView {
     if (signature === this.panelsSignature) return; this.panelsSignature = signature;
     this.renderMembers(s, r.members, d.status.members); this.renderWork();
     const usage = $('#room-usage'); usage.replaceChildren();
-    if (r.budgetMode === 'api-daily') {
-      const a = this.snapshot?.apiDaily;
-      usage.append(el('p', 'API 일일 방식 · GPT/dot/Muse 대화 한도 제외', 'small'), el('p', a?.policy ? `API 요청 ${a.used.requests} (+예약 ${a.used.reserved}) / ${a.policy.maxRequests}\n보고 토큰 ${a.used.inputTokens + a.used.outputTokens} / ${a.policy.maxTokens}\n사용량 미제공 ${a.used.unknownUsage}회 · 다음 갱신 ${dateKst(a.nextResetAt)} (KST)` : 'API 일일 한도 미설정 · API만 대기', 'small pre-line'));
-      usage.append(el('p', `도구 ${r.used?.toolJobs ?? 0} / ${r.budgets?.maxToolJobs ?? 0} · 도구 종료 ${date(r.budgets?.deadlineAt ?? null)}`, 'small muted'));
-    } else if (!r.budgets) usage.append(el('p', '한도·속도 설정이 필요합니다.', 'small muted'));
-    else { const used = r.used; usage.append(el('p', `요청 ${used?.requests ?? 0} / ${r.budgets.maxRequests}`, 'usage-number'), el('p', `보고 토큰 ${(used?.inputTokens ?? 0) + (used?.outputTokens ?? 0)} / ${r.budgets.maxTokens}\n사용량 미제공 ${used?.unknownUsage ?? 0}회 · 도구 ${used?.toolJobs ?? 0} / ${r.budgets.maxToolJobs}\n종료 ${date(r.budgets.deadlineAt)}`, 'small pre-line'));
-      if (r.nextEligibleAt) usage.append(el('p', '다음 발언 가능 ' + date(r.nextEligibleAt), 'small muted'));
-    }
+    const a = s.apiDaily;
+    usage.append(el('p', 'GPT/dot/Muse 대화 한도 제외', 'small'), el('p', a?.policy ? `API 요청 ${a.used.requests} (+예약 ${a.used.reserved}) / ${a.policy.maxRequests}\n보고 토큰 ${a.used.inputTokens + a.used.outputTokens} / ${a.policy.maxTokens}\n사용량 미제공 ${a.used.unknownUsage}회 · 다음 갱신 ${dateKst(a.nextResetAt)} (KST)` : 'API 일일 한도 미설정 · API만 대기', 'small pre-line'));
+    usage.append(el('p', `도구 ${r.used?.toolJobs ?? 0} / ${r.toolBudget?.maxToolJobs ?? 0} · 도구 종료 ${date(r.toolBudget?.deadlineAt ?? null)}`, 'small muted'));
+    if (r.nextEligibleAt) usage.append(el('p', '다음 발언 가능 ' + date(r.nextEligibleAt), 'small muted'));
     const focus = $('#room-focus'); focus.replaceChildren(); const topic = s.discussions.find(t => t.id === r.topicLink);
     if (topic) focus.append(el('p', topic.topic), this.btn('토론·비교·검증 열기', () => { this.closeDrawers(); return this.deps.openDiscussion(topic.id); }));
     else focus.append(el('p', this.topic ? '자유 대화로 복귀 · 마지막 주제와 결과는 대화 상단에 보존합니다.' : '자유 대화 · 상단에서 주제를 정하면 검토·검증·종합을 이어갑니다.', 'small muted'));
@@ -631,8 +627,8 @@ export class RoomView {
       void this.deps.api(this.path('/turns/' + t.id + '/reconcile'), { resolution, ...fields }).then(async () => { dialog.close(); await this.deps.refresh(); }).catch(this.deps.report).finally(() => { apply.disabled = false; }); }); dialog.showModal();
   }
   private settings(): void {
-    if (!this.detail) return; this.settingsVersion = this.detail.room.version; const form = $<HTMLFormElement>('#room-settings-form'); form.reset(); const { budgets: b, pacing: p } = this.detail.room;
-    const values = { budgetMode: this.detail.room.budgetMode ?? 'legacy', maxRequests: b?.maxRequests, maxTokens: b?.maxTokens, maxToolJobs: b?.maxToolJobs, deadlineAt: b ? localDate(b.deadlineAt) : undefined, minInterval: p ? p.minIntervalMs / 1000 : undefined, idleNudge: p ? p.idleNudgeMs / 1000 : undefined, passBackoff: p ? p.passBackoffMs / 1000 : undefined, sleepAfterPasses: p?.sleepAfterPasses };
+    if (!this.detail) return; this.settingsVersion = this.detail.room.version; const form = $<HTMLFormElement>('#room-settings-form'); form.reset(); const b = this.detail.room.toolBudget, p = this.detail.room.pacing ?? { minIntervalMs: 30000, idleNudgeMs: 300000, passBackoffMs: 120000, sleepAfterPasses: 3 };
+    const values = { maxToolJobs: b?.maxToolJobs ?? 0, toolDeadlineAt: b ? localDate(b.deadlineAt) : undefined, minInterval: p.minIntervalMs / 1000, idleNudge: p.idleNudgeMs / 1000, passBackoff: p.passBackoffMs / 1000, sleepAfterPasses: p.sleepAfterPasses };
     for (const [key, value] of Object.entries(values)) (form.elements.namedItem(key) as HTMLInputElement).value = value === undefined ? '' : String(value);
     (form.elements.namedItem('autoTopic') as HTMLInputElement).checked = this.detail.room.autoTopic === true;
     this.settingsFields();
@@ -641,19 +637,16 @@ export class RoomView {
   private async saveSettings(): Promise<void> {
     const form = $<HTMLFormElement>('#room-settings-form'); const submit = form.querySelector<HTMLButtonElement>('[type=submit]')!; if (submit.disabled) return; submit.disabled = true;
     const v = Object.fromEntries(new FormData(form)) as Record<string, string>;
-    const updateBudget = v.budgetMode !== 'api-daily' || $<HTMLInputElement>('#room-update-tools').checked;
-    try { await this.control('configure', { autoTopic: v.autoTopic === 'on', budgetMode: v.budgetMode,
-      ...(updateBudget ? { budgets: { maxRequests: Number(v.maxRequests ?? this.detail?.room.budgets?.maxRequests ?? 1), maxTokens: Number(v.maxTokens ?? this.detail?.room.budgets?.maxTokens ?? 1), maxToolJobs: Number(v.maxToolJobs), deadlineAt: new Date(v.deadlineAt!).toISOString() } } : {}),
+    try { await this.control('configure', { autoTopic: v.autoTopic === 'on',
+      ...($<HTMLInputElement>('#room-update-tools').checked ? { toolBudget: { maxToolJobs: Number(v.maxToolJobs), deadlineAt: new Date(v.toolDeadlineAt!).toISOString() } } : {}),
       pacing: { minIntervalMs: Math.round(Number(v.minInterval) * 1000), idleNudgeMs: Math.round(Number(v.idleNudge) * 1000), passBackoffMs: Math.round(Number(v.passBackoff) * 1000), sleepAfterPasses: Number(v.sleepAfterPasses) } }, this.settingsVersion); $<HTMLDialogElement>('#room-settings-dialog').close(); }
     finally { submit.disabled = false; }
   }
   private settingsFields(): void {
-    const form = $<HTMLFormElement>('#room-settings-form'), daily = $<HTMLSelectElement>('#room-budget-mode').value === 'api-daily';
-    $('#room-update-tools-label').hidden = !daily;
-    for (const key of ['maxRequests', 'maxTokens', 'maxToolJobs', 'deadlineAt']) {
-      const input = form.elements.namedItem(key) as HTMLInputElement;
-      input.disabled = daily && (['maxRequests', 'maxTokens'].includes(key) || !$<HTMLInputElement>('#room-update-tools').checked);
-      input.required = !input.disabled; input.closest('label')!.hidden = input.disabled;
+    const form = $<HTMLFormElement>('#room-settings-form'), enabled = $<HTMLInputElement>('#room-update-tools').checked;
+    $('#room-tool-settings').hidden = !enabled;
+    for (const key of ['maxToolJobs', 'toolDeadlineAt']) {
+      const input = form.elements.namedItem(key) as HTMLInputElement; input.disabled = !enabled; input.required = enabled;
     }
   }
   private apiSettings(): void {

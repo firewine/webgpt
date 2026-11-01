@@ -47,6 +47,7 @@ test('topic failure persists reason and late usage atomically; its reported cons
 test('resident failure keeps reported consumption in the existing ledger and blocks the room without a message, proposal or replay', async t => {
   const f = await setup(t, { residentEnabled: true }); const room = f.app.resident.snapshot().rooms[0].id;
   const control = body => f.app.resident.control(room, { ...body, expectedVersion: f.app.resident.room(room).room.version }, crypto.randomUUID());
+  f.app.configureApiDaily({ expectedVersion: 0, maxRequests: 100, maxTokens: 1000000 }, 'fixture-api-policy');
   control({ action: 'configure', budgets: budget(Date.now()), pacing }); control({ action: 'set_member', participantId: f.pid, enabled: true }); control({ action: 'on' });
   await f.app.residentRunner.tick(); const r = f.app.store.read().resident, turn = r.turns[0];
   assert.equal(turn.status, 'failed'); assert.equal(turn.providerFinishReason, 'length'); assert.equal(turn.text, ''); assert.equal(turn.reply, null); assert.deepEqual(turn.usage, { input: 31, output: 4096 }); assert.deepEqual(r.rooms[0].ledger[0].usage, turn.usage); assert.equal(r.rooms[0].observedStatus, 'blocked'); assert.equal(r.messages.filter(m => m.sourceKind === 'room').length, 0); assert.equal(r.workItems.length, 0);

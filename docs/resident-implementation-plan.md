@@ -50,7 +50,7 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 
 **계약/모델:** 유지=CompletionInput/Completion/Hooks/signals와 기존 6단계/revision/generation/JSON. 추가=ResidentReplyV1, room 전용 attempt/context/ledger/lease·desiredOn·epoch·nextEligibleAt·focus link. adapter가 fixture fake만 기존/제안 모의 응답을 구분해 처리하며 real 응답을 fixture로 대체하지 않는다. invalid JSON은 action 0, 보완 최대 1회도 예약/usage에 포함한다.
 
-**이관:** 기존 running/미확정 상태를 먼저 recover하고 새 루프는 그 상태가 대조되기 전 dispatch하지 않는다. 방 on/off는 영속 명령, 모드 전환은 확정 경계. focus에는 기존 engine.create/control을 사용하고 Room은 계속 존재한다. 예산 값은 U1/U2 확정 전 임의 채우지 않고 on을 막는다. 검사는 명시 fixture budget으로 진행한다.
+**이관:** 기존 running/미확정 상태를 먼저 recover하고 새 루프는 그 상태가 대조되기 전 dispatch하지 않는다. 방 on/off는 영속 명령, 모드 전환은 확정 경계. focus에는 기존 engine.create/control을 사용하고 Room은 계속 존재한다. 2026-11-01 지시로 방 전체 예산 없이 on을 허용한다. API 일일 정책 부재 시 해당 API만 대기하며 멤버/미확정 검사는 유지한다. 속도 부재 때 표준30초/idle300초/pass120초/3회 휴면을 사용한다. 검사는 API 일일 정책·도구 전용 budget을 명시한다.
 
 **32669 보완:** 기존 topic handoff API는 그대로이며 resident만 원문 참조·규칙/목표·pending 업무·Wiki version·예산 snapshot·basisCursor를 갖는 ResidentCheckpoint를 추가한다. 인계는 예상 epoch/generation의 CAS이고 현재 actor의 미확정/진행/미보고 업무·job 또는 topic focus가 있으면 보류한다. browser 원래 대화는 자동 교체하지 않는다. generation이 바뀐 뒤 옛 actor의 결과/action은 stale로 보존하며 신규 실행에 재사용하지 않는다. checkpoint snapshot으로 최신 예산/상태를 되돌리지 않는다. 추가 모델 호출 없는 참조 묶음이 기본이다.
 
@@ -58,8 +58,8 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 | --- | --- | --- |
 | R2-A | Room/topic/work 후보 100개 경쟁→전체 provider 최대 동시 1, 중복 requestId dispatch 0 | PASS · `tests/resident-dispatch.test.mjs` (work는 예약 후보만, 실제 큐는 R5) |
 | R2-B | prepared 전/후·dispatched 후·receipt 후·delta 중·final commit 전 6지점 crash→재전송 0 | PASS · `tests/resident-restart.test.mjs`의 실제 SIGKILL/journal/원래 ID 대조 |
-| R2-C | fixture maxRequests=6 소진 뒤 추가 호출 0, pass/보완 포함 6 이하, unknown usage를 0원으로 표시 0 | PASS · `tests/resident-room.test.mjs`와 runtime-http 자동 loop |
-| R2-D | off/sleep/budget_exhausted 뒤 100 tick→호출 0; missed timer 100개→추가 후보 평가 최대 1 | PASS · room/restart fixture, 놓친 timer를 호출 횟수로 변환하지 않음 |
+| R2-C | 2026-11-01 사용자 지시: API 일일N회(보완/pass 포함) 뒤 API 추가 전송0, GPT는 옛 방 한도를 초과해 진행, unknown을 0원으로 표시0 | PASS · API 일일6회/unknown·GPT 초과 진행. 기존 전체 방6회 제한은 폐기 |
+| R2-D | off/sleep 뒤100tick→호출0; API 소진 뒤100tick→해당 API 호출0·GPT 가능; 도구 deadline 유지; missed timer100개→추가 후보 평가 최대1 | PASS · room/restart fixture, 놓친 timer를 호출 횟수로 변환하지 않음 |
 | R2-E | 3참여자 topic 2라운드에서 기존 공개 장벽 유지, focus 종료→같은 roomId 복귀 1회 | PASS · dispatch fixture+기존 engine 회귀 |
 | R2-F | raw stream 100조각/잘못된 구조/없는 replyTo→검증 전 action 0; 확정 text/claims/원문 digest 보존 | PASS · `tests/resident-replies.test.mjs` |
 | R2-G | 인증/429 한도/미지원 effort/DOM 불일치 4종에서 100 tick 동안 같은 요청 재시도 0·차단 이유 유지 | PASS · room fixture+기존 providers/browser 회귀 |
@@ -209,8 +209,10 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 
 | ID | 아직 확정되지 않은 것 | 결정 전 동작/선행 개발 | 바꾸지 않는 경계 |
 | --- | --- | --- | --- |
-| U1 | 방 기본 wall 시간·요청 수·token/tool 예산, 장기 운영 시 갱신 방식 | 입력 UI/검증/ledger는 구현 가능. 값 없는 신규 방은 off, 기존 토론 한도 유지. 검사는 명시 fixture 숫자 사용 | 무제한 기본값·한도 제거·자동 금액 추정 없음 |
+| U1 | 방 전체 채팅 예산은 사용자 지시로 폐기. API 일일 정책과 도구 실행 허용값은 소유자 설정 | 초기 API 화면24회/20만token, 저장 전 API만 대기. 방은 off 유지, 속도는 표준값. toolBudget 없으면 도구 실행0 | API/도구 한도·승인·미확정·자동 금액 추정 금지 유지 |
 | U2 | 느긋/보통/활발 간격·idle nudge 시각·연속 pass/backoff/sleep 값 | 설정 가능한 scheduler 구현. PR #12의 5/15/45·120·3은 미승인 제안으로만 보존. 기본값 확정 전 자동 on 금지 | provider1·xhigh·pass 비용·미확정 대조 유지 |
 | U3 | 최초 운영 방에 참여할 실제 계정/대화와 업무 role/scope·코드 수정 허용 범위 | 이미 등록한 identity/thread/권한은 보존. 새 계정/역할/쓰기 권한을 임의 생성하지 않고 owner 선택을 기다림. fixture는 독립 진행 | 로그인·API 키·프로필·쓰기 승인·실계정 호출은 이번 금지 |
 
 기술 결론(control.* 개조, 기존 topic 엔진 유지, Providers/Store 재사용, JSON text envelope, Wiki private DB/CAS·보고 버전 자동 게시, 단일 provider 슬롯)은 본 개정에서 내렸다. 이를 사용자에게 다시 결정하라고 떠넘기지 않는다. 아바타 제작·스티커·새 provider·병렬 용량 확대·범용 파일 쓰기·자동 merge는 확정 목표의 필수 수락 범위가 아니다.
+
+2026-11-01 [방 전체 채팅 한도 제거 지시](./reviews/room-chat-limit-removal-20261101.md): 모든 상주방은 API 일일 정책만 대화 한도로 사용한다. legacy 모드 선택·방 누적 요청/token/채팅 종료 시각을 제거하고 toolBudget을 분리한다. R2-C/D의 해당 한도 수락만 위와 같이 개정하며 다른48개 gate ID/의미와 단독 과거 토의·G0/권한/미확정 경계는 유지한다.

@@ -6,6 +6,7 @@ export type ResidentUsage = { input: number; output: number } | null;
 
 export interface RoomMember { participantId: string; enabled: boolean; blockedReason?: string | null }
 export interface RoomBudget { maxRequests: number; maxTokens: number; maxToolJobs: number; deadlineAt: string }
+export interface RoomToolBudget { maxToolJobs: number; deadlineAt: string }
 export interface RoomPacing { minIntervalMs: number; idleNudgeMs: number; passBackoffMs: number; sleepAfterPasses: number }
 export interface RoomContext { participantId: string; generation: number; history: Context['history']; checkpointId: string | null; lastSeenSequence: number; wikiHistoryRefs?: WikiCitation[]; wikiIdentityDigest?: string }
 export interface BudgetEntry { requestId: string; kind: 'topic' | 'resident' | 'work'; reservedAt: string; settledAt: string | null; usage: ResidentUsage; error: string | null }
@@ -25,6 +26,7 @@ export interface Room {
   desiredOn: boolean; observedStatus: 'off' | 'on' | 'sleeping' | 'blocked' | 'budget_exhausted';
   members: RoomMember[]; legacyDiscussionIds: string[]; topicLink: string | null;
   budgets: RoomBudget | null; nextEligibleAt: string | null;
+  toolBudget?: RoomToolBudget | null;
   budgetMode?: 'legacy' | 'api-daily';
   pacing?: RoomPacing | null; contexts?: RoomContext[]; ledger?: BudgetEntry[]; toolReservations?: string[];
   reason?: string | null; passCount?: number; nextMemberIndex?: number; lastCompletedAt?: string | null;
@@ -79,6 +81,7 @@ export interface ResidentStateV1 {
   wikiPages: WikiPage[]; wikiVersions: WikiVersion[]; jobLinks: WorkJobLink[]; residentGrants: ResidentGrant[];
 }
 export interface RoomSummary {
+  toolBudget?: RoomToolBudget | null;
   budgetMode?: 'legacy' | 'api-daily';
   id: string; title: string; version: number; epoch: number; desiredOn: boolean;
   observedStatus: Room['observedStatus']; members: RoomMember[]; legacyDiscussionIds: string[];

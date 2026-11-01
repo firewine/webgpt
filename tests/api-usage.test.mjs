@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { apiDay, nextApiDay, ensureApiUsage, validateApiUsage, apiUsageSummary, configureApiUsage, apiDailyReason, reserveApiUsage, claimApiUsage, settleApiUsage } from '../dist/server/workspace/api-usage.js';
-import { budgetReason, toolBudgetReason } from '../dist/server/workspace/dispatch.js';
+import { budgetReason, toolBudget, toolBudgetReason } from '../dist/server/workspace/dispatch.js';
 import { residentFixture, reply, pacing } from './resident-fixture.mjs';
 import { workspace, until, response, topic } from './workspace-helpers.mjs';
 import { browserPresets } from '../dist/server/connections/browser-discovery.js';
@@ -77,7 +77,7 @@ test('daily room skips unconfigured API and paused browser while GPT continues b
   assert.equal(f.calls(), 4); assert.ok(f.store.read().resident.turns.every(t => t.participantId === 'gpt')); assert.equal(f.room().observedStatus, 'on');
   assert.equal(f.store.read().apiUsage.entries.length, 0);
   f.control({ action: 'off' }); f.control({ action: 'configure', budgetMode: 'legacy', pacing, budgets: { maxRequests: 1, maxTokens: 1, maxToolJobs: 0, deadlineAt: new Date(Date.now() + 100000).toISOString() } });
-  assert.equal(budgetReason(f.room()), 'budget_exhausted');
+  assert.equal(budgetReason(f.room()), null); assert.equal(f.room().budgetMode, 'api-daily');
 });
 
 test('daily API reservation counts actual hooks and returned usage; GPT continues after one-call overshoot', async t => {
@@ -183,4 +183,24 @@ test('dot requires owner confirmation of a probed existing ChatGPT thread; Muse/
   const p = f.app.participant({ connectionId: id, modelId: c.models[0].id, label: 'dot actor' }); f.app.engine.kick = () => {};
   f.app.engine.create({ ...topic, participantIds: [p, 'fake-a'] }, 'historic-dot-topic');
   assert.throws(() => f.app.participant({ connectionId: ordinary, modelId: c.models[0].id, label: 'other' }, p), /requires_new_participant/); assert.equal(f.app.store.read().participants.find(x => x.id === p).connectionId, id);
+});
+
+test('tool-only budget uses no chat fields, preserves consumed slots and cannot enable another job when exhausted or expired', async t => {
+  const f = await residentFixture(t, { configure: false }); f.engine.kick = () => {};
+  const limit = { maxToolJobs: 1, deadlineAt: new Date(Date.now() + 60000).toISOString() };
+  f.control({ action: 'configure', toolBudget: limit }); f.control({ action: 'set_member', participantId: 'fake-a', enabled: true }); f.control({ action: 'on' });
+  assert.equal(f.room().budgets, null); assert.deepEqual(toolBudget(f.room()), limit);
+  const did = f.runner.focus(f.roomId, topic, 'tool-only-focus');
+  f.store.transact(s => f.dispatch.reserveTool(s, did, 'tool-once')); f.store.transact(s => f.dispatch.reserveTool(s, did, 'tool-once'));
+  assert.throws(() => f.store.transact(s => f.dispatch.reserveTool(s, did, 'tool-twice')), /room_tool_budget_exhausted/); assert.deepEqual(f.room().toolReservations, ['tool-once']);
+  f.store.transact(s => { s.resident.rooms[0].toolBudget.deadlineAt = new Date(0).toISOString(); });
+  assert.equal(budgetReason(f.room()), null); assert.equal(toolBudgetReason(f.room()), 'room_tool_budget_exhausted');
+  assert.throws(() => f.store.transact(s => f.dispatch.validateToolDispatch(s, { discussionId: did, requestId: 'tool-once', maxDurationMs: 60000 })), /room_tool_scope_changed/);
+});
+
+test('tool setting validation is transactional and old chat settings cannot restore room caps or erase history', async t => {
+  const f = await residentFixture(t); await f.runner.tick(); f.control({ action: 'off' }); const before = f.store.read();
+  assert.throws(() => f.control({ action: 'configure', toolBudget: { maxToolJobs: 2, deadlineAt: new Date(0).toISOString() } }), /invalid_tool_deadline/); assert.deepEqual(f.store.read(), before);
+  f.control({ action: 'configure', budgetMode: 'legacy', budgets: { maxRequests: 1, maxTokens: 1, maxToolJobs: 0, deadlineAt: new Date(0).toISOString() } });
+  assert.equal(f.room().budgetMode, 'api-daily'); assert.deepEqual(f.room().ledger, before.resident.rooms[0].ledger); f.control({ action: 'on' }); f.advance(1000); await f.runner.tick(); assert.equal(f.calls(), 2);
 });

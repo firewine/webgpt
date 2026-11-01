@@ -82,11 +82,11 @@ state·event·command를 같은 Store.transact에서 기록한다. 새 mutation�
 
 auth_required·usage_limit·reasoning 미지원·browser 목표/준비 불일치는 해당 멤버의 차단 이유로 기록하고 100 tick이어도 같은 요청을 반복하지 않는다. 미확정은 원래 attempt 대조 전 다른 계정 fallback도 금지한다. 새 허용 업무의 배정과 실패한 요청 재전송을 구분한다. eligible 후보가 없거나 lease/budget을 못 얻으면 로컬 대기 상태로 돌아가고 새 event/허용 시각에만 재평가한다. 무한 microtask/kick 재귀로 기다리지 않는다.
 
-legacy 모드의 모든 호출은 상위 Room 예산을 사전 예약하고 실제 usage로 정산한다. topic은 기존 Discussion.used에도 자기 차원으로 기록하되 Room에는 같은 requestId를 두 번 합산하지 않는다. work/review/wiki/format repair도 같은 ledger에 포함한다. legacy의 maxRequests/maxActiveMs/maxTokens/maxToolJobs/turnTimeoutMs/context 계약은 유지한다. usage=null은 unknownUsage이며 0원/정확한 잔여율로 바꾸지 않는다.
+2026-11-01 [사용자 후속 지시](./reviews/room-chat-limit-removal-20261101.md)에 따라 **모든 상주방은 API 일일 정책만 채팅 한도로 사용한다**. 방 전체 요청/token/채팅 종료 시각·legacy 방식 선택은 제거한다. 기존 room ledger와 Discussion.used는 원래 requestId/usage 기록으로 계속 유지하고 이중 합산하지 않는다. API key kind만 KST 공통 일일 원장으로 예약·전송·정산하며 GPT OAuth/browser 대화는 사용량으로 막지 않는다. API 미설정/소진·수동 browser 잠금 후보를 건너뛰고, 미확정이면 전역 새 전송을 막는다. 형식 보완과 API pass도 실제 전송 횟수에 포함한다.
 
-2026-11-01 [승인된 예외](./reviews/api-daily-budget-impact-20261031.md): owner가 명시 선택한 API 일일 모드에서는 API key 모델만 KST 작업실 합산 일일 한도/원장으로 예약·정산한다. GPT OAuth/browser 채팅은 공통 방의 횟수/token/종료 시각 제한에서 제외하고 API 소진/수동 잠금 후보를 건너뛴다. 속도/휴면·단일 provider·전송 전 기록·미확정/세대/문맥·도구 승인/실행 deadline은 유지한다. 혼합 주제의 API 소진은 원문/미실행을 보존한 partial 뒤 같은 방으로 복귀하며 초안 장벽을 생략하지 않는다. 기존 방/토의/원장/예산은 소급 변환·삭제하지 않는다.
+도구 실행은 별도 toolBudget의 maxToolJobs/deadline과 승인/격리를 사용한다. 옛 budgets의 tool 값은 같은 권한으로 보존하고 채팅 값으로 도구나 대화를 추가 차단하지 않는다. 속도/휴면·단일 provider·전송 전 기록·미확정/세대/context/turn timeout 경계는 유지한다. 혼합 주제의 API 소진은 원문/미실행을 보존한 partial 뒤 같은 방으로 복귀하며 초안 장벽을 생략하지 않는다. 과거 단독 legacy 토의의 used/limits·종료 상태나 실제 실행 이력은 소급 재작성/재개하지 않는다. usage=null은 unknownUsage이며 0원/정확한 잔여율로 바꾸지 않는다.
 
-예약이 정확한 미래 token 수를 예측한다는 뜻은 아니다. request/tool 수·deadline은 사전 차단하고 maxTokens는 기존처럼 보고된 소비량을 기준으로 다음 dispatch를 막는다. 한 응답의 token overshoot나 usage 미제공 가능성을 숨기지 않으며 임의 추정으로 “금액/토큰 hard cap 보장”이라고 하지 않는다. 미제공 때도 legacy의 요청/시간 hard limit과 새 모드의 API 일일 요청 수·도구 실행 deadline을 유지하고 U1의 정책에 따른다.
+예약이 정확한 미래 token 수를 예측한다는 뜻은 아니다. request/tool 수·deadline은 사전 차단하고 maxTokens는 기존처럼 보고된 소비량을 기준으로 다음 dispatch를 막는다. 한 응답의 token overshoot나 usage 미제공 가능성을 숨기지 않으며 임의 추정으로 “금액/토큰 hard cap 보장”이라고 하지 않는다. 미제공 때도 API 일일 요청 수와 도구 실행 deadline을 유지하고 U1의 정책에 따른다.
 
 ### 4.1 상주 문맥 인계와 이전 세대 차단
 

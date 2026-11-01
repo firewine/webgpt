@@ -30,6 +30,7 @@ test('R8 auto topic UI: old rooms start unchecked, owner explicitly opts in whil
 
 test('R8-C: two live tabs share the autonomous task/Wiki flow, preserve history/read position after reconnect/reload and remain usable at four widths', { timeout: 90000 }, async t => {
   const f = await acceptanceFixture(t); const b = await tabs(t, f); await f.runUnattended();
+  assert.equal(f.room().ledger.length, 8); assert.equal(f.app.snapshot().apiDaily.used.requests, 0);
   for (const page of b.pages) { await board(page); await page.locator('#work-items').getByText('공개 토론에서 나온 분석 일감', { exact: true }).waitFor(); await page.locator('#wiki-items .work-card').waitFor(); await close(page); }
   messages(f, '이전 발언 ', 12); const previous = f.app.store.read().resident.messages.length;
   for (const page of b.pages) { await page.waitForFunction(n => document.querySelectorAll('.room-message').length === n, previous); await page.locator('#room-timeline').evaluate(n => { n.scrollTop = 0; }); }
@@ -41,7 +42,7 @@ test('R8-C: two live tabs share the autonomous task/Wiki flow, preserve history/
   for (const width of [1440, 1024, 768, 390]) for (const [i, page] of b.pages.entries()) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); assert.equal(await page.locator('#room-text').isVisible(), true);
     await board(page); assert.match(await page.locator('#work-items').textContent(), /완료/); assert.match(await page.locator('#wiki-items').textContent(), /v2/);
-    await page.locator('#board-tab-usage').click(); assert.match(await page.locator('#room-usage').textContent(), /요청 8 \/ 80/); await page.locator('#board-tab-workspace').click();
+    await page.locator('#board-tab-usage').click(); assert.match(await page.locator('#room-usage').textContent(), /API 일일 한도 미설정 · API만 대기/); await page.locator('#board-tab-workspace').click();
     await close(page); await page.screenshot({ path: `test-results/resident/R8/chat-${width}-tab${i + 1}.png` });
   }
   assert.equal(f.calls.length, calls); assert.equal(f.maximum(), 1); assert.deepEqual(b.posts, []); assert.deepEqual(b.errors, []);

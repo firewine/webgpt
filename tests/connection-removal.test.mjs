@@ -41,6 +41,7 @@ test('active topic refuses removal, while a completed real engine flow retains e
 test('room-on and an unresolved dispatched turn both block removal; off never silently discards the uncertain response', async t => {
   const f = await workspace(t, { residentEnabled: true }, { residentAutoSchedule: false }); seed(f); const room = f.app.resident.snapshot().rooms[0].id;
   const control = input => f.app.resident.control(room, { ...input, expectedVersion: f.app.resident.room(room).room.version }, crypto.randomUUID());
+  f.app.configureApiDaily({ expectedVersion: 0, maxRequests: 100, maxTokens: 1000000 }, 'fixture-api-policy');
   control({ action: 'configure', budgets: budget(Date.now()), pacing }); control({ action: 'set_member', participantId: 'real-participant', enabled: true }); control({ action: 'on' });
   assert.throws(() => f.app.removeConnection(connection.id, 'room-on'), /connection_in_use/);
   f.app.providers.complete = async input => { input.hooks.dispatched(); throw new AppError('send_unconfirmed', 502, true); }; await f.app.residentRunner.tick();
