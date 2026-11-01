@@ -6,7 +6,7 @@
 
 | 보완 단계 | 승인 범위 | 현재 상태 |
 | --- | --- | --- |
-| D0 | 대상 dot의 private plugin·Tunnel·지원 인증·Events→입력 조회→응답 제출 검증 | 진행 중/계정 준비 대기. Tunnel 선택 가능 확인, 도구 설치·합성 fixture10/전체369 PASS. ID·runtime key/권한과 native 왕복은 NOT_RUN |
+| D0 | 대상 dot의 private plugin·Tunnel·지원 인증·Events→입력 조회→응답 제출 검증 | 터널 권한/연결 범위 확인 대기. 도구/합성10·Node369/CI browser62 확인. 기존 key·새 전용 key·조직 명시 시도 모두 metadata403·poll401 `tunnel_use_forbidden`. D0 runtime 중지, 실제 Organization/ChatGPT workspace association·발급 주체 권한은 UNVERIFIED, native 왕복 NOT_RUN |
 | D1 | additive dot kind·identity/grant·영속 namespace·이관 | D0 대기 / NOT_RUN |
 | D2 | Events 구독·callback 검증/서명·영속 outbox | D0/D1 대기 / NOT_RUN |
 | D3 | 기존 provider·topic·상주 발화·응답 대조·복구 결합 | D0~D2 대기 / NOT_RUN |

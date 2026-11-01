@@ -1,6 +1,6 @@
 # 공식 dot 연결 D0 — 준비 상태·계약 점검
 
-2026-11-01 KST(최종 로컬 점검22:21). 기준 main `ce8d9717ca34a77f458f47a8eb2f98cc793b2fcf`(PR #35), 작업 브랜치 `codex/dot-mcp-events-d0-20261101`. [사용자 승인 범위](../reviews/dot-official-mcp-events-impact-20261101.md)·[SSOT](../development-plan.md)를 따른다. **D0 진행 중이며 native dot 이벤트 왕복은 NOT_RUN이다. D1 이후 종속 구현은 착수하지 않았다.**
+2026-11-01 KST. 기준 main `ce8d9717ca34a77f458f47a8eb2f98cc793b2fcf`(PR #35), 작업 브랜치 `codex/dot-mcp-events-d0-20261101`. [사용자 승인 범위](../reviews/dot-official-mcp-events-impact-20261101.md)·[SSOT](../development-plan.md)를 따른다. **D0는 터널 권한 확인 대기이며 native dot 이벤트 왕복은 NOT_RUN이다. D1 이후 종속 구현은 착수하지 않았다.**
 
 ## 1. 승인 반영과 보존
 
@@ -19,12 +19,16 @@
 | Muse/기존 browser binding | 보존 확인 | 실제 `/api/state`에서 browser binding1개를 읽고 ID+binding digest를 private 임시 receipt에 기록·최종 대조. 개인 계정·대화·URL은 공개 문서에 복사하지 않음 |
 | 초기 Tunnel 도구/설정 | BLOCKED(초기 점검) | 초기 PATH에 tunnel-client 없음. 전용 `tunnel.env`/grant 파일과 프로세스에 제공된 runtime key/tunnel ID 없음. 다른 위치에 키가 전혀 없다는 주장은 아님 |
 | 공식 Tunnel 도구 설치 | PASS | 공식 latest release v0.0.19 Linux amd64 zip의 게시 SHA256과 다운로드 해시 일치 확인. 사용자 전용 경로에 설치하고 기존 도구를 덮어쓰지 않음. 아래 버전/경로 참조 |
-| 전용 Tunnel profile | PASS(로컬 구성) | 사용자가 제공한 ID를 private profile에만 기록. `sample_mcp_stdio_local`·합성 fixture·file key reference·loopback ephemeral admin 포트, 0600. 실제 workspace 권한·polling은 아직 NOT_RUN |
+| 전용 Tunnel profile | PASS(로컬 구성) | 사용자가 제공한 ID를 private profile에만 기록. `sample_mcp_stdio_local`·합성 fixture·file key reference·loopback ephemeral admin 포트, 0600. 실제 권한 결과는 아래 FAIL_PERMISSION이며 설정 성공과 구별 |
 | 최종 read-only 준비 상태 | BLOCKED / exit2 | `npm run doctor:dot`: installed=true, 이 프로세스의 ID/key·검사용 scoped grant 부재. native 성공·추가 권한을 추정하지 않음. D0 합성 stdio fixture는 별도 경로이며 운영 앱 grant가 필요하지 않음 |
 | 현재 MCP의 Events/응답 계약 | NOT_AVAILABLE(격리 HTTP 관측) | 실제 임시 앱의 scoped legacy grant로 initialize/tools/list/events/list 확인: tools-only, Events/전용 응답 도구 없음. 기존 result_submit은 근거 제출임을 유지 |
 | 새 D0 점검 도구·합성 fixture | PASS(fixture) | `node --test tests/dot-preflight.test.mjs tests/dot-mcp-d0.test.mjs`: 10검사 PASS. 실제 stdio child process·challenge/서명·일회 이벤트·중복 응답/회수/범위 경계 포함 |
 | 전체 Node/정적 검사 | PASS | 격리 checkout에서 `npm run check`: strict TypeScript·빌드·Node369 PASS, fail0/skip0 |
-| browser GUI 검사 | NOT_RUN(이번 변경) | 제품 GUI/src 변경 없음. 과거62 PASS를 이번 실행 결과로 재표기하지 않음 |
+| GitHub CI | PASS(코드 head e446c6a) | [run41311295483](https://github.com/firewine/webgpt/actions/runs/41311295483): Node369·browser62 PASS, 양쪽 fail0/skip0, 설치 Codex contract 성공. fixture CI와 native dot 실계정을 구별 |
+| 로컬 browser GUI 검사 | NOT_RUN(이번 변경) | 제품 GUI/src 변경 없음. 위 browser62는 이번 GitHub CI의 실행 결과이며 로컬 재실행·실기기 성공을 뜻하지 않음 |
+| runtime key 로컬 입력 | PASS(보관만) | 사용자 직접 입력한 파일이 해당 사용자 소유·private/nonempty임을 확인. 값은 출력/commit하지 않음. 키 존재를 터널 접근 권한 성공으로 표시하지 않음 |
+| tunnel-client doctor | PASS(로컬 설정)/SKIP(원격 확인) | `--explain`의 profile/key reference/실행 파일·ephemeral health bind 확인. stdio MCP 원격·OAuth metadata는 SKIP, optional Codex plugin도 SKIP. 실제 control-plane 인증을 검증한 결과가 아님 |
+| 실제 Tunnel control plane | FAIL_PERMISSION | 기존 key·새 전용 key·사용자 제공 Organization 명시 시도에서 모두 metadata403 Forbidden·poll401 `tunnel_use_forbidden`. 모델 API 호출0, 각 D0 runtime만 SIGINT로 종료. native 메시지/구독 없음 |
 | 실제 dot·Events·MCP 결과 왕복 | NOT_RUN | 계정의 Tunnel 선택 가능만으로 D0 전체를 통과시키지 않음 |
 
 전체 검사는 `/tmp/webjjoku-dot-d0-validation-20261101`의 독립 checkout과 임시 DB/모의 provider에서 수행했다. 빌드 스크립트가 `dist/`를 삭제/재생성하므로 운영 저장소의 `dist/`에서 검사하지 않았다. 실제 운영 `webjjoku`·desktop 서비스 재시작/배포는 하지 않았다.
@@ -105,4 +109,14 @@ D0 fixture를 private custom MCP plugin으로 연결할 때만 합성/no-auth �
 
 사용자가 ID를 제공한 뒤 `/home/firewine/.local/state/webjjoku/dot-mcp-d0/profiles/webjjoku-dot-d0.yaml`에 전용 profile을 생성했고0600을 확인했다. 실제 ID는 공개 문서에 복사하지 않는다. 이 전용 디렉터리의 profile을 읽을 때는 `TUNNEL_CLIENT_PROFILE_DIR`을 해당 `profiles` 경로로 지정해야 한다. `doctor:dot`의 기본 앱 metadata 점검은 이 fixture profile을 자동으로 읽지 않는다.
 
-현재 key 입력·tunnel doctor/polling·실제 dot 구독/응답은 NOT_RUN이다. 성공하면 그 시점의 native/도구/event 증거를 추가하고 D0를 판정한다. 도구 설치/profile 생성 자체를 터널/계정 연결 완료로 표시하지 않는다.
+사용자의 로컬 key 입력 후 doctor의 로컬 설정 검증은 통과했지만, 실제 runtime에서 metadata403·poll401 `tunnel_use_forbidden`을 관측했다. `/healthz`·`/readyz`의 HTTP200도 함께 관측했으므로 **로컬 health만으로 control-plane 권한/연결 성공을 판정하지 않는다.** 해당 D0 프로세스만 중지했고 운영 webjjoku는 동일 PID4089462로 active/running이었다.
+
+사용자는 처음에 “다른 조직의 키였음”을 답변했고 이후 전용 key를 다시 만들어 새 파일 `runtime-key-tunnel`에 직접 입력했다. 해당 파일이 private/사용자 소유이며 기존 key와 실제로 다른 값임을 확인했다. 기존 key와 profile backup은 보존하고 **D0 profile의 file reference만** 새 파일로 변경했다. 새 key에서도 동일한403/401을 관측했으며 key 자체가 로그에 없음을 확인했다. 일반 키의 All 설정이나 재발급 자체를 권한 해결로 간주하지 않는다.
+
+공식 CLI `admin --json tunnels get`을 **새 runtime key만** 사용해 읽기 전용으로 실행한 결과도 `GET /v1/tunnels/<원래ID>`에서403이었다. admin key·생성/수정 API는 사용하지 않았다. 사용자가 제공한 Organization을 `--control-plane.organization-id`로 명시한 세 번째 시도도 동일한403/401이었다. 실제 ID/조직 ID·key·개인정보는 공개 기록에 넣지 않았다.
+
+두 번째 시도에서 `/healthz`·`/readyz`는200이었지만 `commands_poll_cycles_total=10`, `commands_poll_errors_total=10`, `commands_poll_last_successful_timestamp_seconds=0`을 관측했다. 즉 local ready는 OpenAI가 이 터널을 허용했거나 실제 native 요청을 받았다는 증거가 아니다. 세 번째 시도도 권한 실패 확인 뒤 종료했다. 현재 D0 터널 프로세스는 실행하지 않는다.
+
+원래 터널·키를 삭제하거나 조직/워크스페이스 연결·역할을 임의 변경하지 않았다. 실제 허용된 Organization/ChatGPT workspace 목록과 발급 주체의 조직 수준 Read+Use를 대조해야 한다. [공식 Tunnel 권한 안내](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)는 조직 수준 Read+Use와 workspace association을 별도로 요구하며 역할 반영에 최대30분이 걸릴 수 있다고 안내한다. 서버 응답만으로 조직 불일치·권한 누락·연결 매핑 중 하나를 원인으로 확정하지 않으며, 권한 실패를 추가 OAuth나 인증 해제로 우회하지 않는다.
+
+실제 dot 구독/응답은 계속 NOT_RUN이다. 성공하면 그 시점의 native/도구/event 증거를 추가하고 D0를 판정한다. 도구 설치/profile/doctor 성공 자체를 터널·계정 연결 완료로 표시하지 않는다. [draft PR36](https://github.com/firewine/webgpt/pull/36)은 이 미완료 경계를 명시한다.
