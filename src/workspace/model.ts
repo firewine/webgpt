@@ -133,7 +133,9 @@ export interface CodexJob {
 export interface WorkspaceState {
   version: 1; hostId: string; connections: Connection[]; participants: Member[]; discussions: Discussion[];
   bindings: ExecutionBinding[]; jobs: CodexJob[];
-  sessions: { hash: string; expiresAt: number }[];
+  sessions: { hash: string; expiresAt: number; credentialId?: string }[];
+  ownerPassword?: { scheme: 'scrypt-v1'; id: string; salt: string; hash: string; changedAt: string };
+  passwordSetup?: { hash: string; expiresAt: number; credentialId: string | null } | null;
   grants: { id: string; hash: string; discussionId: string; participantId: string; tools: string[]; revoked: boolean }[];
   browserPaused: boolean;
   materialPackages?: MaterialPackage[];

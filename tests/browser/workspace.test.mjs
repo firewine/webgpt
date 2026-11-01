@@ -8,7 +8,10 @@ test('owner UI: responsive topic discussion, pause/revise/resume, persisted comp
   t.diagnostic(`Actual browser: ${browser.version()}`); await mkdir('test-results', { recursive: true });
   for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
     const page = await browser.newPage({ viewport }); const errors = []; const external = []; page.on('pageerror', e => errors.push(e.message)); page.on('request', req => { if (!req.url().startsWith(url)) external.push(req.url()); });
-    await page.goto(url); await page.locator('#login-form input').fill('test-owner-key-never-used-outside-fixtures'); await page.getByRole('button', { name: /작업실 열기/ }).click(); await page.waitForFunction(() => !document.querySelector('#workspace').hidden);
+    if (viewport.width === 1440) await page.request.post(url + '/api/login', { data: { token: 'test-owner-key-never-used-outside-fixtures' }, headers: { Origin: url } });
+    await page.goto(url); await page.locator('#login-password').fill('fixture-password-not-for-real-use');
+    if (viewport.width === 1440) await page.locator('#login-confirm').fill('fixture-password-not-for-real-use');
+    await page.locator('#login-submit').click(); await page.waitForFunction(() => !document.querySelector('#workspace').hidden);
     assert.equal(await page.locator('#participant-picker input:checked').count(), 2); await page.screenshot({ path: `test-results/workspace-new-${viewport.width}.png`, fullPage: true });
     const topic = `Ubuntu 서버 구성 비교 ${viewport.width} <img src=x onerror="window.injected=true">`; await page.locator('#topic').fill(topic); await page.getByRole('button', { name: /토의 시작/ }).click();
     await page.waitForFunction(() => !document.querySelector('#discussion-detail').hidden); await page.getByRole('button', { name: '일시정지', exact: true }).click();

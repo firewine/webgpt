@@ -16,7 +16,7 @@
 
 ## 인증·실행 경계
 
-소유자 키는 로컬 0600 파일, 브라우저 세션은 HttpOnly/SameSite=Strict 쿠키다. 운영 HTTPS에서는 Secure를 붙인다. Host와 Origin을 검증하고 인증 헤더를 noVNC upstream으로 전달하지 않는다. noVNC 입력은 수동 제어 lease가 있을 때만 허용한다.
+2026-11-01 개인용 웹 로그인은 소유자 비밀번호로 바꾼다. 최초 새 비밀번호/확인2칸·이후1칸이며 salt+scrypt 해시만 private SQLite에 저장한다. 최초 설정은 기존 소유자 세션 또는10분/1회 설정 링크를 사용하고, credential 세대와 세션/링크를 같은 Store transaction에서 갱신한다. 비밀번호 변경/분실 복구 시 이전 세션과 링크는 폐기한다. 원문·확인값·설정 링크 비밀은 event/command/log에 저장하지 않는다. 기존 소유자 키는 ops/복구·API 호환용 로컬0600 파일로 보존하며 웹 화면에는 입력란을 두지 않는다. 브라우저 세션은 기존12시간 HttpOnly/SameSite=Strict 쿠키다. 운영 HTTPS에서는 Secure를 붙인다. Host와 Origin을 검증하고 인증 헤더를 noVNC upstream으로 전달하지 않는다. noVNC 입력은 수동 제어 lease가 있을 때만 허용한다.
 
 OAuth/API credential은 DB와 별도의 AES-256-GCM vault에 저장한다. 키·암호문은 같은 OS 소유자가 관리하므로 OS 계정 탈취에 대한 분리 보장은 아니다. Codex 자식에는 provider 환경 변수를 전달하지 않으며 bubblewrap으로 앱 state/Chrome profile을 가린다. 별도 PID namespace와 `/proc`를 사용해 호스트 프로세스의 root/fd 경로로 가린 파일을 읽지 못하게 한다. namespace를 만들 수 없으면 실행을 거절하고 격리 없는 경로로 전환하지 않는다. Codex의 읽기 sandbox 자체가 cwd 밖의 모든 읽기를 차단한다고 주장하지 않는다.
 
