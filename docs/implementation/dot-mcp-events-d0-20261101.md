@@ -1,6 +1,6 @@
 # 공식 dot 연결 D0 — 준비 상태·계약 점검
 
-2026-11-01 KST 작성·11-02 후속 검사. 기준 main `ce8d9717ca34a77f458f47a8eb2f98cc793b2fcf`(PR #35), 작업 브랜치 `codex/dot-mcp-events-d0-20261101`. [사용자 승인 범위](../reviews/dot-official-mcp-events-impact-20261101.md)·[SSOT](../development-plan.md)를 따른다. **Platform 터널 대상 보정 후 연결·도구 발견·조회는 PASS다. native 감시 등록 오류와 schema cache 충돌을 관측했으며 전체 이벤트/응답 왕복은 미완료다. 최신 경과는 §7을 따른다. D1 이후 종속 구현은 착수하지 않았다.**
+2026-11-01 KST 작성·11-02 후속 검사. 기준 main `ce8d9717ca34a77f458f47a8eb2f98cc793b2fcf`(PR #35), 작업 브랜치 `codex/dot-mcp-events-d0-20261101`. [사용자 승인 범위](../reviews/dot-official-mcp-events-impact-20261101.md)·[SSOT](../development-plan.md)를 따른다. **11/02 실제 dot의 합성 이벤트 수신·답변 수락 PASS, 사용자와 서버 receipt 일치. 감시는 아직 활성 상태여서 종료 확인을 기다린다. D0 전체와 D1 이후 관문은 유지한다. 최신 결과는 §10이며 §7~9는 앞선 실패/보완 이력이다.**
 
 ## 1. 승인 반영과 보존
 
@@ -24,13 +24,14 @@
 | 현재 MCP의 Events/응답 계약 | NOT_AVAILABLE(격리 HTTP 관측) | 실제 임시 앱의 scoped legacy grant로 initialize/tools/list/events/list 확인: tools-only, Events/전용 응답 도구 없음. 기존 result_submit은 근거 제출임을 유지 |
 | 새 D0 점검 도구·합성 fixture | PASS(fixture) | 11/02 `node --test tests/dot-preflight.test.mjs tests/dot-mcp-d0.test.mjs`: 16검사 PASS. 실제 stdio child·challenge/서명·일회 이벤트·중복/범위·진단 비밀 비노출·고정 catalog/현재 ID 대조·등록 전 답변 거부/단계 안내 포함 |
 | 전체 Node/정적 검사 | PASS | 11/02 격리 checkout에서 `npm run check`: strict TypeScript·빌드·Node375 PASS, fail0/skip0. 이전 e446c6a의369검사와 구별 |
-| GitHub CI | PASS(코드 head e446c6a) | [run41311295483](https://github.com/firewine/webgpt/actions/runs/41311295483): Node369·browser62 PASS, 양쪽 fail0/skip0, 설치 Codex contract 성공. fixture CI와 native dot 실계정을 구별 |
+| GitHub CI | PASS(코드 head4c79515) | [run41321389329](https://github.com/firewine/webgpt/actions/runs/41321389329): Node375·browser62 PASS, 양쪽 fail0/skip0. 이전 e446c6a의 [run41311295483](https://github.com/firewine/webgpt/actions/runs/41311295483)와 구별. fixture CI와 native dot 실계정을 구별 |
 | 로컬 browser GUI 검사 | NOT_RUN(이번 변경) | 제품 GUI/src 변경 없음. 위 browser62는 이번 GitHub CI의 실행 결과이며 로컬 재실행·실기기 성공을 뜻하지 않음 |
 | runtime key 로컬 입력 | PASS(보관만) | 사용자 직접 입력한 파일이 해당 사용자 소유·private/nonempty임을 확인. 값은 출력/commit하지 않음. 키 존재를 터널 접근 권한 성공으로 표시하지 않음 |
 | tunnel-client doctor | PASS(로컬 설정)/SKIP(원격 확인) | `--explain`의 profile/key reference/실행 파일·ephemeral health bind 확인. stdio MCP 원격·OAuth metadata는 SKIP, optional Codex plugin도 SKIP. 실제 control-plane 인증을 검증한 결과가 아님 |
 | 실제 Tunnel control plane | PASS(대상 보정 후) | 초기403/401은 원래 ID 대상의 결과. 실제 Platform 터널 ID를 복사해 보정한 뒤 같은 새 전용 key로 metadata 조회 exit0·org/이름 일치·workspace association1·polling 성공을 확인. 초기 key의 권한은 재검증하지 않음 |
 | 실제 dot 도구/Events 발견·조회 | PASS | 사용자 화면에 get/claim/submit 도구3·event1 표시, 실제 dot의 get 사용자 보고와 진단 목적 read-only get 성공. Codex가 claim/submit을 대신 호출하지 않음 |
-| 실제 dot·Events·MCP 결과 왕복 | FAIL(초기 감시 등록)/후속 확인 대기 | 작업 서비스 오류·`events/subscribe` transport409·후속 child 도달0 관측. callback에 들어갔다는 증거 없음. schema cache 오류/안내 보완 및 설치 CLI의 공식 초기화 shim 적용 후 실제 notification1 확인. native 감시/이벤트/응답/종료는 여전히 미완료 |
+| 실제 dot·Events·MCP 결과 왕복 | PASS(합성1건) | 11/02 사용자 실제 dot의 이벤트 수신·제출 보고, 서버 challenge200/일치·이벤트 전달200·REPLY_ACCEPTED1·동일 receipt 대조. 코드4c79515/fixture0.4.0·공식 stdio 초기화 옵션. 처음 실패한 시도의 재실행 성공으로 덮어쓰지 않고 새 probe 결과로 구별 |
+| 합성 감시 수명 종료 | 확인 대기 | 사용자 보고·서버 모두 감시 ACTIVE. 같은 scope의 구독 갱신1회가 있어 subscribeRequests2·unsubscribeRequests0. 새 이벤트/새 답변 수락은0. 기존 감시 종료만 요청했으며 새 검사/재구독/claim/submit은 요청하지 않음 |
 
 전체 검사는 `/tmp/webjjoku-dot-d0-validation-20261101`의 독립 checkout과 임시 DB/모의 provider에서 수행했다. 빌드 스크립트가 `dist/`를 삭제/재생성하므로 운영 저장소의 `dist/`에서 검사하지 않았다. 실제 운영 `webjjoku`·desktop 서비스 재시작/배포는 하지 않았다.
 
@@ -65,7 +66,7 @@ npm run doctor:dot
 
 합성 fixture4개는①signed challenge→이벤트 수신과 native 응답의 구별→20회 같은 submit의 receipt1/새 이벤트0, ②동일 구독ID·다른 scope/임의 도구/회수 뒤 응답 거부, ③잘못된 challenge/key·private IP/metadata/Tailnet callback·만료 거부와 secret 오류 반사0, ④실제 stdio 프로세스의 initialize/tools/events 광고와 예상하지 않은 stdout/stderr0을 확인했다.
 
-## 4. D0에서 남은 일과 확대 경계
+## 4. 초기 D0 준비 조건과 확대 경계
 
 [공식 custom MCP 연결 문서](https://developers.openai.com/api/docs/guides/custom-mcp-server)의 인증 선택지는 OAuth·무인증·혼합이다. [공식 인증 문서](https://developers.openai.com/plugins/build/auth)는 ChatGPT가 임의 API key를 제시하지 못하는 제약을 설명한다. **사용자 화면에 OAuth가 선택됐다는 이유만으로 별도 IdP 설치를 결정하지 않는다.** 기본안의 고정 grant를 Cloud가 직접 제시할 수 있다고 단정하거나 앱의 인증을 제거해서 해결하지 않는다.
 
@@ -78,7 +79,7 @@ npm run doctor:dot
 3. D0의 격리된 최소 Events fixture로 초기화/도구·구독 challenge·이벤트1·조회/응답1을 실제 dot에서 관측한다. 원래 앱 데이터는 사용하지 않으며 최소 응답 횟수·허용을 실행 전에 구체화한다.
 4. callback 수신2xx와 실제 dot tool/result를 따로 기록한다. 이후 D0 완료 여부를 판단하고 D1 이후를 진행한다. 조건을 못 채우면 해당 단계는 BLOCKED/NOT_RUN으로 남긴다.
 
-이 기록에는 실제 dot 연결 성공·native 기억 이전·실제 Muse 메시지 왕복·유료 모델 호출·새 배포를 완료했다는 내용이 없다. rollback은 새 D0 점검 명령 사용 중단과 작업 브랜치 복귀이며 운영 연결/DB/서비스를 초기화할 작업이 없다.
+이 절은 초기 준비 조건이다. 후속 합성 dot 왕복은 §10을 따르며 native 기억 이전·운영 채팅방 참여·실제 Muse 메시지 왕복·유료 모델 API 호출·새 배포의 성공으로 확대하지 않는다. rollback은 새 D0 점검 명령 사용 중단과 작업 브랜치 복귀이며 운영 연결/DB/서비스를 초기화할 작업이 없다.
 
 ## 5. 실제 dot 왕복을 위한 준비물과 제한
 
@@ -161,3 +162,22 @@ fixture0.4.0의 get은 현재 단계 `SUBSCRIBE/WAIT_FOR_EVENT/STOP_MONITORING`�
 미등록/미전송을 get으로 대조해 private 종료 receipt를 보존한 후 D0만 해당 옵션과 debug 로그로 재시작했다. raw HTTP unsafe logging은 꺼 두고 로그는 private0600에 남겼다. fixture get에 단순 `initializedNotifications` 수신 횟수를 추가했으며 실제 stdio child 검사에서 응답/notification의 구별을 확인했다. 운영자의 원격 read-only get 경로에서 **initializedNotifications1·get 성공·polling 정상·구독0·미수락**을 관측했다. 재시작 직후 첫 read-only 조회의 일시 오류 뒤 다음 조회는 성공했다. native dot 자체의 초기화/전체 왕복 성공으로 확대 해석하지 않는다.
 
 현재는 초기화 누락과 맞는 증상에 공식 보완을 적용한 상태이며 native 재검증 결과를 기다린다. 이전 실패 원인 확정이나 D0 PASS로 표시하지 않는다. native 호출이 계속 실패하면 같은 프로세스를 유지해 safe debug의 RPC code와 get 관측을 대조한다. user/model/event 재전송은 자동으로 하지 않는다. 이번 변화는 승인된 D0 오류 진단/수정 범위이며 전체 단계·추가 OAuth·D1 이후 수락을 바꾸지 않는다.
+
+## 10. 실제 dot 합성 이벤트·응답 왕복 성공
+
+2026-11-02 KST, 코드 `4c79515bae2db7d9be5180748380840bf766cd2f`·fixture0.4.0·Tunnel CLI0.0.19에서 사용자가 실제 dot의 이벤트 수신과 확인 답변 제출을 보고했다. 운영자의 원격 `dot_turn_get`은 `replyAccepted=true`이며 **사용자가 보고한 receipt와 서버 receipt가 정확히 일치**했다. 운영자가 claim/submit을 대신 호출한 횟수는0이다. 원래 probe/request/receipt와 조회 결과는 로컬 private0600 증거에만 보존하고 공개 문서에는 복사하지 않는다.
+
+| 실제 관측 | 판정·범위 |
+| --- | --- |
+| `SUBSCRIBE_RECEIVED`의 event/probe 일치·webhook mode·서명 키 존재, `CALLBACK_RETURNED` HTTP200/challengeMatches=true | native 구독과 signed callback 검증 PASS |
+| `SUBSCRIPTION_ACTIVE` → `DELIVERY_STARTED` → `WEBHOOK_RECEIVED` HTTP200 | 이벤트1회 전달 PASS. 아래 native 답변과 별도로 판정 |
+| 사용자 실제 dot의 이벤트 기동/답변 보고, `REPLY_ACCEPTED`1개·stderr 수락 marker1개·receipt 일치 | 실제 dot 합성 답변1건 수락 PASS |
+| 구독 응답 전달05:47:17.353 → 수락 marker 직후 도구 응답 전달05:47:47.099 | 약29.75초 관측. 구독 응답~결과 응답 구간이며 순수 모델 추론 시간이나 장기 지연 보장이 아님 |
+| 05:55:21의 같은 probe/callback scope 구독 갱신 | subscribeRequests2, challenge200·동일 scope, 새 `DELIVERY_STARTED`0/새 수락0. 갱신이 이미 수락한 이벤트를 재전송하지 않음 |
+| 조회에서 `nextAction=STOP_MONITORING`·감시 ACTIVE·unsubscribeRequests0, 사용자도 활성 상태 보고 | 감시 종료 미확인. 기존 감시 종료 후 상태 조회만 사용자에게 요청. D0 전체 PASS/D1 착수로 표시하지 않음 |
+
+공식 초기화 옵션을 적용한 구성에서 native 왕복이 성공했다. 이전 실패 payload가 없으므로 과거 오류 원인을 모두 초기화 하나로 확정하지는 않는다. Tunnel의 stdio 초기화 guard는 유지했고 옵션은 private profile에도 보존했다. 추가 OAuth·공개 ingress·임의 polling·제품 인증 해제는 사용하지 않았다.
+
+인증 검증 범위는 전용 Platform Tunnel과 사용자 설치 plugin에서 **격리 합성 fixture에 접근한 것**까지다. native actor의 암호학적 증명·운영 grant 전달/회수·방별 scope·기억 이전은 검증하지 않았다. D1의 owner 확인 연결과 검증된 principal 구분, D2/D3의 영속 scope/응답 대조와 D5 통합 수락은 그대로 남는다. 최초/쓰기 승인 UI의 상세 단계는 사용자가 별도로 보고하지 않아 UNVERIFIED이며 무승인 실행을 보장하지 않는다. 추가 인증 범위가 필요하면 기존 확대 승인 절차를 따른다.
+
+운영 앱은 같은 PID4089462의 active/running 상태이며 합성 터널 health ready·control-plane/MCP 정상이다. 이번 결과 기록에는 제품 코드/운영 dist·DB·방 설정·Muse·Serve 변경이 없다. 코드 변경이 없어 이미 통과한 코드 head의 Node375/browser62 검사를 반복하지 않고 문서 diff·참조·비밀 비노출·보존 상태를 확인한다. 감시 종료가 확인되면 원래 receipt를 보존한 채 해당 결과를 추가하며, 종료 전 합성 runtime을 재시작해 성공 기록을 잃거나 자동으로 새 probe를 만들지 않는다.

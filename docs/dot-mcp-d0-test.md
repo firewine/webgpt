@@ -1,6 +1,6 @@
 # D0 native dot — 한 번의 이벤트 왕복 검사
 
-2026-11-02 KST. [SSOT](./development-plan.md)·[실행 기록](./implementation/dot-mcp-events-d0-20261101.md)을 따른다. 합성 fixture0.4.0용 운영 절차이며 **native 왕복 완료 기록이 아니다.** Muse·운영 방·Wiki·Codex를 사용하지 않는다.
+2026-11-02 KST. [SSOT](./development-plan.md)·[실행 기록](./implementation/dot-mcp-events-d0-20261101.md)을 따른다. 합성 fixture0.4.0용 운영 절차다. **실제 dot 이벤트·답변1건과 동일 receipt는 확인했고 감시 종료를 기다린다.** 아래 시작 요청을 현재 성공한 검사에 다시 보내지 않는다. Muse·운영 방·Wiki·Codex를 사용하지 않는다.
 
 ## 대조한 사용 예제
 
@@ -47,6 +47,8 @@ probe/request ID를 예전 대화에서 복사하지 않는다. callback URL·�
 | 5 | 감시 종료·`UNSUBSCRIBED` 확인 | 수명 종료. 불명확하면 종료 미확인으로 기록 |
 
 fixture는 구독당 유한10분·일회 이벤트·메모리 상태다. 실패/timeout/조회로 새 이벤트를 보내거나 자동 재시도하지 않는다. 이벤트 전송2xx와 실제 dot 응답·종료가 모두 확인되기 전 D0 전체를 PASS로 바꾸지 않는다.
+
+답변 수락 뒤에도 감시가 활성일 수 있다. 현재 실측에서는 같은 scope의 구독 갱신도 관측됐으므로 서버 TTL 만료를 native 감시 종료로 간주하지 않는다. 이때 실제 dot에 **기존 D0 감시 작업만 종료하고 그 상태를 조회**하도록 요청하며, 새 감시·검사·claim/submit은 실행하지 않는다. 서버의 `UNSUBSCRIBED`/subscription NONE과 원래 receipt 보존을 함께 대조한다. native 종료와 서버 해제가 다르면 각각 미확인으로 기록한다.
 
 `-32602`의 `data.reason=subscription_required`는 감시가 없는데 claim/submit을 시도한 경우다. `current_request_required`는 현재 request와 다르고 `subscription_expired`는 구독 만료다. callback 오류는 `-32015`와 안전한 분류/HTTP 상태로 별도 대조한다. 과거0.3.0의 일반 오류 문구만으로 이 세 원인 중 하나를 확정하지 않는다.
 

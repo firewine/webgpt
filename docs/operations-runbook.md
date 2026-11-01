@@ -1,6 +1,6 @@
 # Ubuntu 운영 절차 — v0.3
 
-> **2026-11-01 공식 dot 연결 개정·개발 승인 / D0 진행 중:** Muse의 현재 Chrome profile/thread/selector·초안/receipt는 그대로 보존한다. dot은 일반 ChatGPT `/c/...` 선택 대신 공식 private plugin·Secure MCP Tunnel·MCP Events 경로를 검증한다. 아래 과거 dot browser/stdio 예시는 native dot 성공 증거가 아니다. [승인안](./reviews/dot-official-mcp-events-impact-20261101.md)·[SSOT](./development-plan.md)·[D0 점검/차단 기록](./implementation/dot-mcp-events-d0-20261101.md)을 먼저 따른다. owner 비밀번호·GPT provider 토큰·MCP grant·Tunnel runtime key는 별개이며 서로 대신 입력하지 않는다. 추가 OAuth나 공개 ingress는 사전 영향 보고·승인 없이 설치하지 않는다.
+> **2026-11-01 공식 dot 연결 개정·개발 승인 / 11-02 D0 합성 왕복 PASS·감시 종료 대기:** Muse의 현재 Chrome profile/thread/selector·초안/receipt는 그대로 보존한다. dot은 일반 ChatGPT `/c/...` 선택 대신 공식 private plugin·Secure MCP Tunnel·MCP Events 경로를 검증한다. 실제 dot 이벤트·답변1건은 확인했으나 운영 채팅방 연결은 아직 구현 전이다. 아래 과거 dot browser/stdio 예시는 native dot 성공 증거가 아니다. [승인안](./reviews/dot-official-mcp-events-impact-20261101.md)·[SSOT](./development-plan.md)·[D0 점검/실측 기록](./implementation/dot-mcp-events-d0-20261101.md)을 먼저 따른다. owner 비밀번호·GPT provider 토큰·MCP grant·Tunnel runtime key는 별개이며 서로 대신 입력하지 않는다. 추가 OAuth나 공개 ingress는 사전 영향 보고·승인 없이 설치하지 않는다.
 
 실제 사용자 Ubuntu 서버에 적용할 절차다. 개발 컨테이너에서 계정 로그인이나 Tailnet 배포를 완료했다는 기록이 아니다. 처음에는 같은 OS 사용자가 관리하는 개인 서버를 대상으로 한다.
 

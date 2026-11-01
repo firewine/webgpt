@@ -6,14 +6,14 @@
 
 | 보완 단계 | 승인 범위 | 현재 상태 |
 | --- | --- | --- |
-| D0 | 대상 dot의 private plugin·Tunnel·지원 인증·Events→입력 조회→응답 제출 검증 | 진행 중/전체 미완료. 실제 Platform 터널 ID 보정 후 metadata·polling·도구3/Events1 발견·get PASS. 재시작 ID 고정 schema 오류 수정·비밀 없는 진단/등록 우선 안내 추가, 새 검사 plugin 등록 사용자 확인. native task 오류 때 구독 child 도달0·transport409 관측. 설치 CLI의 공식 stdio 초기화 보완 적용 후 read-only 경로의 notification 수신1·get PASS. [사용 예제 기반 검사](./dot-mcp-d0-test.md)로 native 왕복 확인 대기. 격리16·Node375 PASS(11/02), browser62는 이전 CI 결과. 실제 이벤트/응답·종료 미확인, D1 이후 대기 |
+| D0 | 대상 dot의 private plugin·Tunnel·지원 인증·Events→입력 조회→응답 제출 검증 | **실제 dot 합성 왕복 PASS / 감시 종료 확인 대기(11/02).** 공식 stdio 초기화 보완 뒤 구독 challenge200·이벤트 전달200·native 답변1건 수락, 사용자 receipt와 서버 receipt 일치. 약30초 왕복·동일 scope 구독 갱신1회/새 이벤트0 확인. 아직 감시 ACTIVE·unsubscribe0이므로 D0 전체/D1 이후 관문 유지. 코드4c79515의 CI Node375·browser62 PASS, fail/skip0. [실측과 남은 경계](./implementation/dot-mcp-events-d0-20261101.md#10-실제-dot-합성-이벤트응답-왕복-성공)·[검사 절차](./dot-mcp-d0-test.md) |
 | D1 | additive dot kind·identity/grant·영속 namespace·이관 | D0 대기 / NOT_RUN |
 | D2 | Events 구독·callback 검증/서명·영속 outbox | D0/D1 대기 / NOT_RUN |
 | D3 | 기존 provider·topic·상주 발화·응답 대조·복구 결합 | D0~D2 대기 / NOT_RUN |
 | D4 | 공식 연결 UI·private plugin·진단/운영 절차 | D0 결과를 반영해 진행 / NOT_RUN |
 | D5 | 기존 50 gate·Muse 보존·혼합 채팅/업무/Wiki/Codex 통합 수락 | D0~D4 대기 / NOT_RUN |
 
-현재 상태와 D0 실행 증거·차단 조건은 [D0 기록](./implementation/dot-mcp-events-d0-20261101.md)에서 관리한다. 이 표가 아래 과거 dot browser/기존 thread 기본 경로 설명보다 우선한다. 공식 연결 구현·실계정 성공은 아직 아니다.
+현재 상태와 D0 실행 증거·차단 조건은 [D0 기록](./implementation/dot-mcp-events-d0-20261101.md)에서 관리한다. 이 표가 아래 과거 dot browser/기존 thread 기본 경로 설명보다 우선한다. 실제 dot의 격리 합성 이벤트·답변은 확인했지만 운영 채팅방 연결·영속 grant/actor·혼합 실계정 수락은 아직 아니다.
 
 2026-11-01 사용자 명시 변경: **비밀번호 최소 길이를6자로 지정**했다. `passwordValue`와 웹 설정/변경 검증·안내를6~128자로 맞춘다. salt/scrypt·동일 비밀번호 확인·소유자 최초 설정/재설정·12시간 세션·실패 제한은 유지하며 DB 이관과 R1~R8 실행/계정/예산 계약 변경은 없다. 기존15자 이상 비밀번호도 계속 유효하다. [구현·검증 기록](./implementation/password-login-20261101.md)의 후속 변경을 따른다. 운영 비밀번호 변경·서비스 배포는 별도다.
 
