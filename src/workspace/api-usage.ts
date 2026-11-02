@@ -1,3 +1,4 @@
+import { dotParticipantWait } from './dot-mcp-policy.js';
 import type { ApiDailySummary, ApiUsageEntry, ApiUsageState, Member, WorkspaceState } from './model.js';
 import type { Room } from './resident-model.js';
 import { AppError, integer, object } from './util.js';
@@ -59,6 +60,7 @@ export function apiDailyReason(s: WorkspaceState, member: Member, clock = Date.n
 }
 export function participantWait(s: WorkspaceState, room: Room, member: Member, clock = Date.now()): string | null {
   if (!dailyRoom(room)) return null;
+  if (member.kind === 'dot-mcp') return dotParticipantWait(s, room, member, clock);
   if (member.kind === 'browser' && s.browserPaused) return 'browser_manual_control';
   const connection = member.connectionId && s.connections.find(c => c.id === member.connectionId && c.kind === member.kind);
   if (member.kind !== 'fake' && (!connection || connection.status !== 'connected')) return 'participant_not_ready';

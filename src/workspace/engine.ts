@@ -1,3 +1,4 @@
+import { dotCanApply, dotParticipantWait, reconcileDotReply } from './dot-mcp-policy.js';
 import type { Providers } from '../connections/providers.js';
 import { fetchSource } from '../connections/sources.js';
 import type { Store } from './store.js';
@@ -51,7 +52,11 @@ export class DiscussionEngine {
           state.jobs.some(j => j.discussionId && ['running', 'blocked_approval', 'reconciling'].includes(j.status))) throw new AppError('root_workflow_busy', 409);
       const members = participantIds.map(pid => {
         const member = state.participants.find(p => p.id === pid); if (!member) throw new AppError('participant_not_found', 404);
-        if (member.kind !== 'fake') {
+        if (member.kind === 'dot-mcp') {
+          const room = state.resident?.rooms.find(r => r.id === roomId);
+          if (!room) throw new AppError('dot_room_required', 409);
+          const wait = dotParticipantWait(state, room, member); if (wait) throw new AppError(wait, 409);
+        } else if (member.kind !== 'fake') {
           const c = state.connections.find(x => x.id === member.connectionId && x.kind === member.kind);
           if (!c || c.status !== 'connected') throw new AppError('participant_not_ready', 409);
         }
@@ -150,10 +155,11 @@ export class DiscussionEngine {
         if (!turn) throw new AppError('unconfirmed_turn_not_found', 404);
         const task = d.tasks.find(t => t.id === turn.taskId)!; const resolution = string(body.resolution);
         if (resolution === 'completed') {
-          const text = string(body.text, 100_000);
-          turn.text = text; turn.receipt = `owner-confirmed:${string(body.receipt, 2000)}`;
+          const native = d.members.find(m => m.id === turn.participantId)!.kind === 'dot-mcp';
+          const recovered = native ? reconcileDotReply(state, turn.id, body.text, body.receipt) : { text: string(body.text, 100_000), receipt: `owner-confirmed:${string(body.receipt, 2000)}` };
+          const text = recovered.text; turn.text = text; turn.receipt = recovered.receipt;
           turn.finishedAt = now(); turn.error = 'owner_confirmed_result';
-          if (turn.revision !== d.revision || turn.generation !== d.contexts.find(c => c.participantId === turn.participantId)!.generation) { turn.status = 'stale'; task.status = 'cancelled'; }
+          if (turn.revision !== d.revision || turn.generation !== d.contexts.find(c => c.participantId === turn.participantId)!.generation || native && !dotCanApply(state, turn.id)) { turn.status = 'stale'; task.status = 'cancelled'; }
           else { turn.status = 'completed'; turn.reply = parseReply(text, d, task); if (!turn.reply) throw new AppError('format_invalid'); task.status = task.jobId && !d.evidence.some(e => e.taskId === task.id && e.kind === 'execution') ? 'running' : 'completed'; this.applyReply(d, turn); }
         } else if (resolution === 'not_sent' || resolution === 'skip') {
           turn.status = 'failed'; turn.error = `owner_confirmed_${resolution}`; turn.finishedAt = now();
@@ -167,6 +173,7 @@ export class DiscussionEngine {
         const member = d.members.find(p => p.id === pid);
         if (!context || !member) throw new AppError('participant_not_found', 404);
         if (body.expectedGeneration !== context.generation) throw new AppError('generation_conflict', 409);
+        if (member.kind === 'dot-mcp') throw new AppError('native_dot_context_preserved', 409);
         if (member.kind === 'browser') throw new AppError('existing_browser_context_preserved', 409);
         if (d.turns.some(t => t.participantId === pid && ['prepared', 'running', 'unconfirmed'].includes(t.status))) throw new AppError('reconciliation_required', 409);
         const checkpoint = this.checkpoint(d, pid, 'owner_handoff');
@@ -236,12 +243,24 @@ export class DiscussionEngine {
             observedAt: now(), digest: digest(JSON.stringify(job.activities)), status: job.status === 'completed' ? 'observed' : 'failed', reason: job.error });
           emit({ type: 'evidence.added', discussionId: d.id, data: { taskId: task.id, jobId: job.id } }); }); continue;
       }
-      const task = d.tasks.find(t => t.revision === d.revision && t.status === 'pending' && !d.excludedIds.includes(t.participantId)
+      const pending = d.tasks.filter(t => t.revision === d.revision && t.status === 'pending' && !d.excludedIds.includes(t.participantId)
         && t.dependencyIds.every(dep => d.tasks.some(x => x.id === dep && x.status === 'completed')));
+      const dotWait = (t: Task) => { const p = d.members.find(p => p.id === t.participantId)!; const room = state.resident?.rooms.find(r => r.id === d.roomId);
+        return p.kind === 'dot-mcp' ? room ? dotParticipantWait(state, room, p) : 'dot_room_required' : null; };
+      const task = pending.find(t => !dotWait(t));
+      if (!task && pending.length) {
+        const reason = dotWait(pending[0]!)!;
+        if (d.reason !== reason) this.store.transact((s, emit) => { findDiscussion(s, d.id).reason = reason;
+          emit({ type: 'discussion.waiting', discussionId: d.id, data: { reason } }); });
+        return;
+      }
       if (!task) {
         if (d.tasks.some(t => t.revision === d.revision && t.status === 'pending')) { this.finish(d.id, 'partial', 'dependency_blocked'); continue; }
         this.advance(d.id); continue;
       }
+      if (d.reason?.startsWith('dot_') && !pending.some(t => dotWait(t))) this.store.transact((s, emit) => {
+        findDiscussion(s, d.id).reason = null; emit({ type: 'discussion.wait_resolved', discussionId: d.id, data: {} });
+      });
       if (d.budgetMode === 'api-daily' && d.roomId) {
         const room = state.resident?.rooms.find(r => r.id === d.roomId), member = d.members.find(p => p.id === task.participantId);
         const wait = room && member && participantWait(state, room, member); if (wait) { this.finish(d.id, 'partial', wait); continue; }
@@ -306,6 +325,7 @@ export class DiscussionEngine {
         return null;
       }
       d.used.requests++; task.status = 'running'; task.turnId = turn.id; d.turns.push(turn); d.updatedAt = now();
+      this.dispatch.prepareDot(state, emit, { requestId: turn.id, participant, prompt, history: context.history });
       context.observation = { ...context.observation, response: 'prepared', work: 'running', observedAt: now(), reason: null };
       emit({ type: 'turn.prepared', discussionId, data: { turnId: turn.id, participantId: participant.id, phase: task.phase } });
       const room = state.resident?.rooms.find(r => r.id === d.roomId);
@@ -333,7 +353,7 @@ export class DiscussionEngine {
       if (result) {
         turn.text = result.text; turn.receipt = result.receipt; turn.usage = result.usage;
         if (result.usage) { d.used.inputTokens += result.usage.input; d.used.outputTokens += result.usage.output; } else d.used.unknownUsage++;
-        if (turn.revision !== d.revision || turn.generation !== context.generation || d.status === 'cancelled') { turn.status = 'stale'; task.status = 'cancelled'; }
+        if (turn.revision !== d.revision || turn.generation !== context.generation || d.status === 'cancelled' || captured.participant.kind === 'dot-mcp' && !dotCanApply(state, turn.id)) { turn.status = 'stale'; task.status = 'cancelled'; }
         else {
           turn.status = 'completed'; task.status = 'completed'; turn.reply = parseReply(turn.text, d, task);
           if (task.jobId && !d.evidence.some(e => e.taskId === task.id && e.kind === 'execution')) task.status = 'running';

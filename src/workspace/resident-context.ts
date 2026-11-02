@@ -18,6 +18,7 @@ export function handoffBlocker(state: WorkspaceState, room: Room, participantId:
   if (room.topicLink) return 'topic_focus_active';
   const participant = state.participants.find(p => p.id === participantId);
   if (!participant) return 'participant_not_found';
+  if (participant.kind === 'dot-mcp') return 'native_dot_context_preserved';
   if (participant.kind === 'browser') return 'existing_browser_context_preserved';
   if (state.resident!.turns.some(t => t.participantId === participantId && ['prepared', 'running', 'unconfirmed'].includes(t.status)) ||
       state.discussions.some(d => d.turns.some(t => t.participantId === participantId && ['prepared', 'running', 'unconfirmed'].includes(t.status)))) return 'reconciliation_required';

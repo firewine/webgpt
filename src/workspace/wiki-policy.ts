@@ -3,6 +3,7 @@ import type { Room, RoomContext, RoomMessage } from './resident-model.js';
 import type { ResidentActorScope, WikiSourceRef, WikiSnapshot, WikiVersion, WikiCitation } from './wiki-model.js';
 import { AppError, digest, object, string } from './util.js';
 import { seatAllows, workRoom } from './work-policy.js';
+import { dotGrants } from './dot-mcp-policy.js';
 
 export const WIKI_LIMITS = { body: 20000, sourceRefs: 20, pins: 8, context: 60000, page: 50 } as const;
 export function participantIdentity(p: Member): string { return digest(JSON.stringify({ id: p.id, kind: p.kind, connectionId: p.connectionId, modelId: p.modelId })); }
@@ -16,7 +17,7 @@ export function assertActor(s: WorkspaceState, a: ResidentActorScope, enabled: b
   const r = workRoom(s, a.roomId); const p = s.participants.find(p => p.id === a.participantId); const seat = r.seats?.find(v => v.participantId === a.participantId); const m = r.members.find(v => v.participantId === a.participantId);
   if (!p || !m?.enabled || m.blockedReason || !seat?.enabled || seat.policyVersion !== 1 || seat.version !== a.scopeVersion || !seat.scopeRefs.includes(a.scopeRef) ||
       a.contextGeneration !== (r.contexts?.find(c => c.participantId === a.participantId)?.generation ?? 1) || a.epoch !== r.epoch || participantIdentity(p) !== a.identityDigest ||
-      p.kind !== 'fake' && !s.connections.some(c => c.id === p.connectionId && c.kind === p.kind && c.status === 'connected') || p.kind === 'browser' && s.browserPaused) throw new AppError('resident_scope_changed', 403);
+      (p.kind === 'dot-mcp' ? !dotGrants(s, r, p).length : p.kind !== 'fake' && !s.connections.some(c => c.id === p.connectionId && c.kind === p.kind && c.status === 'connected')) || p.kind === 'browser' && s.browserPaused) throw new AppError('resident_scope_changed', 403);
   assertWikiScope(s, r, a.scopeRef);
   if (mutation && !r.desiredOn) throw new AppError('room_off', 409);
   return r;

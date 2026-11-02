@@ -3,6 +3,7 @@ import type { Room } from './resident-model.js';
 import type { SeatAssignment, WorkAction, WorkRole, WorkTask, WorkAcceptance, WorkCheck } from './work-model.js';
 import { budgetReason } from './dispatch.js';
 import { participantWait } from './api-usage.js';
+import { dotGrants } from './dot-mcp-policy.js';
 import { AppError, object, string, strings } from './util.js';
 
 export const WORK_POLICIES: Readonly<Record<WorkRole, readonly WorkAction[]>> = {
@@ -27,7 +28,8 @@ export function seatAllows(state: WorkspaceState, room: Room, pid: string, actio
   if (!seat?.enabled || seat.policyVersion !== 1 || !Object.hasOwn(WORK_POLICIES, seat.role) || !WORK_POLICIES[seat.role].includes(action) || !seat.kinds.includes(kind) || !seat.scopeRefs.includes(scope)) return null;
   const member = room.members.find(m => m.participantId === pid); const participant = state.participants.find(p => p.id === pid);
   if (!member?.enabled || member.blockedReason || !participant || participant.kind === 'browser' && state.browserPaused) return null;
-  if (participant.kind !== 'fake' && !state.connections.some(c => c.id === participant.connectionId && c.kind === participant.kind && c.status === 'connected')) return null;
+  if (participant.kind === 'dot-mcp') { if (!dotGrants(state, room, participant).length) return null; }
+  else if (participant.kind !== 'fake' && !state.connections.some(c => c.id === participant.connectionId && c.kind === participant.kind && c.status === 'connected')) return null;
   return seat;
 }
 export function taskWorker(state: WorkspaceState, room: Room, task: WorkTask, pid: string, action: 'claim' | 'review', checkAvailability = false): SeatAssignment | null {

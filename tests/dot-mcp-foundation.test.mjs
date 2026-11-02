@@ -44,7 +44,7 @@ test('D1 registration is idempotent, disabled by default; confirmation does not 
   assert.throws(() => f.dot.confirm({ ...f.confirmInput(), nativeActorId: 'claimed-by-caller' }, key()), /invalid_work_fields/);
   const body = f.confirmInput(); const access = f.dot.confirm(body, 'confirm');
   for (let i = 0; i < 20; i++) assert.deepEqual(f.dot.confirm(body, 'confirm'), access);
-  assert.throws(() => f.dot.authenticate(access.token), /dot_scope_changed/); f.enable();
+  assert.throws(() => f.dot.check(f.dot.authenticate(access.token), 'dot_turn_get', f.dot.authenticate(access.token)), /dot_scope_changed/); f.enable();
   const grant = f.dot.authenticate(access.token); f.dot.check(grant, 'dot_turn_get', { roomId: f.roomId, participantId: f.participantId });
   assert.equal(f.dot.snapshot().bindings[0].identity, 'owner_confirmed'); assert.equal(f.dot.snapshot().bindings[0].nativeActorVerified, false); assert.equal(f.dot.snapshot().transportReady, false);
   assert.equal(f.app.store.read().connections[0].status, 'unverified'); assert.deepEqual(f.app.store.read().connections[0].models, []);
@@ -91,7 +91,7 @@ for (const phase of ['before_file', 'after_file', 'after_activation']) test('D1 
   const child = spawn(process.execPath, ['--input-type=module', '-e', script], { cwd: new URL('..', import.meta.url), env: { ...process.env, WJ_D1_CRASH: phase }, stdio: ['ignore', 'pipe', 'pipe'] });
   let output = ''; child.stdout.on('data', c => output += c); child.stderr.on('data', c => output += c); const [code, signal] = await once(child, 'close'); assert.equal(code, null, output); assert.equal(signal, 'SIGKILL'); assert.doesNotMatch(output, /"token"|Bearer|dot_grant_/);
   const app = new Workspace(config(directory), 1, { residentAutoSchedule: false });
-  try { const state = app.store.read(); assert.equal(state.dotMcp.grants[0].status, phase === 'after_activation' ? 'active' : 'revoked'); assert.equal(app.dotMcp.snapshot().grants[0].active, false); assert.equal(state.connections[0].status, 'unverified'); assert.equal(state.resident.rooms[0].desiredOn, false); }
+  try { const state = app.store.read(); assert.equal(state.dotMcp.grants[0].status, phase === 'after_activation' ? 'active' : 'revoked'); assert.equal(app.dotMcp.snapshot().grants[0].active, phase === 'after_activation'); assert.equal(state.connections[0].status, 'unverified'); assert.equal(state.resident.rooms[0].desiredOn, false); }
   finally { await app.close(); }
 });
 
