@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-02",
+  "baselineSha": "8affb469c3e6ce5b636f465ff693d62ac45071b8",
+  "originalManifest": "docs/implementation/resident-acceptance-manifest.json",
+  "originalGateCount": 50,
+  "originalGateIds": ["R1-A", "R1-B", "R1-C", "R1-D", "R2-A", "R2-B", "R2-C", "R2-D", "R2-E", "R2-F", "R2-G", "R2-H", "R2-I", "R2-J", "R3-A", "R3-B", "R3-C", "R3-D", "R3-E", "R3-F", "R4-A", "R4-B", "R4-C", "R4-D", "R5-A", "R5-B", "R5-C", "R5-D", "R5-E", "R5-F", "R6-A", "R6-B", "R6-C", "R6-D", "R6-E", "R6-F", "R7-A", "R7-B", "R7-C", "R7-D", "R7-E", "R7-F", "R7-G", "R8-A", "R8-B", "R8-C", "R8-D", "R8-E", "R8-F", "R8-G"],
+  "originalOpenGates": { "R3-E": "UNVERIFIED", "R4-D": "UNVERIFIED", "R6-F": "UNVERIFIED", "R8-D": "NOT_RUN" },
+  "scope": "Additive D5 evidence only. Original 50 gates and historical real-account evidence are retained. Fixture PASS is not live acceptance.",
+  "gates": [
+    {
+      "id": "D5-A",
+      "requirement": "4 participants; native stdio/signed callback; long original read by 3 others; work rework/accept; Wiki 2 versions; automatic topic with 2 review rounds; same room return; provider concurrency 1; API-only quota",
+      "fixtureStatus": "PASS",
+      "files": ["tests/dot-acceptance.test.mjs", "tests/dot-acceptance-fixture.mjs"],
+      "artifact": "test-results/dot-D5/mixed-flow.json",
+      "originalGates": ["R2-B", "R5-D", "R7-D", "R8-A", "R8-B"]
+    },
+    {
+      "id": "D5-B",
+      "requirement": "20 duplicate submissions publish once; 20 refreshes/reconnect create no turn; off/on keeps one grant; old late reply quarantined; revoked grant rejected",
+      "fixtureStatus": "PASS",
+      "files": ["tests/dot-acceptance.test.mjs"],
+      "artifact": "test-results/dot-D5/reconnect.json",
+      "originalGates": ["R2-C", "R2-D", "R2-E", "R8-B"]
+    },
+    {
+      "id": "D5-C",
+      "requirement": "One Codex RPC fixture execution with explicit owner approval and one independent native dot review; no direct Codex/Wiki/work authority from dot grant",
+      "fixtureStatus": "PASS",
+      "files": ["tests/dot-acceptance.test.mjs", "tests/work-execution-fixture.mjs"],
+      "artifact": "test-results/dot-D5/execution-review.json",
+      "originalGates": ["R6-A", "R6-B", "R7-C"]
+    },
+    {
+      "id": "D5-D",
+      "requirement": "Installed Chrome MCP + synthetic Muse and native stdio dot: 2 topic review rounds, draft send 0, original thread/binding retained, unique receipts, 20 refreshes send 0",
+      "fixtureStatus": "PASS",
+      "files": ["tests/browser/dot-mixed.test.mjs"],
+      "artifact": "test-results/dot-D5/muse-mixed.json",
+      "skipCondition": "WJ_TEST_CHROME_MCP absent: SKIP, never PASS",
+      "originalGates": ["R4-D", "R8-C", "R8-D"]
+    },
+    {
+      "id": "D5-E",
+      "requirement": "All original 50 gates retained; full Node/browser regressions including actual process crash recovery and six native request boundaries; source-matched Codex 0.165 contract separately recorded",
+      "fixtureStatus": "PASS",
+      "files": ["tests/resident-e2e.test.mjs", "tests/dot-mcp-restart.test.mjs", "tests/mcp-events.test.mjs", "tests/dot-acceptance.test.mjs"],
+      "originalGates": ["R1-A", "R1-B", "R7-E", "R8-B", "R8-E"]
+    },
+    {
+      "id": "D5-F",
+      "requirement": "Separately authorized deployed native dot ambient >=1 and topic/followup >=2; GPT2+API same room; original Muse thread roundtrip; live Codex read/write and real device acceptance remain distinct",
+      "realStatus": "NOT_RUN",
+      "files": ["docs/implementation/dot-mcp-acceptance-d5-20261102.md"],
+      "originalGates": ["R3-E", "R4-D", "R6-F", "R8-D"],
+      "blockedPrerequisites": ["deployment_and_live_call_authorization", "private_tunnel_scope_confirmation", "native_watch_and_reply_evidence", "Muse_manual_control_release", "separately_scoped_real_Codex_binding"]
+    }
+  ]
+}

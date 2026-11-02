@@ -1,5 +1,7 @@
 # D4 — 공식 dot 연결 화면·private 설정·상태 진단
 
+11/02 후속 확인: [PR #40](https://github.com/firewine/webgpt/pull/40)은 12:12:20 KST 병합, main `8affb469c3e6ce5b636f465ff693d62ac45071b8`. 최종 head `8408c30719b7836382ef338fdb507df6ad4a5399`의 [CI](https://github.com/firewine/webgpt/actions/runs/41380886404)는 Node473/browser64/고정 Codex0.165.0 schema PASS다. 아래 검토 브랜치/CI 재검사 설명은 당시 기록이며 현재 통합/운영 수락은 [D5](./dot-mcp-acceptance-d5-20261102.md)에서 이어간다.
+
 ## 기준과 범위
 
 2026-11-02 사용자 지시 “병합 완료 다음 페이즈 진행”에 따라 D3 PR #39의 병합을 GitHub에서 확인했다. 기준 main **`9992f74fc765f44017cc048f5a5646788a3d2f32`**, D3 head `a2708b1abec1073cf840555e4c402d08b32d29b4`, 병합 2026-11-02 11:25:47 KST. D3 [CI](https://github.com/firewine/webgpt/actions/runs/41374740800)는 Node468/browser62/설치 Codex0.165.0 schema PASS이며 이번 D4 검사와 구분한다.

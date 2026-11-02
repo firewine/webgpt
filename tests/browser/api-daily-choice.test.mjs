@@ -38,7 +38,11 @@ test('room UI has only API daily quotas, separate tool settings and KST/CAS usag
   const roomId = f.app.store.read().resident.rooms[0].id;
   for (const participantId of ['fake-a', 'fake-b']) f.app.resident.control(roomId, { action: 'set_member', expectedVersion: f.app.store.read().resident.rooms[0].version, participantId, enabled: true }, crypto.randomUUID());
   f.app.resident.control(roomId, { action: 'on', expectedVersion: f.app.store.read().resident.rooms[0].version }, crypto.randomUUID());
-  await page.locator('#room-focus-new').click(); assert.equal(await page.locator('#discussion-form [name=maxRequests]').isDisabled(), true); assert.equal(await page.locator('#discussion-form [name=maxMinutes]').isDisabled(), true); assert.match(await page.locator('#discussion-mode').innerText(), /API 일일 한도/);
+  await page.locator('#room-focus-new').click();
+  // The direct fixture mutation reaches room detail and the shared SSE snapshot
+  // separately. Assert after the new snapshot renders, not during that gap.
+  await page.locator('#discussion-mode').filter({ hasText: 'API 일일 한도' }).waitFor();
+  assert.equal(await page.locator('#discussion-form [name=maxRequests]').isDisabled(), true); assert.equal(await page.locator('#discussion-form [name=maxMinutes]').isDisabled(), true); assert.match(await page.locator('#discussion-mode').innerText(), /API 일일 한도/);
   await openNewTopic(page); assert.equal(await page.locator('#discussion-form [name=maxRequests]').isDisabled(), true);
   assert.equal(calls, 0); assert.deepEqual(f.app.store.read().discussions, original); assert.deepEqual(errors, []);
 });

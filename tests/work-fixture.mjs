@@ -2,7 +2,7 @@ import { workspace } from './workspace-helpers.mjs';
 import { budget, pacing } from './resident-fixture.mjs';
 export async function workFixture(t, options = {}) {
   let clock = Date.now();
-  const f = await workspace(t, { residentEnabled: true }, { residentAutoSchedule: options.autoSchedule ?? false, residentClock: () => options.autoSchedule ? Date.now() : clock, ...(options.provider ? { residentProvider: options.provider } : {}) });
+  const f = await workspace(t, { residentEnabled: true }, { ...options.runtimeOptions, residentAutoSchedule: options.autoSchedule ?? false, residentClock: () => options.autoSchedule ? Date.now() : clock, ...(options.provider ? { residentProvider: options.provider } : {}) });
   const roomId = f.app.store.read().resident.rooms[0].id; const q = f.app.workQueue;
   const control = body => f.app.resident.control(roomId, { expectedVersion: f.app.store.read().resident.rooms[0].version, ...body }, crypto.randomUUID());
   control({ action: 'configure', budgets: budget(clock, options.maxRequests ?? 60), pacing: { ...pacing, ...(options.pacing ?? {}) } });
