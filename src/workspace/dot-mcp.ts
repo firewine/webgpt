@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { WorkspaceState } from './model.js';
 import type { Store } from './store.js';
 import type { Vault } from './vault.js';
-import { dotTools, type DotGrant, type DotMcpState } from './dot-mcp-model.js';
+import { dotTools, dotEventName, type DotGrant, type DotMcpState } from './dot-mcp-model.js';
 import { participantIdentity } from './wiki-policy.js';
 import { onlyWork, workRoom } from './work-policy.js';
 import { AppError, digest, id, integer, now, object, string, strings } from './util.js';
@@ -24,6 +24,30 @@ export function readDotState(s: WorkspaceState): DotMcpState | undefined {
       new Set(d.bindings.map(b => b.connectionId)).size !== d.bindings.length || new Set(d.bindings.map(b => b.participantId)).size !== d.bindings.length ||
       new Set(d.grants.map(g => g.id)).size !== d.grants.length || new Set(d.grants.map(g => g.hash)).size !== d.grants.length ||
       d.grants.some(g => !d.bindings.some(b => b.connectionId === g.connectionId && b.participantId === g.participantId && b.roomId === g.roomId))) throw new AppError('dot_state_invalid', 503);
+  if (d.events !== undefined) {
+    const e = d.events; const invalid = () => { throw new AppError('dot_events_state_invalid', 503); };
+    if (!e || e.version !== 1 || !Array.isArray(e.subscriptions) || !Array.isArray(e.outbox)) invalid();
+    for (const sub of e.subscriptions) {
+      if (!sub || ![sub.id, sub.grantId, sub.credentialRef].every(text) || !count(sub.version) || !hash(sub.callbackHash) || !hash(sub.secretHash) ||
+          !['prepared', 'active', 'revoked', 'expired', 'failed'].includes(sub.status) || !date(sub.expiresAt) || sub.verifiedUntil !== null && !date(sub.verifiedUntil) ||
+          !Array.isArray(sub.credentialRefs) || !sub.credentialRefs.every(text) || !sub.credentialRefs.includes(sub.credentialRef) ||
+          !d.grants.some(g => g.id === sub.grantId) || sub.cursor !== null && !text(sub.cursor)) invalid();
+    }
+    for (const row of e.outbox) {
+      if (!row || ![row.id, row.subscriptionId, row.requestId].every(text) || typeof row.body !== 'string' || Buffer.byteLength(row.body) > 262144 || digest(row.body) !== row.digest ||
+          !['pending', 'sending', 'delivered', 'held', 'failed'].includes(row.status) || !date(row.nextAttemptAt) || row.reason !== null && !text(row.reason) ||
+          !Array.isArray(row.attempts) || row.attempts.length > 5 || row.attempts.some(a => !a || !date(a.at) || a.finishedAt !== null && !date(a.finishedAt) ||
+            a.httpStatus !== null && !count(a.httpStatus, 0) || a.error !== null && !text(a.error))) invalid();
+      const sub = e.subscriptions.find(v => v.id === row.subscriptionId); const g = d.grants.find(v => v.id === sub?.grantId);
+      try { const body = object(JSON.parse(row.body));
+        if (!g || !date(body.timestamp) || row.body !== JSON.stringify({ eventId: row.id, name: dotEventName, timestamp: body.timestamp,
+          data: { roomId: g.roomId, participantId: g.participantId, connectionId: g.connectionId, requestId: row.requestId, status: 'requested' }, cursor: row.id })) invalid();
+      } catch { invalid(); }
+    }
+    if (new Set(e.subscriptions.map(s => s.id)).size !== e.subscriptions.length || new Set(e.outbox.map(r => r.id)).size !== e.outbox.length ||
+        new Set(e.outbox.map(r => JSON.stringify([r.subscriptionId, r.requestId]))).size !== e.outbox.length ||
+        e.subscriptions.some(s => s.cursor !== null && !e.outbox.some(r => r.subscriptionId === s.id && r.id === s.cursor && r.status === 'delivered'))) invalid();
+  }
   return d;
 }
 
@@ -130,10 +154,18 @@ export class DotMcp {
     const b = s.dotMcp?.bindings.find(v => v.connectionId === connectionId); if (!b) return;
     b.version++; b.status = 'revoked';
     for (const g of s.dotMcp!.grants) if (g.connectionId === connectionId) g.status = 'revoked';
+    for (const sub of s.dotMcp!.events?.subscriptions ?? []) if (s.dotMcp!.grants.some(g => g.id === sub.grantId && g.connectionId === connectionId)) {
+      sub.status = 'revoked'; sub.version++;
+      for (const e of s.dotMcp!.events!.outbox) if (e.subscriptionId === sub.id && ['pending', 'sending'].includes(e.status)) { e.status = 'held'; e.reason = 'grant_revoked'; }
+    }
     const c = s.connections.find(c => c.id === connectionId); if (c) { c.status = 'unverified'; c.error = 'dot_transport_not_ready'; }
   }
   cleanup(connectionId: string): void {
-    for (const g of this.store.read().dotMcp?.grants ?? []) if (g.connectionId === connectionId) this.vault.remove(g.id);
+    const d = this.store.read().dotMcp;
+    for (const g of d?.grants ?? []) if (g.connectionId === connectionId) {
+      this.vault.remove(g.id);
+      for (const sub of d?.events?.subscriptions ?? []) if (sub.grantId === g.id) for (const ref of sub.credentialRefs) this.vault.remove(ref);
+    }
   }
   snapshot() {
     const d = this.store.read().dotMcp;

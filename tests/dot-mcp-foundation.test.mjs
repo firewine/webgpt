@@ -52,7 +52,7 @@ test('D1 registration is idempotent, disabled by default; confirmation does not 
   assert.ok(!JSON.stringify(f.app.snapshot()).includes(grant.hash)); const db = new DatabaseSync(join(f.directory, 'workspace.sqlite'), { readOnly: true });
   assert.ok(!JSON.stringify(db.prepare('SELECT * FROM commands').all()).includes(access.token)); db.close();
   const encrypted = await readFile(join(f.directory, 'credentials', (await import('node:crypto')).createHash('sha256').update(access.id).digest('hex') + '.enc')); assert.ok(!encrypted.includes(Buffer.from(access.token)));
-  assert.throws(() => new McpEndpoint(f.app).grant('Bearer ' + access.token), /authentication_required/);
+  assert.equal(new McpEndpoint(f.app).grant('Bearer ' + access.token).kind, 'dot');
   let dispatched = 0; f.app.providers.request = async () => { throw new Error('must not contact another provider'); };
   await assert.rejects(f.app.providers.models(f.connectionId), /dot_transport_not_ready/);
   await assert.rejects(f.app.providers.complete({ participant: f.app.store.read().participants.at(-1), hooks: { dispatched: () => dispatched++ } }), /dot_transport_not_ready/); assert.equal(dispatched, 0);

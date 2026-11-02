@@ -30,6 +30,8 @@ import { validateTopicIntents } from './resident-focus.js';
 import { apiUsageSummary, configureApiUsage, validateApiUsage, dailyRoom } from './api-usage.js';
 import { validatePasswordState } from './password.js';
 import { DotMcp, readDotState } from './dot-mcp.js';
+import { McpEvents } from '../http/mcp-events.js';
+import type { WebhookTransport } from '../connections/mcp-webhook.js';
 
 export class Workspace {
   readonly store: Store; readonly vault: Vault; readonly oauth: OAuthService; readonly browser: BrowserBridge;
@@ -45,13 +47,17 @@ export class Workspace {
   readonly wiki: Wiki;
   readonly residentMcp: ResidentMcp;
   readonly dotMcp: DotMcp;
-  constructor(readonly config: WorkspaceConfig, fakeDelay = 80, options: { residentProvider?: Pick<Providers, 'complete'>; residentClock?: () => number; residentAutoSchedule?: boolean } = {}) {
+  readonly mcpEvents: McpEvents;
+  constructor(readonly config: WorkspaceConfig, fakeDelay = 80, options: { residentProvider?: Pick<Providers, 'complete'>; residentClock?: () => number; residentAutoSchedule?: boolean; webhookTransport?: WebhookTransport; eventClock?: () => number } = {}) {
     this.store = new Store(config.stateDir);
     this.dispatch = new DispatchCoordinator(config.residentEnabled);
     try { readDotState(this.store.read()); validatePasswordState(this.store.read()); validateApiUsage(this.store.read()); this.resident = new ResidentStore(this.store, config.residentEnabled); validateTopicIntents(this.store.read()); validateWikiState(this.store.read()); validateWorkExecutionState(this.store.read(), this.store); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); this.wiki = new Wiki(this.store, config.residentEnabled); }
     catch (error) { this.store.close(); throw error; }
     this.vault = new Vault(join(config.stateDir, 'credentials'));
-    try { this.dotMcp = new DotMcp(this.store, this.vault, config.residentEnabled); for (const connectionId of this.store.read().connectionCleanup ?? []) this.cleanupConnection(connectionId); }
+    try { this.dotMcp = new DotMcp(this.store, this.vault, config.residentEnabled);
+      this.mcpEvents = new McpEvents(this.store, this.vault, this.dotMcp, config.residentEnabled, { ...(options.webhookTransport ? { transport: options.webhookTransport } : {}), ...(options.eventClock ? { clock: options.eventClock } : {}),
+        guard: (s, requestId) => { const t = s.resident?.turns.find(t => t.id === requestId); return !t?.workAttemptId || this.workQueue.canDispatch(s, t); } });
+      for (const connectionId of this.store.read().connectionCleanup ?? []) this.cleanupConnection(connectionId); }
     catch (error) { this.store.close(); throw error; }
     const accessPath = join(config.stateDir, 'access-token');
     let token = config.accessToken;
@@ -87,7 +93,7 @@ export class Workspace {
     this.residentMcp = new ResidentMcp(this);
     this.codex.onProgress = () => { this.engine.kick(); this.residentRunner.kick(); };
   }
-  start(): void { this.workExecution.recover(); this.residentRunner.recover(); this.codex.recover(); this.engine.recover(); this.residentRunner.start(); }
+  start(): void { this.workExecution.recover(); this.residentRunner.recover(); this.codex.recover(); this.engine.recover(); this.residentRunner.start(); this.mcpEvents.start(); }
   snapshot() {
     const state = this.store.read();
     return { cursor: this.store.cursor(), connections: state.connections, participants: state.participants,
@@ -284,5 +290,5 @@ export class Workspace {
       s.browserPaused = paused; emit({ type: 'browser.manual_control', discussionId: null, data: { paused } });
     });
   }
-  async close(): Promise<void> { const stopping = Promise.all([this.engine.close(), this.residentRunner.close(), this.codexOAuth.close()]); this.codex.close(); this.browser.close(); this.oauth.close(); await stopping; this.store.close(); }
+  async close(): Promise<void> { const stopping = Promise.all([this.engine.close(), this.residentRunner.close(), this.codexOAuth.close(), this.mcpEvents.close()]); this.codex.close(); this.browser.close(); this.oauth.close(); await stopping; this.store.close(); }
 }
