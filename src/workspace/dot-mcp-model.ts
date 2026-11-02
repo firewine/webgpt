@@ -13,4 +13,16 @@ export interface DotGrant {
 export interface DotMcpState {
   schemaVersion: 1; migration: { at: string; basisCursor: number };
   bindings: DotBinding[]; grants: DotGrant[];
+  events?: { version: 1; subscriptions: DotSubscription[]; outbox: DotEvent[] };
+}
+export const dotEventName = 'webjjoku.turn_requested';
+export interface DotSubscription {
+  id: string; grantId: string; callbackHash: string; secretHash: string; credentialRef: string; credentialRefs: string[];
+  version: number; status: 'prepared' | 'active' | 'revoked' | 'expired' | 'failed';
+  expiresAt: string; verifiedUntil: string | null; cursor: string | null;
+}
+export interface DotEvent {
+  id: string; subscriptionId: string; requestId: string; body: string; digest: string;
+  status: 'pending' | 'sending' | 'delivered' | 'held' | 'failed'; reason: string | null;
+  nextAttemptAt: string; attempts: { at: string; finishedAt: string | null; httpStatus: number | null; error: string | null }[];
 }

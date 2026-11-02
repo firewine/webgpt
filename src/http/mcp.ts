@@ -6,8 +6,11 @@ import { findDiscussion } from '../workspace/engine.js';
 import { promptFor } from '../workspace/prompts.js';
 import type { ResidentGrant } from '../workspace/wiki-model.js';
 import { residentSchemas, residentDescriptions } from '../workspace/resident-mcp.js';
+import type { DotGrant } from '../workspace/dot-mcp-model.js';
+import { CallbackError } from '../connections/mcp-webhook.js';
 const TOOLS = ['task_get', 'context_get', 'result_submit', 'capabilities_get', 'codex_send', 'codex_status', 'codex_result', 'codex_cancel'] as const;
 type Grant = WorkspaceState['grants'][number];
+type AccessGrant = Grant | ResidentGrant | { kind: 'dot'; grant: DotGrant };
 const residentGrant = (g: Grant | ResidentGrant): g is ResidentGrant => 'kind' in g && g.kind === 'resident';
 export class McpEndpoint {
   constructor(private readonly app: Workspace) {}
@@ -23,12 +26,22 @@ export class McpEndpoint {
       emit({ type: 'mcp.granted', discussionId: d.id, data: { grantId, participantId: pid, tools: allowed } });
     }); return { id: grantId, token };
   }
-  grant(header: string | undefined): Grant | ResidentGrant {
+  grant(header: string | undefined): AccessGrant {
     const token = header?.startsWith('Bearer ') ? header.slice(7) : '';
+    if (this.app.store.read().dotMcp?.grants.some(g => g.hash === digest(token))) return { kind: 'dot', grant: this.app.dotMcp.authenticate(token) };
     const grant = this.app.store.read().grants.find(g => !g.revoked && g.hash === digest(token));
     if (!grant) { if (this.app.residentMcp) return this.app.residentMcp.authenticate(token); throw new AppError('mcp_authentication_required', 401); } return grant;
   }
-  async handle(raw: unknown, grant: Grant | ResidentGrant): Promise<unknown | null> {
+  async handle(raw: unknown, grant: AccessGrant): Promise<unknown | null> {
+    if ('kind' in grant && grant.kind === 'dot') {
+      this.app.dotMcp.check(grant.grant, 'dot_turn_get', grant.grant);
+      const m = object(raw); if (m.jsonrpc !== '2.0' || typeof m.method !== 'string') throw new AppError('invalid_jsonrpc');
+      if (m.id === undefined && m.method === 'notifications/initialized') return null;
+      if (typeof m.id !== 'number' && typeof m.id !== 'string') throw new AppError('invalid_jsonrpc_id');
+      try { return { jsonrpc: '2.0', id: m.id, result: await this.app.mcpEvents.handle(m.method, m.params, grant.grant) }; }
+      catch (error) { return { jsonrpc: '2.0', id: m.id, error: error instanceof CallbackError ? { code: -32015, message: 'CallbackEndpointError', data: { reason: error.reason } } :
+        { code: error instanceof AppError && error.code === 'unknown_event_method' ? -32601 : -32602, message: error instanceof AppError ? error.code : 'Event request failed' } }; }
+    }
     if (residentGrant(grant)) this.app.residentMcp.check(grant);
     const message = object(raw); const requestId = message.id;
     if (message.jsonrpc !== '2.0' || typeof message.method !== 'string') throw new AppError('invalid_jsonrpc');
