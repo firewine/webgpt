@@ -9,11 +9,13 @@
 | D0 | 대상 dot의 private plugin·Tunnel·지원 인증·Events→입력 조회→응답 제출 검증 | **합성 왕복·구독 종료 PASS / PR #36 병합.** challenge200·이벤트200·native 답변1건/receipt 일치 뒤 11/02 서버 UNSUBSCRIBED·subscription NONE 확인. 원래 receipt 보존, 검사 runtime 종료. native actor 증명·운영 grant 전달은 후속 검증 대상. [실측과 종료](./implementation/dot-mcp-events-d0-20261101.md#11-감시-해제-확인과-d0-종료) |
 | D1 | additive dot kind·identity/grant·영속 namespace·이관 | **PR #37 병합 완료**, main `159e13b`. 기존 Store/Vault·권한/세대 fencing·삭제 cleanup 기반. 신규22·Node397·CI 브라우저62 PASS. 운영 이관/실계정 grant 전달은 NOT_RUN. [계약·수락·복귀](./implementation/dot-mcp-foundation-d1-20261102.md) |
 | D2 | Events 구독·callback 검증/서명·영속 outbox | **PR #38 병합 완료**, main `672f081`. 동일 구독20회→ID1, signed challenge·키 교체·공개 IP 고정·유한 재시도·실제 SIGKILL 뒤 보류/ID·cursor 보존. 신규47·전체 Node444 PASS. 운영 callback/배포 NOT_RUN, dot provider 준비는 여전히 false. [계약·수락·복귀](./implementation/dot-mcp-events-d2-20261102.md) |
-| D3 | 기존 provider·topic·상주 발화·응답 대조·복구 결합 | **구현·격리 검사 PASS / 검토 브랜치.** 승인된 연결 권한/발언 세대 분리, 원래 turn의 claim·mailbox·공개/대조 결합. 신규24·전체 Node468 PASS. 운영 연결·실계정·배포 NOT_RUN. [계약·수락·복귀](./implementation/dot-mcp-integration-d3-20261102.md) |
-| D4 | 공식 연결 UI·private plugin·진단/운영 절차 | D0 결과를 반영해 진행 / NOT_RUN |
-| D5 | 기존 50 gate·Muse 보존·혼합 채팅/업무/Wiki/Codex 통합 수락 | D0~D4 대기 / NOT_RUN |
+| D3 | 기존 provider·topic·상주 발화·응답 대조·복구 결합 | **PR #39 병합 완료**, main `9992f74`. 승인된 연결 권한/발언 세대 분리, 원래 turn의 claim·mailbox·공개/대조 결합. 신규24·전체 Node468·CI browser62 PASS. 운영 연결·실계정·배포 NOT_RUN. [계약·수락·복귀](./implementation/dot-mcp-integration-d3-20261102.md) |
+| D4 | 공식 연결 UI·private plugin·진단/운영 절차 | **구현·격리 검사 PASS / 검토 브랜치.** owner 등록/확인/회수·상태4축·보호된 stdio 전달기·등록 앱 참조 패키지 준비. Node473·실제 Chromium/MCP browser64 PASS. [수락·검사·보존 기록](./implementation/dot-mcp-onboarding-d4-20261102.md)·[연결 절차](./dot-connection-runbook.md). 운영 인증 전달/실제 감시·배포 NOT_RUN |
+| D5 | 기존 50 gate·Muse 보존·혼합 채팅/업무/Wiki/Codex 통합 수락 | D4 병합 후 진행 / NOT_RUN |
 
 현재 상태와 D0 실행 증거·차단 조건은 [D0 기록](./implementation/dot-mcp-events-d0-20261101.md)에서 관리한다. 이 표가 아래 과거 dot browser/기존 thread 기본 경로 설명보다 우선한다. 실제 dot의 격리 합성 이벤트·답변은 확인했지만 운영 채팅방 연결·영속 grant/actor·혼합 실계정 수락은 아직 아니다.
+
+2026-11-02 사용자가 PR #39 병합 후 다음 단계 진행을 지시해 D4를 별도 worktree에서 구현한다. 기존 D1 owner 명령·D2 구독/outbox·D3 mailbox/세대 검사와 기존 scoped stdio 전달기를 재사용한다. 일반 GPT/Chrome 대화의 dot 오표시를 제거하고 Muse 경로는 유지한다. D4에 DB 이관·추가 OAuth·공개 ingress·timeout 확대·실계정 호출·운영 배포는 없다. 실제 native actor 증명과 개인 전용 Tunnel의 운영 인증 경계는 UI 준비/패키지 생성만으로 PASS 처리하지 않으며, D5에서 원래 50 gate·Muse·혼합 왕복과 함께 확인한다. 추가 인증 설계가 필요하면 기존 사전 영향 보고·승인 규칙을 따른다.
 
 2026-11-02 PR #38 병합 후 D3 진행 및 **권한·발언 세대 분리 보완 승인**. 기준 main `672f08114aea25b7fe59a914f98ac0355b3205be`에서 기존 방 on/focus가 epoch를 바꿔 연결까지 무효화하는 충돌을 확인했다. 연결 권한은 room/member/connection identity·owner 확인·도구·version·만료/회수로 검사하고, 각 발언은 별도의 epoch/generation/revision/lease/input digest로 차단한다. 옛 grant 필드는 이력으로 유지하며 옛 요청을 현재 세대로 승격하지 않는다. 추가4~6파일·150~250줄, D3 총14~18파일·850~1,250줄 예상(검사/문서 포함). D4는 정상 on/focus 전환과 권한 재연결을 구분하고 D5는 off→on/주제 왕복의 새 요청 허용·옛 응답 적용0을 검증한다. [개정 계약](./reviews/dot-official-mcp-events-impact-20261101.md#53-답변단일-실행복구)을 따르며 기존 timeout/단일 실행·승인·API 한도·Muse·50 gate는 유지한다. 추가 OAuth·실계정 호출·배포는 포함하지 않는다.
 

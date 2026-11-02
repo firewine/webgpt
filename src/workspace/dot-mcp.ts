@@ -5,6 +5,7 @@ import type { Vault } from './vault.js';
 import { dotTools, dotEventName, type DotGrant, type DotMcpState } from './dot-mcp-model.js';
 import { participantIdentity } from './wiki-policy.js';
 import { dotParticipantWait, validateDotRequests } from './dot-mcp-policy.js';
+import { projectDotConnection } from './dot-mcp-status.js';
 import { onlyWork, workRoom } from './work-policy.js';
 import { AppError, digest, id, integer, now, object, string, strings } from './util.js';
 
@@ -181,8 +182,10 @@ export class DotMcp {
       const p = s.participants.find(p => p.id === b.participantId), room = s.resident?.rooms.find(r => r.id === b.roomId);
       return p && room && !dotParticipantWait(s, room, p);
     });
-    return { enabled: this.enabled, transportReady, bindings: (d?.bindings ?? []).map(b => ({ ...b })),
-      grants: (d?.grants ?? []).map(g => { let active = false; try { this.checkAuthority(g, g.tools[0]!, g); active = true; } catch { /* Display stale authority as inactive. */ }
-        const { hash: _hash, identityDigest: _identityDigest, ...metadata } = g; return { ...metadata, active }; }) };
+    const grants = (d?.grants ?? []).map(g => { let active = false; try { this.checkAuthority(g, g.tools[0]!, g); active = true; } catch { /* Display stale authority as inactive. */ }
+      const { hash: _hash, identityDigest: _identityDigest, ...metadata } = g; return { ...metadata, active }; });
+    const active = new Set(grants.filter(g => g.active).map(g => g.id));
+    return { enabled: this.enabled, transportReady, bindings: (d?.bindings ?? []).map(b => ({ ...b })), grants,
+      connections: (d?.bindings ?? []).map(b => projectDotConnection(s, b, this.enabled, active)) };
   }
 }

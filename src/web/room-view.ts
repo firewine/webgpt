@@ -1,3 +1,4 @@
+import { dotLabels } from './dot-connections.js';
 import type { ApiDailySummary, Connection, Member, CodexJob, Discussion, MaterialPackage } from '../workspace/model.js';
 import type { RoomSummary, RoomMessage, ResidentTurn, ResidentCheckpoint } from '../workspace/resident-model.js';
 import type { ResidentStatusProjection } from '../workspace/resident-model.js';
@@ -32,11 +33,11 @@ function save(key: string, value: string): void { try { localStorage.setItem('wj
 function date(value: string | null): string { return value ? new Date(value).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '관측 없음'; }
 function dateKst(value: string): string { return new Date(value).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'medium', hourCycle: 'h23' }); }
 const labels: Record<string, string> = { off: '꺼짐', on: '상주 중', sleeping: '휴면', blocked: '확인 필요', budget_exhausted: '진행 한도 소진', unknown: '미관측', not_run: '미실행', not_applicable: '해당 없음', unconfirmed: '응답 미확인', stale: '이전 세대', prepared: '전송 준비', running: '진행 중', paused: '일시정지', completed: '완료', partial: '부분 완료', cancelled: '취소', failed: '실패', fixture: '모의', connected: '연결됨', auth_required: '로그인 필요', queued: '실행 대기', blocked_approval: '승인 대기', reconciling: '대조 필요', interrupted: '중단', waiting: '응답 대기', ready: '준비됨', backlog: '조건 대기', claimed: '픽업됨', review: '독립 검토', rework: '재작업', done: '업무 완료', observed_pass: '관측 검사 통과', observed_fail: '관측 검사 실패', reported: '참여자 보고' };
-const label = (value: string): string => labels[value] ?? value;
+const label = (value: string): string => labels[value] ?? dotLabels[value] ?? value;
 labels.not_sent = '미전송';
 const topicPhases: Record<Discussion['phase'], string> = { independent: '독립 초기안', cross_review: '상호 검토', verification: '근거 검증', revision: '수정안', synthesis: '종합안 작성', summary_review: '종합안 동료 검토' };
 const topicReasons: Record<string, string> = { procedure_completed: '예정된 토론 절차 완료', budget_exhausted: '진행 한도에 도달함', user_cancelled: '사용자가 토론을 취소함', participant_excluded: '일부 참여자가 제외됨', partial_unstructured_reply: '일부 응답의 형식을 확인하지 못함', restart_requires_reconciliation: '재시작 전 응답의 대조가 필요함' };
-const waitReasons: Record<string, string> = { api_daily_not_configured: 'API 일일 한도 미설정', api_daily_exhausted: 'API 일일 한도 소진 · 다음 KST 자정 대기', browser_manual_control: '서버 Chrome 수동 잠금', participant_not_ready: '계정 연결 확인 필요' };
+const waitReasons: Record<string, string> = { dot_subscription_required: 'dot 이벤트 감시 등록 필요', dot_grant_required: 'dot 연결 권한 확인 필요', dot_delivery_requires_reconciliation: 'dot 원래 요청·전달 기록 대조 필요', api_daily_not_configured: 'API 일일 한도 미설정', api_daily_exhausted: 'API 일일 한도 소진 · 다음 KST 자정 대기', browser_manual_control: '서버 Chrome 수동 잠금', participant_not_ready: '계정 연결 확인 필요' };
 Object.assign(topicReasons, waitReasons);
 const workReasons: Record<string, string> = { work_source_required: '근거가 된 공개 발언을 선택해 주세요.', work_acceptance_required: '수용 기준이 필요합니다.', work_assignment_required: '허용 참여자와 범위를 정해 주세요.', work_execution_phase_pending: '실제 코드 실행은 페이즈 6 연결을 기다립니다.', work_dependency_pending: '선행 일감의 완료를 기다립니다.', work_scope_not_authorized: '해당 범위를 허용한 업무 역할이 필요합니다.', work_acceptance_not_observed: '수용 기준의 직접 확인이나 실제 근거가 필요합니다.', room_settings_required: '방의 진행 한도와 속도를 설정해 주세요.', budget_exhausted: '방의 진행 한도에 도달했습니다.', work_reconciliation_required: '원래 요청·응답을 대조해 주세요.', work_scope_or_report_changed: '배정·범위·보고가 바뀌어 결과를 보류했습니다.', owner_cancelled: '소유자가 취소했습니다.' };
 const workReason = (reason: string): string => workReasons[reason] ?? '추가 확인이 필요합니다. 원래 요청·응답에서 사유를 확인해 주세요.';
@@ -588,15 +589,16 @@ export class RoomView {
     for (const p of s.participants) {
       const m = roomMembers.find(m => m.participantId === p.id); const card = el('article', '', 'room-member'); card.dataset.tone = this.tone(p.id); card.dataset.participantId = p.id;
       const status = statuses.find(c => c.participantId === p.id); const info = el('div', '', 'member-info'); const name = el('div', '', 'member-name');
-      name.append(el('strong', p.label), el('span', p.kind === 'fake' ? '모의' : ['openai-oauth', 'codex-oauth'].includes(p.kind) ? 'GPT' : p.kind === 'deepseek' || p.kind === 'anthropic' ? 'API' : '웹', 'member-kind')); info.append(name);
+      name.append(el('strong', p.label), el('span', p.kind === 'fake' ? '모의' : ['openai-oauth', 'codex-oauth'].includes(p.kind) ? 'GPT' : p.kind === 'deepseek' || p.kind === 'anthropic' ? 'API' : p.kind === 'dot-mcp' ? 'dot' : '웹', 'member-kind')); info.append(name);
       info.append(el('small', p.kind === 'fake' ? '외부 모델 호출 없음' : (s.connections.find(c => c.id === p.connectionId)?.label ?? '연결 미확인'), 'member-account'));
       if (['openai-oauth', 'codex-oauth', 'deepseek'].includes(p.kind)) info.append(el('small', '사고 깊이 · ' + (p.reasoningEffort ?? (p.kind === 'deepseek' ? '제공처 기본값' : 'xhigh')), 'member-account'));
       if (p.kind === 'deepseek') info.append(el('small', '출력 한도 · ' + (p.maxOutputTokens ?? 4096).toLocaleString('ko-KR') + '토큰', 'member-account'));
       const connection = s.connections.find(c => c.id === p.connectionId);
-      if (p.kind !== 'fake' && connection?.status !== 'connected') info.append(el('small', connection ? connection.status === 'auth_required' ? '로그인 필요' : '연결 확인 필요 · ' + (connection.error ?? connection.status) : '연결 삭제됨 · 기록 보존', 'member-connection-error'));
+      if (p.kind === 'dot-mcp' && status) info.append(el('small', '공식 연결 · ' + (dotLabels[status.connection.state] ?? status.connection.state), 'member-account'));
+      if (p.kind !== 'fake' && p.kind !== 'dot-mcp' && connection?.status !== 'connected') info.append(el('small', connection ? connection.status === 'auth_required' ? '로그인 필요' : '연결 확인 필요 · ' + (connection.error ?? connection.status) : '연결 삭제됨 · 기록 보존', 'member-connection-error'));
       if (this.selectedTopic) info.append(el('small', this.selectedTopic.members.some(m => m.id === p.id) ? this.selectedTopic.excludedIds.includes(p.id) ? '이 주제 참여 제외' : '이 주제 참여자' : '이 주제 미참여', 'member-topic-status'));
       const reason = m?.blockedReason ?? status?.response.reason;
-      const state = m?.blockedReason ? '확인 필요 · ' + workReason(m.blockedReason) : status ? label(status.response.state) + (reason ? ' · ' + (waitReasons[reason] ?? reason) : '') : '미참여';
+      const state = m?.blockedReason ? '확인 필요 · ' + workReason(m.blockedReason) : status ? (p.kind === 'dot-mcp' ? dotLabels[status.response.state] ?? label(status.response.state) : label(status.response.state)) + (reason ? ' · ' + (waitReasons[reason] ?? reason) : '') : '미참여';
       info.append(el('small', state, 'member-observed')); info.title = `${p.label}\n${p.modelId}\n${p.role}\n${state}`;
       const toggleLabel = el('label', '', 'member-toggle'); const toggle = el('input'); toggle.type = 'checkbox'; toggle.checked = !!m?.enabled; toggle.disabled = !this.detail?.enabled; toggle.setAttribute('aria-label', p.label + ' 발언 참여');
       toggle.addEventListener('change', () => { toggle.disabled = true; void this.control('set_member', { participantId: p.id, enabled: toggle.checked }).catch(this.deps.report).finally(() => { toggle.disabled = !this.detail?.enabled; }); }); toggleLabel.append(toggle, el('span', '', 'toggle-track'));

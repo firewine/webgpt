@@ -370,3 +370,14 @@ dialog { max-height: calc(100dvh - 20px); overflow-y: auto; background: var(--pa
 #topic-opinion-form { display: flex; gap: 8px; align-items: end; margin-bottom: 9px; }
 #topic-opinion-text { flex: 1; min-width: 0; resize: vertical; max-height: 20dvh; font-size: 13px; }
 #topic-opinion-form button { flex: none; }
+
+/* Official dot setup shares the existing monochrome connection panels. */
+#dot-connection-panel { margin-bottom: 20px; }
+#dot-connection-panel ol { padding-left: 22px; }
+#dot-connection-panel li { margin: 8px 0; }
+#participant-fields, #dot-register-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.dot-status { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; font-size: .85rem; }
+.dot-status dt { color: var(--muted); }
+.dot-status dd { margin: 0; overflow-wrap: anywhere; }
+#dot-confirm-dialog { max-width: min(560px, calc(100vw - 24px)); }
+#dot-grant-token { font-family: monospace; }

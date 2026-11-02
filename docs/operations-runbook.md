@@ -1,6 +1,6 @@
 # Ubuntu 운영 절차 — v0.3
 
-> **2026-11-01 공식 dot 연결 개정·개발 승인 / 11-02 D0 합성 왕복·서버 구독 해제 PASS:** Muse의 현재 Chrome profile/thread/selector·초안/receipt는 그대로 보존한다. dot은 일반 ChatGPT `/c/...` 선택 대신 공식 private plugin·Secure MCP Tunnel·MCP Events 경로를 검증한다. 실제 dot 이벤트·답변1건은 확인했으나 운영 채팅방 연결은 아직 구현 전이다. 아래 과거 dot browser/stdio 예시는 native dot 성공 증거가 아니다. [승인안](./reviews/dot-official-mcp-events-impact-20261101.md)·[SSOT](./development-plan.md)·[D0 점검/실측 기록](./implementation/dot-mcp-events-d0-20261101.md)을 먼저 따른다. owner 비밀번호·GPT provider 토큰·MCP grant·Tunnel runtime key는 별개이며 서로 대신 입력하지 않는다. 추가 OAuth나 공개 ingress는 사전 영향 보고·승인 없이 설치하지 않는다.
+> **2026-11-02 D3 병합·D4 공식 연결 화면/운영 절차 구현:** Muse의 현재 Chrome profile/thread/selector·초안/receipt는 그대로 보존한다. dot은 일반 ChatGPT `/c/...` 선택 대신 공식 private plugin·Secure MCP Tunnel·MCP Events를 사용한다. D0 합성 이벤트·답변1건/구독 해제는 PASS이며 운영 방의 실제 인증 전달·왕복은 아직 NOT_RUN이다. [D4 연결 절차](./dot-connection-runbook.md)·[SSOT](./development-plan.md)·[D0 실측](./implementation/dot-mcp-events-d0-20261101.md)을 먼저 따른다. 아래 과거 browser/토의 grant 예시는 native dot 성공 증거가 아니다. owner 비밀번호·GPT provider 토큰·MCP grant·Tunnel runtime key는 별개다. 추가 OAuth나 공개 ingress는 사전 영향 보고·승인 없이 설치하지 않는다.
 
 실제 사용자 Ubuntu 서버에 적용할 절차다. 개발 컨테이너에서 계정 로그인이나 Tailnet 배포를 완료했다는 기록이 아니다. 처음에는 같은 OS 사용자가 관리하는 개인 서버를 대상으로 한다.
 
@@ -273,6 +273,8 @@ WJ_CODEX_BINARY=/실제/경로/codex npm run test:codex-contract
 
 ## 5. dot MCP와 Secure MCP Tunnel
 
+**공식 dot은 [D4 전용 절차](./dot-connection-runbook.md)를 따른다.** UI에서 확인한 dot grant는 해당 방/참여자/연결에 고정되고 정상 on/focus마다 재발급하지 않는다. 아래는 기존 토의/resident grant 전달기 설명이며 그 키를 dot grant로 재사용하지 않는다. D4의 `WJ_MCP_EXPECT_DOT=true`는 기존 전달기를 쓰면서 native 도구/Events와 인증을 먼저 검사한다. 전용 Tunnel의 접근 범위는 owner 확인이 필요하고 실제 사용자/principal 증명은 UNVERIFIED다.
+
 기존 작업실 MCP 권한은 **토의·참여자·도구 목록**에 고정된다. Codex 권한을 포함하려면 그 토의에 binding이 있어야 한다. 페이즈 7 상주 도구는 위의 별도 resident grant만 사용하며 기존 키를 확대하지 않는다. 발급된 접근 키를 모델의 대화 본문에 넣지 않는다. 토의가 바뀌면 새 scope를 발급한다.
 
 HTTP `/mcp`를 직접 사용할 수 있는 클라이언트는 Bearer 인증을 설정한다. dot이 private 서버에 접근할 때는 공식 Secure MCP Tunnel을 사용한다. Tailscale URL만 OpenAI에 등록해서 접근 가능하다고 가정하지 않는다.
@@ -287,7 +289,7 @@ HTTP `/mcp`를 직접 사용할 수 있는 클라이언트는 Bearer 인증을 �
 
 터널 프로세스는 해당 서버의 서비스 관리 아래 유지한다. 먼저 구성과 계정 왕복을 확인한 다음 보호된 environment 파일을 읽는 user unit으로 등록한다. 이 저장소가 실제 사용자의 터널·키·plugin을 이미 생성한 것은 아니다.
 
-dot에 codex_send grant가 있으면 검증 발언 중 dot이 구체적인 prompt를 제출한다. 접수 후 Core가 실제 job 완료를 관측하고 같은 과제를 다시 검토하게 한다. 아직 설치·검증하지 않은 **MCP Events / Muse 공식 Connector는 지원 capability로 광고하지 않는다.** 이벤트와 browser 경로로 같은 turn을 이중 시작하지 않는다.
+기존 토의 MCP에서 codex_send grant가 있으면 검증 발언 중 구체적인 prompt를 제출한다. 접수 후 Core가 실제 job 완료를 관측하고 같은 과제를 다시 검토하게 한다. 공식 dot grant의 세 도구에 codex_send 권한은 포함하지 않는다. D2~D3가 구현한 Events는 유효한 dot grant에만 광고하며, 실제 사용자 구독/왕복 성공은 별도 증거로 판단한다. **Muse 공식 Connector는 미구현**이다. 이벤트와 browser 경로로 같은 turn을 이중 시작하지 않는다.
 
 ## 6. 백업과 복구
 

@@ -1,9 +1,11 @@
+import { DotConnectionsView } from './dot-connections.js';
+import type { DotConnectionStatus } from '../workspace/dot-mcp-model.js';
 import type { Connection, Member, Discussion, ExecutionBinding, CodexJob, DurableEvent, Phase, MaterialPackage, ProviderKind, DeviceSignin } from '../workspace/model.js';
 import { RoomView } from './room-view.js';
 import { TopicChatView } from './topic-chat-view.js';
 import type { RoomSnapshot } from './room-view.js';
 import type { DiscoveryPage, DiscoveryResult } from '../connections/browser-discovery-model.js';
-type Snapshot = { cursor: number; connections: Connection[]; participants: Member[]; discussions: Pick<Discussion, 'id' | 'topic' | 'status' | 'phase' | 'revision' | 'createdAt' | 'updatedAt'>[];
+type Snapshot = { dotMcp?: { enabled: boolean; connections: DotConnectionStatus[] }; cursor: number; connections: Connection[]; participants: Member[]; discussions: Pick<Discussion, 'id' | 'topic' | 'status' | 'phase' | 'revision' | 'createdAt' | 'updatedAt'>[];
   bindings: ExecutionBinding[]; jobs: CodexJob[]; browserPaused: boolean; grants: { id: string; participantId: string; discussionId: string; revoked: boolean; tools: string[] }[];
   capabilities: { sourceFetch: boolean; browserConfigured: boolean; noVncConfigured: boolean; codexConfigured: boolean };
   materialPackages: { id: string; label: string; createdAt: string; files: Omit<MaterialPackage['files'][number], 'text' | 'identity'>[] }[]; materialRoots: string[]; resident: RoomSnapshot['resident']; apiDaily: RoomSnapshot['apiDaily'] };
@@ -45,8 +47,8 @@ const phases: Record<Phase, string> = { independent: '초기안', cross_review: 
 const states: Record<string, string> = { running: '진행 중', paused: '일시정지', blocked: '확인 필요', completed: '완료', partial: '부분 완료', cancelled: '취소',
   prepared: '전송 준비', pending: '대기', failed: '실패', unconfirmed: '결과 미확인', stale: '이전 조건의 응답', connected: '연결됨', auth_required: '로그인 필요', unverified: '미확인', error: '연결 오류',
   observed: '자료 관측됨', reported: '참여자 보고', not_run: '미실행', queued: '실행 대기', blocked_approval: '승인 대기', reconciling: '실행 확인 필요', interrupted: '중단됨', ready: '준비됨', fixture: '모의', not_applicable: '해당 없음', waiting: '대기' };
-const errors: Record<string, string> = { authentication_required: '비밀번호를 확인해 주세요.', password_mismatch: '두 비밀번호가 일치하지 않습니다.', invalid_password: '비밀번호는 6~128자로 입력하세요. 한글과 공백도 사용할 수 있습니다.', password_setup_not_authorized: '최초 설정 링크를 서버에서 열거나 기존 소유자 로그인으로 접속해 주세요.', password_setup_changed: '설정이 먼저 변경됐거나 링크가 만료됐습니다. 새 설정 링크를 열어 주세요.', password_already_set: '이미 비밀번호가 설정돼 있습니다. 비밀번호로 로그인하거나 서버에서 재설정 링크를 여세요.', password_verification_failed: '현재 비밀번호를 확인해 주세요.', login_rate_limited: '잠시 후 다시 시도해 주세요. 연속 시도 또는 다른 로그인 처리가 진행 중입니다.', root_workflow_busy: '진행 중인 토의를 먼저 완료하거나 취소해 주세요.', two_participants_required: '참여자를 2명 이상 선택해 주세요.',
-  api_daily_not_configured: 'API 일일 한도를 먼저 저장해 주세요. GPT 대화는 계속할 수 있습니다.', api_daily_exhausted: 'API 일일 한도에 도달했습니다. 다음 KST 자정까지 API만 기다립니다.', api_daily_version_conflict: '다른 화면에서 API 한도가 바뀌었습니다. 창을 닫고 최신 한도를 다시 확인하세요.', api_daily_policy_requires_idle: '진행·미확정 API 발언을 먼저 확인한 뒤 한도를 변경하세요.', dot_existing_chat_required: 'dot은 확인한 기존 ChatGPT 대화에만 연결할 수 있습니다.',
+const errors: Record<string, string> = { dot_version_conflict: '다른 화면에서 연결 권한이 바뀌었습니다. 최신 상태에서 다시 확인하세요.', dot_owner_confirmation_required: '대상 dot과 권한 범위를 확인해 주세요.', dot_disabled: '서버의 상주 기능을 켠 뒤 공식 dot을 등록하세요.', dot_credential_write_failed: '권한 키 저장을 확인하지 못했습니다. 연결 상태를 대조하세요.', authentication_required: '비밀번호를 확인해 주세요.', password_mismatch: '두 비밀번호가 일치하지 않습니다.', invalid_password: '비밀번호는 6~128자로 입력하세요. 한글과 공백도 사용할 수 있습니다.', password_setup_not_authorized: '최초 설정 링크를 서버에서 열거나 기존 소유자 로그인으로 접속해 주세요.', password_setup_changed: '설정이 먼저 변경됐거나 링크가 만료됐습니다. 새 설정 링크를 열어 주세요.', password_already_set: '이미 비밀번호가 설정돼 있습니다. 비밀번호로 로그인하거나 서버에서 재설정 링크를 여세요.', password_verification_failed: '현재 비밀번호를 확인해 주세요.', login_rate_limited: '잠시 후 다시 시도해 주세요. 연속 시도 또는 다른 로그인 처리가 진행 중입니다.', root_workflow_busy: '진행 중인 토의를 먼저 완료하거나 취소해 주세요.', two_participants_required: '참여자를 2명 이상 선택해 주세요.',
+  api_daily_not_configured: 'API 일일 한도를 먼저 저장해 주세요. GPT 대화는 계속할 수 있습니다.', api_daily_exhausted: 'API 일일 한도에 도달했습니다. 다음 KST 자정까지 API만 기다립니다.', api_daily_version_conflict: '다른 화면에서 API 한도가 바뀌었습니다. 창을 닫고 최신 한도를 다시 확인하세요.', api_daily_policy_requires_idle: '진행·미확정 API 발언을 먼저 확인한 뒤 한도를 변경하세요.', dot_existing_chat_required: '이전 browser 연결은 확인한 ChatGPT 대화가 필요합니다. 공식 dot은 전용 플러그인 연결을 사용하세요.',
   invalid_output_limit: '출력 한도는 512~32,768 범위의 정수로 지정하세요.', output_limit_requires_deepseek: '출력 한도 설정은 DeepSeek 연결에서 지원합니다.', output_limit_not_supported: '모델 목록이 보고한 최대 출력을 넘었습니다. 출력 한도를 직접 조절해 주세요.', participant_output_requires_idle: '진행·미확정 발언을 먼저 확인한 뒤 출력 한도를 변경하세요.',
   device_login_unavailable: 'ChatGPT 보안 설정 또는 workspace에서 기기 코드 로그인을 허용해 주세요.', device_login_expired: '기기 코드가 만료됐습니다. 같은 계정에서 새 로그인을 시작해 주세요.', device_login_interrupted: '서버가 재시작됐거나 이전 요청이 끝났습니다. 같은 계정에서 다시 시작해 주세요.', device_login_start_failed: '기기 코드를 받지 못했습니다. 연결 상태를 확인해 주세요.', device_login_poll_failed: '로그인 승인 상태를 확인하지 못했습니다.', codex_version_required: '설정한 Codex 실행 파일의 버전을 확인하지 못했습니다.', codex_refresh_failed: '이 계정의 인증을 갱신하지 못했습니다. 연결 상태를 확인해 주세요.',
   signin_pending: '이미 시작한 로그인이 있습니다. 서버 Chrome 화면에서 진행해 주세요.', signin_account_pending: '진행 중 로그인과 다른 계정을 지정했습니다. 기존 로그인을 마치거나 이 계정을 로그아웃한 뒤 다시 시작해 주세요.',
@@ -90,7 +92,7 @@ async function api<T>(path: string, body?: unknown, requestId: string = crypto.r
   if (!response.ok) { if (response.status === 401) lock(); throw new Error(result.error?.code ?? 'request_failed'); }
   return result;
 }
-function lock(load = true): void { stream?.close(); stream = null; topicChat.clear(); $<HTMLDialogElement>('#topic-details-dialog').close(); roomView.clear(); closeDeviceScreen(); $('#device-code').textContent = ''; $<HTMLDialogElement>('#oauth-login-dialog').close(); $<HTMLDialogElement>('#password-dialog').close(); $<HTMLFormElement>('#password-change-form').reset(); $('#oauth-desktop').replaceChildren(); $('#oauth-result').replaceChildren(); $('#login').hidden = false; $('#workspace').hidden = true; if (load) { authStatus = null; void loadLogin().catch(report); } }
+function lock(load = true): void { dotView.clear(); stream?.close(); stream = null; topicChat.clear(); $<HTMLDialogElement>('#topic-details-dialog').close(); roomView.clear(); closeDeviceScreen(); $('#device-code').textContent = ''; $<HTMLDialogElement>('#oauth-login-dialog').close(); $<HTMLDialogElement>('#password-dialog').close(); $<HTMLFormElement>('#password-change-form').reset(); $('#oauth-desktop').replaceChildren(); $('#oauth-result').replaceChildren(); $('#login').hidden = false; $('#workspace').hidden = true; if (load) { authStatus = null; void loadLogin().catch(report); } }
 async function loadLogin(): Promise<void> { const sequence = ++authSequence; const result = await api<AuthStatus>('/api/auth'); if (sequence === authSequence) { authStatus = result; renderLogin(); } }
 function renderLogin(): void {
   const setup = !authStatus?.passwordConfigured || !!setupToken, allowed = !setup || !!setupToken || !!authStatus?.canSetup;
@@ -115,6 +117,7 @@ function showView(next: View): void {
   if (next === 'discussion') { if (current) openTopicDetails(); else beginTopic(); return; }
   viewChosen = true; view = next; for (const id of ['room', 'connections', 'execution']) $(`#view-${id}`).hidden = id !== next;
   if (next !== 'room') $<HTMLDialogElement>('#topic-details-dialog').close();
+  if (next !== 'connections') dotView.clear();
   roomView.setSelectedTopic(current, !!selected); roomView.setActive(next === 'room'); localStorage.setItem('wj.room.view', next);
   for (const el of document.querySelectorAll<HTMLElement>('[data-view]')) el.classList.toggle('selected', el.dataset.view === next);
   if (state) topicChat.render(state.discussions, current, next === 'room', selected);
@@ -170,7 +173,7 @@ function render(): void {
     selectOptions($('#grant-discussion'), state.discussions.map(d => ({ id: d.id, label: d.topic }))); choiceSignature = signature;
   }
   $('#composer').hidden = !composingTopic; $('#discussion-detail').hidden = composingTopic || !current;
-  if (current) renderDiscussion(); renderConnections(); renderJobs(); renderMaterials(); renderFocusBudget(); showView(view);
+  dotView.render(state); if (current) renderDiscussion(); renderConnections(); renderJobs(); renderMaterials(); renderFocusBudget(); showView(view);
 }
 async function selectTopic(id: string): Promise<void> {
   roomView.closeNavigation(); $<HTMLDialogElement>('#topic-details-dialog').close(); if (selected !== id) current = null; selected = id;
@@ -186,6 +189,7 @@ function beginTopic(roomId?: string): void {
   $<HTMLFormElement>('#discussion-form').reset(); choiceSignature = ''; showView('room'); render();
   $('#topic-dialog-title').textContent = '새 주제'; $<HTMLDialogElement>('#topic-details-dialog').showModal(); $('#topic').focus();
 }
+const dotView = new DotConnectionsView({ api, refresh, report });
 const roomView = new RoomView({ api, refresh, report, openView: showView,
   openDiscussion: async id => { await selectTopic(id); openTopicDetails(); }, startFocus: beginTopic,
   setupConnection: id => {
@@ -236,9 +240,7 @@ async function browseMaterials(path: string): Promise<void> {
 }
 function connectionMode(c: Connection): string {
   if (gptKind(c.kind)) return 'gpt';
-  if (c.kind === 'browser' && c.browser?.discovery?.target === 'dot') {
-    try { const u = new URL(c.browser.url); if (u.hostname === 'chatgpt.com' && /\/c\/[^/]+\/?$/.test(u.pathname)) return 'dot'; } catch { /* An invalid stored URL is not a dot connection. */ }
-  }
+  if (c.kind === 'dot-mcp') return 'dot';
   return 'other';
 }
 function updateConnections(): void {
@@ -247,7 +249,8 @@ function updateConnections(): void {
   selectOptions($('#participant-connection'), connections.map(c => ({ id: c.id, label: `${c.label} · ${c.kind === 'browser' ? c.browser?.agentLabel ?? '기존 대화' : c.kind}` })), '연결 선택');
   if (connections.length === 1) $<HTMLSelectElement>('#participant-connection').value = connections[0]!.id;
   $('#participant-dot-connect').hidden = mode !== 'dot';
-  $('#participant-mode-note').textContent = mode === 'dot' ? '직접 확인한 기존 dot 대화만 표시합니다. 계정 이름·요금제로 dot 사용 가능 여부를 추정하지 않습니다. 일반 GPT와 문맥·역할·권한을 공유하지 않습니다.' : mode === 'gpt' ? '앱이 관리하는 일반 GPT 대화입니다. ChatGPT 웹·dot의 과거 기억을 가져오지 않습니다.' : 'API와 Muse 등 등록한 기존 연결을 선택합니다. dot으로 확인되지 않은 웹 연결은 이 목록에 남습니다.';
+  const fields = $<HTMLFieldSetElement>('#participant-fields'); fields.hidden = mode === 'dot'; fields.disabled = mode === 'dot';
+  $('#participant-mode-note').textContent = mode === 'dot' ? '공식 dot 전용 연결에서 방·토커를 함께 등록합니다. 기존 ChatGPT 웹 대화는 dot으로 간주하지 않습니다.' : mode === 'gpt' ? '앱이 관리하는 일반 GPT 대화입니다. ChatGPT 웹·dot의 과거 기억을 가져오지 않습니다.' : 'API와 Muse 등 등록한 기존 연결을 선택합니다. 기존 웹 연결의 원문과 기록은 그대로 유지됩니다.';
   updateModels();
 }
 function updateModels(): void { const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); const select = $<HTMLSelectElement>('#participant-model'); selectOptions(select, c?.models ?? [], c && select.dataset.explicitConnection === c.id ? '모델을 선택하세요' : undefined); updateEffort(); }
@@ -262,7 +265,7 @@ function updateEffort(): void {
   else if (gptKind(c?.kind) && (changed || !allowed.includes(previous))) select.value = 'xhigh';
   const source = c?.models.find(m => m.id === modelId)?.reasoningSource;
   const output = $<HTMLInputElement>('#participant-output'); output.disabled = c?.kind !== 'deepseek'; $('#participant-output-controls').hidden = output.disabled; output.max = String(outputMaximum(c, modelId)); if (changed) output.value = ''; $('#participant-output-note').textContent = outputNote(c, modelId);
-  $('#participant-effort-note').textContent = c?.kind === 'deepseek' ? source ? `제공처 기본값은 요청을 덮어쓰지 않습니다. ${source === 'catalog' ? '실제 모델 목록' : '제공처 공식 문서'}에서 확인한 값만 선택합니다.` : '사고 설정 지원 정보가 없어 제공처 기본값만 표시합니다. 연결 카드에서 모델 확인을 눌러 주세요.' : c?.kind === 'browser' ? '기존 dot·Muse의 모델과 사고 깊이는 원래 서비스에서 조절합니다.' : c?.kind === 'codex-oauth' ? '이 계정의 모델 목록에서 확인한 사고 깊이만 선택합니다. Extra high를 지원하면 기본으로 사용합니다.' : gptKind(c?.kind) ? '기본 Extra high. 모델이 지원하지 않는 값은 오류로 표시합니다.' : '이 연결은 제공처의 기본 사고 설정을 사용합니다.';
+  $('#participant-effort-note').textContent = c?.kind === 'deepseek' ? source ? `제공처 기본값은 요청을 덮어쓰지 않습니다. ${source === 'catalog' ? '실제 모델 목록' : '제공처 공식 문서'}에서 확인한 값만 선택합니다.` : '사고 설정 지원 정보가 없어 제공처 기본값만 표시합니다. 연결 카드에서 모델 확인을 눌러 주세요.' : c?.kind === 'browser' ? '기존 웹 대화의 모델과 사고 깊이는 원래 서비스에서 조절합니다.' : c?.kind === 'codex-oauth' ? '이 계정의 모델 목록에서 확인한 사고 깊이만 선택합니다. Extra high를 지원하면 기본으로 사용합니다.' : gptKind(c?.kind) ? '기본 Extra high. 모델이 지원하지 않는 값은 오류로 표시합니다.' : '이 연결은 제공처의 기본 사고 설정을 사용합니다.';
 }
 function control(body: Record<string, unknown>): Promise<unknown> { if (!current) return Promise.resolve(); return api(`/api/discussions/${current.id}/control`, { expectedRevision: current.revision, ...body }).then(refresh); }
 function renderDiscussion(): void {
@@ -351,13 +354,13 @@ function renderRecords(target: HTMLElement, d: Discussion): void {
 function renderConnections(): void {
   if (!state) return; const target = $('#connections-list'); target.replaceChildren();
   for (const c of state.connections) { const service = c.kind === 'deepseek' ? ({ deepseek: 'DeepSeek 공식 API', coralbricks: 'CoralBricks · DeepSeek', river: 'River · DeepSeek' }[c.apiService ?? 'deepseek']) : c.kind === 'codex-oauth' ? 'GPT · 기기 코드 연결 (Codex)' : c.kind === 'anthropic' ? 'Anthropic · Claude API' : c.kind;
-    const card = node('article', '', 'connection-card'); card.dataset.connectionId = c.id; card.append(node('h3', c.label), badge(c.status), node('p', `${service}${c.email ? ` · ${c.email}` : ''}`, 'muted'), node('p', `${c.models.length}개 모델${c.error ? ` · ${errors[c.error] ?? c.error}` : ''}`, 'small'));
+    const card = c.kind === 'dot-mcp' ? dotView.card(c) : node('article', '', 'connection-card'); card.dataset.connectionId = c.id; if (c.kind !== 'dot-mcp') card.append(node('h3', c.label), badge(c.status), node('p', `${service}${c.email ? ` · ${c.email}` : ''}`, 'muted'), node('p', `${c.models.length}개 모델${c.error ? ` · ${errors[c.error] ?? c.error}` : ''}`, 'small'));
     if (c.modelError) card.append(node('p', `모델 조회 HTTP ${c.modelError.httpStatus}${c.modelError.providerCode ? ' · ' + c.modelError.providerCode : ''}`, 'small muted'));
     if (c.apiService === 'coralbricks' && c.error === 'coralbricks_verification_required') {
       const link = node('a', 'CoralBricks 계정 검증 페이지 열기 ↗'); link.href = 'https://www.coralbricks.ai/organization/billing'; link.target = '_blank'; link.rel = 'noopener noreferrer'; card.append(link);
     }
     if (c.browser?.thread) card.append(node('p', `연결된 대화 ID: ${c.browser.thread.value}`, 'small muted'));
-    const row = node('div', '', 'toolbar'); row.append(button('모델 확인', async () => { await api(`/api/connections/${c.id}/models`, {}); await refresh(); }));
+    const row = node('div', '', 'toolbar'); if (c.kind !== 'dot-mcp') row.append(button('모델 확인', async () => { await api(`/api/connections/${c.id}/models`, {}); await refresh(); }));
     if (c.kind === 'openai-oauth') row.append(button('다시 로그인', async () => {
       const start = async (expectedEmail: string) => { await showOAuth(await api('/api/connections/oauth', { label: c.label, connectionId: c.id, expectedEmail })); };
       if (c.expectedEmail || c.email) await start(c.expectedEmail || c.email!);
@@ -381,13 +384,13 @@ function renderConnections(): void {
       }, `${service} · ${c.email ?? c.label} 연결을 목록에서 지우고 이 서버의 인증 정보를 삭제합니다. 기존 대화·토커·원래 Chrome 대화는 보존됩니다. 외부 서비스의 로그인 권한 폐기는 확인하지 않습니다. 사용 중이거나 미확정 응답이 있으면 삭제할 수 없습니다.`, '삭제');
     }, 'danger'));
     card.append(row); target.append(card); }
-  if (!state.connections.length) target.append(node('p', '등록된 실제 계정이 없습니다. 모의 참여자로 전체 흐름을 먼저 확인할 수 있습니다.', 'small muted'));
+  if (!state.connections.length) target.append(node('p', '등록된 실제 계정이 없습니다. 사용할 연결을 추가해 주세요.', 'small muted'));
   const participants = $('#participants-list'); participants.replaceChildren();
   for (const p of state.participants.filter(p => p.kind !== 'fake')) {
     const connection = state.connections.find(c => c.id === p.connectionId); const card = node('article', '', 'connection-card');
     card.append(node('h3', p.label), node('p', '계정 · ' + (connection?.email ?? connection?.browser?.accountLabel ?? connection?.label ?? '연결 삭제됨 · 이전 대화 기록 보존'), 'small muted'), node('p', p.modelId + (reasoningKind(p.kind) ? ' · ' + effortLabel(savedEffort(p)) : ''), 'small'));
     if (p.kind === 'deepseek') card.append(node('p', '출력 한도 · ' + (p.maxOutputTokens ?? 4096).toLocaleString('ko-KR') + '토큰', 'small'));
-    card.append(button('토커 설정 변경', () => { if (connection?.status !== 'connected') { announce('먼저 해당 계정을 로그인하고 모델을 확인해 주세요.', true); return; }
+    card.append(button(p.kind === 'dot-mcp' ? '공식 dot 연결 설정' : '토커 설정 변경', () => { if (p.kind === 'dot-mcp') { dotView.open(); return; } if (connection?.status !== 'connected') { announce('먼저 해당 계정을 로그인하고 모델을 확인해 주세요.', true); return; }
       const form = $<HTMLFormElement>('#participant-form'); let hidden = form.elements.namedItem('participantId') as HTMLInputElement | null;
       if (!hidden) { hidden = node('input'); hidden.type = 'hidden'; hidden.name = 'participantId'; form.append(hidden); } hidden.value = p.id;
       $<HTMLSelectElement>('#participant-mode').value = connectionMode(connection); updateConnections(); $<HTMLSelectElement>('#participant-connection').value = p.connectionId!; updateModels(); $<HTMLSelectElement>('#participant-model').value = p.modelId;
@@ -522,7 +525,6 @@ form('#browser-discovery-form', async values => {
   const evidence = $('#browser-discovery-evidence'); evidence.replaceChildren();
   for (const text of [`프로필 · ${candidate.page.profile === 'default' ? '서버 기본 프로필' : candidate.page.profile}`, `주소 · ${candidate.page.url}`, `계정 식별 문구 · ${candidate.identityText ?? '확인 불가'}`, `에이전트 표시 · ${candidate.agentLabel ?? '확인 불가'}`, `대화 ID · ${candidate.threadValue ?? '확인 불가'}`, `관측 · ${time(candidate.observedAt)}`]) evidence.append(node('p', text));
   $('#browser-discovery-result').hidden = false; $('#browser-discovery-confirm-form').hidden = candidate.status !== 'ready';
-  $('#browser-dot-target').hidden = candidate.status !== 'ready' || new URL(candidate.page.url).hostname !== 'chatgpt.com';
   if (candidate.status === 'ready') {
     browserCandidate = candidate; browserDiscoveryConnection = values.connectionId ?? '';
     const existing = state?.connections.find(c => c.id === values.connectionId); ($<HTMLFormElement>('#browser-discovery-confirm-form').elements.namedItem('label') as HTMLInputElement).value = existing?.label ?? candidate.agentLabel ?? '';
@@ -530,7 +532,7 @@ form('#browser-discovery-form', async values => {
 });
 form('#browser-discovery-confirm-form', async values => {
   if (!browserCandidate?.id) throw new Error('browser_discovery_expired');
-  await api('/api/browser/discovery/confirm', { discoveryId: browserCandidate.id, label: values.label, confirmed: values.confirmed === 'on', ...(values.dotTarget === 'on' ? { target: 'dot' } : {}), ...(browserDiscoveryConnection ? { connectionId: browserDiscoveryConnection } : {}) });
+  await api('/api/browser/discovery/confirm', { discoveryId: browserCandidate.id, label: values.label, confirmed: values.confirmed === 'on', ...(browserDiscoveryConnection ? { connectionId: browserDiscoveryConnection } : {}) });
   invalidateDiscovery(); announce('기존 대화를 연결했습니다. 참여자를 등록해 방에 초대할 수 있습니다.'); await refresh();
 });
 form('#binding-form', async values => { await api('/api/bindings', { ...values, allowWrite: values.allowWrite === 'on' }); await refresh(); });
@@ -543,7 +545,7 @@ $('#participant-mode').addEventListener('change', () => {
   if ($('#participant-form [name=participantId]')) { clearParticipantEdit(); $<HTMLSelectElement>('#participant-mode').value = mode; announce('대화 방식을 바꿀 때는 새 참여자로 등록합니다. 기존 기록과 업무 역할·권한은 원래 참여자에게 남습니다.'); }
   updateConnections();
 });
-click('#participant-dot-connect', async () => { $<HTMLDetailsElement>('#browser-connection-panel').open = true; $<HTMLSelectElement>('#browser-discovery-preset').value = 'chatgpt-v1'; $<HTMLSelectElement>('#browser-discovery-connection').value = ''; invalidateDiscovery(); await loadBrowserPages(); $('#browser-discovery-form').scrollIntoView(); });
+click('#participant-dot-connect', async () => dotView.open());
 $('#participant-model').addEventListener('change', updateEffort);
 for (const el of document.querySelectorAll<HTMLElement>('[data-view]')) el.addEventListener('click', () => showView(el.dataset.view as View));
 for (const el of document.querySelectorAll<HTMLElement>('[data-tab]')) el.addEventListener('click', () => { tab = el.dataset.tab!; renderDiscussion(); });

@@ -43,18 +43,18 @@ test('room UI has only API daily quotas, separate tool settings and KST/CAS usag
   assert.equal(calls, 0); assert.deepEqual(f.app.store.read().discussions, original); assert.deepEqual(errors, []);
 });
 
-test('ordinary GPT/dot picker only offers explicitly confirmed ChatGPT dot, separates Muse and resets edited identity/role before creating a new actor', { timeout: 60000 }, async t => {
+test('ordinary GPT/dot picker routes native setup separately and preserves legacy browser identities', { timeout: 60000 }, async t => {
   const f = await workspace(t, { residentEnabled: true }, { residentAutoSchedule: false }); let calls = 0; f.app.providers.complete = async () => { calls++; throw new Error('No transport from picker'); };
   const model = { id: 'fixture', label: 'fixture', reasoningEfforts: ['xhigh'] }; f.app.store.transact(s => {
     for (const c of [{ id: 'gpt', kind: 'codex-oauth', label: 'Ordinary GPT' }, { id: 'dot', kind: 'browser', label: 'Confirmed dot', browser: { url: 'https://chatgpt.com/g/fixture/c/thread', agentLabel: 'dot', discovery: { target: 'dot', presetVersion: 'saved-binding/1', observedAt: new Date().toISOString(), evidenceDigest: 'fixture', profile: 'default' } } }, { id: 'muse', kind: 'browser', label: 'dot name on Muse', browser: { url: 'https://muse.ai/', agentLabel: 'dot' } }, { id: 'web', kind: 'browser', label: 'Ordinary ChatGPT web', browser: { url: 'https://chatgpt.com/c/ordinary', agentLabel: 'dot' } }]) s.connections.push({ ...c, status: 'connected', models: [model] });
   });
   const oldId = f.app.participant({ connectionId: 'gpt', modelId: 'fixture', label: 'Original actor', role: 'original role' }); const { page, errors } = await open(t, f);
   await page.locator('[data-view=connections]').click(); const mode = page.locator('#participant-mode'), connection = page.locator('#participant-connection'); assert.equal(await mode.inputValue(), 'gpt'); assert.deepEqual(await connection.locator('option').evaluateAll(o => o.map(x => x.value)), ['', 'gpt']);
-  await mode.selectOption('dot'); assert.deepEqual(await connection.locator('option').evaluateAll(o => o.map(x => x.value)), ['', 'dot']); assert.equal(await page.locator('#participant-dot-connect').isVisible(), true);
-  await mode.selectOption('other'); assert.deepEqual(await connection.locator('option').evaluateAll(o => o.map(x => x.value)), ['', 'muse', 'web']);
+  await mode.selectOption('dot'); assert.deepEqual(await connection.locator('option').evaluateAll(o => o.map(x => x.value)), ['']); assert.equal(await page.locator('#participant-dot-connect').isVisible(), true);
+  await mode.selectOption('other'); assert.deepEqual(await connection.locator('option').evaluateAll(o => o.map(x => x.value)), ['', 'dot', 'muse', 'web']);
   await page.locator('#participants-list article').filter({ hasText: 'Original actor' }).getByRole('button', { name: '토커 설정 변경' }).click(); assert.equal(await mode.inputValue(), 'gpt'); assert.equal(await page.locator('#participant-form [name=role]').inputValue(), 'original role');
   await mode.selectOption('dot'); assert.equal(await page.locator('#participant-form [name=participantId]').count(), 0); assert.equal(await page.locator('#participant-form [name=role]').inputValue(), '');
-  await page.locator('#participant-form [name=label]').fill('New dot actor'); await page.locator('#participant-save').click(); await until(() => f.app.store.read().participants.some(p => p.label === 'New dot actor'));
-  const newId = f.app.store.read().participants.find(p => p.label === 'New dot actor').id; assert.notEqual(oldId, newId); assert.equal(f.app.store.read().participants.find(p => p.id === oldId).connectionId, 'gpt'); assert.equal(f.app.store.read().grants.length, 0); assert.equal((f.app.store.read().resident.rooms[0].seats ?? []).length, 0);
+  await page.locator('#participant-dot-connect').click(); assert.equal(await page.locator('#dot-connection-panel').getAttribute('open'), '');
+  assert.equal(f.app.store.read().participants.length, 3); assert.equal(f.app.store.read().participants.find(p => p.id === oldId).connectionId, 'gpt');
   await page.setViewportSize({ width: 390, height: 844 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); assert.equal(calls, 0); assert.deepEqual(errors, []);
 });
