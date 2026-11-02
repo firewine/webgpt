@@ -48,6 +48,8 @@ Ubuntu 격리 worktree, Node24.18.0/npm11.16.0. 모델 응답·callback은 fixtu
 
 전체 browser 첫 실행은63/64로, 기존 R3 검사 하나가 변경 전 연결 제목을 찾았다. 현재 Muse/일반 ChatGPT 제목으로 그 검사를 맞춰 해당7개가 통과했고, 키의2분 만료/실제401 세션 상실 검사를 강화한 뒤 전체64개가 통과했다. 생략한 검사 없이 최종 결과를 기록한다.
 
+PR #40 첫 [CI 실행](https://github.com/firewine/webgpt/actions/runs/41380395624)은 Node473·Codex0.165.0 계약 PASS, browser63/64였다. 신규 화면 증거 캡처 중 SSE가 카드를 다시 그려 locator가 분리된 `Element is not attached to the DOM` 실패였다. 화면/상태/overflow/전송0 수락 검사는 유지하고 증거 캡처를 element에서 document screenshot으로 바꿨다. 제품 코드를 바꾸거나 실패 검사를 제외하지 않았으며 후속 PR Check에서 최종 commit을 판정한다.
+
 ## 보존·후속·복귀
 
 D4는 운영 저장소/.env/state/접속 키/Chrome profile·Muse 대화·다른 서비스/포트를 변경하지 않았다. 최종 읽기 전용 확인에서 운영 `.env` 해시·기존 사용자 파일35개 해시가 기준과 동일했고 운영 branch/head는 기존 D0 `9fb2dd9`, 서비스는 같은 PID로 active/running이었다. 실계정 로그인/모델·dot/Muse 전송·Tunnel 생성/시작·배포 **NOT_RUN**이다. 로컬 테스트의 Muse 보존을 실제 서버의 오래된 snapshot 일치로 확대하지 않는다.

@@ -31,7 +31,9 @@ test('D4 390/768/1440px owner setup preserves Muse; twenty reloads/views dispatc
     if(i%3===0){await p.reload();await p.locator('[data-view=connections]').click();}
     else {await p.locator('[data-view=room]').click();await p.locator('[data-view=connections]').click();}
     await card.getByText('소유자 확인 필요',{exact:true}).waitFor(); assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
-    if(i<3) await card.screenshot({path:`test-results/dot-D4/connection-${[390,768,1440][i]}.png`});
+    // SSE may replace a card between a locator screenshot's scroll and capture.
+    // Capture the document without holding a detached element; assertions above remain unchanged.
+    if(i<3) await p.screenshot({path:`test-results/dot-D4/connection-${[390,768,1440][i]}.png`,fullPage:true});
   }
   assert.equal(f.app.store.cursor(),cursor); assert.equal(f.calls(),0); assert.deepEqual(f.app.store.read().connections.find(c=>c.id==='muse'),muse);
   assert.equal(f.app.store.read().resident.rooms[0].desiredOn,false); assert.equal(f.app.store.read().resident.rooms[0].members.find(m=>m.participantId===b.participantId).enabled,false);
