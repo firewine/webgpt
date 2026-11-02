@@ -59,3 +59,5 @@ private 추가 증거는 `deployment-observed.json`, `retry-prepared-observed.js
 21:14 KST 사용자는 **해당 실제 dot에서 여러 대화를 열 수 없다**고 정정했고, 여전히 `attemptId/attemptToken/requestId`만 보인다고 보고했다. 새 대화 요청은 이 계정 흐름에 적용할 수 없으므로 취소했다. 기존 dot을 교체하거나 새 일반 GPT를 만들지 않는다.
 
 다음 연결 진단은 D0에서 사용한 기존 방법처럼 **같은 dot/같은 private Tunnel에 새 이름의 custom MCP 연결**을 추가하는 것이다. 이름 `webjjoku_dot_paged`로 기존 세 도구/동일 권한을 새 discovery snapshot에서 확인하도록 요청했다. 기존 `ubuntu_dot_d0_v3`·Muse·계정/원문은 보존하며 새 runtime key·Tunnel·OAuth/공개 ingress·제품 코드/DB 계약 변경은 없다. 관리 플러그인의 이름 검색으로는 기존 private custom 연결이 검색되지 않았으며, 검색 결과 부재를 계정 접근 거부로 단정하지 않는다. 등록/새 명세 확인 전 native 감시 생성·실제 호출은 계속0이다.
+
+21:18 KST 사용자가 새 연결 등록을 완료했다. 새 `webjjoku_dot_paged`의 실제 소비자 도구 정의에 선택적 `inputPage`가 포함되는 것을 확인했고, 같은 연결의 읽기 전용 get이 정상 event filter/현재 요청 없음으로 응답했다. **새 연결의 discovery 갱신 PASS**다. 동일 dot의 감시 준비 지시를 새 연결명으로 전달하도록 요청했다. 옛 연결의 감시는 활성화하지 않는다. 준비용 권한 만료 전에 같은 scope의30분 권한으로 전용 runtime1개를 갱신했으며, 실제 호출 시작 전 현재 grant/구독·Muse·API 잔여를 다시 검사한다. native 답변 수락/두 라운드/후속은 아직 NOT_RUN이다.
