@@ -1,8 +1,9 @@
-import type { WorkspaceState, Member } from './model.js';
+import type { WorkspaceState, Member, Discussion, DiscussionTurn } from './model.js';
 import type { Room } from './resident-model.js';
 import type { DotGrant, DotRequest } from './dot-mcp-model.js';
 import { participantIdentity, assertWikiSnapshots, wikiHistoryAllowed } from './wiki-policy.js';
 import { AppError, digest } from './util.js';
+import { promptFor } from './prompts.js';
 
 export function dotGrants(s: WorkspaceState, room: Room, p: Member, clock = Date.now()): DotGrant[] {
   const d = s.dotMcp, b = d?.bindings.find(b => b.roomId === room.id && b.participantId === p.id && b.connectionId === p.connectionId);
@@ -52,6 +53,33 @@ export function dotRequestCurrent(s: WorkspaceState, r: DotRequest, g: DotGrant,
   } catch { return false; }
 }
 export const dotInputDigest = (prompt: string, history: DotRequest['history']) => digest(JSON.stringify({ prompt, history }));
+// Closing an old request is an owner action, not permission to invoke dot.
+// A later, explicit resume must reserve a new turn under current authority.
+export function assertDotRetryAfterStop(s: WorkspaceState, d: Discussion, turn: DiscussionTurn): void {
+  const r = s.dotMcp?.requests?.items.find(r => r.id === turn.id);
+  const task = d.tasks.find(t => t.id === turn.taskId), context = d.contexts.find(c => c.participantId === turn.participantId);
+  if (!r || d.members.find(p => p.id === turn.participantId)?.kind !== 'dot-mcp') throw new AppError('dot_retry_requires_native_topic', 409);
+  if (r.reply || turn.reply || turn.receipt || turn.text) throw new AppError('dot_retry_reply_exists', 409);
+  const { lease, room, participant, discussion } = dotTurn(s, turn.id);
+  const roomContext = room.contexts?.find(c => c.participantId === participant.id);
+  if (!['blocked', 'paused'].includes(d.status) || discussion?.id !== d.id || d.roomId !== room.id || room.topicLink !== d.id ||
+      r.discussionId !== d.id || r.roomId !== room.id || r.participantId !== participant.id || r.connectionId !== participant.connectionId ||
+      r.status !== 'held' || turn.status !== 'unconfirmed' || lease.state !== 'unconfirmed' ||
+      !task || task.turnId !== turn.id || task.status !== 'unconfirmed' || task.jobId || task.method === 'codex' ||
+      d.turns.findLast(t => t.taskId === task.id)?.id !== turn.id || task.participantId !== participant.id || d.excludedIds.includes(participant.id) ||
+      [task.revision, turn.revision, r.revision].some(v => v !== d.revision) || task.phase !== d.phase || turn.phase !== d.phase || task.round !== d.round || turn.round !== d.round ||
+      !context || context.generation !== turn.generation || r.generation !== turn.generation || (roomContext?.generation ?? 1) !== r.contextGeneration ||
+      !room.members.some(m => m.participantId === participant.id) ||
+      !s.connections.some(c => c.id === r.connectionId && c.kind === 'dot-mcp') || participantIdentity(participant) !== r.identityDigest ||
+      !s.participants.some(p => p.id === participant.id && participantIdentity(p) === r.identityDigest)) throw new AppError('dot_retry_scope_changed', 409);
+  if (s.resident?.dispatchLeases.some(l => l.id !== turn.id && l.state !== 'released') ||
+      s.discussions.some(v => v.turns.some(t => t.id !== turn.id && ['prepared', 'running', 'unconfirmed'].includes(t.status))) ||
+      s.resident?.turns.some(t => ['prepared', 'running', 'unconfirmed'].includes(t.status))) throw new AppError('reconciliation_required', 409);
+  if (turn.prompt !== r.prompt || turn.promptDigest !== digest(r.prompt) || dotInputDigest(r.prompt, r.history) !== r.inputDigest ||
+      dotInputDigest(promptFor(d, task), context.history) !== r.inputDigest ||
+      !assertWikiSnapshots(s, room.id, [participant.id], turn.wikiCitations) || !assertWikiSnapshots(s, room.id, [participant.id], d.wikiCitations) ||
+      roomContext && !wikiHistoryAllowed(s, room, roomContext)) throw new AppError('dot_retry_input_changed', 409);
+}
 export function dotCanApply(s: WorkspaceState, requestId: string): boolean {
   const r = s.dotMcp?.requests?.items.find(r => r.id === requestId); if (!r) return false;
   const g = s.dotMcp!.grants.find(g => g.id === r.grantId);

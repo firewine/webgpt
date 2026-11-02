@@ -2,13 +2,120 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
-import { dotFixture, key } from './dot-mcp-fixture.mjs';
+import { dotFixture, stoppedDotTopicFixture, key } from './dot-mcp-fixture.mjs';
 import { until, topic, response } from './workspace-helpers.mjs';
 import { reply } from './resident-fixture.mjs';
 import { participantWait } from '../dist/server/workspace/api-usage.js';
 import { readDotState } from '../dist/server/workspace/dot-mcp.js';
 import { dotInputPage, dotToolResult, DOT_INPUT_PAGE_BYTES } from '../dist/server/connections/dot-input-pages.js';
 import { dotInputDigest } from '../dist/server/workspace/dot-mcp-policy.js';
+import { topicPublishedTurns } from '../dist/client/web/topic-chat-view.js';
+import { AppError } from '../dist/server/workspace/util.js';
+
+test('D3 owner stopped retry preserves accepted answers, requires resume and fences late replies and old credentials', async t => {
+  const f = await stoppedDotTopicFixture(t), before = f.state(), d = before.discussions[0];
+  const old = d.turns.find(v => v.id === f.stoppedRequestId), original = before.dotMcp.requests.items.find(r => r.id === old.id);
+  const answers = d.turns.filter(v => v.status === 'completed'); assert.equal(answers.length, 5);
+  assert.throws(() => f.app.engine.control(d.id, { action: 'resume', expectedRevision: 1 }, key()), /reconciliation_required/);
+  const command = key();
+  for (let i = 0; i < 20; i++) f.app.engine.control(d.id, f.retryBody, command);
+  let s = f.state(); const retry = s.discussions[0];
+  assert.equal(retry.status, 'blocked'); assert.equal(retry.tasks.find(v => v.id === old.taskId).status, 'pending');
+  assert.equal(retry.turns.find(v => v.id === old.id).error, 'owner_confirmed_retry_after_stop');
+  assert.deepEqual(retry.used, d.used); assert.deepEqual(s.apiUsage, before.apiUsage);
+  assert.deepEqual(s.dotMcp.requests.items.find(r => r.id === old.id), { ...original, status: 'consumed' });
+  assert.equal(s.resident.dispatchLeases.find(l => l.id === old.id).state, 'released');
+  const audit = f.app.store.events(0, 10000).filter(e => e.type === 'discussion.retry_prepared');
+  assert.equal(audit.length, 1); assert.equal(audit[0].data.previousError, old.error); assert.equal(audit[0].data.note, f.retryBody.note);
+  assert.throws(() => f.app.engine.control(d.id, { ...f.retryBody, note: 'changed' }, command), /idempotency_conflict/);
+  assert.throws(() => f.app.engine.control(d.id, f.retryBody, key()), /unconfirmed_turn_not_found/);
+  for (let i = 0; i < 20; i++) { await f.step(); await f.app.mcpEvents.pump(); }
+  assert.equal(f.state().discussions[0].turns.length, d.turns.length); assert.equal(f.deliveries.length, 2);
+  const late = { requestId: old.id, ...f.stoppedAttempt, commandId: key(), text: response(old.prompt, d.members.at(-1)) };
+  assert.equal(f.call('dot_turn_submit', late).accepted, false);
+  assert.equal(f.state().dotMcp.requests.items.find(r => r.id === old.id).reply.disposition, 'quarantined');
+  let replacement; const actorErrors = [];
+  f.onEvent = async requestId => {
+    try {
+    const turn = f.state().discussions[0].turns.find(v => v.id === requestId);
+    if (turn.taskId === old.taskId) {
+      replacement = requestId; assert.notEqual(requestId, old.id);
+      assert.equal(f.call('dot_turn_submit', late).accepted, false);
+      assert.throws(() => f.call('dot_turn_get', { ...f.stoppedAttempt, requestId, inputPage: 0 }), /attempt_not_in_scope/);
+      const attempt = f.claim(requestId); assert.notEqual(attempt.attemptId, f.stoppedAttempt.attemptId);
+      let inputPage = 0, text = '', count;
+      do { const r = f.call('dot_turn_get', { requestId, ...attempt, inputPage }).request; count = r.input.pageCount; text += r.input.text; inputPage = r.input.nextPage; } while (inputPage !== null);
+      assert.ok(count > 1); assert.deepEqual(JSON.parse(text), { prompt: original.prompt, history: original.history });
+    }
+    return await f.respond(requestId);
+    } catch (error) { actorErrors.push(error); throw error; }
+  };
+  f.app.engine.control(d.id, { action: 'resume', expectedRevision: 1 }, key());
+  await until(() => { if (actorErrors.length) throw actorErrors[0]; const current = f.state().discussions[0];
+    assert.ok(!['blocked', 'partial'].includes(current.status), JSON.stringify({ status: current.status, phase: current.phase, reason: current.reason })); return current.status === 'completed'; });
+  s = f.state(); const after = s.discussions[0];
+  assert.ok(replacement); assert.equal(after.turns.filter(v => v.taskId === old.taskId && v.status === 'completed').length, 1);
+  assert.deepEqual(after.turns.filter(v => answers.some(a => a.id === v.id)), answers);
+  assert.equal(after.turns.find(v => v.id === old.id).text, old.text);
+  for (const round of [1, 2]) assert.equal(topicPublishedTurns(after).filter(v => v.phase === 'cross_review' && v.round === round).length, 3);
+  assert.equal(s.dotMcp.requests.items.find(r => r.id === old.id).reply.text, late.text);
+});
+
+test('D3 stopped retry rejects missing confirmation, changed scope/input, existing results and competing execution atomically', async t => {
+  const f = await stoppedDotTopicFixture(t), base = f.state(), did = f.discussionId;
+  const context = s => { const d = s.discussions[0], turn = d.turns.find(v => v.id === f.stoppedRequestId); return { d, turn, task: d.tasks.find(v => v.id === turn.taskId), r: s.dotMcp.requests.items.find(v => v.id === turn.id) }; };
+  const cases = [
+    ['confirmation missing', () => {}, { stoppedWithoutSubmit: undefined }],
+    ['confirmation is not boolean', () => {}, { stoppedWithoutSubmit: 'true' }],
+    ['empty evidence', () => {}, { note: '  ' }], ['oversized evidence', () => {}, { note: 'x'.repeat(1001) }],
+    ['wrong turn', () => {}, { turnId: 'foreign-turn' }], ['stale revision command', () => {}, { expectedRevision: 2 }],
+    ...['cancelled', 'completed', 'partial', 'running'].map(status => ['discussion ' + status, (s, c) => { c.d.status = status; }]),
+    ['non-native', (s, c) => { c.d.members.at(-1).kind = 'browser'; }],
+    ['mailbox reply', (s, c) => { c.r.reply = { text: 'received' }; }],
+    ['partial raw result', (s, c) => { c.turn.text = 'already received'; }],
+    ['receipt', (s, c) => { c.turn.receipt = 'observed'; }],
+    ['missing request', s => { s.dotMcp.requests.items = s.dotMcp.requests.items.filter(r => r.id !== f.stoppedRequestId); }],
+    ['request not held', (s, c) => { c.r.status = 'waiting'; }],
+    ['wrong participant', (s, c) => { c.r.participantId = 'fake-a'; }],
+    ['old task', (s, c) => { c.task.turnId = 'other'; }],
+    ['newer turn', (s, c) => { c.d.turns.push({ ...c.turn, id: 'newer', status: 'failed' }); }],
+    ['old revision', (s, c) => { c.task.revision++; }],
+    ['different phase', (s, c) => { c.d.phase = 'revision'; }],
+    ['different round', (s, c) => { c.d.round++; }],
+    ['new generation', (s, c) => { c.d.contexts.at(-1).generation++; }],
+    ['identity changed', s => { s.participants.find(p => p.id === f.participantId).modelId = 'changed'; }],
+    ['removed participant', (s, c) => { c.d.excludedIds.push(f.participantId); }],
+    ['changed focus', s => { s.resident.rooms[0].topicLink = null; }],
+    ['task has job', (s, c) => { c.task.jobId = 'existing-job'; }],
+    ['task requests Codex', (s, c) => { c.task.method = 'codex'; }],
+    ['changed prompt', (s, c) => { c.turn.prompt += 'changed'; }],
+    ['changed criteria', (s, c) => { c.d.criteria += 'changed'; }],
+    ['changed history', (s, c) => { c.d.contexts.at(-1).history.push({ role: 'user', content: 'changed' }); }],
+    ['Wiki visibility changed', (s, c) => { c.turn.wikiCitations = [{ pageId: 'no-access', versionId: 'private' }]; }],
+    ['competing lease', s => { s.resident.dispatchLeases.push({ ...s.resident.dispatchLeases.at(-1), id: 'competing', state: 'running' }); }],
+    ['competing turn', (s, c) => { c.d.turns.push({ ...c.turn, id: 'competing', taskId: 'other', status: 'running' }); }],
+  ];
+  for (const [name, change, body = {}] of cases) await t.test(name, () => {
+    const snapshot = structuredClone(base); change(snapshot, context(snapshot));
+    f.app.store.transact(s => Object.assign(s, snapshot)); const events = f.app.store.events(0, 10000).length;
+    assert.throws(() => f.app.engine.control(did, { ...f.retryBody, ...body }, key()), AppError);
+    assert.deepEqual(f.state(), snapshot); assert.equal(f.app.store.events(0, 10000).length, events);
+  });
+  f.app.store.transact(s => Object.assign(s, base));
+});
+
+test('D3 stopped retry with revoked grant and room off closes only the old request; resume still needs current authority', async t => {
+  const f = await stoppedDotTopicFixture(t);
+  f.control({ action: 'off' }); f.app.dotMcp.revoke(f.connectionId, f.state().dotMcp.bindings[0].version, key());
+  const before = f.state(); f.app.engine.control(f.discussionId, f.retryBody, key());
+  assert.equal(f.room().desiredOn, false); assert.deepEqual(f.state().dotMcp.grants, before.dotMcp.grants);
+  assert.deepEqual(f.state().dotMcp.events.subscriptions, before.dotMcp.events.subscriptions);
+  const requests = f.state().dotMcp.requests.items.length;
+  f.app.engine.control(f.discussionId, { action: 'resume', expectedRevision: 1 }, key());
+  await until(() => f.state().discussions[0].reason === 'dot_grant_required');
+  assert.equal(f.state().dotMcp.requests.items.length, requests); assert.equal(f.deliveries.length, 2);
+  assert.throws(() => f.call('dot_turn_get', { requestId: f.stoppedRequestId }), /revoked|authentication|grant/);
+});
 
 for (const size of [35_812, 179_000]) test('D3 paged input preserves every original character and review reference at ' + size + ' chars', () => {
   const unit = '한글🙂e\u0301"\\\n\t\u0000';

@@ -129,6 +129,8 @@ D4는 정상 on/focus 전환에는 연결을 유지하고, 만료·회수·ident
 
 재시작의 “결과 수락 후 기존 turn 최종 commit 전” 구간도 다룬다. 저장된 mailbox를 원래 turn의 대조 근거로 연결하며, 원래 `recover`의 prepared/running→unconfirmed 원칙을 유지한다. 그 turn에 묶인 outbox도 보류하고 재구독/cursor 재생이 보류를 우회하지 못하게 한다. 재시작만으로 외부 발송이나 결과 공개를 재개하지 않는다. 사용자의 대조/수락 시 정확한 원래 turn을 기존 정산·공개 경로로 한 번만 확정한다. room off/cancel/세대 교체/권한 회수 뒤 늦게 온 결과는 원문·영수증을 격리 보존하고 현재 action에 적용하지 않는다. off는 외부 dot의 이미 시작한 작업을 중단했다는 증거가 아니다.
 
+2026-11-02 **명시 재시도 복구 보완 승인**: [영향 검토](./dot-explicit-retry-impact-20261102.md)에 따라 주제 토의의 native dot 미확정 요청에만 `reconcile/retry_after_stop`을 추가한다. 소유자의 외부 실행 중단·미제출 확인과 사유, 현재 과제/세대·고정 입력·reply 없음 검사를 통과해야 한다. 원래 실패 요청/lease를 종료 보존하고 같은 task만 pending으로 준비하며 별도 resume 전 새 전송0이다. 새 요청은 현재 grant·구독·방 권한을 다시 검사한다. 기존 요청을 미전송으로 오기록하거나 held를 재활성화하지 않는다. D4 복구 UI·D5 원래 답변/늦은 응답/실제 SIGKILL 검사를 보완하고 상주·업무·Muse·API·Codex의 재시도 계약은 유지한다. DB 이관0·timeout 확대0, 배포/추가 실호출은 별도다.
+
 ### 5.4 영속 모델·이관·패턴
 
 `WorkspaceState.dotMcp?`의 선택적 새 namespace에 제안 `schemaVersion`, connections/bindings, subscriptions, outbox, requests/mailbox를 둔다. 이 중 연결 kind/참여자 snapshot은 기존 모델에 additive 반영한다. 민감한 callback secret·grant 원문·claim credential은 DB/event/UI 로그에 넣지 않고 vault 참조/해시만 저장한다. 조회용 진단은 callback URL/token을 가린 상태를 투영한다.

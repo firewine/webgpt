@@ -1,4 +1,4 @@
-import { dotCanApply, dotParticipantWait, reconcileDotReply } from './dot-mcp-policy.js';
+import { assertDotRetryAfterStop, dotCanApply, dotParticipantWait, reconcileDotReply } from './dot-mcp-policy.js';
 import type { Providers } from '../connections/providers.js';
 import { fetchSource } from '../connections/sources.js';
 import type { Store } from './store.js';
@@ -161,6 +161,13 @@ export class DiscussionEngine {
           turn.finishedAt = now(); turn.error = 'owner_confirmed_result';
           if (turn.revision !== d.revision || turn.generation !== d.contexts.find(c => c.participantId === turn.participantId)!.generation || native && !dotCanApply(state, turn.id)) { turn.status = 'stale'; task.status = 'cancelled'; }
           else { turn.status = 'completed'; turn.reply = parseReply(text, d, task); if (!turn.reply) throw new AppError('format_invalid'); task.status = task.jobId && !d.evidence.some(e => e.taskId === task.id && e.kind === 'execution') ? 'running' : 'completed'; this.applyReply(d, turn); }
+        } else if (resolution === 'retry_after_stop') {
+          if (body.stoppedWithoutSubmit !== true) throw new AppError('dot_stop_confirmation_required', 409);
+          const note = string(body.note, 1000); assertDotRetryAfterStop(state, d, turn);
+          emit({ type: 'discussion.retry_prepared', discussionId: d.id, data: { turnId: turn.id, taskId: task.id,
+            revision: d.revision, previousError: turn.error, stoppedWithoutSubmit: true, note } });
+          turn.status = 'failed'; turn.error = 'owner_confirmed_retry_after_stop'; turn.finishedAt = now();
+          task.status = 'pending'; task.reason = turn.error;
         } else if (resolution === 'not_sent' || resolution === 'skip') {
           turn.status = 'failed'; turn.error = `owner_confirmed_${resolution}`; turn.finishedAt = now();
           task.status = resolution === 'not_sent' && task.revision === d.revision && d.status !== 'cancelled' ? 'pending' : 'cancelled';

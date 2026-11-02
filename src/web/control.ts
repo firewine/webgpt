@@ -69,6 +69,7 @@ const errors: Record<string, string> = { dot_version_conflict: '다른 화면에
   browser_turn_active: '진행 중인 Chrome 응답이 끝난 뒤 수동 조작을 시작할 수 있습니다.', browser_target_mismatch: '대화 주소 또는 계정 식별 문구가 일치하지 않습니다.',
   browser_selectors_invalid: '실제 입력란과 전송 버튼 선택자를 확인해 주세요.', browser_not_ready: 'Chrome 대화가 응답 가능한 상태인지 확인해 주세요.',
   reconciliation_required: '미확인 응답이나 실행 결과를 먼저 대조해 주세요.', workspace_not_allowed: '서버에서 허용한 작업 경로 안의 디렉터리를 등록해 주세요.',
+  dot_stop_confirmation_required: '원래 dot 실행이 중단됐고 답변을 제출하지 않았는지 확인해 주세요.', dot_retry_requires_native_topic: '공식 dot의 주제 토의에서만 중단 확인 후 재시도를 준비할 수 있습니다.', dot_retry_reply_exists: '이미 받은 답변이 있습니다. 원래 결과를 먼저 대조해 주세요.', dot_retry_scope_changed: '과제나 문맥 상태가 바뀌었습니다. 원래 요청과 현재 토의를 대조해 주세요.', dot_retry_input_changed: '원래 입력이나 자료 접근 범위가 바뀌어 같은 과제를 재시도할 수 없습니다.',
   session_target_mismatch: 'Codex 세션의 작업 경로·호스트·사용자가 일치하지 않습니다.', feature_branch_required: '파일 수정은 작업 브랜치에서만 허용됩니다.',
   existing_browser_context_preserved: '기존 dot·Muse 대화의 문맥은 자동 교체하지 않습니다.', revision_conflict: '다른 변경이 반영됐습니다. 새 상태에서 다시 시도해 주세요.',
   context_limit_requires_handoff: '문맥이 길어졌습니다. 원본과 복구에서 체크포인트를 적용해 주세요.', source_fetch_disabled: '서버에서 공개 출처 조회가 꺼져 있습니다.',
@@ -344,7 +345,13 @@ function renderRecords(target: HTMLElement, d: Discussion): void {
   for (const t of d.turns.filter(t => t.status === 'unconfirmed')) { const card = node('section', '', 'panel'); card.append(node('h2', `응답 대조 · ${labelFor(t.participantId)}`), node('p', '기존 대화와 수신 기록을 확인하고 처리합니다. 새 응답을 보내지 않습니다.', 'small muted'), details('미확인 요청', JSON.stringify(t, null, 2), t.id)); const row = node('div', '', 'toolbar');
     row.append(button('완료 응답 반영', () => modal('원격 완료 기록 반영', [{ name: 'text', label: '실제 JSON 응답 원문', multiline: true }, { name: 'receipt', label: '대화 URL 또는 응답 ID' }], data => control({ action: 'reconcile', turnId: t.id, resolution: 'completed', ...data }))),
       button('전송되지 않음 확인', () => modal('미전송 확인', [], () => control({ action: 'reconcile', turnId: t.id, resolution: 'not_sent' }), '원격 대화에 요청이 없음을 직접 확인했을 때 적용하세요. 이어가기를 누르면 새 요청을 보냅니다.')),
-      button('이 응답 건너뛰기', () => control({ action: 'reconcile', turnId: t.id, resolution: 'skip' }))); card.append(row); target.append(card); }
+      button('이 응답 건너뛰기', () => control({ action: 'reconcile', turnId: t.id, resolution: 'skip' })));
+    if (d.members.find(p => p.id === t.participantId)?.kind === 'dot-mcp' && ['paused', 'blocked'].includes(d.status)) row.append(button('중단 확인 후 재시도 준비', () => modal('dot 재시도 준비', [
+      { name: 'stoppedWithoutSubmit', label: '원래 dot 실행이 중단됐고 답변을 제출하지 않았음을 확인했습니다.', checkbox: true },
+      { name: 'note', label: '확인한 실행 시각·중단 단계·미제출 근거', multiline: true },
+    ], async data => { await control({ action: 'reconcile', turnId: t.id, resolution: 'retry_after_stop', stoppedWithoutSubmit: data.stoppedWithoutSubmit === 'on', note: data.note }); announce('재시도를 준비했습니다. dot 연결·방 설정을 확인하고 이어가기를 누르세요.'); },
+    '감시 비활성이나 방 끄기만으로 실행 종료를 판단하지 마세요. 원래 실패와 완료된 답변은 보존합니다. 지금 새 요청을 보내지 않으며, 이어가기를 눌러야 실행합니다.', '재시도 준비')));
+    card.append(row); target.append(card); }
   const handoff = node('section', '', 'panel'); handoff.append(node('h2', '문맥과 참여자 관리'), node('p', '문맥 전환은 기존 원문·근거·미해결 과제를 보존합니다. 주제 revision과 별도로 기록합니다.', 'small muted'));
   for (const p of d.members) { const row = node('div', '', 'toolbar'); row.append(node('span', p.label)); if (p.kind !== 'browser') row.append(button('체크포인트 적용', () => control({ action: 'handoff', participantId: p.id, expectedGeneration: d.contexts.find(c => c.participantId === p.id)!.generation })));
     if (!d.excludedIds.includes(p.id) && ['running', 'paused', 'blocked'].includes(d.status)) row.append(button('참여 제외', () => modal('참여자 제외', [], () => control({ action: 'exclude', participantId: p.id }), `${p.label}의 기존 결과는 남기고, 이후 과제에서 제외합니다.`))); handoff.append(row); } target.append(handoff);
@@ -465,12 +472,13 @@ function renderJobs(): void {
       for (const activity of job.activities) card.append(details(`${activity.type} · ${activity.status}`, activity.text, `${job.id}:${activity.id}`)); if (job.error) card.append(node('p', job.error, 'small muted')); target.append(card); }
   });
 }
-type Field = { name: string; label: string; multiline?: boolean; required?: boolean; secret?: boolean; email?: boolean; number?: { min: number; max: number }; options?: { value: string; label: string }[]; value?: string };
+type Field = { name: string; label: string; multiline?: boolean; required?: boolean; secret?: boolean; email?: boolean; checkbox?: boolean; number?: { min: number; max: number }; options?: { value: string; label: string }[]; value?: string };
 let modalAction: ((values: Record<string, string>) => Promise<unknown>) | null = null;
 function modal(title: string, fields: Field[], action: (values: Record<string, string>) => Promise<unknown>, note?: string, submitLabel = '적용'): void {
   $<HTMLButtonElement>('#action-form button[type=submit]').textContent = submitLabel;
   $('#action-title').textContent = title; const target = $('#action-fields'); target.replaceChildren(); if (note) target.append(node('p', note, 'small muted'));
   for (const field of fields) { const label = node('label', field.label); const input = field.options ? node('select') : field.multiline ? node('textarea') : node('input'); input.name = field.name; input.required = field.required !== false; if (input instanceof HTMLTextAreaElement) input.rows = 6; else if (input instanceof HTMLInputElement && field.secret) { input.type = 'password'; input.autocomplete = 'off'; }
+    if (input instanceof HTMLInputElement && field.checkbox) input.type = 'checkbox';
     if (input instanceof HTMLInputElement && field.number) { input.type = 'number'; input.min = String(field.number.min); input.max = String(field.number.max); input.step = '1'; }
     if (input instanceof HTMLSelectElement && field.options) selectOptions(input, field.options.map(o => ({ id: o.value, label: o.label }))); if (field.value !== undefined) input.value = field.value; label.append(input); target.append(label); }
   for (const field of fields.filter(f => f.email)) (target.querySelector(`[name="${field.name}"]`) as HTMLInputElement).type = 'email';
