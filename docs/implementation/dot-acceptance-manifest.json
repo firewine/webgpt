@@ -43,7 +43,7 @@
     },
     {
       "id": "D5-E",
-      "requirement": "All original 50 gates retained; full Node/browser regressions including actual process crash recovery and six native request boundaries; source-matched Codex 0.165 contract separately recorded",
+      "requirement": "All original 50 gates retained; full Node/browser regressions including actual process crash recovery, six native request boundaries and an additional input-page boundary; source-matched Codex 0.165 contract separately recorded",
       "fixtureStatus": "PASS",
       "files": ["tests/resident-e2e.test.mjs", "tests/dot-mcp-restart.test.mjs", "tests/mcp-events.test.mjs", "tests/dot-acceptance.test.mjs"],
       "originalGates": ["R1-A", "R1-B", "R7-E", "R8-B", "R8-E"]
@@ -52,10 +52,10 @@
       "id": "D5-F",
       "requirement": "Separately authorized deployed native dot ambient >=1 and topic/followup >=2; GPT2+API same room; original Muse thread roundtrip; live Codex read/write and real device acceptance remain distinct",
       "realStatus": "BLOCKED",
-      "files": ["docs/implementation/dot-mcp-acceptance-d5-20261102.md", "docs/implementation/dot-mcp-live-d5-20261102.md"],
-      "observed": { "nativeAmbientReplies": 1, "nativeTopicReplies": 1, "nativeFollowupReplies": 0, "mixedParticipants": 5, "independentDrafts": 5, "crossReviewReplies": 2, "completedReviewRounds": 0, "providerReservations": 9, "apiRequests": 1, "unconfirmedAtStop": 0 },
+      "files": ["docs/implementation/dot-mcp-acceptance-d5-20261102.md", "docs/implementation/dot-mcp-live-d5-20261102.md", "docs/implementation/dot-mcp-resume-d5-20261102.md", "docs/implementation/dot-input-paging-20261102.md"],
+      "observed": {"nativeAmbientReplies": 1, "nativeTopicReplies": 1, "nativeFollowupReplies": 0, "mixedParticipants": 5, "independentDrafts": 5, "crossReviewReplies": 3, "completedReviewRounds": 0, "providerReservations": 11, "apiRequests": 2, "unconfirmedAtStop": 1},
       "originalGates": ["R3-E", "R4-D", "R6-F", "R8-D"],
-      "blockedPrerequisites": ["next_bounded_live_window_for_paused_topic", "two_review_rounds_and_native_followup", "same_room_return_and_remaining_real_gates", "real_device_acceptance", "separately_scoped_real_Codex_binding"]
+      "blockedPrerequisites": ["native_long_input_readability", "same_original_request_reconciliation", "next_bounded_live_window_after_input_fix", "two_review_rounds_and_native_followup", "same_room_return_and_remaining_real_gates", "real_device_acceptance", "separately_scoped_real_Codex_binding"]
     }
   ]
 }

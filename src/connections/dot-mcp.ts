@@ -11,14 +11,15 @@ import { dotGrants, dotInputDigest, dotParticipantWait, dotRequestCurrent, dotTu
 import { participantIdentity } from '../workspace/wiki-policy.js';
 import { onlyWork } from '../workspace/work-policy.js';
 import { AppError, digest, id, now, object, string } from '../workspace/util.js';
+import { dotInputPage, type DotInputPage } from './dot-input-pages.js';
 
 type Emit = Parameters<Parameters<Store['transact']>[0]>[1];
 export type DotInput = Pick<CompletionInput, 'requestId' | 'participant' | 'prompt' | 'history'>;
 const field = { type: 'string' };
 const schema = (properties: Record<string, unknown>, required: string[]) => ({ type: 'object', properties, required, additionalProperties: false });
 const tools = [
-  { name: 'dot_turn_get', description: 'Get the reserved request metadata. Frozen input is returned only with the winning attempt credential. Never invent request IDs.',
-    inputSchema: schema({ requestId: field, attemptId: field, attemptToken: field }, []), annotations: { readOnlyHint: true } },
+  { name: 'dot_turn_get', description: 'Get reserved request metadata, then read frozen input with the winning attempt credential and inputPage:0. Read each nextPage separately through null; verify the same requestId/inputDigest and all pages before answering. Pages contain lossless JSON text for {prompt,history}. Never print the entire combined input or invent IDs. Omitting inputPage retains the legacy full input response.',
+    inputSchema: schema({ requestId: field, attemptId: field, attemptToken: field, inputPage: { type: 'integer', minimum: 0 } }, []), annotations: { readOnlyHint: true } },
   { name: 'dot_turn_claim', description: 'Claim one reserved turn with a unique commandId. Retry the same commandId to recover the same attempt; another claimant is rejected.',
     inputSchema: schema({ requestId: field, commandId: field }, ['requestId', 'commandId']), annotations: { idempotentHint: true } },
   { name: 'dot_turn_submit', description: 'Submit the exact JSON reply requested by the frozen input. A receipt means stored, not published or independently verified. Reuse commandId for retries.',
@@ -80,14 +81,25 @@ export class DotMcpAdapter {
   call(name: string, raw: unknown, g: DotGrant): unknown {
     this.dot.checkAuthority(g, g.tools[0]!, g); if (!g.tools.includes(name)) throw new AppError('dot_tool_not_granted', 403); const a = object(raw);
     if (name === 'dot_turn_get') {
-      onlyWork(a, ['requestId', 'attemptId', 'attemptToken']); const s = this.store.read();
+      onlyWork(a, ['requestId', 'attemptId', 'attemptToken', 'inputPage']); const s = this.store.read();
+      const paged = a.inputPage !== undefined;
+      if (paged) {
+        if (!Number.isSafeInteger(a.inputPage) || (a.inputPage as number) < 0) throw new AppError('invalid_dot_input_page');
+        string(a.requestId, 200);
+      }
       const r = a.requestId ? this.request(s, g, a.requestId) : s.dotMcp!.requests!.items.findLast(r => r.grantId === g.id && ['prepared', 'waiting', 'received'].includes(r.status));
       const event = { name: dotEventName, arguments: { roomId: g.roomId, participantId: g.participantId, connectionId: g.connectionId } };
       if (!r) return { event, request: null };
       const metadata = { requestId: r.id, status: r.status, receipt: r.reply?.receipt ?? null };
-      if (a.attemptId === undefined && a.attemptToken === undefined) return { event, request: metadata };
+      if (!paged && a.attemptId === undefined && a.attemptToken === undefined) return { event, request: metadata };
       this.claimCredential(r, a);
       if (!this.current(s, r, g) || !['waiting', 'received'].includes(r.status)) throw new AppError('dot_request_stale', 409);
+      if (paged) {
+        const project = (input: DotInputPage) => ({ event, request: { ...metadata, inputDigest: r.inputDigest, usage: null, input } });
+        // Page boundaries belong to the frozen input, not the changing receipt/status.
+        const sizeAs = (input: DotInputPage) => ({ event, request: { requestId: r.id, status: 'received', receipt: 'r'.repeat(200), inputDigest: r.inputDigest, usage: null, input } });
+        return project(dotInputPage(r, a.inputPage as number, sizeAs));
+      }
       return { event, request: { ...metadata, prompt: r.prompt, history: r.history, inputDigest: r.inputDigest, usage: null } };
     }
     if (name === 'dot_turn_claim') {

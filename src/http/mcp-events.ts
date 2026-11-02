@@ -9,6 +9,7 @@ import { dotRequestCurrent } from '../workspace/dot-mcp-policy.js';
 import { onlyWork } from '../workspace/work-policy.js';
 import { AppError, digest, id, object, string } from '../workspace/util.js';
 import { CallbackError, callbackUrl, challengeMatches, McpWebhook, signingKey, type WebhookTransport } from '../connections/mcp-webhook.js';
+import { dotToolResult } from '../connections/dot-input-pages.js';
 
 interface Credential { url: string; secret: string; previous?: { secret: string; until: number } }
 type Emit = (event: Omit<DurableEvent, 'id' | 'at'>) => void;
@@ -68,7 +69,7 @@ export class McpEvents {
       if (!this.tools) throw new AppError('dot_transport_not_ready', 409);
       const p = object(raw); onlyWork(p, ['name', 'arguments']);
       const value = this.tools.call(string(p.name, 200), p.arguments ?? {}, g);
-      return { content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value };
+      return dotToolResult(value);
     }
     if (method === 'events/list') { const p = object(raw ?? {}); onlyWork(p, ['cursor']); if (p.cursor != null) throw new AppError('invalid_event_cursor'); return { events: [definition] }; }
     if (method === 'events/unsubscribe') {

@@ -113,6 +113,8 @@ outbox에는 발송 전 durable intent·고정 eventId·본문 digest·시도 �
 
 ### 5.3 답변·단일 실행·복구
 
+**2026-11-02 D5 실측 후 추가 승인:** 고정 입력 get은 성공했으나 native 도구 출력이 잘려 검토가 중단됐다. [분할 조회 보완 계약](./dot-input-paging-impact-20261102.md)에 따라 D3 `dot_turn_get`에 선택적 `inputPage`를 추가한다. 기존 조회 shape/claim/submit/권한·세대·원문 digest·미확정 경계는 유지하고 DB 이관은 없다. D4 감시 안내는 모든 페이지의 같은 입력/누락0을 확인하며, D5는 UTF-8 12,000 bytes 이하의 결과와 긴 원문 무손실·권한/복구·Muse 통합을 검사한다. 예상10~14파일·450~750줄, timeout·원문 한도·OAuth·실계정 호출/배포 확대는 제외한다.
+
 **2026-11-02 D3 추가 승인:** D1 `DotMcp.check`의 grant epoch/contextGeneration 고정은 `ResidentStore.control`의 on/off와 `DiscussionEngine.create`의 focus epoch 증가 시 정상 연결도 무효화한다. `DotMcp.checkAuthority`로 연결 권한과 요청 검사를 분리한다. 같은 방·참여자·연결 identity·owner 확인·허용 도구·grant version·만료/회수는 계속 확인하고, 원래 grant epoch/generation은 이력으로 보존한다. 새 `DotRequest`마다 고정한 epoch/contextGeneration/revision/lease/입력 digest를 get/claim/submit/전달/최종 공개에서 확인한다. off/구세대/취소/회수 뒤 새 실행0·현재 적용0, 미확정 자동 재시작0을 유지한다. 이는 정상 방 전환마다 재등록을 요구하지 않기 위한 승인 변경이며 권한 확대가 아니다.
 
 D4는 정상 on/focus 전환에는 연결을 유지하고, 만료·회수·identity 변경에는 재연결을 안내한다. D5는 방 off→on 및 자유 발화→주제→복귀의 새 요청/옛 요청 분리를 추가 대조한다. 추가4~6파일·150~250줄, D3 합계14~18파일·850~1,250줄 예상이며 R1~R8/50 gate/Muse/Codex/timeout 계약은 그대로다. optional requests/mailbox 이관만 추가하고, rollback은 dot off·미확정 대조·이전 바이너리 호환성 확인 후 진행한다.

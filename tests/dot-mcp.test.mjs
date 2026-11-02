@@ -7,6 +7,66 @@ import { until, topic, response } from './workspace-helpers.mjs';
 import { reply } from './resident-fixture.mjs';
 import { participantWait } from '../dist/server/workspace/api-usage.js';
 import { readDotState } from '../dist/server/workspace/dot-mcp.js';
+import { dotInputPage, dotToolResult, DOT_INPUT_PAGE_BYTES } from '../dist/server/connections/dot-input-pages.js';
+import { dotInputDigest } from '../dist/server/workspace/dot-mcp-policy.js';
+
+for (const size of [35_812, 179_000]) test('D3 paged input preserves every original character and review reference at ' + size + ' chars', () => {
+  const unit = '한글🙂e\u0301"\\\n\t\u0000';
+  const claims = Array.from({ length: 12 }, (_, i) => `CLAIM_${i}_ORIGINAL_반론`).join('\n');
+  const long = unit.repeat(Math.ceil(size / unit.length)).slice(0, size - claims.length - 30);
+  const input = { prompt: 'FIRST 원문\n' + long.slice(0, Math.floor(long.length / 2)) + claims,
+    history: [{ role: 'user', content: long.slice(Math.floor(long.length / 2)) }, { role: 'assistant', content: 'LAST 근거 \ud800' }] };
+  const inputDigest = dotInputDigest(input.prompt, input.history);
+  const project = page => ({ event: { name: 'webjjoku.turn_requested', arguments: { roomId: 'r'.repeat(200), participantId: 'p'.repeat(200), connectionId: 'c'.repeat(200) } },
+    request: { requestId: 't'.repeat(200), status: 'waiting', receipt: null, inputDigest, usage: null, input: page } });
+  let index = 0, text = '', count;
+  do {
+    const page = dotInputPage(input, index, project); count ??= page.pageCount;
+    assert.equal(page.pageCount, count); assert.equal(page.pageIndex, index); assert.equal(page.encoding, 'json');
+    const envelope = { jsonrpc: '2.0', id: 'i'.repeat(200), result: dotToolResult(project(page)) };
+    assert.ok(Buffer.byteLength(JSON.stringify(envelope)) <= DOT_INPUT_PAGE_BYTES);
+    assert.ok(page.text.isWellFormed(), 'JSON pages never split surrogate pairs');
+    text += page.text; index = page.nextPage;
+  } while (index !== null);
+  assert.ok(count > 10); assert.deepEqual(JSON.parse(text), input);
+  assert.equal(dotInputDigest(JSON.parse(text).prompt, JSON.parse(text).history), inputDigest);
+  for (let i = 0; i < 12; i++) assert.ok(text.includes(`CLAIM_${i}_ORIGINAL_반론`));
+  assert.throws(() => dotInputPage(input, count, project), /invalid_dot_input_page/);
+});
+
+test('D3 page reads retain legacy get and one winning claim; twenty reads create no dispatch or publication', async t => {
+  const f = await dotFixture(t); let requestId; f.onEvent = async id => { requestId = id; };
+  for (let i = 0; i < 8; i++) f.app.resident.postMessage(f.roomId, { text: `SOURCE_${i}_START ` + '긴 원문·반론🙂 '.repeat(200) + ` SOURCE_${i}_END` }, key());
+  const pending = f.step(); await until(() => requestId); const attempt = f.claim(requestId);
+  const original = f.call('dot_turn_get', { requestId, ...attempt }).request;
+  assert.equal(original.input, undefined); assert.ok(original.prompt.length > 12_000);
+  const before = f.state(); let text = '', pageIndex = 0, count;
+  do {
+    const rpc = await f.rpc('tools/call', { name: 'dot_turn_get', arguments: { requestId, ...attempt, inputPage: pageIndex } });
+    assert.ok(Buffer.byteLength(JSON.stringify(rpc)) <= DOT_INPUT_PAGE_BYTES);
+    const r = rpc.result.structuredContent.request, page = r.input;
+    assert.equal(r.requestId, requestId); assert.equal(r.inputDigest, original.inputDigest);
+    assert.equal(r.prompt, undefined); assert.equal(r.history, undefined);
+    count ??= page.pageCount; assert.equal(page.pageCount, count); assert.equal(page.pageIndex, pageIndex);
+    text += page.text; pageIndex = page.nextPage;
+  } while (pageIndex !== null);
+  assert.deepEqual(JSON.parse(text), { prompt: original.prompt, history: original.history });
+  for (let i = 0; i < 8; i++) assert.ok(text.includes(`SOURCE_${i}_END`));
+  const first = f.call('dot_turn_get', { requestId, ...attempt, inputPage: 0 });
+  for (let i = 0; i < 20; i++) assert.deepEqual(f.call('dot_turn_get', { requestId, ...attempt, inputPage: 0 }), first);
+  assert.deepEqual(f.state(), before, 'page reads do not write state, leases, claims, messages or usage');
+  for (const inputPage of [-1, 0.5, '0', null, Number.MAX_SAFE_INTEGER + 1, count])
+    assert.throws(() => f.call('dot_turn_get', { requestId, ...attempt, inputPage }), /invalid_dot_input_page/);
+  assert.throws(() => f.call('dot_turn_get', { requestId, inputPage: 0 }), /attempt_not_in_scope/);
+  assert.throws(() => f.call('dot_turn_get', { inputPage: 0 }), /invalid_/);
+  assert.throws(() => f.call('dot_turn_get', { requestId, ...attempt, attemptToken: 'wrong', inputPage: 0 }), /attempt_not_in_scope/);
+  assert.throws(() => f.call('dot_turn_get', { ...attempt, requestId: 'foreign', inputPage: 0 }), /not_in_scope/);
+  assert.throws(() => f.call('dot_turn_claim', { requestId, commandId: 'another' }), /already_claimed/);
+  f.call('dot_turn_submit', { requestId, ...attempt, commandId: key(), text: reply() });
+  assert.deepEqual(f.call('dot_turn_get', { requestId, ...attempt, inputPage: 0 }).request.input, first.request.input, 'receipt arrival cannot change page boundaries');
+  await pending;
+  assert.equal(f.deliveries.length, 1); assert.equal(f.state().resident.messages.filter(m => m.sourceId === requestId).length, 1);
+});
 
 test('D3 native tools retain connection authority across on/off, expose frozen input only to one claimant and apply twenty submits once', async t => {
   const f = await dotFixture(t); let requestId; f.onEvent = async id => { requestId = id; };
@@ -54,9 +114,11 @@ test('D3 absent subscription across 100 ticks never dispatches dot or prevents a
 for (const change of ['off', 'generation', 'revoked']) test('D3 late reply after ' + change + ' is retained without a message or action', async t => {
   const f = await dotFixture(t); let requestId, attempt; f.onEvent = async id => { requestId = id; attempt = f.claim(id); };
   const pending = f.step(); await until(() => requestId);
+  f.call('dot_turn_get', { requestId, ...attempt, inputPage: 0 });
   if (change === 'off') f.control({ action: 'off' });
   else if (change === 'revoked') f.app.dotMcp.revoke(f.connectionId, f.grant.version, key());
   else f.app.store.transact((s, emit) => { s.resident.rooms[0].contexts.find(c => c.participantId === f.participantId).generation++; emit({ type: 'scope.test', discussionId: null, data: {} }); });
+  assert.throws(() => f.call('dot_turn_get', { requestId, ...attempt, inputPage: 1 }), change === 'revoked' ? /authentication_required/ : /request_stale/);
   const body = { ...attempt, requestId, commandId: key(), text: reply() };
   if (change === 'revoked') assert.throws(() => f.call('dot_turn_submit', body), /authentication_required/);
   else { const result = f.call('dot_turn_submit', body); assert.equal(result.accepted, false); assert.equal(result.disposition, 'quarantined'); }
@@ -227,6 +289,7 @@ test('D3 claim cannot read a frozen history after its earlier project Wiki acces
   const pending = f.step(); await until(() => requestId);
   q.seat(f.roomId, { ...seat, expectedVersion: 1, scopeRefs: ['room:' + f.roomId] }, key());
   assert.throws(() => f.call('dot_turn_get', { requestId, ...attempt }), /request_stale/);
+  assert.throws(() => f.call('dot_turn_get', { requestId, ...attempt, inputPage: 1 }), /request_stale/);
   assert.equal(f.call('dot_turn_submit', { requestId, ...attempt, commandId: key(), text: reply() }).accepted, false);
   await pending; assert.equal(f.state().resident.turns[1].status, 'unconfirmed'); assert.equal(f.state().resident.turns[1].messageId, null);
 });
