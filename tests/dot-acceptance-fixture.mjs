@@ -28,8 +28,8 @@ export function topicReply(input) {
 // signer, event outbox and mailbox. Only DNS/TLS transport and the external dot
 // actor are substituted. No Tunnel, account, model or production state is used.
 export async function nativeFixture(t, options = {}) {
-  const secret = randomBytes(32), errors = [], callbacks = [], inputs = [], answers = [], inputPages = [];
-  let f, rpc, timer;
+  const secret = randomBytes(32), errors = [], callbacks = [], inputs = [], answers = [], inputPages = [], actors = new Set();
+  let f, rpc;
   const receiver = createServer(async (req, res) => {
     try {
       const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -40,11 +40,19 @@ export async function nativeFixture(t, options = {}) {
       assert.ok(Math.abs(Date.now() / 1000 - Number(req.headers['webhook-timestamp'])) < 30);
       callbacks.push({ type: body.type, eventId: req.headers['webhook-id'], requestId: body.data?.requestId });
       if (body.type === 'verification') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ challenge: body.challenge })); }
-      else { assert.ok(body.data.requestId); await f.onEvent(body.data.requestId); res.end('{}'); }
+      else {
+        assert.ok(body.data.requestId); res.end('{}');
+        // A callback acknowledges delivery; the native task reads/answers later.
+        // Waiting for all input pages here would impose the webhook's 10s limit
+        // on a model turn and could trigger duplicate callback retries in CI.
+        const actor = Promise.resolve().then(() => f.onEvent(body.data.requestId))
+          .catch(error => errors.push(error)).finally(() => actors.delete(actor));
+        actors.add(actor);
+      }
     } catch (error) { errors.push(error); res.writeHead(500); res.end('{}'); }
   });
   receiver.listen(0, '127.0.0.1'); await once(receiver, 'listening');
-  t.after(async () => { clearInterval(timer); rpc?.close(); receiver.closeAllConnections(); await new Promise(resolve => receiver.close(resolve)); });
+  t.after(async () => { rpc?.close(); receiver.closeAllConnections(); await Promise.all(actors); await new Promise(resolve => receiver.close(resolve)); });
   const transport = new McpWebhook(async host => {
     assert.equal(host, 'receiver.example'); return [{ address: '93.184.216.34', family: 4 }];
   }, (url, requestOptions, callback) => {
@@ -76,6 +84,7 @@ export async function nativeFixture(t, options = {}) {
       const attempt = await f.call('dot_turn_claim', { requestId, commandId: 'claim-' + requestId });
       let pageIndex = 0, count, digest, combined = '', maximumBytes = 0;
       do {
+        f.inputProgress = { pageIndex, pageCount: count ?? null };
         const result = await rpc.request('tools/call', { name: 'dot_turn_get', arguments: { requestId, ...attempt, inputPage: pageIndex } });
         const bytes = Buffer.byteLength(JSON.stringify({ jsonrpc: '2.0', id: 'fixture', result }));
         assert.ok(bytes <= 12_000); maximumBytes = Math.max(maximumBytes, bytes);
@@ -88,6 +97,7 @@ export async function nativeFixture(t, options = {}) {
       const frozen = { ...JSON.parse(combined), requestId, inputDigest: digest };
       assert.equal(dotInputDigest(frozen.prompt, frozen.history), digest);
       inputPages.push({ pageCount: count, maximumBytes, digestMatched: true });
+      f.inputProgress = null;
       const input = { ...frozen, participant: f.state().participants.find(p => p.id === f.participantId) }; inputs.push(input);
       const body = { requestId, ...attempt, commandId: 'submit-' + requestId, text: text ?? await f.replyFor(input) };
       const results = []; for (let i = 0; i < repeats; i++) results.push(await f.call('dot_turn_submit', { ...body, commandId: i % 2 ? body.commandId : body.commandId + '-' + i }));
@@ -104,6 +114,7 @@ export async function nativeFixture(t, options = {}) {
   f.control({ action: 'configure', pacing: { ...f.room().pacing, minIntervalMs: 1, idleNudgeMs: 1, sleepAfterPasses: 100 } });
   f.control({ action: 'set_member', participantId: f.participantId, enabled: true });
   f.q.seat(f.roomId, { participantId: f.participantId, expectedVersion: 0, role: 'specialist', enabled: true, kinds: ['analysis'], scopeRefs: ['room:' + f.roomId] }, key());
-  timer = setInterval(() => { void f.app.mcpEvents.pump().catch(error => errors.push(error)); }, 5);
+  // workspace() already starts the real Events worker. Avoid another 5ms pump
+  // that repeatedly parses the growing fixture state while pages are read.
   return f;
 }

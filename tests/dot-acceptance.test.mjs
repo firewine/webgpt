@@ -71,11 +71,25 @@ test('D5-A: private stdio and signed callback carry native dot through mixed amb
   // Page reads cross the real stdio/HTTP boundary; allow the full two-round
   // fixture to finish on CI, while surfacing a blocked turn or actor error now.
   // This is a test wait only, not the provider timeout or acceptance budget.
-  await until(() => {
-    f.assertClean(); const d = f.state().discussions[0];
-    assert.ok(['running', 'completed'].includes(d.status), JSON.stringify({ status: d.status, blockedReason: d.blockedReason }));
-    return d.status === 'completed';
-  }, 50000); await f.step();
+  let observed = f.state().discussions[0];
+  const unsubscribe = f.app.store.subscribe(event => {
+    if (event.discussionId === intent.discussionId) observed = f.state().discussions[0];
+  });
+  try {
+    await until(() => {
+      f.assertClean();
+      assert.ok(['running', 'completed'].includes(observed.status), JSON.stringify({ status: observed.status, reason: observed.reason }));
+      return observed.status === 'completed';
+    }, 50000);
+  } catch (error) {
+    const s = f.state(), d = s.discussions[0];
+    t.diagnostic(JSON.stringify({ status: d.status, reason: d.reason, phase: d.phase, round: d.round,
+      completedTurns: d.turns.filter(t => t.status === 'completed').length, inputProgress: f.inputProgress, completedInputs: f.inputPages.length,
+      requests: s.dotMcp.requests.items.map(r => ({ status: r.status, claimed: !!r.claim, replied: !!r.reply })),
+      delivery: s.dotMcp.events.outbox.map(e => ({ status: e.status, reason: e.reason, attempts: e.attempts })) }));
+    throw error;
+  } finally { unsubscribe(); }
+  await f.step();
   await until(() => f.answers.length === f.state().dotMcp.requests.items.length); f.assertClean();
   const s = f.state(), task = s.resident.workItems[0], wiki = s.resident.wikiVersions.at(-1), d = s.discussions[0];
   assert.equal(task.proposedBy, f.participantId); assert.equal(task.status, 'done'); assert.equal(task.reports.length, 2);
@@ -111,9 +125,16 @@ test('D5-B: reconnect and twenty duplicate submits publish once; off quarantines
   f.control({ action: 'off' }); f.control({ action: 'on' }); f.onEvent = id => f.respond(id);
   await f.step(); await until(() => f.answers.length === 2); before = f.state();
   assert.equal(before.dotMcp.grants.length, 1); assert.equal(before.dotMcp.requests.items[1].status, 'consumed');
-  let requestId, attempt;
-  f.onEvent = async id => { attempt = await f.call('dot_turn_claim', { requestId: id, commandId: 'held-' + id }); requestId = id; };
-  const pending = f.step(); await until(() => requestId); f.control({ action: 'off' });
+  let requestId, attempt, releaseActor;
+  const actorGate = new Promise(resolve => { releaseActor = resolve; });
+  f.onEvent = async id => { attempt = await f.call('dot_turn_claim', { requestId: id, commandId: 'held-' + id }); requestId = id; await actorGate; };
+  const pending = f.step();
+  try {
+    await until(() => requestId);
+    await until(() => f.state().dotMcp.events.outbox.find(e => e.requestId === requestId)?.status === 'delivered');
+    assert.equal(f.state().dotMcp.requests.items.find(r => r.id === requestId).reply, null, 'event receipt does not wait for or establish a model reply');
+  } finally { releaseActor(); }
+  f.control({ action: 'off' });
   const late = await f.call('dot_turn_submit', { requestId, ...attempt, commandId: key(), text: reply({ text: 'off 이후 늦은 원문' }) });
   assert.equal(late.accepted, false); assert.equal(late.disposition, 'quarantined'); await pending;
   for (let i = 0; i < 20; i++) await f.step();

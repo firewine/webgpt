@@ -20,7 +20,7 @@
 
 기존 Adapter에 작은 순수 변환 함수를 결합했다. provider/Store/엔진을 재작성하거나 페이지를 별도 업무 상태로 저장하지 않는다. R1·R5~R7 데이터/계약, R3 GUI, D1 권한·D2 Events는 변경0이다. R2/R8의 단일 실행/대조와 R4 Muse는 기존 통합 fixture로 회귀한다. 원래180,000자 입력 한도·300초 timeout·API 일일 정책·Human 승인·50 gate는 유지한다.
 
-승인 후 구현 보완은14파일·약280줄(add+delete)이며, 앞선 실계정 사실 기록/영향 검토서의 갱신2파일은 별도다. 사전 예상10~14파일·450~750줄보다 작은 것은 기존 입력/권한 처리와 통합 fixture를 재사용했기 때문이다. 수락 범위나 후속 페이즈를 축소하지 않는다.
+승인 후 구현 보완은14파일·약330줄(add+delete)이며, 앞선 실계정 사실 기록/영향 검토서의 갱신2파일은 별도다. 사전 예상10~14파일·450~750줄보다 작은 것은 기존 입력/권한 처리와 통합 fixture를 재사용했기 때문이다. 수락 범위나 후속 페이즈를 축소하지 않는다.
 
 ## 실행 증거
 
@@ -33,11 +33,13 @@
 | 강제 종료·복구 | `node --test tests/dot-mcp-restart.test.mjs` | **7 PASS**. 실제 다중 페이지의 첫 페이지 후 SIGKILL/재시작→원래 held 보존, 다음 페이지 stale, 자동 재전송/게시0. 원래 사용자 메시지 보존 |
 | 전체 브라우저 | 설치한 `WJ_TEST_CHROME_MCP`, `WJ_TEST_CHROMIUM_EXECUTABLE`을 지정해 `node --test tests/browser/*.test.mjs` | **65 PASS, fail0, skip0**. 실제 Chromium/Chrome MCP 프로세스 사용 |
 | 다중 페이지·Muse 통합 | 같은 환경의 `node --test tests/browser/dot-mixed.test.mjs` | **1 PASS**. 두 검토 라운드와 상주 복귀, dot 합성 답변6개·Muse 합성 전송6개, 입력별1~7페이지·합20페이지, 최대11,296 bytes. 모든 digest 일치, 기존 thread/초안 보호, 동시 provider 최대1 |
-| CI 대기 실패 대조·혼합 업무 통합 | `node --test --test-isolation=none --test-name-pattern='D5-A:' tests/dot-acceptance.test.mjs` | **1 PASS**, 23.4초. dot 합성 답변9개, 입력별2~63페이지·합220페이지·최대11,302 bytes·전부 digest 일치. 장문을3명이 읽고 업무 재검토/수정→Wiki2판→자동 주제 검토2라운드→같은 방 복귀 |
+| CI 실패 대조·혼합 업무 통합 | `node --test tests/dot-acceptance.test.mjs` | **4 PASS**, 전체23.3초/혼합22.4초. dot 합성 답변9개, 입력별2~63페이지·합220페이지·최대11,302 bytes·전부 digest 일치. 장문을3명이 읽고 업무 재검토/수정→Wiki2판→자동 주제 검토2라운드→같은 방 복귀 |
 
-위21/7/1개는 전체 검사와 중복되는 관련 검사 수이며 합산해 별도 총합을 만들지 않는다. 최종 다중 페이지 SIGKILL fixture의 보존 assertion을 보완한 뒤7개를 다시 통과했고, 실제 혼합 입력이2페이지 이상임을 확인하는 assertion을 추가한 뒤 혼합1개를 다시 통과했다. Node 전체/브라우저 전체와 제품 소스는 같다. 초기에 새 fixture의 기존 메시지를0개로 기대한 검사가 실패해 원래 snapshot과 비교하도록 바로잡았다.
+위21/7/1/4개는 전체 검사와 중복되는 관련 검사 수이며 합산해 별도 총합을 만들지 않는다. 최종 다중 페이지 SIGKILL fixture의 보존 assertion을 보완한 뒤7개를 다시 통과했고, 실제 혼합 입력이2페이지 이상임을 확인하는 assertion을 추가한 뒤 혼합1개를 다시 통과했다. Node 전체/브라우저 전체와 제품 소스는 같다. 초기에 새 fixture의 기존 메시지를0개로 기대한 검사가 실패해 원래 snapshot과 비교하도록 바로잡았다.
 
-첫 [PR #43 CI](https://github.com/firewine/webgpt/actions/runs/41405024675)는 Node489 PASS/1 FAIL이었다. D5-A의 주제 완료 대기25초가 소진됐으며 나머지 신규 분할·권한·복구 검사는 통과했다. 로컬 전체검사에서도 같은 통합 흐름이25.5초 걸려 여유가 작았다. **검사 전용 대기**를50초로 조정하고 매 대기에서 actor 오류/blocked 상태를 즉시 실패로 드러내도록 보완했다. 제품 timeout·예산/수락 조건은 바꾸지 않았다. 이후 관련 D5-A 전체 흐름을 다시 통과했으며 최종 전체 CI는 PR checks에서 별도로 확인한다.
+첫 [PR #43 CI](https://github.com/firewine/webgpt/actions/runs/41405024675)는 Node489 PASS/1 FAIL이었다. D5-A의 주제 완료 대기25초가 소진됐으며 나머지 신규 분할·권한·복구 검사는 통과했다. 로컬 흐름도 약23~25초여서 **검사 전용 대기**를50초로 조정했으나 [두 번째 CI](https://github.com/firewine/webgpt/actions/runs/41405897515)도 같은 대기가 끝났다. 시간 확대만으로 해결됐다고 판단하지 않았다.
+
+추가 코드 대조에서 합성 webhook 수신기가 모델 작업 완료까지 HTTP 수신 확인을 지연해 기존10초 callback 제한과 결합하고, 별도5ms pump가 이미 시작된 실제 worker와 중복 조회하는 것을 확인했다. fixture는 callback을 즉시 수신 확인하고 답변 작업을 별도 실행하며 기존 worker를 그대로 사용하도록 수정했다. D5-B에서는 답변 작업을 의도적으로 보류한 상태에서 delivery가 완료되고 reply는 아직 없음을 확인한다. D5-A 완료 관측은 매10ms 전체 DB 읽기 대신 commit event를 사용하고, 실패 시 현재 페이지/토론/전달 상태만 진단한다. 제품의 webhook/turn timeout·예산/수락 조건은 바꾸지 않았다. 수정 후 관련 통합4개 PASS, 최종 전체 CI는 PR checks에서 별도로 확인한다.
 
 브라우저 통합의 수치/원문 보존 판정은 실행 시 생성하는 `test-results/dot-D5/muse-mixed.json`에 남는다. 해당 artifact는 `isolated_fixture`/`realAccounts:NOT_RUN`으로 표시하며 공개 저장소에 실제 대화나 키를 넣지 않는다. 최종 PR의 CI 상태는 PR checks에서 확인한다.
 
