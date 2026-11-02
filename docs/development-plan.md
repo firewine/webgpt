@@ -2,6 +2,10 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
+2026-11-02 PR #43 병합(`2447ada`) 후 D5 재개 준비에서 원래 dot 요청은 이미 전달·claim돼 `not_sent`로 대조할 수 없고, `skip`은 첫 검토 라운드를 완성하지 못함을 확인했다. 사용자가 [소유자 중단 확인 후 명시 재시도 보완](./reviews/dot-explicit-retry-impact-20261102.md)을 승인했다. D3의 주제 토의 dot 복구 선택지·D4 확인 UI·D5 중복/늦은 응답/재시작 검사를 보완한다. 원래 실패 요청·완료8개·Muse·DB·단일 실행·예산/300초 경계를 유지하며 새 phase는 없다. 예상10~12파일·350~650줄. 배포/추가 실계정 호출은 별도이며 D5-F BLOCKED를 유지한다.
+
+[명시 재시도 구현·검사](./implementation/dot-explicit-retry-20261102.md): 소유자 중단·미제출 확인 뒤 같은 과제만 대기시키고 별도 resume 전 전송0. 원래 답변·늦은 응답 격리·권한 회수·실제 SIGKILL을 포함해 **Node529·Chromium/Chrome MCP66 PASS**다. 원래 운영 데이터에 복구 명령을 적용하지 않았고 실제 native 재시도/배포는 NOT_RUN이다.
+
 2026-11-02 PR #42 병합(`3bc031e`) 후 **D5 동일 주제의 남은 실계정 검증**을 진행했다. 운영 제품 소스와 기존7개 답변을 유지하고, 별도 승인된 추가30분·최대31회·DeepSeek High 잔여7회/189,610 보고 토큰 범위에서15:17 재개했다. DeepSeek 검토1개 수락 뒤 dot은 고정 입력 조회 성공·`Warning: truncated output`으로 생성 중단/submit 미호출을 보고했고 서버는300초 뒤 미확정으로 정지했다. 추가 예약2/API1회,15:23 방 off·Muse 잠금/멤버 토글,15:29 정상 서비스 복구. native 감시 비활성·구독0·전용 grant 회수/Tunnel 종료도 확인했다. 원래 요청을 보존하며 D5-F BLOCKED다. [실제 관측·남은 대조](./implementation/dot-mcp-resume-d5-20261102.md)와 [긴 입력 분할 조회 — 추가 승인](./reviews/dot-input-paging-impact-20261102.md)를 따른다. 사용자가 이어서 선택적 분할 조회 계획 개정·개발을 승인했다. D3 조회/D4 감시 안내/D5 검사를 보완했으며 기존 get 호환·Muse·DB·timeout·50 gate는 유지한다. [분할 조회 구현·자동 검사](./implementation/dot-input-paging-20261102.md)는 Node490·Chrome/MCP65 PASS다. 추가 실계정 호출/배포는 NOT_RUN이다.
 
 2026-11-01 **공식 dot 플러그인·MCP Events 전환 계획 개정·개발 승인**: 사용자가 [영향·변경량·수락·복귀 검토서](./reviews/dot-official-mcp-events-impact-20261101.md)의 기본안을 승인하고 D0부터 진행하도록 지시했다. dot은 일반 ChatGPT `/c/...`/Chrome 연결과 분리하며 **Muse는 현재 browser 연결을 유지**한다. Providers.complete·Store transaction·단일 dispatch·원래 turn/세대·업무 큐·Wiki CAS·Codex 승인·API 전용 일일 한도는 재사용한다. 예상 고유40~52파일·2,700~4,200줄(검사/문서 포함)이며 추가 OAuth/공개 ingress/timeout 확대는 영향·변경량을 재보고하고 승인받는다. 아래 D0 관문이 통과되기 전 D1 이후 종속 구현·운영 적용은 진행하지 않는다. 원래50 gate와 Muse thread 수락은 유지하고 dot의 잘못된 기존 thread 전제만 공식 이벤트 왕복으로 정정한다.

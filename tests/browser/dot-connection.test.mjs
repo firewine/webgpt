@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { workspace, ownerKey, until } from '../workspace-helpers.mjs';
+import { stoppedDotTopicFixture } from '../dot-mcp-fixture.mjs';
 
 async function setup(t) {
   const f = await workspace(t, { residentEnabled: true }, { residentAutoSchedule: false, webhookTransport: { post: async input => {
@@ -14,6 +16,42 @@ async function setup(t) {
   await page.goto(f.url); await page.locator('[data-view=connections]').click();
   return {...f,page,context,errors,calls:()=>calls};
 }
+test('D4 native stopped retry requires explicit evidence and confirmation and leaves resume separate', {timeout:30000}, async t => {
+  const source=await stoppedDotTopicFixture(t), f=await setup(t), p=f.page, seed=source.state();
+  p.setDefaultTimeout(5000);
+  // Add non-native recovery cards without invoking those providers.
+  const d=seed.discussions[0], old=d.turns.find(v=>v.id===source.stoppedRequestId);
+  d.members[0].kind='browser'; d.members[0].label='Muse fixture'; d.members[1].kind='deepseek';
+  const prior=structuredClone(d.turns.filter(v=>v.status==='completed'));
+  f.app.store.transact(s=>{const password=s.ownerPassword,sessions=s.sessions;Object.assign(s,structuredClone(seed));s.ownerPassword=password;s.sessions=sessions;
+    for(const turn of s.discussions[0].turns.filter(v=>v.phase==='cross_review' && v.id!==old.id)) turn.status='unconfirmed';});
+  assert.equal((await f.context.request.get(f.url+'/api/state')).status(),200);
+  await p.reload(); await p.locator('[data-view=room]').click(); await p.locator('#history button').first().click(); await p.locator('#topic-details-open').click();
+  await p.getByRole('button',{name:'원본과 복구',exact:true}).click();
+  assert.equal(await p.getByRole('button',{name:'중단 확인 후 재시도 준비',exact:true}).count(),1);
+  for(const name of ['완료 응답 반영','전송되지 않음 확인','이 응답 건너뛰기']) assert.equal(await p.getByRole('button',{name,exact:true}).count(),3);
+  // Return the two completed peers to their actual fixture state before recovery.
+  f.app.store.transact(s=>{for(const turn of s.discussions[0].turns) if(prior.some(v=>v.id===turn.id)) turn.status='completed';});
+  const invalid=await f.api('/api/discussions/'+d.id+'/control',{...source.retryBody,stoppedWithoutSubmit:false}); assert.equal(invalid.status,409);
+  await p.getByRole('button',{name:'중단 확인 후 재시도 준비',exact:true}).click();
+  const dialog=p.locator('#action-dialog'), checkbox=dialog.locator('[name=stoppedWithoutSubmit]'), note=dialog.locator('[name=note]');
+  assert.equal(await checkbox.isChecked(),false);
+  let controls=0;p.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/control')) controls++;});
+  await note.fill('Native fixture stopped after input; submit not invoked.');
+  await dialog.getByRole('button',{name:'재시도 준비',exact:true}).click(); assert.equal(controls,0);
+  await checkbox.check(); await note.fill(''); await dialog.getByRole('button',{name:'재시도 준비',exact:true}).click();assert.equal(controls,0);
+  await note.fill('Native fixture stopped after input; submit not invoked.');
+  await mkdir('test-results/dot-D5',{recursive:true}); await p.screenshot({path:'test-results/dot-D5/owner-retry-ui.png'});
+  const request=p.waitForRequest(r=>r.method()==='POST'&&r.url().endsWith('/control'));
+  await dialog.getByRole('button',{name:'재시도 준비',exact:true}).click();
+  assert.equal((await request).postDataJSON().stoppedWithoutSubmit,true);
+  await dialog.waitFor({state:'hidden'}); const after=f.app.store.read().discussions[0];
+  assert.equal(controls,1); assert.equal(after.status,'blocked'); assert.equal(after.tasks.find(v=>v.id===old.taskId).status,'pending');
+  assert.deepEqual(after.turns.filter(v=>prior.some(a=>a.id===v.id)),prior);assert.equal(after.turns.length,d.turns.length);
+  assert.equal(await p.getByRole('button',{name:'중단 확인 후 재시도 준비',exact:true}).count(),0);
+  await p.locator('#topic-details-close').click(); assert.equal(await p.locator('#topic-resume').isEnabled(),true);
+  assert.equal(f.calls(),0);assert.deepEqual(f.errors,[]);
+});
 test('D4 390/768/1440px owner setup preserves Muse; twenty reloads/views dispatch nothing and never label browser dot as native', {timeout:60000}, async t => {
   const f = await setup(t), p=f.page;
   const muse={id:'muse',kind:'browser',label:'Muse unchanged',status:'connected',models:[{id:'existing',label:'existing'}],browser:{url:'https://muse.ai/fixture',pageId:7,thread:{value:'original-thread'},accountLabel:'fixture',agentLabel:'Muse'}};

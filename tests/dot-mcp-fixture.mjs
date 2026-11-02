@@ -8,7 +8,7 @@ import { dotTools, dotEventName } from '../dist/server/workspace/dot-mcp-model.j
 import { McpEndpoint } from '../dist/server/http/mcp.js';
 import { FakeResidentCompletion } from '../dist/server/workspace/resident-fake.js';
 import { reply, pacing } from './resident-fixture.mjs';
-import { response } from './workspace-helpers.mjs';
+import { response, topic, until } from './workspace-helpers.mjs';
 
 export const key = () => crypto.randomUUID();
 export const config = directory => loadWorkspaceConfig({ WJ_STATE_DIR: directory, WJ_CHROME_PROFILE_DIR: join(directory, 'chrome'), WJ_ACCESS_TOKEN: 'fixture-dot-d3-owner-key-not-a-real-credential', WJ_RESIDENT_ENABLED: 'true' });
@@ -57,5 +57,32 @@ export async function dotFixture(t, options = {}) {
   if (options.subscribe !== false) await f.subscribe();
   f.control({ action: 'on' });
   timer = setInterval(() => { void app.mcpEvents.pump(); }, 5);
+  return f;
+}
+
+// A real native mailbox/lease stopped after input was read, never a not-sent fixture.
+export async function stoppedDotTopicFixture(t, options = {}) {
+  const f = await dotFixture(t, { timeoutMs: 400, ...options });
+  for (const participantId of ['fake-a', 'fake-b']) f.control({ action: 'set_member', participantId, enabled: true });
+  f.app.resident.postMessage(f.roomId, { text: '보존할 원문🙂 '.repeat(300) }, key());
+  const original = f.app.providers.complete.bind(f.app.providers);
+  f.app.providers.complete = async input => {
+    if (input.participant.kind === 'dot-mcp') return original(input);
+    input.hooks.dispatched(); const answer = JSON.parse(response(input.prompt, input.participant)); answer.verifications = [];
+    return { text: JSON.stringify(answer), receipt: key(), usage: null };
+  };
+  f.onEvent = async requestId => {
+    const d = f.state().discussions[0];
+    if (d.phase !== 'cross_review' || d.round !== 1) return f.respond(requestId);
+    f.stoppedRequestId = requestId; f.stoppedAttempt = f.claim(requestId);
+    const page = f.call('dot_turn_get', { requestId, ...f.stoppedAttempt, inputPage: 0 }).request.input;
+    if (page.nextPage !== 1) throw new Error('multi_page_fixture_required');
+  };
+  f.discussionId = f.app.residentRunner.focus(f.roomId, { ...topic, participantIds: ['fake-a', 'fake-b', f.participantId],
+    limits: { maxRequests: 60, maxRounds: 2, maxVerificationTasks: 0 } }, key());
+  await until(() => f.state().discussions[0].status === 'blocked');
+  await f.step(); // Publish already accepted drafts before capturing recovery baselines.
+  f.retryBody = { action: 'reconcile', resolution: 'retry_after_stop', expectedRevision: 1, turnId: f.stoppedRequestId,
+    stoppedWithoutSubmit: true, note: 'Fixture actor stopped after input read; no submit invoked.' };
   return f;
 }
