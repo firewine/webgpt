@@ -1,6 +1,6 @@
 # 공식 dot 연결 D0 — 준비 상태·계약 점검
 
-2026-11-01 KST 작성·11-02 후속 검사. 기준 main `ce8d9717ca34a77f458f47a8eb2f98cc793b2fcf`(PR #35), 작업 브랜치 `codex/dot-mcp-events-d0-20261101`. [사용자 승인 범위](../reviews/dot-official-mcp-events-impact-20261101.md)·[SSOT](../development-plan.md)를 따른다. **11/02 실제 dot의 합성 이벤트 수신·답변 수락 PASS, 사용자와 서버 receipt 일치. 감시는 아직 활성 상태여서 종료 확인을 기다린다. D0 전체와 D1 이후 관문은 유지한다. 최신 결과는 §10이며 §7~9는 앞선 실패/보완 이력이다.**
+2026-11-01 KST 작성·11-02 후속 검사. 기준 main `ce8d9717ca34a77f458f47a8eb2f98cc793b2fcf`(PR #35), 작업 브랜치 `codex/dot-mcp-events-d0-20261101`. [사용자 승인 범위](../reviews/dot-official-mcp-events-impact-20261101.md)·[SSOT](../development-plan.md)를 따른다. **11/02 실제 dot의 합성 이벤트/답변·동일 receipt·서버 구독 해제 PASS. PR #36 병합과 다음 단계 지시 뒤 종료를 대조해 D1로 진행했다. 최신 결과는 §11이며 이전 절의 미완료 표기는 당시 관측 이력이다. 운영 grant/실제 채팅방 연결의 완료는 아니다.**
 
 ## 1. 승인 반영과 보존
 
@@ -181,3 +181,11 @@ fixture0.4.0의 get은 현재 단계 `SUBSCRIBE/WAIT_FOR_EVENT/STOP_MONITORING`�
 인증 검증 범위는 전용 Platform Tunnel과 사용자 설치 plugin에서 **격리 합성 fixture에 접근한 것**까지다. native actor의 암호학적 증명·운영 grant 전달/회수·방별 scope·기억 이전은 검증하지 않았다. D1의 owner 확인 연결과 검증된 principal 구분, D2/D3의 영속 scope/응답 대조와 D5 통합 수락은 그대로 남는다. 최초/쓰기 승인 UI의 상세 단계는 사용자가 별도로 보고하지 않아 UNVERIFIED이며 무승인 실행을 보장하지 않는다. 추가 인증 범위가 필요하면 기존 확대 승인 절차를 따른다.
 
 운영 앱은 같은 PID4089462의 active/running 상태이며 합성 터널 health ready·control-plane/MCP 정상이다. 이번 결과 기록에는 제품 코드/운영 dist·DB·방 설정·Muse·Serve 변경이 없다. 코드 변경이 없어 이미 통과한 코드 head의 Node375/browser62 검사를 반복하지 않고 문서 diff·참조·비밀 비노출·보존 상태를 확인한다. 감시 종료가 확인되면 원래 receipt를 보존한 채 해당 결과를 추가하며, 종료 전 합성 runtime을 재시작해 성공 기록을 잃거나 자동으로 새 probe를 만들지 않는다.
+
+## 11. 감시 해제 확인과 D0 종료
+
+사용자가 PR #36 병합 후 다음 단계 진행을 지시했다. D1 착수 전 같은 fixture의 read-only get을 대조해 **UNSUBSCRIBE_RECEIVED → UNSUBSCRIBED, subscription NONE, unsubscribeRequests1**을 확인했다. private runtime 로그의 해제 응답은 2026-11-02 06:38:24 KST HTTP200이다. 최초 구독과 갱신을 포함한 subscribeRequests7, 원래 답변 receipt 동일·수락 marker1이었다. native 작업 목록 UI는 직접 조회하지 않았으며 서버의 실제 구독 해제 증거로 구분한다.
+
+최초 수락/종료 조회와 원래 receipt는 private0600 기록에 보존했다. 합성 이벤트·답변·구독 수명 검사를 PASS로 마무리하고, 완료된 D0 runtime 하나에만 SIGTERM을 보냈다. 운영 webjjoku PID4089462·Muse·Serve·설정은 유지했다. 새 감시/이벤트/답변 제출·운영 모델 호출은 하지 않았다. 이후 해당 검사 plugin은 runtime이 종료돼 응답하지 않을 수 있으며, 성공한 검사를 다시 시작해 현재 기록을 대체하지 않는다.
+
+후속 [D1 기록](./dot-mcp-foundation-d1-20261102.md)은 운영 권한·영속 연결 기반을 다룬다. D0의 합성 전용 인증 경로가 운영 actor/grant를 검증했다는 의미는 아니며 추가 OAuth 확대는 계속 별도 승인 대상이다.

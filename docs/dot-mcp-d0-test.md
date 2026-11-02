@@ -1,6 +1,6 @@
 # D0 native dot — 한 번의 이벤트 왕복 검사
 
-2026-11-02 KST. [SSOT](./development-plan.md)·[실행 기록](./implementation/dot-mcp-events-d0-20261101.md)을 따른다. 합성 fixture0.4.0용 운영 절차다. **실제 dot 이벤트·답변1건과 동일 receipt는 확인했고 감시 종료를 기다린다.** 아래 시작 요청을 현재 성공한 검사에 다시 보내지 않는다. Muse·운영 방·Wiki·Codex를 사용하지 않는다.
+2026-11-02 KST. [SSOT](./development-plan.md)·[실행 기록](./implementation/dot-mcp-events-d0-20261101.md)을 따른다. 합성 fixture0.4.0용 운영 절차다. **실제 dot 이벤트·답변1건·동일 receipt·서버 구독 해제를 확인하고 합성 runtime을 종료했다.** 아래 시작 요청을 완료한 검사에 다시 보내지 않는다. Muse·운영 방·Wiki·Codex를 사용하지 않는다.
 
 ## 대조한 사용 예제
 

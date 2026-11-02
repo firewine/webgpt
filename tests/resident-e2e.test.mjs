@@ -79,7 +79,8 @@ for (const variant of ['legacy-v1', 'r1-resident']) test('R8 migration: ' + vari
   const before = f.store.read(); f.store.close();
   const config = loadWorkspaceConfig({ WJ_STATE_DIR: f.directory, WJ_CHROME_PROFILE_DIR: join(f.directory, 'fixture-chrome'), WJ_ACCESS_TOKEN: ownerKey, WJ_RESIDENT_ENABLED: 'true' });
   const app = new Workspace(config, 1, { residentAutoSchedule: false });
-  try { const { resident, ...legacy } = app.store.read(); const { resident: oldResident, ...oldLegacy } = before;
+  try { const { resident, dotMcp, ...legacy } = app.store.read(); const { resident: oldResident, ...oldLegacy } = before;
+    assert.equal(dotMcp.schemaVersion, 1); assert.deepEqual(dotMcp.bindings, []); assert.deepEqual(dotMcp.grants, []);
     assert.deepEqual(legacy, oldLegacy); assert.equal(resident.workSchemaVersion, 1); assert.equal(resident.workExecutionSchemaVersion, 1); assert.equal(resident.wikiSchemaVersion, 1);
     assert.equal(resident.wikiPages.length, 0); assert.equal(resident.residentGrants.length, 0); assert.equal(resident.workItems.length, 0);
     if (rid) { assert.equal(resident.rooms[0].id, rid); assert.deepEqual(resident.messages, oldResident.messages); }

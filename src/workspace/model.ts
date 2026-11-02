@@ -1,6 +1,6 @@
 import type { ResidentStateV1 } from './resident-model.js';
 
-export type ProviderKind = 'fake' | 'openai-oauth' | 'codex-oauth' | 'deepseek' | 'anthropic' | 'browser';
+export type ProviderKind = 'fake' | 'openai-oauth' | 'codex-oauth' | 'deepseek' | 'anthropic' | 'browser' | 'dot-mcp';
 export type DeepSeekService = 'deepseek' | 'coralbricks' | 'river';
 export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type ProviderFinishReason = 'stop' | 'length' | 'content_filter' | 'tool_calls' | 'function_call' | 'other';
@@ -142,6 +142,7 @@ export interface WorkspaceState {
   connectionCleanup?: string[];
   resident?: ResidentStateV1;
   apiUsage?: ApiUsageState;
+  dotMcp?: import('./dot-mcp-model.js').DotMcpState;
 }
 export interface DurableEvent { id: number; type: string; discussionId: string | null; at: string; data: unknown }
 export function initialState(hostId: string): WorkspaceState {
