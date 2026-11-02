@@ -52,10 +52,10 @@
       "id": "D5-F",
       "requirement": "Separately authorized deployed native dot ambient >=1 and topic/followup >=2; GPT2+API same room; original Muse thread roundtrip; live Codex read/write and real device acceptance remain distinct",
       "realStatus": "BLOCKED",
-      "files": ["docs/implementation/dot-mcp-acceptance-d5-20261102.md", "docs/implementation/dot-mcp-live-d5-20261102.md"],
-      "observed": { "nativeAmbientReplies": 1, "nativeTopicReplies": 1, "nativeFollowupReplies": 0, "mixedParticipants": 5, "independentDrafts": 5, "crossReviewReplies": 2, "completedReviewRounds": 0, "providerReservations": 9, "apiRequests": 1, "unconfirmedAtStop": 0 },
+      "files": ["docs/implementation/dot-mcp-acceptance-d5-20261102.md", "docs/implementation/dot-mcp-live-d5-20261102.md", "docs/implementation/dot-mcp-resume-d5-20261102.md"],
+      "observed": {"nativeAmbientReplies": 1, "nativeTopicReplies": 1, "nativeFollowupReplies": 0, "mixedParticipants": 5, "independentDrafts": 5, "crossReviewReplies": 3, "completedReviewRounds": 0, "providerReservations": 11, "apiRequests": 2, "unconfirmedAtStop": 1},
       "originalGates": ["R3-E", "R4-D", "R6-F", "R8-D"],
-      "blockedPrerequisites": ["next_bounded_live_window_for_paused_topic", "two_review_rounds_and_native_followup", "same_room_return_and_remaining_real_gates", "real_device_acceptance", "separately_scoped_real_Codex_binding"]
+      "blockedPrerequisites": ["native_long_input_readability", "same_original_request_reconciliation", "next_bounded_live_window_after_input_fix", "two_review_rounds_and_native_followup", "same_room_return_and_remaining_real_gates", "real_device_acceptance", "separately_scoped_real_Codex_binding"]
     }
   ]
 }

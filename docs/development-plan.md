@@ -2,6 +2,8 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
+2026-11-02 PR #42 병합(`3bc031e`) 후 **D5 동일 주제의 남은 실계정 검증**을 진행했다. 운영 제품 소스와 기존7개 답변을 유지하고, 별도 승인된 추가30분·최대31회·DeepSeek High 잔여7회/189,610 보고 토큰 범위에서15:17 재개했다. DeepSeek 검토1개 수락 뒤 dot은 고정 입력 조회 성공·`Warning: truncated output`으로 생성 중단/submit 미호출을 보고했고 서버는300초 뒤 미확정으로 정지했다. 추가 예약2/API1회,15:23 방 off·Muse 잠금/멤버 토글,15:29 정상 서비스 복구. 원래 요청을 보존하며 D5-F BLOCKED다. [실제 관측·남은 대조](./implementation/dot-mcp-resume-d5-20261102.md)와 [긴 입력 분할 조회 제안 — 승인 대기](./reviews/dot-input-paging-impact-20261102.md)를 따른다. 새 페이즈·승인된 제품 계약/수락 기준 변경은 없다.
+
 2026-11-01 **공식 dot 플러그인·MCP Events 전환 계획 개정·개발 승인**: 사용자가 [영향·변경량·수락·복귀 검토서](./reviews/dot-official-mcp-events-impact-20261101.md)의 기본안을 승인하고 D0부터 진행하도록 지시했다. dot은 일반 ChatGPT `/c/...`/Chrome 연결과 분리하며 **Muse는 현재 browser 연결을 유지**한다. Providers.complete·Store transaction·단일 dispatch·원래 turn/세대·업무 큐·Wiki CAS·Codex 승인·API 전용 일일 한도는 재사용한다. 예상 고유40~52파일·2,700~4,200줄(검사/문서 포함)이며 추가 OAuth/공개 ingress/timeout 확대는 영향·변경량을 재보고하고 승인받는다. 아래 D0 관문이 통과되기 전 D1 이후 종속 구현·운영 적용은 진행하지 않는다. 원래50 gate와 Muse thread 수락은 유지하고 dot의 잘못된 기존 thread 전제만 공식 이벤트 왕복으로 정정한다.
 
 | 보완 단계 | 승인 범위 | 현재 상태 |
@@ -11,7 +13,7 @@
 | D2 | Events 구독·callback 검증/서명·영속 outbox | **PR #38 병합 완료**, main `672f081`. 동일 구독20회→ID1, signed challenge·키 교체·공개 IP 고정·유한 재시도·실제 SIGKILL 뒤 보류/ID·cursor 보존. 신규47·전체 Node444 PASS. 운영 callback/배포 NOT_RUN, dot provider 준비는 여전히 false. [계약·수락·복귀](./implementation/dot-mcp-events-d2-20261102.md) |
 | D3 | 기존 provider·topic·상주 발화·응답 대조·복구 결합 | **PR #39 병합 완료**, main `9992f74`. 승인된 연결 권한/발언 세대 분리, 원래 turn의 claim·mailbox·공개/대조 결합. 신규24·전체 Node468·CI browser62 PASS. 운영 연결·실계정·배포 NOT_RUN. [계약·수락·복귀](./implementation/dot-mcp-integration-d3-20261102.md) |
 | D4 | 공식 연결 UI·private plugin·진단/운영 절차 | **PR #40 병합 완료**, main `8affb46`. owner 등록/확인/회수·상태4축·보호된 stdio 전달기·등록 앱 참조 패키지 준비. Node473·실제 Chromium/MCP browser64·Codex0.165 계약 [CI PASS](https://github.com/firewine/webgpt/actions/runs/41380886404). [수락·검사·보존 기록](./implementation/dot-mcp-onboarding-d4-20261102.md)·[연결 절차](./dot-connection-runbook.md). 운영 인증 전달/실제 감시·배포 NOT_RUN |
-| D5 | 기존 50 gate·Muse 보존·혼합 채팅/업무/Wiki/Codex 통합 수락 | **PR #41 병합·서버 적용 / 실제 왕복 일부 PASS.** MCP 메타데이터 오류 수정 및 감시 commandId 지시 보완 후 dot 상주1+주제1 답변 수락. GPT2·DeepSeek High·dot·Muse 초안5개와 GPT2 교차 검토 완료. 예약9/API1회, 시간 한도로 동일 주제 pause·방 off·Muse 잠금/정상 service 복구, 미확정0. Node486·browser65·Codex 계약 CI PASS. 제품 전역 한도/DB 변경0. [실환경 기록·남은 수락](./implementation/dot-mcp-live-d5-20261102.md)·[추가 수락 manifest](./implementation/dot-acceptance-manifest.json)·[자동 통합 증거](./implementation/dot-mcp-acceptance-d5-20261102.md). 전체2라운드/후속·기기·실제 Codex 등 D5 전체 미완료 |
+| D5 | 기존 50 gate·Muse 보존·혼합 채팅/업무/Wiki/Codex 통합 수락 | **PR #42 병합·서버 적용 / 실제 왕복 일부 PASS, 전체 BLOCKED.** dot 상주1+주제 초안1, GPT2·DeepSeek High·dot·Muse 초안5개와 교차 검토3개 수락. 두 검증 창 합계 예약11/API2회. 재개 중 dot 고정 입력 get은 성공했으나 출력 절단 보고 후 submit0·미확정1로 정지. 방 off·Muse 잠금/정상 service 복구. [최신 관측](./implementation/dot-mcp-resume-d5-20261102.md)·[분할 조회 제안(승인 대기)](./reviews/dot-input-paging-impact-20261102.md)·[수락 manifest](./implementation/dot-acceptance-manifest.json). 2라운드/후속·기기·실제 Codex 등 미완료 |
 
 현재 D5 실환경 진행은 [적용·수락 기록](./implementation/dot-mcp-live-d5-20261102.md), 과거 D0 증거는 [D0 기록](./implementation/dot-mcp-events-d0-20261101.md)에서 관리한다. 이 표가 아래 과거 dot browser/기존 thread 기본 경로 설명보다 우선한다. 운영 grant/전달기 준비와 실제 dot 응답·혼합 수락을 구분한다.
 
