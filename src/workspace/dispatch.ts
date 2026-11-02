@@ -5,6 +5,7 @@ import { AppError, now } from './util.js';
 import type { Store } from './store.js';
 import { assertWikiSnapshots, wikiHistoryAllowed } from './wiki-policy.js';
 import { reserveApiUsage, claimApiUsage, settleApiUsage } from './api-usage.js';
+import type { DotMcpAdapter, DotInput } from '../connections/dot-mcp.js';
 
 const bounded = (v: unknown, min: number, max: number): boolean => typeof v === 'number' && Number.isSafeInteger(v) && v >= min && v <= max;
 export function validBudget(value: unknown): boolean {
@@ -46,6 +47,12 @@ export function unresolvedProvider(state: WorkspaceState): boolean {
     !!state.resident?.turns.some(t => ['prepared', 'running', 'unconfirmed'].includes(t.status));
 }
 export class DispatchCoordinator {
+  dot?: Pick<DotMcpAdapter, 'prepare' | 'settle'>;
+  prepareDot(state: WorkspaceState, emit: Parameters<Parameters<Store['transact']>[0]>[1], input: DotInput): void {
+    if (input.participant.kind !== 'dot-mcp') return;
+    if (!this.dot) throw new AppError('dot_transport_not_ready', 409);
+    this.dot.prepare(state, emit, input);
+  }
   workGuard?: (state: WorkspaceState, turn: ResidentTurn) => boolean;
   constructor(private readonly residentEnabled = true) {}
   async perform(store: Store, provider: Pick<Providers, 'complete'>, input: CompletionInput) {
@@ -94,6 +101,7 @@ export class DispatchCoordinator {
     return null;
   }
   settle(state: WorkspaceState, requestId: string, usage: Completion['usage'], error: string | null, uncertain: boolean): void {
+    this.dot?.settle(state, requestId);
     settleApiUsage(state, requestId, usage, error, uncertain);
     const lease = state.resident?.dispatchLeases.find(l => l.id === requestId);
     if (lease) lease.state = uncertain ? 'unconfirmed' : 'released';

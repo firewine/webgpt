@@ -34,7 +34,7 @@ export class McpEndpoint {
   }
   async handle(raw: unknown, grant: AccessGrant): Promise<unknown | null> {
     if ('kind' in grant && grant.kind === 'dot') {
-      this.app.dotMcp.check(grant.grant, 'dot_turn_get', grant.grant);
+      this.app.dotMcp.checkAuthority(grant.grant, 'dot_turn_get', grant.grant);
       const m = object(raw); if (m.jsonrpc !== '2.0' || typeof m.method !== 'string') throw new AppError('invalid_jsonrpc');
       if (m.id === undefined && m.method === 'notifications/initialized') return null;
       if (typeof m.id !== 'number' && typeof m.id !== 'string') throw new AppError('invalid_jsonrpc_id');

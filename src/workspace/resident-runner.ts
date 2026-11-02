@@ -1,3 +1,4 @@
+import { dotCanApply, reconcileDotReply } from './dot-mcp-policy.js';
 import type { Completion, Providers } from '../connections/providers.js';
 import type { WorkspaceState } from './model.js';
 import type { ResidentTurn, Room } from './resident-model.js';
@@ -20,7 +21,7 @@ import { participantWait, nextApiDay } from './api-usage.js';
 type Emit = Parameters<Parameters<Store['transact']>[0]>[1];
 const LIVE = ['prepared', 'running', 'unconfirmed'];
 const WAKE = new Set(['resident.room_changed', 'resident.message_created', 'resident.turn_finished', 'resident.reconciled', 'resident.context_rotated',
-  'turn.finished', 'discussion.phase', 'discussion.created', 'discussion.pause', 'discussion.resume', 'discussion.cancel', 'discussion.reconcile', 'browser.manual_control', 'resident.work_changed', 'api_daily.configured', 'connection.models', 'participant.updated']);
+  'turn.finished', 'discussion.phase', 'discussion.created', 'discussion.pause', 'discussion.resume', 'discussion.cancel', 'discussion.reconcile', 'browser.manual_control', 'resident.work_changed', 'api_daily.configured', 'connection.models', 'participant.updated', 'dot.subscribed', 'dot.subscription_refreshed']);
 
 export class ResidentRunner {
   private started = false; private stopping = false; private queued = false; private pending = false;
@@ -107,7 +108,8 @@ export class ResidentRunner {
           state.discussions.some(d => ['running', 'paused', 'blocked'].includes(d.status))) return null;
       if (room.nextEligibleAt && Date.parse(room.nextEligibleAt) > this.clock()) return null;
       const work = this.options.work?.prepareTurn(state, room, emit, this.clock());
-      if (work) return { turn: work, remainingMs: this.timeoutMs };
+      if (work) { this.dispatch.prepareDot(state, emit, { requestId: work.id, participant: work.participant, prompt: work.prompt, history: work.history });
+        return { turn: work, remainingMs: this.timeoutMs }; }
       const candidates = room.members.filter(m => m.enabled && !m.blockedReason).map(m => state.participants.find(p => p.id === m.participantId)).filter(p => p !== undefined);
       const members = candidates.filter(p => !participantWait(state, room, p, this.clock()));
       if (!members.length && candidates.length) {
@@ -150,6 +152,7 @@ export class ResidentRunner {
       const denied = this.dispatch.reserve(state, { requestId: turn.id, kind: 'resident', participantId: participant.id, participant: turn.participant, generation: context.generation, roomId: room.id }, this.clock());
       if (denied) return null;
       state.resident!.turns.push(turn); room.nextMemberIndex = (index + 1) % members.length;
+      this.dispatch.prepareDot(state, emit, { requestId: turn.id, participant: turn.participant, prompt, history: turn.history });
       emit({ type: 'resident.turn_prepared', discussionId: null, data: { roomId: room.id, turnId: turn.id, participantId: turn.participantId } });
       return { turn, remainingMs: this.timeoutMs };
     });
@@ -175,7 +178,9 @@ export class ResidentRunner {
         Object.assign(turn, failureObservation(outcome.failure));
         const member = room.members.find(m => m.participantId === turn.participantId);
         if (turn.error === 'dispatch_scope_changed') { turn.status = 'stale'; turn.proposalsStatus = 'stale'; }
-        else if (member) member.blockedReason = turn.error.startsWith('api_daily_') ? null : turn.error;
+        // The original unconfirmed lease stops dispatch without revoking the native
+        // participant's work/Wiki authority needed to reconcile that same reply.
+        else if (member && !(turn.participant.kind === 'dot-mcp' && outcome.uncertain)) member.blockedReason = turn.error.startsWith('api_daily_') ? null : turn.error;
         room.observedStatus = room.desiredOn ? !outcome.uncertain && room.members.some(m => m.enabled && !m.blockedReason) ? 'on' : 'blocked' : 'off'; room.reason = turn.error;
         room.nextEligibleAt = room.observedStatus === 'on' ? new Date(this.clock() + room.pacing!.minIntervalMs).toISOString() : null;
       }
@@ -188,7 +193,7 @@ export class ResidentRunner {
   private accept(state: WorkspaceState, room: Room, turn: ResidentTurn, result: Completion, emit: Emit): void {
     turn.text = result.text; turn.receipt = result.receipt; turn.usage = result.usage;
     const context = roomContext(room, turn.participantId);
-    if (turn.epoch !== room.epoch || turn.generation !== context.generation || !assertWikiSnapshots(state, room.id, [turn.participantId], turn.wikiCitations)) { turn.status = 'stale'; turn.proposalsStatus = 'stale'; return; }
+    if (turn.participant.kind === 'dot-mcp' && !dotCanApply(state, turn.id) || turn.epoch !== room.epoch || turn.generation !== context.generation || !assertWikiSnapshots(state, room.id, [turn.participantId], turn.wikiCitations)) { turn.status = 'stale'; turn.proposalsStatus = 'stale'; return; }
     if (turn.workAttemptId && (!this.options.work || !this.options.work.canDispatch(state, turn))) { turn.status = 'stale'; turn.proposalsStatus = 'stale'; return; }
     const data = publicRoomData(state, room, [turn.participantId]); const messages = data.messages.filter(m => m.sequence <= turn.basisSequence);
     turn.reply = parseResidentReply(turn.text, { messageIds: messages.map(m => m.id), participantIds: room.members.map(m => m.participantId),
@@ -258,8 +263,9 @@ export class ResidentRunner {
       const room = state.resident?.rooms.find(r => r.id === roomId); if (!turn || !room) throw new AppError('unconfirmed_turn_not_found', 404);
       turn.finishedAt = now();
       if (body.resolution === 'completed') {
-        const text = string(body.text, 100_000); const receipt = 'owner-confirmed:' + string(body.receipt, 2000);
-        this.accept(state, room, turn, { text, receipt, usage: null }, emit);
+        const result = turn.participant.kind === 'dot-mcp' ? reconcileDotReply(state, turn.id, body.text, body.receipt) :
+          { text: string(body.text, 100_000), receipt: 'owner-confirmed:' + string(body.receipt, 2000), usage: null };
+        this.accept(state, room, turn, result, emit);
         if (turn.status !== 'stale' && !turn.reply) throw new AppError('format_invalid');
       } else if (body.resolution === 'not_sent' || body.resolution === 'skip') { turn.status = 'failed'; turn.error = 'owner_confirmed_' + body.resolution; }
       else throw new AppError('invalid_resolution');

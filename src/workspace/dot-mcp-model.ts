@@ -14,6 +14,15 @@ export interface DotMcpState {
   schemaVersion: 1; migration: { at: string; basisCursor: number };
   bindings: DotBinding[]; grants: DotGrant[];
   events?: { version: 1; subscriptions: DotSubscription[]; outbox: DotEvent[] };
+  requests?: { version: 1; items: DotRequest[] };
+}
+export interface DotRequest {
+  id: string; grantId: string; grantVersion: number; roomId: string; participantId: string; connectionId: string;
+  epoch: number; contextGeneration: number; generation: number; discussionId: string | null; revision: number | null;
+  identityDigest: string; prompt: string; history: { role: 'user' | 'assistant'; content: string }[]; inputDigest: string;
+  status: 'prepared' | 'waiting' | 'received' | 'held' | 'consumed' | 'quarantined'; createdAt: string;
+  claim: { id: string; commandId: string; hash: string; status: 'prepared' | 'active' } | null;
+  reply: { text: string; digest: string; receipt: string; at: string; disposition: 'received' | 'quarantined' } | null;
 }
 export const dotEventName = 'webjjoku.turn_requested';
 export interface DotSubscription {
@@ -23,6 +32,6 @@ export interface DotSubscription {
 }
 export interface DotEvent {
   id: string; subscriptionId: string; requestId: string; body: string; digest: string;
-  status: 'pending' | 'sending' | 'delivered' | 'held' | 'failed'; reason: string | null;
+  status: 'pending' | 'sending' | 'delivered' | 'settled' | 'held' | 'failed'; reason: string | null;
   nextAttemptAt: string; attempts: { at: string; finishedAt: string | null; httpStatus: number | null; error: string | null }[];
 }

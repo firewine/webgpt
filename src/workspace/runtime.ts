@@ -30,6 +30,7 @@ import { validateTopicIntents } from './resident-focus.js';
 import { apiUsageSummary, configureApiUsage, validateApiUsage, dailyRoom } from './api-usage.js';
 import { validatePasswordState } from './password.js';
 import { DotMcp, readDotState } from './dot-mcp.js';
+import { DotMcpAdapter } from '../connections/dot-mcp.js';
 import { McpEvents } from '../http/mcp-events.js';
 import type { WebhookTransport } from '../connections/mcp-webhook.js';
 
@@ -48,6 +49,7 @@ export class Workspace {
   readonly residentMcp: ResidentMcp;
   readonly dotMcp: DotMcp;
   readonly mcpEvents: McpEvents;
+  readonly dotAdapter: DotMcpAdapter;
   constructor(readonly config: WorkspaceConfig, fakeDelay = 80, options: { residentProvider?: Pick<Providers, 'complete'>; residentClock?: () => number; residentAutoSchedule?: boolean; webhookTransport?: WebhookTransport; eventClock?: () => number } = {}) {
     this.store = new Store(config.stateDir);
     this.dispatch = new DispatchCoordinator(config.residentEnabled);
@@ -57,6 +59,9 @@ export class Workspace {
     try { this.dotMcp = new DotMcp(this.store, this.vault, config.residentEnabled);
       this.mcpEvents = new McpEvents(this.store, this.vault, this.dotMcp, config.residentEnabled, { ...(options.webhookTransport ? { transport: options.webhookTransport } : {}), ...(options.eventClock ? { clock: options.eventClock } : {}),
         guard: (s, requestId) => { const t = s.resident?.turns.find(t => t.id === requestId); return !t?.workAttemptId || this.workQueue.canDispatch(s, t); } });
+      this.dotAdapter = new DotMcpAdapter(this.store, this.vault, this.dotMcp, this.mcpEvents, config.residentEnabled,
+        (s, requestId) => { const t = s.resident?.turns.find(t => t.id === requestId); return !t?.workAttemptId || this.workQueue.canDispatch(s, t); });
+      this.dispatch.dot = this.dotAdapter; this.mcpEvents.tools = this.dotAdapter;
       for (const connectionId of this.store.read().connectionCleanup ?? []) this.cleanupConnection(connectionId); }
     catch (error) { this.store.close(); throw error; }
     const accessPath = join(config.stateDir, 'access-token');
@@ -76,6 +81,7 @@ export class Workspace {
       const observed = await installedVersion(config.codexCommand); if (observed.status !== 'observed' || !observed.version) throw new AppError('codex_version_required', 409); return observed.version;
     });
     this.workQueue.wiki = this.wiki;
+    this.providers.dot = this.dotAdapter;
     this.dispatch.workGuard = (state, turn) => this.workQueue.canDispatch(state, turn);
     this.engine = new DiscussionEngine(this.store, this.providers, config, undefined, this.dispatch);
     this.materials = new LocalMaterials(config.materialRoots, [config.stateDir, config.chromeProfileDir]);

@@ -4,6 +4,7 @@ import type { Store } from './store.js';
 import type { Vault } from './vault.js';
 import { dotTools, dotEventName, type DotGrant, type DotMcpState } from './dot-mcp-model.js';
 import { participantIdentity } from './wiki-policy.js';
+import { dotParticipantWait, validateDotRequests } from './dot-mcp-policy.js';
 import { onlyWork, workRoom } from './work-policy.js';
 import { AppError, digest, id, integer, now, object, string, strings } from './util.js';
 
@@ -35,7 +36,7 @@ export function readDotState(s: WorkspaceState): DotMcpState | undefined {
     }
     for (const row of e.outbox) {
       if (!row || ![row.id, row.subscriptionId, row.requestId].every(text) || typeof row.body !== 'string' || Buffer.byteLength(row.body) > 262144 || digest(row.body) !== row.digest ||
-          !['pending', 'sending', 'delivered', 'held', 'failed'].includes(row.status) || !date(row.nextAttemptAt) || row.reason !== null && !text(row.reason) ||
+          !['pending', 'sending', 'delivered', 'settled', 'held', 'failed'].includes(row.status) || !date(row.nextAttemptAt) || row.reason !== null && !text(row.reason) ||
           !Array.isArray(row.attempts) || row.attempts.length > 5 || row.attempts.some(a => !a || !date(a.at) || a.finishedAt !== null && !date(a.finishedAt) ||
             a.httpStatus !== null && !count(a.httpStatus, 0) || a.error !== null && !text(a.error))) invalid();
       const sub = e.subscriptions.find(v => v.id === row.subscriptionId); const g = d.grants.find(v => v.id === sub?.grantId);
@@ -48,7 +49,7 @@ export function readDotState(s: WorkspaceState): DotMcpState | undefined {
         new Set(e.outbox.map(r => JSON.stringify([r.subscriptionId, r.requestId]))).size !== e.outbox.length ||
         e.subscriptions.some(s => s.cursor !== null && !e.outbox.some(r => r.subscriptionId === s.id && r.id === s.cursor && r.status === 'delivered'))) invalid();
   }
-  return d;
+  validateDotRequests(s); return d;
 }
 
 // Owner-facing lifecycle only. D2/D3 provide the authenticated MCP transport and
@@ -128,9 +129,16 @@ export class DotMcp {
   authenticate(token: string): DotGrant {
     this.available(); const g = this.store.read().dotMcp?.grants.find(g => g.hash === digest(token));
     if (!g) throw new AppError('mcp_authentication_required', 401);
-    this.check(g, g.tools[0]!, { roomId: g.roomId, participantId: g.participantId }); return g;
+    this.checkAuthority(g, g.tools[0]!, g); return g;
   }
   check(g: DotGrant, tool: string, scope: { roomId: string; participantId: string }, state = this.store.read()): void {
+    this.checkAuthority(g, tool, scope, state);
+    const room = state.resident!.rooms.find(r => r.id === g.roomId)!;
+    if (!room.members.some(m => m.participantId === g.participantId && m.enabled && !m.blockedReason) || room.epoch !== g.epoch ||
+        (room.contexts?.find(c => c.participantId === g.participantId)?.generation ?? 1) !== g.contextGeneration) throw new AppError('dot_scope_changed', 403);
+  }
+  // Connection authority survives room transitions; each request fences its own generation.
+  checkAuthority(g: DotGrant, tool: string, scope: { roomId: string; participantId: string }, state = this.store.read()): void {
     this.available(); const d = readDotState(state); const current = d?.grants.find(v => v.id === g.id);
     const binding = d?.bindings.find(v => v.connectionId === g.connectionId);
     if (!current || JSON.stringify(current) !== JSON.stringify(g) || g.status !== 'active' || Date.parse(g.expiresAt) <= Date.now() ||
@@ -139,8 +147,7 @@ export class DotMcp {
     const room = state.resident?.rooms.find(r => r.id === g.roomId); const p = state.participants.find(p => p.id === g.participantId);
     if (!g.tools.includes(tool) || scope.roomId !== g.roomId || scope.participantId !== g.participantId || !room || !p || p.kind !== 'dot-mcp' ||
         p.connectionId !== g.connectionId || !state.connections.some(c => c.id === g.connectionId && c.kind === 'dot-mcp') || participantIdentity(p) !== g.identityDigest ||
-        !room.members.some(m => m.participantId === p.id && m.enabled && !m.blockedReason) || room.epoch !== g.epoch ||
-        (room.contexts?.find(c => c.participantId === p.id)?.generation ?? 1) !== g.contextGeneration) throw new AppError('dot_scope_changed', 403);
+        !room.members.some(m => m.participantId === p.id)) throw new AppError('dot_scope_changed', 403);
   }
   revoke(connectionId: string, expectedVersion: number, requestId: string): void {
     this.available(); this.store.transact((s, emit) => {
@@ -165,12 +172,17 @@ export class DotMcp {
     for (const g of d?.grants ?? []) if (g.connectionId === connectionId) {
       this.vault.remove(g.id);
       for (const sub of d?.events?.subscriptions ?? []) if (sub.grantId === g.id) for (const ref of sub.credentialRefs) this.vault.remove(ref);
+      for (const r of d?.requests?.items ?? []) if (r.grantId === g.id && r.claim) this.vault.remove(r.claim.id);
     }
   }
   snapshot() {
-    const d = this.store.read().dotMcp;
-    return { enabled: this.enabled, transportReady: false, bindings: (d?.bindings ?? []).map(b => ({ ...b })),
-      grants: (d?.grants ?? []).map(g => { let active = false; try { this.check(g, g.tools[0]!, g); active = true; } catch { /* Display stale scopes as inactive. */ }
+    const s = this.store.read(), d = s.dotMcp;
+    const transportReady = this.enabled && !!d?.requests && d.bindings.some(b => {
+      const p = s.participants.find(p => p.id === b.participantId), room = s.resident?.rooms.find(r => r.id === b.roomId);
+      return p && room && !dotParticipantWait(s, room, p);
+    });
+    return { enabled: this.enabled, transportReady, bindings: (d?.bindings ?? []).map(b => ({ ...b })),
+      grants: (d?.grants ?? []).map(g => { let active = false; try { this.checkAuthority(g, g.tools[0]!, g); active = true; } catch { /* Display stale authority as inactive. */ }
         const { hash: _hash, identityDigest: _identityDigest, ...metadata } = g; return { ...metadata, active }; }) };
   }
 }

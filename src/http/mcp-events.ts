@@ -5,6 +5,7 @@ import type { DotMcp } from '../workspace/dot-mcp.js';
 import { dotEventName, type DotGrant, type DotSubscription, type DotEvent } from '../workspace/dot-mcp-model.js';
 import type { WorkspaceState, DurableEvent } from '../workspace/model.js';
 import { participantIdentity } from '../workspace/wiki-policy.js';
+import { dotRequestCurrent } from '../workspace/dot-mcp-policy.js';
 import { onlyWork } from '../workspace/work-policy.js';
 import { AppError, digest, id, object, string } from '../workspace/util.js';
 import { CallbackError, callbackUrl, challengeMatches, McpWebhook, signingKey, type WebhookTransport } from '../connections/mcp-webhook.js';
@@ -14,10 +15,12 @@ type Emit = (event: Omit<DurableEvent, 'id' | 'at'>) => void;
 const fields = { roomId: { type: 'string' }, participantId: { type: 'string' }, connectionId: { type: 'string' } };
 const schema = (properties: Record<string, unknown>) => ({ type: 'object', properties, required: Object.keys(properties), additionalProperties: false });
 const definition = { name: dotEventName, description: 'A reserved native dot turn is ready. Filters must match the connected grant. Delivery is not a completed answer.',
+  delivery: ['webhook'],
   inputSchema: schema(fields), payloadSchema: schema({ ...fields, requestId: { type: 'string' }, status: { const: 'requested' } }) };
 const iso = (clock: number) => new Date(clock).toISOString();
 
 export class McpEvents {
+  tools?: { list(): { name: string }[]; call(name: string, raw: unknown, grant: DotGrant): unknown };
   private readonly transport: WebhookTransport; private readonly clock: () => number;
   private readonly abort = new AbortController(); private readonly locks = new Map<string, Promise<unknown>>();
   private readonly unsubscribed = new Map<string, number>();
@@ -40,7 +43,7 @@ export class McpEvents {
   private readonly guard: ((s: WorkspaceState, requestId: string) => boolean) | undefined;
   private check(g: DotGrant, state = this.store.read()): void {
     if (this.closed) throw new AppError('dot_events_closed', 409);
-    this.dot.check(g, 'dot_turn_get', g, state);
+    this.dot.checkAuthority(g, 'dot_turn_get', g, state);
   }
   private credential(sub: DotSubscription): Credential | null {
     try { const c = this.vault.get<Credential>(sub.credentialRef);
@@ -60,9 +63,13 @@ export class McpEvents {
     this.check(g);
     if (method === 'initialize') return { protocolVersion: '2025-06-18', capabilities: { tools: {}, events: {} }, serverInfo: { name: 'webjjoku', version: '0.2.0' } };
     if (method === 'ping') return {};
-    // The mailbox/provider adapter is D3. Do not expose successful placeholder tools.
-    if (method === 'tools/list') return { tools: [] };
-    if (method === 'tools/call') throw new AppError('dot_transport_not_ready', 409);
+    if (method === 'tools/list') return { tools: this.tools?.list().filter(t => g.tools.includes(t.name)) ?? [] };
+    if (method === 'tools/call') {
+      if (!this.tools) throw new AppError('dot_transport_not_ready', 409);
+      const p = object(raw); onlyWork(p, ['name', 'arguments']);
+      const value = this.tools.call(string(p.name, 200), p.arguments ?? {}, g);
+      return { content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value };
+    }
     if (method === 'events/list') { const p = object(raw ?? {}); onlyWork(p, ['cursor']); if (p.cursor != null) throw new AppError('invalid_event_cursor'); return { events: [definition] }; }
     if (method === 'events/unsubscribe') {
       const { subId } = this.parse(g, raw, false);
@@ -130,6 +137,13 @@ export class McpEvents {
   }
   private assertTurn(s: WorkspaceState, g: DotGrant, requestId: string): void {
     this.check(g, s); const room = s.resident!.rooms.find(r => r.id === g.roomId)!;
+    const request = s.dotMcp?.requests?.items.find(r => r.id === requestId);
+    if (request) {
+      if (!dotRequestCurrent(s, request, g) || !['prepared', 'waiting', 'received'].includes(request.status) || this.guard && !this.guard(s, requestId)) throw new AppError('dot_turn_not_reserved', 409);
+      return;
+    }
+    // Legacy D2 reserved records keep their original, strict generation fence.
+    this.dot.check(g, 'dot_turn_get', g, s);
     const lease = s.resident!.dispatchLeases.find(l => l.id === requestId);
     const discussion = s.discussions.find(d => d.turns.some(t => t.id === requestId));
     const turn = s.resident!.turns.find(t => t.id === requestId) ?? discussion?.turns.find(t => t.id === requestId);
@@ -183,7 +197,9 @@ export class McpEvents {
       emit({ type: 'dot.subscription_inactive', discussionId: null, data: { subscriptionId: sub.id, status: sub.status } });
     } });
     const events = this.store.read().dotMcp!.events!;
-    const next = events.outbox.find((e, i, all) => e.status === 'pending' && Date.parse(e.nextAttemptAt) <= this.clock() && !all.slice(0, i).some(p => p.subscriptionId === e.subscriptionId && p.status !== 'delivered'));
+    const next = events.outbox.find((e, i, all) => e.status === 'pending' && Date.parse(e.nextAttemptAt) <= this.clock() &&
+      this.store.read().dotMcp?.requests?.items.find(r => r.id === e.requestId)?.status !== 'prepared' &&
+      !all.slice(0, i).some(p => p.subscriptionId === e.subscriptionId && !['delivered', 'settled'].includes(p.status)));
     if (!next) return;
     let scope: ReturnType<McpEvents['deliveryScope']>;
     try { scope = this.deliveryScope(this.store.read(), next); }
@@ -205,7 +221,8 @@ export class McpEvents {
     this.store.transact((s, emit) => { const e = s.dotMcp!.events!.outbox.find(e => e.id === next.id)!; const attempt = e.attempts.at(-1)!;
       attempt.finishedAt = iso(this.clock()); attempt.httpStatus = status; attempt.error = error;
       let valid = !this.closed && e.status === 'sending'; try { this.deliveryScope(s, e); } catch { valid = false; }
-      if (!valid) { e.status = 'held'; e.reason = 'delivery_scope_changed'; }
+      if (e.status === 'settled') { /* Original turn already resolved; preserve the actual HTTP observation without replay. */ }
+      else if (!valid) { e.status = 'held'; e.reason = 'delivery_scope_changed'; }
       else if (!error) { e.status = 'delivered'; e.reason = null; s.dotMcp!.events!.subscriptions.find(v => v.id === e.subscriptionId)!.cursor = e.id; }
       else if (retry && e.attempts.length < 5) { e.status = 'pending'; e.reason = error; e.nextAttemptAt = iso(this.clock() + 1000 * 2 ** (e.attempts.length - 1)); }
       else { e.status = 'failed'; e.reason = error; }

@@ -11,12 +11,14 @@ import { Anthropic } from './anthropic.js';
 import { readCodexJson, type CodexOAuth } from './codex-oauth.js';
 import { modelCatalogError } from './model-catalog-error.js';
 import { CompletionFailure } from './completion-failure.js';
+import type { DotMcpAdapter } from './dot-mcp.js';
 
 export interface Completion { text: string; receipt: string | null; usage: { input: number; output: number } | null }
 export interface Hooks { dispatched(): void; receipt(id: string): void; delta(text: string): void }
 export interface CompletionInput { requestId: string; participant: Member; prompt: string; history: Context['history']; signal: AbortSignal; hooks: Hooks }
 export interface BrowserCompletion { complete(input: CompletionInput): Promise<Completion>; probe?(binding: BrowserBinding): Promise<void> }
 export class Providers {
+  dot?: Pick<DotMcpAdapter, 'models' | 'complete'>;
   readonly anthropic: Anthropic;
   constructor(private readonly store: Store, private readonly vault: Vault, private readonly oauth: OAuthService,
     private readonly browser: BrowserCompletion, private readonly request: typeof fetch = fetch, private readonly fakeDelay = 80,
@@ -24,7 +26,7 @@ export class Providers {
   async models(connectionId: string): Promise<ModelChoice[]> {
     const c = this.store.read().connections.find(x => x.id === connectionId);
     if (!c) throw new AppError('connection_not_found', 404);
-    if (c.kind === 'dot-mcp') throw new AppError('dot_transport_not_ready', 409);
+    if (c.kind === 'dot-mcp') { if (!this.dot) throw new AppError('dot_transport_not_ready', 409); return this.dot.models(c.id); }
     if (c.kind === 'anthropic') return this.anthropic.models(c.id);
     if (c.kind === 'browser') { if (!c.browser || !this.browser.probe) throw new AppError('browser_not_configured', 409); await this.browser.probe(c.browser); return c.models; }
     const codex = c.kind === 'codex-oauth' ? await this.codexOAuth?.access(c.id) : null;
@@ -51,7 +53,7 @@ export class Providers {
   }
   async complete(input: CompletionInput): Promise<Completion> {
     const { participant: p, signal, hooks } = input;
-    if (p.kind === 'dot-mcp') throw new AppError('dot_transport_not_ready', 409);
+    if (p.kind === 'dot-mcp') { if (!this.dot) throw new AppError('dot_transport_not_ready', 409); return this.dot.complete(input); }
     if (p.kind !== 'deepseek' && p.maxOutputTokens !== undefined) throw new AppError('output_limit_requires_deepseek', 409);
     if (p.kind === 'fake') {
       hooks.dispatched(); const receipt = id('fake'); hooks.receipt(receipt);

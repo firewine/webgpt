@@ -55,8 +55,9 @@ test('D2 authenticated catalog/handshake, 20 concurrent refreshes, canonical ide
   const f = await fixture(t);
   assert.deepEqual((await f.rpc('initialize')).result.capabilities, { tools: {}, events: {} });
   assert.equal((await f.rpc('events/list')).result.events[0].name, dotEventName);
-  assert.deepEqual((await f.rpc('tools/list')).result.tools, []);
-  assert.equal((await f.rpc('tools/call', { name: 'dot_turn_submit' })).error.message, 'dot_transport_not_ready');
+  assert.deepEqual((await f.rpc('tools/list')).result.tools.map(t => t.name), [...dotTools]);
+  assert.deepEqual((await f.rpc('events/list')).result.events[0].delivery, ['webhook']);
+  assert.equal((await f.rpc('tools/call', { name: 'resident_message_post' })).error.message, 'dot_tool_not_granted');
   const results = await Promise.all(Array.from({ length: 20 }, () => f.subscribe()));
   assert.equal(new Set(results.map(r => r.id)).size, 1); assert.equal(f.state().subscriptions.length, 1); assert.equal(f.calls.length, 1);
   const reordered = { ...f.params, arguments: { connectionId: f.connectionId, participantId: f.participantId, roomId: f.roomId } };
