@@ -68,7 +68,14 @@ test('D5-A: private stdio and signed callback carry native dot through mixed amb
   f.control({ action: 'on' });
   for (let i = 0; i < 25 && !f.state().resident.topicIntents?.[0]?.discussionId; i++) { await f.step(); f.assertClean(); }
   const intent = f.state().resident.topicIntents[0]; assert.ok(intent?.discussionId, JSON.stringify(f.room()));
-  await until(() => f.state().discussions[0].status === 'completed', 25000); await f.step();
+  // Page reads cross the real stdio/HTTP boundary; allow the full two-round
+  // fixture to finish on CI, while surfacing a blocked turn or actor error now.
+  // This is a test wait only, not the provider timeout or acceptance budget.
+  await until(() => {
+    f.assertClean(); const d = f.state().discussions[0];
+    assert.ok(['running', 'completed'].includes(d.status), JSON.stringify({ status: d.status, blockedReason: d.blockedReason }));
+    return d.status === 'completed';
+  }, 50000); await f.step();
   await until(() => f.answers.length === f.state().dotMcp.requests.items.length); f.assertClean();
   const s = f.state(), task = s.resident.workItems[0], wiki = s.resident.wikiVersions.at(-1), d = s.discussions[0];
   assert.equal(task.proposedBy, f.participantId); assert.equal(task.status, 'done'); assert.equal(task.reports.length, 2);
@@ -89,7 +96,7 @@ test('D5-A: private stdio and signed callback carry native dot through mixed amb
   for (const id of ['fake-a', 'd5-gpt-b', f.participantId]) assert.equal(participantWait(f.state(), f.room(), s.participants.find(p => p.id === id)), null);
   await evidence('mixed-flow', { members: 4, maximumProviderCalls: maximum, nativeReplies: f.answers.length, workReports: 2, independentReviews: ['rework', 'accept'], wikiVersions: 2,
     fullOriginalCharacters: longText.length, readersOfFullOriginal: seenLong.size, reviewRounds: 2, explicitOwnerFocusRequests: 0, sameRoomReturn: true, apiRequests,
-    nativeUnknownUsage: d.turns.filter(t => t.participantId === f.participantId).every(t => t.usage === null), callbacks: f.callbacks.length });
+    nativeUnknownUsage: d.turns.filter(t => t.participantId === f.participantId).every(t => t.usage === null), callbacks: f.callbacks.length, inputPaging: f.inputPages });
 });
 
 test('D5-B: reconnect and twenty duplicate submits publish once; off quarantines the old request and revoke disables forwarding', { timeout: 30000 }, async t => {
