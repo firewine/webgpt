@@ -6,7 +6,7 @@
 
 PR #41은 2026-11-02 12:57:41 KST 병합됐다. 적용 main은 `befac863c3e8539faf2e189a7747f9f6d1bb757b`, 검사한 PR head는 `23abad876ad54558ebaa9fed02e23ee21c977b8f`다. 두 tree는 `22257918dc0aec82fc5d6213a820dd3a534ecf4d`로 같다. [병합 전 CI](https://github.com/firewine/webgpt/actions/runs/41384360145)는 Node477/browser65/Codex0.165 schema PASS다.
 
-이번 변경은 D5의 기존 적용 절차5번인 **별도 검증 종료 제어**와 실행 증거의 구체화다. `src/`, 의존성, DB schema, 원래50 gate, D5-A~F 기준 변경0. GUI/후속 단계 확대도 없다. 기존 검증 manifest를 자동 검사 결과만으로 승격하지 않는다.
+이번 변경은 D5의 기존 적용 절차5번인 **별도 검증 종료 제어**와 실행 증거의 구체화다. 실제 연결 검사에서 드러난 표준 MCP 요청 메타데이터 처리 오류도 `src/http/mcp.ts` 한 파일에서 수정했다. 의존성, DB schema, 원래50 gate, D5-A~F 기준 변경0. GUI/후속 단계 확대도 없으며 fixture만으로 실제 gate를 승격하지 않는다.
 
 ## 실제 관측
 
@@ -22,8 +22,8 @@ PR #41은 2026-11-02 12:57:41 KST 병합됐다. 적용 main은 `befac863c3e8539f
 | 전달기 | `WJ_MCP_EXPECT_DOT=true`로 초기화/3도구/Events catalog 조회 성공·모델 호출0 | PASS |
 | private Tunnel | D0 runtime0 확인 후 기존 터널/기존 file-reference runtime key 재사용. 별도 profile1·초기화 통지 옵션·metadata 조회/시작 정상. health/admin loopback | OBSERVED |
 | Muse | 기존 binding의 계정/thread/URL 일치, 빈 입력창·ready·busy=false. 수동 잠금 유지 | 읽기 전용 PASS / 전송 NOT_RUN |
-| DeepSeek | CoralBricks 토커 High. API policy=null이므로 기존 규칙상 호출 불가 | BLOCKED: 한도 미설정 |
-| 실제 감시/응답 | 구독0·새 요청/receipt0. 실제 dot에게 새로고침·native 감시1개 등록 요청 | NOT_RUN |
+| DeepSeek | 미설정 상태에서 사용자 별도 허용 후 일일8회·보고 토큰200,000 설정. CoralBricks 토커 High, 현재 당일 사용0 | 설정 PASS / 호출 NOT_RUN |
+| 실제 감시/응답 | dot 첫 조회가 invalid_work_fields로 중단됨. 수정 뒤 연결된 같은 플러그인의 조회 성공을 직접 확인. 감시 재등록 결과 대기, 구독0·새 요청/receipt0 | 조회 PASS / 실제 감시·응답 NOT_RUN |
 | 혼합 검증 | 이번 단계의 새 provider turn0. 요청/시간 창을 아직 시작하지 않음 | NOT_RUN |
 | 실제 Codex | roots/binding 미준비이며 이번 범위에서 제외 | NOT_RUN |
 
@@ -41,7 +41,7 @@ PR #41은 2026-11-02 12:57:41 KST 병합됐다. 적용 main은 `befac863c3e8539f
 - 임시 entry는 Codex roots가 있으면 시작을 거절하고 기존 `beforeDispatch` 훅에서 예외를 발생시켜 명령 전송도 차단한다.
 - `scripts/live-acceptance-server.mjs`는 적용 build의 Workspace·HTTP·자동 runner를 사용한다. 기본 `npm start`, 일반 서비스, 제품 채팅 한도에는 연결하지 않는다.
 
-**현재 entry는 격리 fixture에서만 실행했다. 운영 서비스는 정상 `dist/server/main.js`다.** 다음 절차 전 실제 혼합 방을 켜지 않는다.
+추가8검사 후 13:29:09 KST에 검증용 entry를 해당 서비스에만 적용했다. 기존 service 원본과 `.env`는 보존하고 전용 drop-in과 private script 사본/policy를 사용했다. 시작 관측은0회/API0회/off이며 실제 발언 창은 아직 시작하지 않았다. 종료 시 전용 drop-in만 제거해 정상 `dist/server/main.js`로 복귀한다.
 
 1. private policy0600에 현재 roomId, baselineLeases, 허용 participant snapshot, `maxRequests:40`, `maxApiRequests:8`, `maxMs:1800000`, `drainMs:300000`을 고정한다. drain은 실제 timeout 이상이어야 한다. 이력 삭제나 baseline 재설정으로 횟수를 초기화하지 않는다.
 2. 방 off/미확정0에서 이번 검증에만 entry를 `node --env-file=/실제/.env /검토한/scripts/live-acceptance-server.mjs /적용된/저장소 /보호된/policy.json`으로 지정한다. 단일 서비스만 실행하며 정상 entry는 복구 가능하게 보존한다.
@@ -58,12 +58,20 @@ npm run check
 
 추가8개 PASS: 41번째 전송 전 거절·재시작 횟수 보존, API8회 제한·identity 변경 거절, 25분 신규 예약 차단/30분 off·pause, 기존 정책 위임·baseline 변경 차단, 범위를 넘는 policy 거절, 실제 ResidentRunner/Store transaction의 receipt/메시지 보존, 기존 DeepSeek snapshot 기본값, 실제 자식 entry의 HTTP/소유자 인증·off 종료. 모두 fixture이며 실제 모델 호출0이다.
 
-Node24.18.0/npm11.16.0의 `npm run check`는 **485 PASS, fail/skip0** (`/tmp/webjjoku-dot-d5-live-check.log`). UI/제품 소스는 배포한 tree와 같아 로컬 browser 전체 검사를 반복하지 않았다. 새 PR의 CI는 원래 browser/Codex schema까지 실행하며 결과는 해당 commit의 Check로 구분한다.
+최초 Node24.18.0/npm11.16.0의 `npm run check`는485 PASS였다. 아래 MCP 수정 후 관련70개와 전체 **486 PASS, fail/skip0** (`/tmp/webjjoku-dot-d5-live-mcp-fix-check.log`)를 확인했다. 새 PR CI는 원래 browser/Codex schema까지 실행하며 결과는 해당 commit의 Check로 구분한다.
+
+## 실제 첫 조회 오류와 보완
+
+사용자는 첫 `dot_turn_get`에서 `INVALID_ARGUMENT/-32602/invalid_work_fields`로 중단했고 구독/claim/submit은 하지 않았다고 보고했다. 연결된 같은 플러그인에 빈 인자 `{}`를 전달해 같은 실패를 재현했다. Loopback의 같은 grant/도구 조회는 정상이고 `params._meta`를 추가하면 실패했다.
+
+[MCP 기본 명세](https://modelcontextprotocol.io/specification/2025-06-18/basic/index#meta)는 `_meta`를 요청 메타데이터로 정의한다. 기존 native 경로는 이를 업무 인자 검사의 알 수 없는 필드로 거절했다. `McpEndpoint.handle`에서 object 형태만 확인하고 메서드 입력과 분리한다. 메타데이터를 권한/identity/도구 인자로 해석·저장하지 않으며 중첩 arguments와 다른 알 수 없는 필드는 계속 거절한다. 추가 OAuth나 권한 확대가 아닌 기존 프로토콜 호환 오류 수정이다.
+
+수정 commit `5af26bd`를 운영 브랜치에 `01be270`으로 적용·빌드했다. 재시작 뒤 **동일한 실제 연결 플러그인 get 성공·현재 event 필터 반환·request=null**을 관측했다. 이는 실제 dot의 감시/발언 성공은 아니다. 새 회귀는 도구 조회·Events 목록/구독/해제와 메타데이터의 권한 우회 거절·저장0·잘못된 object/중첩 인자 차단을 검사한다.
 
 ## 사용자 확인 대기·다음 수락
 
 1. 기존 플러그인을 새로고침한 실제 dot의 native 감시 등록 결과. 전달기 정상/도구 목록으로 대체할 수 없다.
-2. API 일일 정책이 비어 있어 검증용 **오늘8회·보고된 토큰200,000** 설정 또는 이번 DeepSeek 제외를 요청했다. 아직 정책을 바꾸지 않았다.
-3. Muse를 직접 사용 중이지 않을 때 검증 중 수동 잠금 해제·끝난 뒤 복구 또는 이번 Muse 제외를 요청했다. 계정/thread/draft 대조는 마쳤다.
+2. API 일일8회·보고된 토큰200,000 설정은 사용자 허용 후 완료했다. 사용량/원래 기록은 유지한다.
+3. Muse 검증 중 수동 잠금 해제·종료 후 복구도 사용자에게 허용받았다. 실제 시작 직전 계정/thread/빈 초안을 재확인하고 해제한다.
 
-방 off·dot 발언 off·API 미설정 차단·Muse 수동 잠금을 유지한다. 실제 응답/혼합/다른 기기/Codex gate는 미완료다. 새 페이즈를 만들거나 D5 완료로 선언하지 않는다.
+감시 준비 전까지 방 off·dot 발언 off·Muse 수동 잠금을 유지한다. 실제 응답/혼합/다른 기기/Codex gate는 미완료다. 새 페이즈를 만들거나 D5 완료로 선언하지 않는다.
