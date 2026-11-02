@@ -59,8 +59,10 @@ export function projectReadiness(state, config) {
   if (!state.resident.rooms.some(r => Array.isArray(r?.members) && r.members.some(m => m?.enabled === true && participants.some(p => p.id === m.participantId)))) roomIssues.push('room_members_required');
   const browserCount = connected.filter(c => c.kind === 'browser').length;
   const browserIssues = [];
-  if (browserCount < 2) browserIssues.push('dot_and_muse_connections_required');
+  if (browserCount < 1) browserIssues.push('browser_connection_required');
   if (state.browserPaused) browserIssues.push('browser_manual_control_active');
+  const dot = state.dotMcp?.connections ?? [];
+  const dotIssues = !state.dotMcp?.enabled ? ['dot_feature_disabled'] : !dot.length ? ['dot_connection_required'] : dot.filter(d => !d.ready).map(d => 'dot_' + (d.authority !== 'active' ? d.authority : d.subscription !== 'active' ? 'subscription_required' : 'reconciliation_required'));
   const codexIssues = [];
   if (!state.capabilities?.codexConfigured) codexIssues.push('workspace_roots_required');
   if (!state.bindings.some(b => b?.status === 'ready' && b.allowWrite === false)) codexIssues.push('ready_read_only_binding_required');
@@ -70,6 +72,7 @@ export function projectReadiness(state, config) {
     participants: { readyGpt: gptParticipants.length, recordedDistinctGptEmails: distinctEmails, readyDeepseek: participants.filter(p => p.kind === 'deepseek').length, readyBrowser: participants.filter(p => p.kind === 'browser').length, fake: state.participants.filter(p => p?.kind === 'fake').length },
     topic: { recordedPrerequisitesMet: topicIssues.length === 0, issues: topicIssues, activeOrBlockedDiscussions: activeDiscussions, unconfirmedTurnAcceptance: 'UNVERIFIED_BY_DOCTOR' },
     resident: { enabled: state.resident.enabled, rooms: state.resident.rooms.length, desiredOn: enabledRooms, issues: roomIssues },
+    dot: { connections: dot.length, ready: dot.filter(d => d.ready).length, issues: [...new Set(dotIssues)], observations: dot.map(d => ({ authority: d.authority, subscription: d.subscription, delivery: d.delivery, response: d.response })), nativeActorAcceptance: 'UNVERIFIED_BY_DOCTOR', liveRoundtrip: 'UNVERIFIED_BY_DOCTOR' },
     browser: { issues: browserIssues, liveThreadAcceptance: 'UNVERIFIED_BY_DOCTOR' },
     codex: { issues: codexIssues, activeOrUnconfirmedJobs: activeJobs, executionAcceptance: 'UNVERIFIED_BY_DOCTOR' },
     configMatchesService: { residentEnabled: config.residentEnabled === state.resident.enabled, codexConfigured: !!config.workspaceRoots?.length === !!state.capabilities?.codexConfigured },

@@ -1,5 +1,6 @@
 import type { DurableEvent, WorkspaceState } from './model.js';
 import { participantWait } from './api-usage.js';
+import { projectDotConnection } from './dot-mcp-status.js';
 
 import type { ResidentStatusAxis, ResidentStatusProjection } from './resident-model.js';
 export type { ResidentStatusAxis, ResidentStatusProjection } from './resident-model.js';
@@ -29,10 +30,12 @@ export function projectResidentStatus(state: WorkspaceState, roomId: string, eve
     const workTask = workAttempt && state.resident!.workItems.find(t => t.id === workAttempt.taskId);
     const activity = job?.activities.at(-1);
     const waiting = participant && member.enabled ? participantWait(state, room, participant) : null;
+    const binding = state.dotMcp?.bindings.find(b => b.participantId === member.participantId && b.roomId === roomId);
+    const dot = binding && projectDotConnection(state, binding, true);
     return {
       participantId: member.participantId, generation, previousGeneration,
-      connection: axis(participant?.kind === 'fake' ? 'fixture' : connection?.status ?? 'unknown', connection?.lastCheckedAt ?? null, 'connection', connection?.error ?? null),
-      response: waiting && !['prepared', 'running', 'unconfirmed'].includes(turn?.status ?? '') ? axis('waiting', null, 'dispatch_policy', waiting)
+      connection: dot ? axis(dot.authority, null, 'dot_authority', dot.authority !== 'active' ? 'dot_' + dot.authority : null) : axis(participant?.kind === 'fake' ? 'fixture' : connection?.status ?? 'unknown', connection?.lastCheckedAt ?? null, 'connection', connection?.error ?? null),
+      response: dot ? axis(dot.response, null, 'dot_mailbox', dot.response === 'not_run' && waiting ? waiting : null) : waiting && !['prepared', 'running', 'unconfirmed'].includes(turn?.status ?? '') ? axis('waiting', null, 'dispatch_policy', waiting)
         : observation ? axis(observation.response, observation.observedAt, observation.source, observation.reason)
         : axis(turn ? previousGeneration ? 'stale' : turn.status : 'unknown', observed?.at ?? turn?.finishedAt ?? turn?.startedAt ?? null, turn ? 'resident_turn' : 'unobserved', turn?.error ?? member.blockedReason ?? null),
       tool: job ? axis(job.status, activity?.observedAt ?? job.finishedAt ?? job.createdAt, 'codex_job', job.error)

@@ -25,6 +25,14 @@ export interface DotRequest {
   reply: { text: string; digest: string; receipt: string; at: string; disposition: 'received' | 'quarantined' } | null;
 }
 export const dotEventName = 'webjjoku.turn_requested';
+export interface DotConnectionStatus {
+  connectionId: string; participantId: string; roomId: string; version: number;
+  authority: string; identity: DotBinding['identity']; nativeActorVerified: false;
+  subscription: string; activeSubscriptions: number; grantExpiresAt: string | null; subscriptionExpiresAt: string | null;
+  delivery: string; deliveryHttpStatus: number | null; response: string;
+  requestId: string | null; discussionId: string | null; receipt: string | null;
+  memberEnabled: boolean; roomOn: boolean; ready: boolean;
+}
 export interface DotSubscription {
   id: string; grantId: string; callbackHash: string; secretHash: string; credentialRef: string; credentialRefs: string[];
   version: number; status: 'prepared' | 'active' | 'revoked' | 'expired' | 'failed';

@@ -33,7 +33,7 @@ async function boundedJson(response) {
     return JSON.parse(text);
   } finally { await reader.cancel().catch(() => {}); }
 }
-async function readGrant(path) {
+export async function readGrant(path) {
   if (typeof path !== 'string' || !isAbsolute(path)) throw new Error('private_grant_required');
   const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {

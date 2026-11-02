@@ -1,0 +1,7 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "webjjoku-dot",
+  "version": "0.1.0",
+  "description": "Participate in an explicitly connected Webjjoku room through its registered private MCP plugin.",
+  "extensions": { "com.openai": { "apps": "./.app.json" } }
+}

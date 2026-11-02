@@ -9,7 +9,7 @@ import { Access } from './access.js';
 import { McpEndpoint } from './mcp.js';
 
 const ROOT = new URL('../../client/web/', import.meta.url);
-const FILES = [['/', 'control.html', 'text/html'], ['/control.js', 'control.js', 'text/javascript'], ['/room-view.js', 'room-view.js', 'text/javascript'], ['/topic-chat-view.js', 'topic-chat-view.js', 'text/javascript'], ['/wiki-view.js', 'wiki-view.js', 'text/javascript'], ['/control.css', 'control.css', 'text/css']] as const;
+const FILES = [['/', 'control.html', 'text/html'], ['/control.js', 'control.js', 'text/javascript'], ['/dot-connections.js', 'dot-connections.js', 'text/javascript'], ['/room-view.js', 'room-view.js', 'text/javascript'], ['/topic-chat-view.js', 'topic-chat-view.js', 'text/javascript'], ['/wiki-view.js', 'wiki-view.js', 'text/javascript'], ['/control.css', 'control.css', 'text/css']] as const;
 export async function createWorkspaceServer(app: Workspace, log: Logger) {
   const access = new Access(app); const mcp = new McpEndpoint(app);
   const assets = new Map(await Promise.all(FILES.map(async ([path, file, type]) => [path as string, { data: await readFile(new URL(file, ROOT)), type }] as const)));
@@ -83,6 +83,7 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
       res.on('close', () => upstream.destroy()); upstream.end(); return;
     }
     if (get && path === '/api/state') { json(res, 200, app.snapshot()); return; }
+    if (get && path === '/api/dot/status') { json(res, 200, app.dotMcp.snapshot()); return; }
     const devicePath = /^\/api\/connections\/([\w-]+)\/device-signin(?:\/(cancel))?$/.exec(path);
     if (get && devicePath && !devicePath[2]) { json(res, 200, app.codexOAuth.status(devicePath[1]!, url.searchParams.get('attemptId') ?? undefined)); return; }
     if (get && path === '/api/rooms') { json(res, 200, { ...app.resident.snapshot(), cursor: app.store.cursor() }); return; }
@@ -140,6 +141,15 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     if (get && path === '/api/browser/snapshot') { json(res, 200, { text: await app.browser.snapshot(integer(Number(url.searchParams.get('pageId')), 0, 0, 1_000_000)) }); return; }
     if (req.method !== 'POST') throw new AppError('not_found', 404);
     const input = object(await body(req));
+    if (path === '/api/dot/connections') { json(res, 201, app.dotMcp.register(input, command(req))); return; }
+    const dotPath = /^\/api\/dot\/connections\/([\w-]+)\/(confirm|revoke)$/.exec(path);
+    if (dotPath) {
+      const allowed = dotPath[2] === 'confirm' ? ['expectedVersion', 'ownerConfirmed', 'expiresAt'] : ['expectedVersion'];
+      if (Object.keys(input).some(k => !allowed.includes(k))) throw new AppError('invalid_dot_fields');
+      if (dotPath[2] === 'confirm') json(res, 201, app.dotMcp.confirm({ ...input, connectionId: dotPath[1], tools: ['dot_turn_get', 'dot_turn_claim', 'dot_turn_submit'] }, command(req)));
+      else { app.dotMcp.revoke(dotPath[1]!, integer(input.expectedVersion, -1, 1, Number.MAX_SAFE_INTEGER), command(req)); json(res, 200, { revoked: true }); }
+      return;
+    }
     if (path === '/api/api-daily') { json(res, 200, app.configureApiDaily(input, command(req))); return; }
     if (wikiPath && !wikiPath[3]) { const result = app.wiki.edit(wikiPath[1]!, { ...input, ...(wikiPath[2] ? { pageId: wikiPath[2] } : {}) }, command(req)); json(res, result.status === 'conflict' ? 409 : 200, { ...result, ...(result.status === 'conflict' ? { error: { code: 'wiki_version_conflict' } } : {}) }); return; }
     const wikiPins = /^\/api\/rooms\/([\w-]+)\/wiki-pins$/.exec(path);
