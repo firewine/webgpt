@@ -62,8 +62,11 @@ test('D5-D: native stdio dot and installed Chrome MCP Muse keep original thread/
   assert.equal(await page.getAttribute('#thread', 'data-thread'), binding.thread.value);
   assert.deepEqual(s.connections.find(c => c.id === muse.connectionId).browser, binding);
   assert.equal(f.room().topicLink, null); assert.equal(maximum, 1);
+  assert.equal(f.inputPages.length, f.answers.length);
+  assert.ok(f.inputPages.every(p => p.digestMatched && p.maximumBytes <= 12_000));
+  assert.ok(f.inputPages.some(p => p.pageCount > 1), 'mixed discussion reads multiple original input pages');
   const count = await page.evaluate(() => window.sends);
   for (let i = 0; i < 20; i++) { await f.api('/api/state'); await f.api('/api/dot/status'); }
   assert.equal(await page.evaluate(() => window.sends), count);
-  await evidence('muse-mixed', { installedChromeMcp: true, chromium: browser.version(), nativeReplies: f.answers.length, museFixtureSends: count, draftPreserved: true, originalThreadPreserved: true, reviewRounds: 2, maximumProviderCalls: maximum, realMuseRoundtrip: 'NOT_RUN' });
+  await evidence('muse-mixed', { installedChromeMcp: true, chromium: browser.version(), nativeReplies: f.answers.length, inputPaging: f.inputPages, museFixtureSends: count, draftPreserved: true, originalThreadPreserved: true, reviewRounds: 2, maximumProviderCalls: maximum, realMuseRoundtrip: 'NOT_RUN' });
 });

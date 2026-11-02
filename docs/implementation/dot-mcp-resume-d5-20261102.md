@@ -61,19 +61,21 @@
 
 저장된 입력은 prompt21,793자·history14,019자(2항목), 합35,812자로 원래 한도 내다. canonical JSON은69,621 UTF-8 bytes다. `DotMcpAdapter.call`이 반환하는 값70,059 bytes를 `McpEvents.handle`이 content와 structuredContent 양쪽에 넣어 전체 MCP envelope144,644 bytes가 된다. 데이터 중복과 크기는 코드/저장 snapshot 실측이며 정확한 플랫폼 절단 계층·상한은 UNVERIFIED다. history나 원문이 서버에서 삭제된 것은 아니다.
 
-현재 판정은 **DeepSeek 추가 검토 PASS / native 긴 입력 읽기 실패 보고·원래 요청 보존 / D5-F BLOCKED**다. 원문 요약/삭제·timeout 확대로 통과시키지 않는다. [분할 조회 영향 검토서](../reviews/dot-input-paging-impact-20261102.md)는 승인 대기 제안이며, 계약/제품 코드를 먼저 바꾸지 않았다.
+현재 판정은 **DeepSeek 추가 검토 PASS / native 긴 입력 읽기 실패 보고·원래 요청 보존 / D5-F BLOCKED**다. 원문 요약/삭제·timeout 확대로 통과시키지 않는다. [분할 조회 영향 검토서](../reviews/dot-input-paging-impact-20261102.md)를 제출한 뒤 사용자가 계획 개정·개발을 승인했다. 후속 [구현·자동 검사](./dot-input-paging-20261102.md)는 별도 작업 브랜치에서 진행했으며 이번 실계정 실행에 소급 적용하거나 D5-F를 PASS로 바꾸지 않는다.
 
-### 서비스 복구와 남은 정리
+### 서비스 복구와 종료 정리
 
 15:29:12 KST 우리 검증용 drop-in만 제거하고 정상 `dist/server/main.js` 서비스로 복구했다. readiness 대기 뒤 health/owner API 정상, 전체 토의 동일·재시작 신규 예약0·방 off·Muse 잠금 true를 확인했다. 기존 다른 서비스/Serve/desktop 설정을 변경하지 않았다.
 
-현재 원래 dot 요청1개는 held/unconfirmed로 대조 보존 중이다. 실제 감시 종료를 사용자에게 요청했으며 전용 grant/Tunnel은 종료 확인 뒤 정리한다. 미확정을 완료/미전송으로 처리하지 않으며 전체 검증 성공으로 표시하지 않는다. 검증 결과 원문을 DB 백업으로 덮어쓰지 않는다.
+사용자가 native 감시 비활성·중단 실행 미재개를 확인했다. 서버의 유효 구독0을 대조하고 전용 grant를 회수했으며, 실행 파일/전용 profile을 확인한 Tunnel 프로세스1개를15:44:51 KST 종료했다. 다른 runtime과 Muse는 유지했다. `.env`·소유자 암호 자료·참여자·Muse binding·기존 토의/7개 완료 turn·업무/Wiki·API 정책의 보존과 동시 provider 최대1, 실제 Codex 실행0도 private snapshot으로 대조했다.
 
-로컬 private 증거는 `dot-mcp-d5-resume-20261102/`의 `live-start.json`, `live-progress.jsonl`, `live-outcome.json`, `native-timeout-observed.json`, `native-input-size-observed.json`, `native-user-report.json`, `normal-service-restored.json`에 있다. 로그/스냅샷/키 파일은 공개 저장소에 포함하지 않는다.
+현재 원래 dot 요청1개는 held/unconfirmed로 대조 보존 중이다. 미확정을 완료/미전송으로 처리하지 않으며 전체 검증 성공으로 표시하지 않는다. 검증 결과 원문을 DB 백업으로 덮어쓰지 않는다.
 
-### 문서/수락표 검사
+로컬 private 증거는 `dot-mcp-d5-resume-20261102/`의 `live-start.json`, `live-progress.jsonl`, `live-outcome.json`, `native-timeout-observed.json`, `native-input-size-observed.json`, `native-user-report.json`, `normal-service-restored.json`, `native-unsubscribe-observed.json`, `native-grant-revoked.json`, `tunnel-stopped.json`, `preservation-observed.json`에 있다. 로그/스냅샷/키 파일은 공개 저장소에 포함하지 않는다.
 
-제품 소스/검사 소스 변경0으로 기존 병합 CI를 재사용한다. 수정한 수락표에는 원래50 gate와 미완료 상태를 유지했다. `git diff --check` PASS, 기존 `D5-E` manifest 검사1개 PASS/fail0/skip0다.
+### 실계정 재개 기록의 문서/수락표 검사
+
+실계정 재개 당시 제품 소스/검사 소스 변경0으로 기존 병합 CI를 재사용했다. 수정한 수락표에는 원래50 gate와 미완료 상태를 유지했다. `git diff --check` PASS, 기존 `D5-E` manifest 검사1개 PASS/fail0/skip0다. 승인 후 분할 조회의 변경/전체 회귀는 위 후속 구현 기록에서 별도로 관리한다.
 
 새 worktree에서 최초 검사 실행은 미생성 dist import로 실패했다. 제품 실패가 아니다. 테스트 파일이 운영 checkout과 동일한 것을 대조한 뒤, 같은 제품 소스의 기존 dist를 사용하도록 해당 테스트를 절대 경로로 지정하고 작업 디렉터리는 새 문서 worktree로 유지했다:
 

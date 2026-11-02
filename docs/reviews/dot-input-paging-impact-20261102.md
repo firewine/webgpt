@@ -1,6 +1,6 @@
-# dot 긴 입력 분할 조회 — 변경 제안 / 승인 대기
+# dot 긴 입력 분할 조회 — 2026-11-02 승인
 
-2026-11-02, 기준 main `3bc031e51c98928eb396837b7831859524d79f76`. **이 문서는 제안이며 승인된 계획/제품 코드가 아니다.** D5 실검증에서 발견한 입력 표시 절단을 해결하기 위한 D3/D4/D5 최소 보완안이다. Muse 연결, 기존 완료 답변8개 및 미확정 원래 요청을 보존한다.
+2026-11-02, 기준 main `3bc031e51c98928eb396837b7831859524d79f76`. **사용자가 ‘분할 조회 계획 개정·개발 승인’을 명시했다.** 아래 계약을 D3/D4/D5의 보완 범위로 구현한다. 실제 호출/배포는 이 승인에 포함되지 않는다. D5 실검증에서 발견한 입력 표시 절단을 해결하기 위한 D3/D4/D5 최소 보완안이다. Muse 연결, 기존 완료 답변8개 및 미확정 원래 요청을 보존한다.
 
 ## 관측과 원인 범위
 
@@ -9,7 +9,7 @@
 - 해당 입력은 prompt21,793자 + history14,019자=35,812자, canonical JSON69,621 UTF-8 bytes다. 원래 도구 반환값70,059 bytes, 전체 MCP envelope144,644 bytes다. 공개 문서에는 크기만 기록하고 원문/ID/키를 복사하지 않는다.
 - `src/http/mcp-events.ts::McpEvents.handle`의 `tools/call`은 같은 값을 `content[].text`와 `structuredContent`에 모두 넣는다. 이는 응답 크기를 키우지만, **어느 계층의 정확한 출력 한도가 절단을 일으켰는지는 UNVERIFIED**다. 서버가 입력을 삭제하거나 API 오류를 반환한 것으로 기록하지 않는다.
 
-공식 [MCP 서버 문서](https://developers.openai.com/plugins/build/mcp-server)는 두 결과 채널 및 간결한 구조화 결과와 호환 가능한 스키마 갱신을 설명한다. [Programmatic Tool Calling 문서](https://developers.openai.com/api/docs/guides/tools-programmatic-tool-calling)는 큰 중간 결과를 코드에서 처리하는 방법과 V8/Node 및 실행 간 상태의 제약을 설명한다. 이 문서들에서 해당 native dot의 정확한 출력 상한이나 영속 저장 helper 지원을 확인한 것은 아니다. 아래 페이지 크기/계약은 **우리 서비스의 제안**이며 OpenAI가 지정한 값이 아니다.
+공식 [MCP 서버 문서](https://developers.openai.com/plugins/build/mcp-server)는 두 결과 채널 및 간결한 구조화 결과와 호환 가능한 스키마 갱신을 설명한다. [Programmatic Tool Calling 문서](https://developers.openai.com/api/docs/guides/tools-programmatic-tool-calling)는 큰 중간 결과를 코드에서 처리하는 방법과 V8/Node 및 실행 간 상태의 제약을 설명한다. 이 문서들에서 해당 native dot의 정확한 출력 상한이나 영속 저장 helper 지원을 확인한 것은 아니다. 아래 페이지 크기/계약은 **우리 서비스의 승인된 설계**이며 OpenAI가 지정한 값이 아니다.
 
 ## 대안과 결론
 
@@ -19,7 +19,7 @@
 | **기존 get에 선택적 분할 조회 추가** | 같은 request/claim의 원문을 작은 응답으로 읽고, 모델 실행/감시를 새로 만들지 않음. client 전용 저장 helper 불필요 | 조회 스키마·반환 variant/감시 안내·긴 입력 회귀 보완 필요. **권장** |
 | 원문 요약/절단 또는 timeout 확대 | 겉보기 요청량 감소/대기 증가 | 긴 답변/반론을 읽는 사용자 목표를 바꾸거나 원인을 해결하지 않음. 이번 범위에서 기각 |
 
-## 제안 계약
+## 승인된 조회 계약
 
 1. `dot_turn_get`에 선택적 `inputPage` 정수를 추가한다. 생략한 기존 metadata/전체 입력 조회의 shape는 유지한다. 새 감시 지침은 winning attempt를 받은 뒤 page0부터 읽는다.
 2. 페이지 조회에는 기존 requestId·attemptId·attemptToken이 모두 필요하다. 매 호출마다 기존 grant/identity/epoch/generation/revision/lease/Wiki 가시성을 검사한다. metadata-only 조회로 원문을 받지 못한다.
@@ -50,4 +50,4 @@ R1 영속/이관·R5 작업큐·R6 Codex·R7 Wiki의 타입/권한 변경은 없
 - **실제 native:** 위 fixture 이후 별도 허용된 창에서 native dot의 모든 페이지 읽기→JSON submit/receipt/공개를 확인한다. 실제 플랫폼 한도/지연은 그때 관측한다. 이번 미확정 요청을 자동 재실행하거나 기존 완료8개를 삭제/덮어쓰지 않는다. 원래 실행 대조와 새 실계정 호출 범위는 제품 구현 승인과 분리한다.
 - **복귀:** dot 발화 off→진행/미확정 대조→감시 종료/전용 grant·Tunnel 정리. 스키마를 되돌리면 감시 안내도 이전 get 계약으로 돌리고 도구를 새로 고친다. 새 DB가 없으므로 원문/receipt를 삭제하거나 백업을 덮어쓰지 않는다. Muse와 정상 웹 서비스는 유지한다.
 
-사용자 승인 필요: **위 선택적 분할 조회 계약과 D3/D4/D5 계획 개정·구현**. 지침 보완만으로 실증되기 전 원문 수락 완료를 선언하지 않는다. 추가 timeout·OAuth·새 실제 모델 호출은 이 제안의 승인 범위가 아니다.
+사용자 승인 범위: **위 선택적 분할 조회 계약과 D3/D4/D5 계획 개정·구현**. 지침 보완만으로 실증되기 전 원문 수락 완료를 선언하지 않는다. 추가 timeout·OAuth·새 실제 모델 호출은 이 제안의 승인 범위가 아니다.

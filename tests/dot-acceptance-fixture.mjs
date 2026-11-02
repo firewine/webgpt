@@ -11,6 +11,7 @@ import { saveDotGrant } from '../scripts/dot-mcp-ops.mjs';
 import { workFixture } from './work-fixture.mjs';
 import { response } from './workspace-helpers.mjs';
 import { reply } from './resident-fixture.mjs';
+import { dotInputDigest } from '../dist/server/workspace/dot-mcp-policy.js';
 
 export const key = () => crypto.randomUUID();
 export const dataOf = (prompt, field) => JSON.parse(prompt.split('\n\n').find(v => v.startsWith('{"' + field + '":')));
@@ -27,7 +28,7 @@ export function topicReply(input) {
 // signer, event outbox and mailbox. Only DNS/TLS transport and the external dot
 // actor are substituted. No Tunnel, account, model or production state is used.
 export async function nativeFixture(t, options = {}) {
-  const secret = randomBytes(32), errors = [], callbacks = [], inputs = [], answers = [];
+  const secret = randomBytes(32), errors = [], callbacks = [], inputs = [], answers = [], inputPages = [];
   let f, rpc, timer;
   const receiver = createServer(async (req, res) => {
     try {
@@ -51,7 +52,7 @@ export async function nativeFixture(t, options = {}) {
     return httpRequest('http://127.0.0.1:' + receiver.address().port + '/d5', requestOptions, callback);
   });
   f = await (options.factory ?? workFixture)(t, { ...options, on: false, runtimeOptions: { webhookTransport: transport } });
-  Object.assign(f, { inputs, answers, callbacks, errors, state: () => f.app.store.read(), room: () => f.app.store.read().resident.rooms[0] });
+  Object.assign(f, { inputs, answers, callbacks, errors, inputPages, state: () => f.app.store.read(), room: () => f.app.store.read().resident.rooms[0] });
   const registered = await f.api('/api/dot/connections', { roomId: f.roomId, label: 'D5 native dot fixture' });
   assert.equal(registered.status, 201); Object.assign(f, await registered.json());
   const confirmed = await f.api('/api/dot/connections/' + f.connectionId + '/confirm', {
@@ -73,7 +74,20 @@ export async function nativeFixture(t, options = {}) {
     replyFor: input => input.prompt.startsWith('웹쫀쿠 상주') ? reply() : topicReply(input),
     respond: async (requestId, text, repeats = 1) => {
       const attempt = await f.call('dot_turn_claim', { requestId, commandId: 'claim-' + requestId });
-      const frozen = (await f.call('dot_turn_get', { requestId, ...attempt })).request;
+      let pageIndex = 0, count, digest, combined = '', maximumBytes = 0;
+      do {
+        const result = await rpc.request('tools/call', { name: 'dot_turn_get', arguments: { requestId, ...attempt, inputPage: pageIndex } });
+        const bytes = Buffer.byteLength(JSON.stringify({ jsonrpc: '2.0', id: 'fixture', result }));
+        assert.ok(bytes <= 12_000); maximumBytes = Math.max(maximumBytes, bytes);
+        const r = result.structuredContent.request, page = r.input;
+        count ??= page.pageCount; digest ??= r.inputDigest;
+        assert.equal(r.requestId, requestId); assert.equal(r.inputDigest, digest); assert.equal(page.pageCount, count);
+        assert.equal(page.pageIndex, pageIndex); assert.equal(page.nextPage, pageIndex + 1 < count ? pageIndex + 1 : null);
+        combined += page.text; pageIndex = page.nextPage;
+      } while (pageIndex !== null);
+      const frozen = { ...JSON.parse(combined), requestId, inputDigest: digest };
+      assert.equal(dotInputDigest(frozen.prompt, frozen.history), digest);
+      inputPages.push({ pageCount: count, maximumBytes, digestMatched: true });
       const input = { ...frozen, participant: f.state().participants.find(p => p.id === f.participantId) }; inputs.push(input);
       const body = { requestId, ...attempt, commandId: 'submit-' + requestId, text: text ?? await f.replyFor(input) };
       const results = []; for (let i = 0; i < repeats; i++) results.push(await f.call('dot_turn_submit', { ...body, commandId: i % 2 ? body.commandId : body.commandId + '-' + i }));
