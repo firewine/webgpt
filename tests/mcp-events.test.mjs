@@ -19,6 +19,30 @@ import { McpWebhook, CallbackError, webhookHeaders, signingKey, challengeMatches
 import { unusedPort } from './helpers.mjs';
 
 const key = () => crypto.randomUUID();
+
+test('native MCP accepts protocol metadata without treating it as tool or event authority', async t => {
+  const f = await fixture(t);
+  const metadata = { progressToken: 'fixture-progress', 'openai.com/caller': { role: 'owner', connectionId: 'not-authority' } };
+  const initial = await f.rpc('tools/call', { name: 'dot_turn_get', arguments: {}, _meta: metadata });
+  assert.equal(initial.error, undefined); assert.equal(initial.result.structuredContent.event.name, dotEventName);
+  assert.deepEqual(initial.result.structuredContent.event.arguments, f.params.arguments);
+  assert.equal(initial.result.structuredContent.request, null);
+  assert.equal((await f.rpc('events/list', { _meta: metadata })).result.events[0].name, dotEventName);
+  const subscribed = await f.rpc('events/subscribe', { ...f.params, _meta: metadata });
+  assert.equal(subscribed.error, undefined); assert.equal(f.state().subscriptions.length, 1);
+  assert.equal((await f.rpc('events/unsubscribe', { name: f.params.name, arguments: f.params.arguments,
+    delivery: { mode: 'webhook', url: f.params.delivery.url }, _meta: metadata })).error, undefined);
+  assert.equal(f.state().subscriptions[0].status, 'revoked');
+  assert.equal(JSON.stringify(f.app.store.read()).includes('fixture-progress'), false);
+  assert.equal((await f.rpc('tools/call', { name: 'codex_send', arguments: {}, _meta: metadata })).error.message, 'dot_tool_not_granted');
+  for (const params of [
+    { name: 'dot_turn_get', arguments: {}, extra: true, _meta: metadata },
+    { name: 'dot_turn_get', arguments: { _meta: metadata } },
+    { name: 'dot_turn_get', arguments: { probeId: 'old-probe' } },
+  ]) assert.equal((await f.rpc('tools/call', params)).error.message, 'invalid_work_fields');
+  for (const _meta of [null, [], 'invalid', 7]) assert.ok((await f.rpc('tools/call', { name: 'dot_turn_get', arguments: {}, _meta })).error);
+  assert.equal(f.app.store.read().resident.turns.length, 0);
+});
 const secret = () => 'whsec_' + randomBytes(32).toString('base64');
 const owner = 'fixture-owner-key-for-dot-events-only';
 const config = directory => loadWorkspaceConfig({ WJ_STATE_DIR: directory, WJ_CHROME_PROFILE_DIR: join(directory, 'chrome'), WJ_ACCESS_TOKEN: owner, WJ_RESIDENT_ENABLED: 'true' });
