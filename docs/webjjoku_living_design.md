@@ -1,5 +1,7 @@
 # 웹쫀쿠 Living Design Document
 
+> **2026-11-01 공식 dot 연결 개정·개발 승인:** 상주 방·주제 토론·업무 큐·Wiki의 운영 방식은 유지한다. dot은 native agent의 공식 plugin/MCP Events로 차례를 통지받고 해당 입력 조회·답변 제출을 통해 실제 방에 참여한다. 일반 ChatGPT 웹 대화 URL은 dot 식별 근거가 아니다. Muse는 현재 browser 연결을 유지한다. native 기억은 원래 서비스에 두며 앱이 명시한 입력/근거만 공유하고, 기존 provider/Store·lease·미확정·Codex 승인·API 일일 정책을 재사용한다. [D0~D5 승인안](./reviews/dot-official-mcp-events-impact-20261101.md)과 [SSOT](./development-plan.md)가 아래 과거 공통 browser 설명보다 우선하며, 현재 native 왕복은 NOT_RUN이다.
+
 > **2026-11-01 주제별 채팅 통합 승인:** 제품의 기본 정보 구조는 채팅방 아래 자유 대화와 모든 주제별 토의다. 선택한 주제를 상단 고정하고 아래에서 AI 말풍선·중간 개입·검토·검증·결론을 읽는다. 모든 현재 토커와 아직 등록되지 않은 연결의 상태를 표시한다. 지도/3D 없이 흑백 GUI를 유지하며 별도 토의 콘솔은 고급 제어로 결합한다. 기존 토론 엔진·큐·Wiki·승인/복구·권한 범위는 그대로다. [승인 범위·후속 영향·검증·복귀](./reviews/topic-chat-ui-impact-20261101.md). 실제 완료 여부는 [페이즈 SSOT](./development-plan.md)를 따른다.
 
 

@@ -2,6 +2,19 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
+2026-11-01 **공식 dot 플러그인·MCP Events 전환 계획 개정·개발 승인**: 사용자가 [영향·변경량·수락·복귀 검토서](./reviews/dot-official-mcp-events-impact-20261101.md)의 기본안을 승인하고 D0부터 진행하도록 지시했다. dot은 일반 ChatGPT `/c/...`/Chrome 연결과 분리하며 **Muse는 현재 browser 연결을 유지**한다. Providers.complete·Store transaction·단일 dispatch·원래 turn/세대·업무 큐·Wiki CAS·Codex 승인·API 전용 일일 한도는 재사용한다. 예상 고유40~52파일·2,700~4,200줄(검사/문서 포함)이며 추가 OAuth/공개 ingress/timeout 확대는 영향·변경량을 재보고하고 승인받는다. 아래 D0 관문이 통과되기 전 D1 이후 종속 구현·운영 적용은 진행하지 않는다. 원래50 gate와 Muse thread 수락은 유지하고 dot의 잘못된 기존 thread 전제만 공식 이벤트 왕복으로 정정한다.
+
+| 보완 단계 | 승인 범위 | 현재 상태 |
+| --- | --- | --- |
+| D0 | 대상 dot의 private plugin·Tunnel·지원 인증·Events→입력 조회→응답 제출 검증 | **실제 dot 합성 왕복 PASS / 감시 종료 확인 대기(11/02).** 공식 stdio 초기화 보완 뒤 구독 challenge200·이벤트 전달200·native 답변1건 수락, 사용자 receipt와 서버 receipt 일치. 약30초 왕복·동일 scope 구독 갱신1회/새 이벤트0 확인. 아직 감시 ACTIVE·unsubscribe0이므로 D0 전체/D1 이후 관문 유지. 코드4c79515의 CI Node375·browser62 PASS, fail/skip0. [실측과 남은 경계](./implementation/dot-mcp-events-d0-20261101.md#10-실제-dot-합성-이벤트응답-왕복-성공)·[검사 절차](./dot-mcp-d0-test.md) |
+| D1 | additive dot kind·identity/grant·영속 namespace·이관 | D0 대기 / NOT_RUN |
+| D2 | Events 구독·callback 검증/서명·영속 outbox | D0/D1 대기 / NOT_RUN |
+| D3 | 기존 provider·topic·상주 발화·응답 대조·복구 결합 | D0~D2 대기 / NOT_RUN |
+| D4 | 공식 연결 UI·private plugin·진단/운영 절차 | D0 결과를 반영해 진행 / NOT_RUN |
+| D5 | 기존 50 gate·Muse 보존·혼합 채팅/업무/Wiki/Codex 통합 수락 | D0~D4 대기 / NOT_RUN |
+
+현재 상태와 D0 실행 증거·차단 조건은 [D0 기록](./implementation/dot-mcp-events-d0-20261101.md)에서 관리한다. 이 표가 아래 과거 dot browser/기존 thread 기본 경로 설명보다 우선한다. 실제 dot의 격리 합성 이벤트·답변은 확인했지만 운영 채팅방 연결·영속 grant/actor·혼합 실계정 수락은 아직 아니다.
+
 2026-11-01 사용자 명시 변경: **비밀번호 최소 길이를6자로 지정**했다. `passwordValue`와 웹 설정/변경 검증·안내를6~128자로 맞춘다. salt/scrypt·동일 비밀번호 확인·소유자 최초 설정/재설정·12시간 세션·실패 제한은 유지하며 DB 이관과 R1~R8 실행/계정/예산 계약 변경은 없다. 기존15자 이상 비밀번호도 계속 유효하다. [구현·검증 기록](./implementation/password-login-20261101.md)의 후속 변경을 따른다. 운영 비밀번호 변경·서비스 배포는 별도다.
 
 2026-11-01 **주제별 채팅 작업실 통합 승인**: 사용자가 [변경안](./reviews/topic-chat-ui-impact-20261101.md)의 계획 개정·개발을 승인했다. 기본 진입을 **채팅방 → 자유 대화/모든 주제별 토의**로 통합하고, 선택 주제의 말풍선·사용자 개입·검토/검증·종합과 기존 상세 제어를 같은 shell/보조 화면에 결합한다. 모든 현재 토커와 미등록 연결의 설정/참여/오류를 표시하며 별도 지시로 제거한 운영 모의 A/B는 재등록하지 않는다. 과거 토의/작성자 snapshot·원문·ID·room scope는 보존한다. R3 GUI 보완/R8 회귀이며 새 페이즈·backend 재작성은 없다. 예상18~26파일·900~1,600줄, 후속 R1~R8·데이터 불변/조회 전환 호출0·복귀·PR #33 의존 관계는 검토서를 따른다. [구현·검사·사용/복귀 기록](./implementation/topic-chat-workspace-20261101.md): Node359·Chrome/MCP62 PASS, 마지막 위치 보완의 신규 UI5 PASS. GUI 구현은 검토 브랜치에 있으며 병합/운영 적용·실기기/실계정 수락은 별도다.
@@ -268,7 +281,7 @@ dot이 `task_get`·`codex_send` 등을 호출할 때는 Ubuntu private MCP와 Se
 
 | 대상 | 첫 연결 | 후속 경로 | 계정에서 확인할 항목 |
 | --- | --- | --- | --- |
-| GPT dot | 기존 dot 대화의 UI 입출력 | 공식 MCP 도구 + MCP Events | dot 식별, 지속 대화, 비동기 업무, 도구·이벤트 |
+| GPT dot | 공식 private plugin + Secure MCP Tunnel + MCP Events, D0부터 검증 | 같은 원래 turn의 입력 조회·응답 제출과 기존 토의/상주 실행기 | 실제 dot pairing·인증·구독·후속 맥락·중복/미확정 대조. 일반 ChatGPT 대화 URL로 대체하지 않음 |
 | Muse | 기존 Muse 대화의 UI 입출력 | 공식 Connector/API·MCP 도구 | 대화·결과·산출물, Connector 권한 |
 | GPT 계정 여러 개 | OAuth + ChatGPT plan usage + Responses | 검증한 모델·도구 확장 | 등록·scope·모델·이력·갱신·사용 한도 분리 |
 | DeepSeek 등 API | API key + provider별 공식 대화 API | 추가 API adapter | 모델·stream 완료·usage·비용·오류 |
@@ -277,15 +290,15 @@ dot이 `task_get`·`codex_send` 등을 호출할 때는 Ubuntu private MCP와 Se
 
 ### 7.1 GPT dot
 
-- dot은 계정과 별도로 식별되는 에이전트 화면이다. 같은 계정의 일반 ChatGPT와 dot을 독립 계정으로 중복 계산하지 않는다.
-- 초기에는 해당 계정의 동시 실행 한도를 1로 공유한다.
-- 기존 대화를 유지하고 task ID로 업무를 구분한다. 새 대화·새 dot 생성은 기본 동작이 아니다.
+- dot은 native agent이며 공식 연결의 principal과 owner pairing을 확인한다. 일반 ChatGPT 대화 URL은 dot 식별 근거가 아니다. 같은 계정의 일반 GPT와 dot을 독립 계정으로 중복 계산하지 않는다.
+- 앱의 공통 provider 슬롯은 1개다. 앱 밖에서 dot이 수행하는 내부/병렬 작업까지 통제하거나 exactly-once로 보장한다고 주장하지 않는다.
+- native 맥락은 원래 서비스에 유지하고 앱의 원래 turn/task ID로 입력·결과를 구분한다. `/c/...` 기존 대화·새 대화·새 dot 생성을 필수로 요구하지 않는다.
 - “진행하겠다”는 응답은 수신 확인이다. 업무 완료는 명시적인 결과·상태·산출물 또는 인증된 결과 제출로 판단한다.
 - 공식 문서상 MCP Events는 dots에서 지원된다. 사용자가 감시 대상과 수행 동작을 정하고 구독하면 서버가 일치하는 이벤트를 전달한다.
-- `task.ready`는 웹쫀쿠에서 제안하는 자체 이벤트 이름이다. 계정 검증 전부터 동작하는 내장 기능으로 표기하지 않는다.
+- `webjjoku.turn_requested`는 웹쫀쿠에서 제안하는 자체 이벤트 이름이다. 계정 검증 전부터 동작하는 내장 기능으로 표기하지 않는다.
 - webhook HTTP 성공은 접수 증거다. 구독 갱신, 이벤트 중복·순서, 도구 멱등성, 결과 수신을 별도로 검증한다.
-- 공식 연동의 목표는 작업 이벤트 수신 → `task_get` → 수행 → `result_submit`이다. 이 도구와 이벤트는 웹쫀쿠가 구현한다.
-- Phase 4A에서는 dot이 개발 프롬프트를 작성해 `codex_send`로 기존 Codex 세션에 전달하고 `codex_result`로 결과를 검토한다.
+- 공식 발화는 이벤트 수신 → 제안 `dot_turn_get/claim` → 구조화 답변 → `dot_turn_submit` → 기존 엔진의 파싱/공개 경로다. 기존 `result_submit`은 검토용 reported 근거 제출로 남으며 provider 완료로 의미를 바꾸지 않는다.
+- Phase 4A의 실행은 기존 업무 큐·Codex binding·도구 grant·Human 승인 경계를 따른다. dot 기본 연결에 `codex_send`나 shell 권한을 추가하지 않는다. 실제 Codex 결과 receipt만 실행 근거로 인정한다.
 
 ### 7.2 Muse
 

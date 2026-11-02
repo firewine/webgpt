@@ -20,6 +20,7 @@
     "password:setup": "node --env-file-if-exists=.env scripts/ops.mjs password-setup",
     "password:reset": "node --env-file-if-exists=.env scripts/ops.mjs password-reset",
     "doctor": "node --env-file-if-exists=.env scripts/ops.mjs doctor",
+    "doctor:dot": "node --env-file-if-exists=.env scripts/dot-preflight.mjs",
     "install:service": "node --env-file-if-exists=.env scripts/ops.mjs install",
     "serve:tailnet": "node --env-file-if-exists=.env scripts/ops.mjs serve",
     "backup": "node --env-file-if-exists=.env scripts/ops.mjs backup",

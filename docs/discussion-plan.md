@@ -1,5 +1,7 @@
 # 웹쫀쿠 능동 토론·상호 검증 계획
 
+> **2026-11-01 공식 dot 연결 개정·개발 승인:** dot도 기존 엔진이 예약한 원래 turn을 사용한다. 고정한 입력을 공식 plugin의 MCP 도구로 읽고 구조화한 답변을 제출하며 기존 topic/resident parser·독립 초안/라운드 공개 장벽·말풍선/후속 분석을 통과한다. Events `2xx`는 수신이며 답변 완료가 아니다. 같은 event/submit 재전송은 기존 ID로 대조하고, 재시작/구세대/회수 뒤 결과는 현재 action에 자동 적용하지 않는다. Muse browser·complete/Store/공통 lease·승인 경계 유지. [승인안](./reviews/dot-official-mcp-events-impact-20261101.md)과 [SSOT](./development-plan.md)를 따르며 D0 이후 종속 구현은 관문 대기다.
+
 > **2026-11-01 주제별 채팅 통합 승인:** 주제 토론의 기본 화면은 채팅방 아래 주제별 대화다. 독립 토의/방 focus의 엔진·JSON·라운드 공개·수정/재개 의미와 원래 room scope는 보존한다. 목록 선택은 GET만 수행하며 실행을 유발하지 않는다. 과거 토의도 같은 목록에 보이고 상세 비교/근거/승인/복구는 주제 보조 화면에서 제공한다. [승인 범위·후속 영향·검증·복귀](./reviews/topic-chat-ui-impact-20261101.md). 실제 완료 여부는 [페이즈 SSOT](./development-plan.md)를 따른다.
 
 

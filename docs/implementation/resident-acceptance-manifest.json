@@ -298,7 +298,7 @@
     },
     {
       "id": "R4-D",
-      "requirement": "실제 dot/Muse 각 1개 기존 대화에서 profile/identity/thread·왕복 확인",
+      "requirement": "실제 dot 1개는 공식 plugin/Events 입력 조회·응답 제출, Muse 1개는 기존 profile/identity/thread·왕복 확인",
       "status": "UNVERIFIED",
       "evidence": "fixture",
       "files": [
@@ -307,7 +307,7 @@
         "tests/browser/bridge.test.mjs"
       ],
       "realStatus": "NOT_RUN",
-      "note": "Discovery/identity fixtures do not verify existing dot/Muse account threads."
+      "note": "2026-11-01 approved dot-native amendment: generic ChatGPT discovery is not dot identity. Existing fixtures cover browser guards, not native dot Events or real Muse follow-up. Native dot roundtrip remains NOT_RUN; gate count and acceptance level are preserved."
     },
     {
       "id": "R5-A",
@@ -578,7 +578,7 @@
     },
     {
       "id": "R8-D",
-      "requirement": "실제 GPT2계정+DeepSeek, dot/Muse 각각 기존 thread 포함 흐름. 실제 읽기 Codex와 허용된 쓰기 gate 별도",
+      "requirement": "실제 GPT2계정+DeepSeek, dot은 공식 plugin/Events 왕복·후속 맥락, Muse는 기존 thread 포함 흐름. 실제 읽기 Codex와 허용된 쓰기 gate 별도",
       "status": "NOT_RUN",
       "evidence": "real_account_required",
       "files": [],
