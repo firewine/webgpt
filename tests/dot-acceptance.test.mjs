@@ -18,7 +18,7 @@ test('D5-E: the additive gate map retains all original fifty gates and keeps rea
     for (const id of gate.originalGates) assert.ok(added.originalGateIds.includes(id));
     for (const file of gate.files) assert.ok((await readFile(file)).length > 0);
   }
-  assert.equal(added.gates.find(g => g.id === 'D5-F').realStatus, 'NOT_RUN');
+  assert.ok(['NOT_RUN', 'BLOCKED'].includes(added.gates.find(g => g.id === 'D5-F').realStatus), 'Fixture success must not close incomplete real-account acceptance.');
 });
 
 test('D5-A: private stdio and signed callback carry native dot through mixed ambient/work/rework/Wiki/automatic topic and back', { timeout: 60000 }, async t => {
