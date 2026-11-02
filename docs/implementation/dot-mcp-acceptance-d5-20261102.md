@@ -1,5 +1,7 @@
 # D5 — 공식 dot의 기존 흐름 통합과 실계정 수락
 
+> 후속: PR #41 병합 뒤 main `befac86`을 서버에 적용했다. 아래는 자동 통합검사 당시 기록이며 최신 배포·종료 제어·실계정 차단 조건은 [D5 실환경 기록](./dot-mcp-live-d5-20261102.md)에서 관리한다. 혼합 실계정 수락은 아직 완료되지 않았다.
+
 ## 기준·범위·판정
 
 2026-11-02 사용자 지시 “병합 완료 다음 페이즈 진행”. [D4 PR #40](https://github.com/firewine/webgpt/pull/40)은 12:12:20 KST에 병합됐으며 기준 main은 **`8affb469c3e6ce5b636f465ff693d62ac45071b8`**, D4 head는 `8408c30719b7836382ef338fdb507df6ad4a5399`다. [D4 최종 CI](https://github.com/firewine/webgpt/actions/runs/41380886404)는 Node473/browser64/고정 Codex0.165.0 schema PASS다. D5 검사와 구분한다.

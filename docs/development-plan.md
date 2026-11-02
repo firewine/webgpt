@@ -11,9 +11,13 @@
 | D2 | Events 구독·callback 검증/서명·영속 outbox | **PR #38 병합 완료**, main `672f081`. 동일 구독20회→ID1, signed challenge·키 교체·공개 IP 고정·유한 재시도·실제 SIGKILL 뒤 보류/ID·cursor 보존. 신규47·전체 Node444 PASS. 운영 callback/배포 NOT_RUN, dot provider 준비는 여전히 false. [계약·수락·복귀](./implementation/dot-mcp-events-d2-20261102.md) |
 | D3 | 기존 provider·topic·상주 발화·응답 대조·복구 결합 | **PR #39 병합 완료**, main `9992f74`. 승인된 연결 권한/발언 세대 분리, 원래 turn의 claim·mailbox·공개/대조 결합. 신규24·전체 Node468·CI browser62 PASS. 운영 연결·실계정·배포 NOT_RUN. [계약·수락·복귀](./implementation/dot-mcp-integration-d3-20261102.md) |
 | D4 | 공식 연결 UI·private plugin·진단/운영 절차 | **PR #40 병합 완료**, main `8affb46`. owner 등록/확인/회수·상태4축·보호된 stdio 전달기·등록 앱 참조 패키지 준비. Node473·실제 Chromium/MCP browser64·Codex0.165 계약 [CI PASS](https://github.com/firewine/webgpt/actions/runs/41380886404). [수락·검사·보존 기록](./implementation/dot-mcp-onboarding-d4-20261102.md)·[연결 절차](./dot-connection-runbook.md). 운영 인증 전달/실제 감시·배포 NOT_RUN |
-| D5 | 기존 50 gate·Muse 보존·혼합 채팅/업무/Wiki/Codex 통합 수락 | **자동 통합검사 PASS / 실계정 NOT_RUN.** Node477·설치 Chromium/MCP browser65 PASS, fail/skip0. 실제 stdio/HTTP·signed callback의 혼합 업무/Wiki/주제·재연결·승인 회귀와 합성 Muse 왕복. 제품/DB 변경0, 원래50 gate 유지. [추가 수락 manifest](./implementation/dot-acceptance-manifest.json)·[검사와 별도 실환경 적용안](./implementation/dot-mcp-acceptance-d5-20261102.md). CI는 PR의 해당 commit Check로 판정하며 운영 실수락 전 D5 전체 완료 아님 |
+| D5 | 기존 50 gate·Muse 보존·혼합 채팅/업무/Wiki/Codex 통합 수락 | **PR #41 병합·서버 적용 / 실제 왕복 일부 PASS.** MCP 메타데이터 오류 수정 및 감시 commandId 지시 보완 후 dot 상주1+주제1 답변 수락. GPT2·DeepSeek High·dot·Muse 초안5개와 GPT2 교차 검토 완료. 예약9/API1회, 시간 한도로 동일 주제 pause·방 off·Muse 잠금/정상 service 복구, 미확정0. Node486·browser65·Codex 계약 CI PASS. 제품 전역 한도/DB 변경0. [실환경 기록·남은 수락](./implementation/dot-mcp-live-d5-20261102.md)·[추가 수락 manifest](./implementation/dot-acceptance-manifest.json)·[자동 통합 증거](./implementation/dot-mcp-acceptance-d5-20261102.md). 전체2라운드/후속·기기·실제 Codex 등 D5 전체 미완료 |
 
-현재 상태와 D0 실행 증거·차단 조건은 [D0 기록](./implementation/dot-mcp-events-d0-20261101.md)에서 관리한다. 이 표가 아래 과거 dot browser/기존 thread 기본 경로 설명보다 우선한다. 실제 dot의 격리 합성 이벤트·답변은 확인했지만 운영 채팅방 연결·영속 grant/actor·혼합 실계정 수락은 아직 아니다.
+현재 D5 실환경 진행은 [적용·수락 기록](./implementation/dot-mcp-live-d5-20261102.md), 과거 D0 증거는 [D0 기록](./implementation/dot-mcp-events-d0-20261101.md)에서 관리한다. 이 표가 아래 과거 dot browser/기존 thread 기본 경로 설명보다 우선한다. 운영 grant/전달기 준비와 실제 dot 응답·혼합 수락을 구분한다.
+
+2026-11-02 PR #41 병합 후 서버 적용·제한된 혼합 검증을 진행했다. 첫 dot 요청은 감시 환경의 `crypto` 오류로 답변 없이 중단돼 대조 종료했다. 기존 감시 지시 보완 후 원래30분 창 안에서 dot 답변2건과 GPT2/API/Muse의 실제 초안·일부 교차 검토를 확인했다. 방과 dot 발언은 off, 동일 주제는 일시정지이며 원문/receipt를 보존한다. API 일일8회·200,000 보고 토큰 설정은 유지한다. D5 종료 제어는 검증용이며 일반 제품 전역 한도는 추가하지 않는다. 실제 Codex 실행은 이번 범위에서 제외했다.
+
+14:13 KST 검증 종료 정리: native 감시 비활성·서버 구독0·전용 grant 회수·Tunnel1개 종료를 확인했다. 다음 실계정 창을 허용받으면 동일 주제의 남은 검토를 이어가며, 그 전에는 dot을 상시 연결 완료로 표시하지 않는다. Muse 수동 잠금과 정상 서비스는 복구했다.
 
 2026-11-02 PR #40 병합 후 D5 진행 지시. 기준 main `8affb469c3e6ce5b636f465ff693d62ac45071b8`에서 기존 엔진·Store·큐·Wiki·Codex·Muse 계약을 바꾸지 않고 통합 수락을 추가한다. 원래50 gate의 역사적 상태/실계정 부분 결과는 유지하며 새6개 관문은 별도 manifest로 추적한다. D5 전체 완료는 운영 인증 전달·실제 dot/Muse/혼합 수락까지 확인해야 한다. 승인 계획 §6의 배포/실호출 별도 허용 조건을 따르며 자동 검사만으로 계정·서버·실행 완료를 선언하지 않는다.
 

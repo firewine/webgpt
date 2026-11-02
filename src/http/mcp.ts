@@ -12,6 +12,15 @@ const TOOLS = ['task_get', 'context_get', 'result_submit', 'capabilities_get', '
 type Grant = WorkspaceState['grants'][number];
 type AccessGrant = Grant | ResidentGrant | { kind: 'dot'; grant: DotGrant };
 const residentGrant = (g: Grant | ResidentGrant): g is ResidentGrant => 'kind' in g && g.kind === 'resident';
+// MCP request metadata is protocol context, never a tool argument or authority.
+// Preserve strict field checks on method data and nested tool/event arguments.
+function methodParams(raw: unknown): Record<string, unknown> | undefined {
+  if (raw === undefined) return undefined;
+  const params = object(raw);
+  if (Object.hasOwn(params, '_meta')) object(params._meta);
+  const { _meta: _ignored, ...data } = params;
+  return data;
+}
 export class McpEndpoint {
   constructor(private readonly app: Workspace) {}
   createGrant(input: unknown): { id: string; token: string } {
@@ -38,7 +47,7 @@ export class McpEndpoint {
       const m = object(raw); if (m.jsonrpc !== '2.0' || typeof m.method !== 'string') throw new AppError('invalid_jsonrpc');
       if (m.id === undefined && m.method === 'notifications/initialized') return null;
       if (typeof m.id !== 'number' && typeof m.id !== 'string') throw new AppError('invalid_jsonrpc_id');
-      try { return { jsonrpc: '2.0', id: m.id, result: await this.app.mcpEvents.handle(m.method, m.params, grant.grant) }; }
+      try { return { jsonrpc: '2.0', id: m.id, result: await this.app.mcpEvents.handle(m.method, methodParams(m.params), grant.grant) }; }
       catch (error) { return { jsonrpc: '2.0', id: m.id, error: error instanceof CallbackError ? { code: -32015, message: 'CallbackEndpointError', data: { reason: error.reason } } :
         { code: error instanceof AppError && error.code === 'unknown_event_method' ? -32601 : -32602, message: error instanceof AppError ? error.code : 'Event request failed' } }; }
     }

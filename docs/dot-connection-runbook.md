@@ -83,6 +83,8 @@ tunnel-client run --profile webjjoku-dot-prod-v1 \
 
 동적 request/probe ID를 스키마에 고정하지 않는다. D0 합성 probe 설명이 보이면 운영 등록이 아니다. `mcp.json`/패키지 생성·도구 목록만으로 감시와 답변이 성공했다고 표시하지 않는다. 실제 native 감시 등록/이벤트 전달은 [MCP Events](https://developers.openai.com/plugins/build/mcp-events) 절차로 검증한다.
 
+이름만 같은 D0 정의와 혼동하지 않도록 실제 감시가 사용하는 인자도 대조한다. 운영 `dot_turn_claim`에는 `requestId/commandId`, `dot_turn_submit`에는 `requestId/attemptId/attemptToken/commandId/text`가 필요하다. `dot_turn_get`은 빈 인자로 메타데이터를 읽고, 입력 조회에는 winning attempt를 전달할 수 있어야 한다. 다른 대화의 캐시 상태를 실제 dot의 상태로 단정하지 않으며, 불일치하면 방을 끈 상태에서 도구 새로 고침과 기존 감시의 정의를 확인한다.
+
 등록된 앱을 참조하는 개인 패키지가 필요할 때만 아래 도구를 사용한다. `plugin_asdk_app_...`는 등록된 **plugin 기술 ID**다. tunnel ID·앱의 표시 이름으로 대체하지 않고 등록/내보내기 결과로 확인한다. 저장소에는 계정별 `.app.json`을 넣지 않는다.
 
 ```bash
@@ -94,6 +96,8 @@ node scripts/dot-mcp-ops.mjs package /실제/state/dot-production/plugin-v1 plug
 ## 5. 실제 dot 참여와 관측
 
 운영 인증/기존 감시 중복 여부를 확인한 후 `plugins/webjjoku-dot/README.md`의 최초 지시를 실제 dot에게 전달한다. 핵심은 native Events 감시 하나 → 이벤트에서 현재 요청 조회 → claim → winning attempt로 고정 입력 조회 → 같은 요청/attempt에 JSON 답변 submit이다. 서버가 돌려준 ID/필터를 사용한다. 일반 채팅에 확인 문장을 적는 것과 `accepted/receipt` 수락은 다르다.
+
+감시 환경의 `crypto` 존재를 전제하지 않는다. commandId는 README의 일반 JavaScript 문자열 생성 예시처럼 한 번 만들고 재확인 시 보존하며, 인증에 쓰는 attemptToken은 반드시 서버가 발급한다. `crypto is not defined` 같은 실행 환경 오류가 나면 원래 감시의 실행 시각·get/claim/submit 단계와 서버 기록을 대조한 후 지시를 보완한다. callback200만으로 답변 완료나 미전송을 판정하지 않는다.
 
 구독이 유효하고 차단 사유가 없을 때 UI는 **전송 준비됨**을 표시한다. 그 뒤 사용자가 채팅방의 해당 dot 발언 참여와 방 켜기를 설정한다. 등록/상태 조회만으로 모델 호출을 시작하지 않는다. 통합 수락은 D5의 실제 호출 허용 범위·횟수 안에서 진행한다.
 
