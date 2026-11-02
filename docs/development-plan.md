@@ -6,6 +6,8 @@
 
 20:50 KST native dot이 이전 schema라 `inputPage`가 없음을 보고해 감시를 활성화하지 않았다. 실서버와 실제 stdio 전달기의 새 schema는 PASS이며 소비자 snapshot 불일치를 대조했다. [공식 새로 고침→새 대화 확인 절차와 진단](./implementation/dot-mcp-paged-live-d5-20261102.md#도구-명세-갱신-대조)을 진행하며 새 모델 호출0을 유지한다. 기존8개·API 정책·Muse 잠금과 두 라운드 수락 기준은 그대로다.
 
+21:14 KST 해당 실제 dot은 여러 대화를 열 수 없다는 사용자 보고를 반영해 새 대화 요청을 취소했다. **기존 dot을 유지하고 같은 private Tunnel에 MCP 연결만 새 이름으로 등록**하는 D4 기존 절차로 discovery를 분리한다. 등록/최신 `inputPage` 확인 대기이며 새 감시·실제 호출0이다. 기존 연결·Muse를 삭제하지 않고 제품/권한 계약을 확대하지 않는다.
+
 2026-11-02 PR #43 병합(`2447ada`) 후 D5 재개 준비에서 원래 dot 요청은 이미 전달·claim돼 `not_sent`로 대조할 수 없고, `skip`은 첫 검토 라운드를 완성하지 못함을 확인했다. 사용자가 [소유자 중단 확인 후 명시 재시도 보완](./reviews/dot-explicit-retry-impact-20261102.md)을 승인했다. D3의 주제 토의 dot 복구 선택지·D4 확인 UI·D5 중복/늦은 응답/재시작 검사를 보완한다. 원래 실패 요청·완료8개·Muse·DB·단일 실행·예산/300초 경계를 유지하며 새 phase는 없다. 예상10~12파일·350~650줄. 배포/추가 실계정 호출은 별도이며 D5-F BLOCKED를 유지한다.
 
 [명시 재시도 구현·검사](./implementation/dot-explicit-retry-20261102.md): 소유자 중단·미제출 확인 뒤 같은 과제만 대기시키고 별도 resume 전 전송0. 원래 답변·늦은 응답 격리·권한 회수·실제 SIGKILL을 포함해 **Node529·Chromium/Chrome MCP66 PASS**다. 원래 운영 데이터에 복구 명령을 적용하지 않았고 실제 native 재시도/배포는 NOT_RUN이다.

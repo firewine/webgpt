@@ -55,3 +55,7 @@ private 추가 증거는 `deployment-observed.json`, `retry-prepared-observed.js
 대기 중 최초 전용 grant가 만료돼 기존 runtime1개를 확인 종료하고 같은 dot/방/세 도구의 **30분 scoped grant**로 전용 runtime1개를 준비했다. grant/API key를 공개하거나 새 runtime key를 요청하지 않았다. readyz200/경고0, 원래8개 보존·새 예약/API0·구독0·방 off/Muse 잠금을 재확인했다. 실제 검증 예약은 아직 시작하지 않았다.
 
 [공식 Refresh metadata 절차](https://developers.openai.com/plugins/deploy/connect-chatgpt#refresh-metadata)의 ‘연결 새로 고침→명세 변경 확인→새 대화에서 재검사’를 대조했다. 같은 dot의 새 대화에서 **도구를 호출하지 않고 입력 명세만** 확인하도록 요청했다. 새 플러그인/새 터널 생성·서버 schema 우회·기존 원문 절단을 먼저 적용하지 않는다. 페이지 인자가 실제 native에 노출되고 감시 지시 갱신이 확인되기 전 resume하지 않는다. 진단 증거는 private `native-schema-stale-user-report.json`, `stdio-v2-catalog-observed.json`, `schema-refresh-v2-ready.json`에 있다.
+
+21:14 KST 사용자는 **해당 실제 dot에서 여러 대화를 열 수 없다**고 정정했고, 여전히 `attemptId/attemptToken/requestId`만 보인다고 보고했다. 새 대화 요청은 이 계정 흐름에 적용할 수 없으므로 취소했다. 기존 dot을 교체하거나 새 일반 GPT를 만들지 않는다.
+
+다음 연결 진단은 D0에서 사용한 기존 방법처럼 **같은 dot/같은 private Tunnel에 새 이름의 custom MCP 연결**을 추가하는 것이다. 이름 `webjjoku_dot_paged`로 기존 세 도구/동일 권한을 새 discovery snapshot에서 확인하도록 요청했다. 기존 `ubuntu_dot_d0_v3`·Muse·계정/원문은 보존하며 새 runtime key·Tunnel·OAuth/공개 ingress·제품 코드/DB 계약 변경은 없다. 관리 플러그인의 이름 검색으로는 기존 private custom 연결이 검색되지 않았으며, 검색 결과 부재를 계정 접근 거부로 단정하지 않는다. 등록/새 명세 확인 전 native 감시 생성·실제 호출은 계속0이다.
