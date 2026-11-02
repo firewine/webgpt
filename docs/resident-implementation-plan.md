@@ -1,6 +1,6 @@
 # 상주 운영 단계별 변경·이관·수락·롤백
 
-> **2026-11-01 공식 dot 연결 개정·개발 승인:** [D0~D5 승인 범위](./reviews/dot-official-mcp-events-impact-20261101.md)를 R1 additive 상태/이관→R2 provider·대조→R3 연결 UI→R4 native dot 분리→R5 업무·R6 Codex·R7 Wiki 권한 소비→R8 통합 회귀에 반영한다. 실제 순서는 [SSOT](./development-plan.md)를 따른다. Muse의 현재 browser binding/profile/thread·초안/receipt 가드는 유지한다. dot의 일반 ChatGPT `/c/...` 요구는 공식 연결로 대체하며 기존 browser 기록을 자동 승격하지 않는다. complete/transaction/단일 lease·예산/승인/미확정·50 gate는 유지한다. 추가 OAuth 등 확대는 별도 영향 보고·승인 대상이다. 현재 D0 진행 중이며 D1 이후는 관문 대기다.
+> **2026-11-01 공식 dot 연결 개정·개발 승인:** [D0~D5 승인 범위](./reviews/dot-official-mcp-events-impact-20261101.md)를 R1 additive 상태/이관→R2 provider·대조→R3 연결 UI→R4 native dot 분리→R5 업무·R6 Codex·R7 Wiki 권한 소비→R8 통합 회귀에 반영한다. 실제 순서는 [SSOT](./development-plan.md)를 따른다. Muse의 현재 browser binding/profile/thread·초안/receipt 가드는 유지한다. dot의 일반 ChatGPT `/c/...` 요구는 공식 연결로 대체하며 기존 browser 기록을 자동 승격하지 않는다. complete/transaction/단일 lease·예산/승인/미확정·50 gate는 유지한다. 추가 OAuth 등 확대는 별도 영향 보고·승인 대상이다. **11/02 D4까지 병합, D5 통합 수락 진행 중.** [D5 보완 manifest](./implementation/dot-acceptance-manifest.json)는 원래50개를 대체하지 않으며 실계정 수락은 미완료다.
 
 > **2026-11-01 주제별 채팅 통합 승인:** R3의 별도 토의 화면 기본 진입/복귀 결정을 주제별 채팅 shell로 대체한다. 기존 상세 제어는 drawer/dialog로 재사용하며 G0 뒤 동일 ID 원문/상세 보기로 복귀할 수 있다. R8에서 독립3+방 연결2 주제 표시, 전환20회 POST/외부 호출0, 4폭/2탭/SSE·공개 경계·승인/복구를 추가 회귀한다. 원래 gate의 숫자·안전 기준·실계정 미검증은 유지한다. [승인 범위·후속 영향·검증·복귀](./reviews/topic-chat-ui-impact-20261101.md). 실제 완료 여부는 [페이즈 SSOT](./development-plan.md)를 따른다.
 
