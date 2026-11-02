@@ -29,6 +29,7 @@ import { ResidentMcp } from './resident-mcp.js';
 import { validateTopicIntents } from './resident-focus.js';
 import { apiUsageSummary, configureApiUsage, validateApiUsage, dailyRoom } from './api-usage.js';
 import { validatePasswordState } from './password.js';
+import { DotMcp, readDotState } from './dot-mcp.js';
 
 export class Workspace {
   readonly store: Store; readonly vault: Vault; readonly oauth: OAuthService; readonly browser: BrowserBridge;
@@ -43,13 +44,14 @@ export class Workspace {
   readonly workExecution: WorkExecutionBridge;
   readonly wiki: Wiki;
   readonly residentMcp: ResidentMcp;
+  readonly dotMcp: DotMcp;
   constructor(readonly config: WorkspaceConfig, fakeDelay = 80, options: { residentProvider?: Pick<Providers, 'complete'>; residentClock?: () => number; residentAutoSchedule?: boolean } = {}) {
     this.store = new Store(config.stateDir);
     this.dispatch = new DispatchCoordinator(config.residentEnabled);
-    try { validatePasswordState(this.store.read()); validateApiUsage(this.store.read()); this.resident = new ResidentStore(this.store, config.residentEnabled); validateTopicIntents(this.store.read()); validateWikiState(this.store.read()); validateWorkExecutionState(this.store.read(), this.store); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); this.wiki = new Wiki(this.store, config.residentEnabled); }
+    try { readDotState(this.store.read()); validatePasswordState(this.store.read()); validateApiUsage(this.store.read()); this.resident = new ResidentStore(this.store, config.residentEnabled); validateTopicIntents(this.store.read()); validateWikiState(this.store.read()); validateWorkExecutionState(this.store.read(), this.store); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); this.wiki = new Wiki(this.store, config.residentEnabled); }
     catch (error) { this.store.close(); throw error; }
     this.vault = new Vault(join(config.stateDir, 'credentials'));
-    try { for (const connectionId of this.store.read().connectionCleanup ?? []) this.cleanupConnection(connectionId); }
+    try { this.dotMcp = new DotMcp(this.store, this.vault, config.residentEnabled); for (const connectionId of this.store.read().connectionCleanup ?? []) this.cleanupConnection(connectionId); }
     catch (error) { this.store.close(); throw error; }
     const accessPath = join(config.stateDir, 'access-token');
     let token = config.accessToken;
@@ -92,7 +94,7 @@ export class Workspace {
       discussions: state.discussions.map(d => ({ id: d.id, topic: d.topic, roomId: d.roomId ?? null, status: d.status, phase: d.phase, revision: d.revision, createdAt: d.createdAt, updatedAt: d.updatedAt })),
       bindings: state.bindings, jobs: state.jobs.slice(-50), browserPaused: state.browserPaused,
       materialPackages: (state.materialPackages ?? []).map(materialMetadata), materialRoots: this.config.materialRoots,
-      resident: this.resident.snapshot(), apiDaily: apiUsageSummary(state),
+      resident: this.resident.snapshot(), apiDaily: apiUsageSummary(state), dotMcp: this.dotMcp.snapshot(),
       capabilities: { sourceFetch: this.config.sourceFetch, browserConfigured: !!this.config.chromeCommand,
         noVncConfigured: this.config.noVncPort !== null, codexConfigured: this.config.workspaceRoots.length > 0 },
       grants: state.grants.map(({ hash: _hash, ...grant }) => grant) };
@@ -247,6 +249,7 @@ export class Workspace {
       this.assertNoActiveTurn(connectionId); this.assertConnectionIdle(connectionId);
       const index = s.connections.findIndex(c => c.id === connectionId);
       if (index >= 0) {
+        this.dotMcp.revokeInState(s, connectionId);
         s.connections.splice(index, 1);
         (s.connectionCleanup ??= []).push(connectionId);
         emit({ type: 'connection.removed', discussionId: null, data: { connectionId } });
@@ -262,7 +265,7 @@ export class Workspace {
   }
   private cleanupConnection(connectionId: string): void {
     if (this.store.read().connections.some(c => c.id === connectionId)) throw new AppError('invalid_connection_cleanup', 500);
-    try { this.vault.remove(connectionId); } catch { throw new AppError('connection_cleanup_failed', 500); }
+    try { this.dotMcp.cleanup(connectionId); this.vault.remove(connectionId); } catch { throw new AppError('connection_cleanup_failed', 500); }
     if (this.store.read().connectionCleanup?.includes(connectionId)) this.store.transact((s, emit) => {
       s.connectionCleanup = (s.connectionCleanup ?? []).filter(id => id !== connectionId);
       emit({ type: 'connection.credentials_removed', discussionId: null, data: { connectionId } });

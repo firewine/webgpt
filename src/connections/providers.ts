@@ -24,6 +24,7 @@ export class Providers {
   async models(connectionId: string): Promise<ModelChoice[]> {
     const c = this.store.read().connections.find(x => x.id === connectionId);
     if (!c) throw new AppError('connection_not_found', 404);
+    if (c.kind === 'dot-mcp') throw new AppError('dot_transport_not_ready', 409);
     if (c.kind === 'anthropic') return this.anthropic.models(c.id);
     if (c.kind === 'browser') { if (!c.browser || !this.browser.probe) throw new AppError('browser_not_configured', 409); await this.browser.probe(c.browser); return c.models; }
     const codex = c.kind === 'codex-oauth' ? await this.codexOAuth?.access(c.id) : null;
@@ -50,6 +51,7 @@ export class Providers {
   }
   async complete(input: CompletionInput): Promise<Completion> {
     const { participant: p, signal, hooks } = input;
+    if (p.kind === 'dot-mcp') throw new AppError('dot_transport_not_ready', 409);
     if (p.kind !== 'deepseek' && p.maxOutputTokens !== undefined) throw new AppError('output_limit_requires_deepseek', 409);
     if (p.kind === 'fake') {
       hooks.dispatched(); const receipt = id('fake'); hooks.receipt(receipt);

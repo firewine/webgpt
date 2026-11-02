@@ -6,14 +6,16 @@
 
 | 보완 단계 | 승인 범위 | 현재 상태 |
 | --- | --- | --- |
-| D0 | 대상 dot의 private plugin·Tunnel·지원 인증·Events→입력 조회→응답 제출 검증 | **실제 dot 합성 왕복 PASS / 감시 종료 확인 대기(11/02).** 공식 stdio 초기화 보완 뒤 구독 challenge200·이벤트 전달200·native 답변1건 수락, 사용자 receipt와 서버 receipt 일치. 약30초 왕복·동일 scope 구독 갱신1회/새 이벤트0 확인. 아직 감시 ACTIVE·unsubscribe0이므로 D0 전체/D1 이후 관문 유지. 코드4c79515의 CI Node375·browser62 PASS, fail/skip0. [실측과 남은 경계](./implementation/dot-mcp-events-d0-20261101.md#10-실제-dot-합성-이벤트응답-왕복-성공)·[검사 절차](./dot-mcp-d0-test.md) |
-| D1 | additive dot kind·identity/grant·영속 namespace·이관 | D0 대기 / NOT_RUN |
+| D0 | 대상 dot의 private plugin·Tunnel·지원 인증·Events→입력 조회→응답 제출 검증 | **합성 왕복·구독 종료 PASS / PR #36 병합.** challenge200·이벤트200·native 답변1건/receipt 일치 뒤 11/02 서버 UNSUBSCRIBED·subscription NONE 확인. 원래 receipt 보존, 검사 runtime 종료. native actor 증명·운영 grant 전달은 후속 검증 대상. [실측과 종료](./implementation/dot-mcp-events-d0-20261101.md#11-감시-해제-확인과-d0-종료) |
+| D1 | additive dot kind·identity/grant·영속 namespace·이관 | **구현·로컬 검사 PASS / 검토 브랜치, 병합 전.** 병합 main5b0eaae 기준, 기존 Store/Vault 재사용·owner 확인/암호학적 native identity 구별·준비 권한 복구 시 폐기·범위/세대 fencing·삭제 cleanup 결합. 신규22·전체 Node397 PASS. D2/D3 전송·모델/발화 준비는 false로 유지. [계약·수락·복귀](./implementation/dot-mcp-foundation-d1-20261102.md) |
 | D2 | Events 구독·callback 검증/서명·영속 outbox | D0/D1 대기 / NOT_RUN |
 | D3 | 기존 provider·topic·상주 발화·응답 대조·복구 결합 | D0~D2 대기 / NOT_RUN |
 | D4 | 공식 연결 UI·private plugin·진단/운영 절차 | D0 결과를 반영해 진행 / NOT_RUN |
 | D5 | 기존 50 gate·Muse 보존·혼합 채팅/업무/Wiki/Codex 통합 수락 | D0~D4 대기 / NOT_RUN |
 
 현재 상태와 D0 실행 증거·차단 조건은 [D0 기록](./implementation/dot-mcp-events-d0-20261101.md)에서 관리한다. 이 표가 아래 과거 dot browser/기존 thread 기본 경로 설명보다 우선한다. 실제 dot의 격리 합성 이벤트·답변은 확인했지만 운영 채팅방 연결·영속 grant/actor·혼합 실계정 수락은 아직 아니다.
+
+2026-11-02 사용자가 PR #36 병합 후 다음 단계를 지시했다. D0 구독 해제와 원래 receipt를 먼저 대조한 뒤 D1을 독립 worktree에서 구현했다. 추가 OAuth·공개 ingress·기존 MCP 권한 확대·provider 전송 계약 변경은 없다. 아래 D2~D5 순서와 수락 기준을 유지하며 D1의 owner 내부 서비스만으로 실제 plugin/운영 방 연결이 완료됐다고 표시하지 않는다.
 
 2026-11-01 사용자 명시 변경: **비밀번호 최소 길이를6자로 지정**했다. `passwordValue`와 웹 설정/변경 검증·안내를6~128자로 맞춘다. salt/scrypt·동일 비밀번호 확인·소유자 최초 설정/재설정·12시간 세션·실패 제한은 유지하며 DB 이관과 R1~R8 실행/계정/예산 계약 변경은 없다. 기존15자 이상 비밀번호도 계속 유효하다. [구현·검증 기록](./implementation/password-login-20261101.md)의 후속 변경을 따른다. 운영 비밀번호 변경·서비스 배포는 별도다.
 
