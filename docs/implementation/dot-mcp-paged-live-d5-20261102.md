@@ -47,3 +47,11 @@ private 준비 파일은 `dot-mcp-d5-paged-live-20261102/`의 `before-deploy.sql
 private 추가 증거는 `deployment-observed.json`, `retry-prepared-observed.json`, `grant-prepared.json`, `tunnel-ready-observed.json`, `muse-page-restored.json`, `page-observer-ready.json`, `paging-catalog-observed.json`이다. 운영 결과를 보존하며 서버를 정상 entry로 복구할 때는 이번 전용 drop-in만 제거하고 다른 서비스/Serve를 건드리지 않는다.
 
 **서버 적용·조회/복구 준비 PASS / 추가 실계정 답변 수락 NOT_RUN / D5-F BLOCKED.** 두 라운드/같은 방 후속은 아직 완료로 표시하지 않는다.
+
+### 도구 명세 갱신 대조
+
+20:50 KST 사용자가 실제 dot의 명세에 선택적 `inputPage`가 없어 감시 변경/활성화·claim/submit을 하지 않았다고 보고했다. 현재 Codex에 노출된 같은 플러그인의 schema도 예전 세 입력 필드뿐이었다. 반면 실서버 `tools/list`와20:54 KST **실제 stdio 전달기 초기화→tools/list** 모두 `inputPage: {type:integer,minimum:0}` 및 새 페이지 지시를 반환했다. 도구3개/프로토콜 동일이며 source 배포 누락으로 분류하지 않는다. 서버와 소비자 discovery snapshot 불일치는 확인됐으나 정확한 캐시 계층은 UNVERIFIED다.
+
+대기 중 최초 전용 grant가 만료돼 기존 runtime1개를 확인 종료하고 같은 dot/방/세 도구의 **30분 scoped grant**로 전용 runtime1개를 준비했다. grant/API key를 공개하거나 새 runtime key를 요청하지 않았다. readyz200/경고0, 원래8개 보존·새 예약/API0·구독0·방 off/Muse 잠금을 재확인했다. 실제 검증 예약은 아직 시작하지 않았다.
+
+[공식 Refresh metadata 절차](https://developers.openai.com/plugins/deploy/connect-chatgpt#refresh-metadata)의 ‘연결 새로 고침→명세 변경 확인→새 대화에서 재검사’를 대조했다. 같은 dot의 새 대화에서 **도구를 호출하지 않고 입력 명세만** 확인하도록 요청했다. 새 플러그인/새 터널 생성·서버 schema 우회·기존 원문 절단을 먼저 적용하지 않는다. 페이지 인자가 실제 native에 노출되고 감시 지시 갱신이 확인되기 전 resume하지 않는다. 진단 증거는 private `native-schema-stale-user-report.json`, `stdio-v2-catalog-observed.json`, `schema-refresh-v2-ready.json`에 있다.
