@@ -26,6 +26,7 @@ PR #41은 2026-11-02 12:57:41 KST 병합됐다. 적용 main은 `befac863c3e8539f
 | 실제 감시/응답 | native 감시1개, 요청3개의 callback 각1회 HTTP200. 첫 요청은 감시 실행 오류로 대조 종료. 수정 후 상주1개·주제1개 각각 claim/reply/receipt/기존 엔진 수락 | 실제 왕복2건 PASS / 전체 D5-F 미완료 |
 | 혼합 검증 | GPT2·DeepSeek High·dot·Muse의 독립 초안5개 모두 수락, 이후 GPT2의 교차 검토2개·구조화 reviews20개 보존. 시간 창 종료로 동일 주제 cross_review1에서 pause. 전체 예약9회/응답8건/API1회/Codex0 | 일부 실행 PASS / 전체 수락 BLOCKED |
 | 종료 복구 | 14:03:53 KST 방 off·참여 토글·Muse 잠금 복구, 미해제 lease0·미확정0. 14:05 정상 service entry 복귀, health/owner API·원래 기록 보존 | PASS |
+| 감시/권한 정리 | 실제 `events/unsubscribe` 수신·구독0 확인 후14:12:33 KST 검증 grant 회수,14:13:13 해당 profile의 Tunnel1개 정상 종료. 사용자가 native 감시 비활성도 확인 | PASS |
 | 실제 Codex | roots/binding 미준비이며 이번 범위에서 제외 | NOT_RUN |
 
 연결별 모델 목록과 실제 응답은 구분한다. 이번에는 GPT2·CoralBricks High·Muse의 실제 초안을 확인했으며 River는 호출하지 않았다. Muse send 버튼은 빈 입력에서 보이지 않는 기존 `sendAppearsAfterInput` 계약을 유지한다. 읽기 전용 사전 검사로 계정/thread/빈 초안을 확인한 뒤 허용된 혼합 검증에서만 입력·전송했다.
@@ -96,4 +97,6 @@ npm run check
 
 private 증거: `live-continuation-start.json`, `live-progress.jsonl`, `live-continuation-outcome.json`, `independent-barrier-observed.json`, `five-drafts-observed.json`, `acceptance-observed.json`, `normal-service-restored.json`. 실제 native 감시/claim/receipt와 주제 원문은 운영 DB에도 보존한다. 공개 문서에는 개인 ID·원문·키를 넣지 않는다.
 
-API 일일8회·보고 토큰200,000 설정은 사용자 승인대로 유지한다. 검증용 감시 종료 결과 대조와 해당 grant/전달기 정리를 진행한다. 이어갈 때는 기존 일시정지 주제를 사용하되 다음 실계정 검증 시간·요청 범위를 먼저 확정한다. D5-F는 실제 일부 왕복이 확인됐으므로 NOT_RUN에서 BLOCKED로 갱신하며 수락 조건은 변경하지 않는다. 다른 기기/Codex gate도 미완료이고 D5 전체 완료를 선언하지 않는다.
+API 일일8회·보고 토큰200,000 설정은 사용자 승인대로 유지한다. 서버의 `dot.unsubscribed` 이벤트·활성 구독0과 사용자의 native 감시 비활성 보고를 대조했다. 검증 grant 회수 뒤 profile/경로가 일치하는 Tunnel 프로세스1개만 SIGTERM으로 정상 종료했다. `native-unsubscribe-observed.json`, `native-grant-revoked.json`, `tunnel-stopped.json`에 기록했으며 원문/receipt2개·일시정지 주제를 보존했다. Muse·다른 provider와 서비스에는 종료 신호를 보내지 않았다.
+
+이어갈 때는 기존 일시정지 주제와 누적 API 사용량을 사용하되 다음 실계정 검증 시간·요청 범위를 먼저 확정한다. 검증 grant가 회수됐으므로 현재 dot 연결을 계속 사용 가능한 상태로 안내하지 않는다. 다음 허용된 창에서 같은 dot/방의 새 scoped grant·전달기·native 감시를 준비하고 미확정0을 확인한 뒤 같은 주제를 재개한다. D5-F는 실제 일부 왕복이 확인됐으므로 NOT_RUN에서 BLOCKED로 갱신하며 수락 조건은 변경하지 않는다. 다른 기기/Codex gate도 미완료이고 D5 전체 완료를 선언하지 않는다.
