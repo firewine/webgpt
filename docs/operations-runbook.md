@@ -305,6 +305,8 @@ SQLite의 online backup API를 사용한다. 백업은 0600이며 대화·실행
 
 재시작 당시 준비/전송/실행 중이던 항목은 미확인으로 복구된다. `원본과 복구`에서 원격 대화를 대조한 뒤 완료 응답·미전송·건너뛰기를 기록하고 명시적으로 이어간다. Codex는 원래 thread/turn의 실제 결과를 조회한다. 웹 새로고침과 SSE 재연결은 추가 발언이나 실행을 만들지 않는다.
 
+GPT의 `response_not_completed`는 정상 완료 응답을 받지 못했다는 판정이다. 진단 보완 버전에서는 해당 종료 이벤트의 `provider.response_not_completed` 운영 로그에 local request digest·허용된 event/status/error code/incomplete reason만 남긴다. `journalctl --user -u webjjoku --since '확인할 시각' --no-pager`에서 대조하되 `other`/null을 특정 원인으로 해석하지 않는다. provider 오류 문장·원문·출력·credential·원격 response ID는 기록하지 않는다. 이 로그가 없는 과거 실패의 원인은 복원되지 않으며, 같은 실패를 새 요청으로 자동 반복하지 않는다. [실패 실측·진단 계약·검사](./implementation/dot-mcp-v2-live-d5-20261104.md)를 따른다.
+
 ## 7. 실환경 완료 판정
 
 아래가 모두 실제 증거를 갖추기 전에는 MVP-1/2를 PASS로 바꾸지 않는다.
