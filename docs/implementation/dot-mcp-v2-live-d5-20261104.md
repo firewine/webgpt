@@ -15,9 +15,9 @@
 
 private 근거는 `before-deploy.sqlite`, `dist-before/`, `baseline.json`, `preparation-summary.json`, `chrome-page-preparation.json`, `muse-page-diagnosis.json`, `muse-blank-page-diagnosis.json`, `muse-front-preflight.json`이다. 계정/원문·키·callback을 공개 문서에 넣지 않는다.
 
-## 구체 적용·새 검증안 — 별도 승인 전 NOT_RUN
+## 구체 적용·새 검증 범위 — 사용자 명시 승인
 
-[직전 검증](./dot-mcp-resume-live-d5-20261104.md)의30분 실행 창은 종료됐다. 제품 개발 승인은 서버 적용/새 실계정 호출과 구분된다. 이번 준비는 새 호출 승인을 대신하지 않는다.
+[직전 검증](./dot-mcp-resume-live-d5-20261104.md)의30분 실행 창은 종료됐다. 이후 사용자가 **이전 dot 처리 중단·추가 제출 없음 확인 및 서버 적용/아래 새 실검증 범위**를 명시 승인했다. 이번 승인 범위만 사용하며 원래 호출/사용량을 초기화하지 않는다.
 
 | 항목 | 제안 실행/중지 범위 |
 | --- | --- |
@@ -32,4 +32,15 @@ private 근거는 `before-deploy.sqlite`, `dist-before/`, `baseline.json`, `prep
 | 정지·복귀 | 완료/한도/미확정/원래 데이터·범위 변경 시 방 off·실행 대조·Muse 잠금·최신 멤버 토글 복원·이번 grant/Tunnel/검증 drop-in 정리·정상 service 복구 |
 | 제외 | 실제 Codex/쓰기·새 외부 업무·추가 OAuth/계정/플러그인·새 phase·300초/12,000bytes 확대 |
 
-**현재: 빌드·백업·순수 guard·Muse 원래 화면 준비 PASS / 서버 적용·소유자 복구 명령·새 실제 모델 호출 NOT_RUN / D5-F 전체 BLOCKED.** 실제 결과가 관측되면 호출/시간·페이지/receipt·두 라운드/종합·같은 방 후속·복귀 증거를 추가한다. 원래50 gate·별도 기기/Codex 수락은 유지한다.
+## 실제 적용·복구·연결 준비
+
+-21:21 KST 운영 checkout을 `ops/dot-mcp-d5-v2-live-20261104`·병합 main `bd19d1f`로 fast-forward하고, 검사한 같은 소스의 별도 빌드로 교체했다. 정상 service 재시작/health·owner API PASS, 완료13개 digest·환경/API 정책·방 off/Muse 잠금·새 예약0을 확인했다. 사용자 untracked 파일은 유지했다.
+-21:22 KST 소유자 중단/추가 제출 없음 확인과 서버 reply/receipt/text0·원래 grant 회수를 다시 대조해 `retry_after_failed_submit`을 적용했다. 원래 요청은 consumed·실패 turn은 `owner_confirmed_retry_after_failed_submit`·lease released로 보존하고 같은 task만 pending이다. 기존13개 그대로·미확정0·새 전송0이다. 복구 command/event에 오류 뒤 제출 시도와 소유자 근거를 남겼으며 외부 작업 서비스의 최종 상태를 서버가 독립 증명했다고 표시하지 않는다.
+- 원래 Muse 계정/thread·빈 입력/idle을 기존 discovery로 다시 확인하고 같은 connection의 page ID만 현재 값으로 갱신했다. 초기 확인 요청에서 connectionId 누락을 서버가 scope mismatch로 거절했으며, 같은 기존 연결을 명시한 확인으로 통과했다. 새 연결·대화·계정으로 바꾸거나 메시지를 재전송하지 않았다.
+-21:25 KST 이번 검증용 drop-in으로 기존 앱의 요청/시간/API 제한·Codex/새 업무 차단을 켰다. 같은 dot/방/세 도구의30분 권한과 기존 Tunnel/runtime key 참조로 전달기1개를 준비했다. 실제 동일 플러그인의 metadata get·readiness PASS, 현재 요청 없음이다. 새 키·터널·플러그인은 만들지 않았다.
+- 토큰 제한은 기존 계약대로 이번 새 API 요청에서 **보고된 사용량**을 정산하고 다음 호출을 차단한다. 미보고량을 만들어 표시하지 않는다. 원래 제품의 단일 응답 정산 후 한도 초과 가능성/추가 호출 차단 계약을 유지하며 별도 tokenizer/금융 한도를 추가하지 않는다.
+- 검증 종료 정리는 소유권이 확인된 항목을 각각 시도하고 실패 사유를 모아 실제 결과에 남긴다. 진행 중 lease가 남으면 브라우저/서비스를 강제 교체하지 않는다. 이번 시작 전 Muse 잠금 true를 다시 요구하고, 승인된 종료 잠금·사용자 멤버 변경 보존·이번 grant/Tunnel/drop-in 정리 경계를 유지한다.
+
+**현재: 서버 적용·원래 과제 명시 복구·완료13개 보존·Muse/전달기 준비 PASS / 실제 dot 감시 재연결 확인 대기·새 모델 예약0 / D5-F 전체 BLOCKED.** 감시 준비 뒤에만 같은 토의를 명시 resume한다. 실제 결과가 관측되면 호출/시간·페이지/receipt·두 라운드/종합·같은 방 후속·복귀 증거를 추가한다. 원래50 gate·별도 기기/Codex 수락은 유지한다.
+
+private 추가 증거는 `authorization.json`, `acceptance-policy.json`, `before-apply-observed.json`, `deployment-observed.json`, `before-explicit-recovery.json`, `explicit-recovery-observed.json`, `muse-preflight-confirmed.json`, `guard-service-ready.json`, `grant-ready.json`, `tunnel-readiness-observed.json`이다. 원래 단일 입력/토큰·인증 파일을 공개 문서에 복사하지 않는다.

@@ -2,7 +2,7 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
-**2026-11-04 PR #45 병합 뒤 D5 v2 실검증 준비:** main `bd19d1f`와 검사한 head `aecf65f`의 tree가 같고 CI553/67 PASS를 확인했다. 별도 빌드·SQLite/이전 dist 백업·완료13개 digest·원래 미확정의 새 순수 복구 guard PASS·Muse 같은 계정/thread/idle을 대조했다. 운영은 아직 이전 source·방 off/Muse 잠금이며 **서버 적용/복구 명령/새 호출 NOT_RUN·D5-F BLOCKED**다. [구체 적용·새30분/23회·DeepSeek High5회/119,757 보고 토큰 범위](./implementation/dot-mcp-v2-live-d5-20261104.md)는 별도 승인 전 실행하지 않는다. 기존13개와 원래 실패/제출 시도·Muse·50 gate를 보존한다.
+**2026-11-04 PR #45 병합 뒤 D5 v2 적용·명시 복구:** main `bd19d1f`와 검사한 head `aecf65f`의 tree가 같고 CI553/67 PASS를 확인했다. 사용자가 기존 dot 중단 확인·서버 적용·새30분/23회·DeepSeek High5회/119,757 보고 토큰 실검증을 승인했다.21:21 적용/health,21:22 원래 과제의 `retry_after_failed_submit`·실패/제출 시도 이력 보존·완료13개 digest 동일·미확정0·전송0을 확인했다. 같은 Muse 계정/thread·page ID 갱신·현재 dot 전달기 조회를 확인하고 native 감시 재연결을 기다린다. **방 off/Muse 잠금·새 예약0·D5-F 전체 BLOCKED**다. [새 범위·실제 적용·후속 증거](./implementation/dot-mcp-v2-live-d5-20261104.md)를 따른다. 기존13개·Muse·50 gate와 단일 실행/300초/권한 경계를 유지한다.
 
 **2026-11-04 승인 보완 구현·자동 검사 PASS:** 사용자가 [페이지 중복 전송 축소·제출 오류 복구 영향안](./reviews/dot-page-transport-retry-impact-20261104.md)의 A+B를 승인했다. 새 요청에만 표현 버전을 고정한 단일 content 페이지와 별도 `retry_after_failed_submit` 소유자 복구를 D3·D4·D5에 구현했다. **Node553·실제 Chromium156/Chrome MCP1.12 브라우저67·설치 Codex0.166 요청 schema PASS**, 브라우저 SKIP0이다. 기존 dual 요청·고정 원문/digest·300초/12,000bytes·단일 실행·예산/승인·완료13개·Muse는 유지한다. [구현·검사·복귀 기록](./implementation/dot-page-transport-retry-20261104.md)을 따른다. 신규 phase·계정·OAuth 확대는 없으며 **서버 적용·실제 native v2/제출 오류 복구 수락은 NOT_RUN**, D5-F 전체 BLOCKED다. Codex 요청 schema 검사는 실제 세션 실행이 아니다.
 
