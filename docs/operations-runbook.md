@@ -275,6 +275,10 @@ WJ_CODEX_BINARY=/실제/경로/codex npm run test:codex-contract
 
 **공식 dot은 [D4 전용 절차](./dot-connection-runbook.md)를 따른다.** UI에서 확인한 dot grant는 해당 방/참여자/연결에 고정되고 정상 on/focus마다 재발급하지 않는다. 아래는 기존 토의/resident grant 전달기 설명이며 그 키를 dot grant로 재사용하지 않는다. D4의 `WJ_MCP_EXPECT_DOT=true`는 기존 전달기를 쓰면서 native 도구/Events와 인증을 먼저 검사한다. 전용 Tunnel의 접근 범위는 owner 확인이 필요하고 실제 사용자/principal 증명은 UNVERIFIED다.
 
+11/04 승인된 전송 보완은 **새 native 요청의 paged get만** 원문 JSON을 text `content`에 한 번 담는다(`transportVersion:2`). 기존 요청은 이중 표현과 원래 페이지 경계를 유지한다. 클라이언트는 `structuredContent`가 있으면 그 값, 없으면 `content[0].text`의 JSON 중 한 표현을 읽는다. 같은 request/attempt로0페이지부터 마지막까지 pageCount·digest·누락0을 확인한 뒤 원문의 JSON 계약으로 제출한다. 같은 dot/플러그인과 기존 입력 schema를 유지하며 새 로그인·키·터널은 필요하지 않다. 실제 단일 표현 왕복은 별도 수락 전까지 NOT_RUN이다.
+
+주제 토의의 dot이 **submit 호출 오류 뒤** 미확정이면 먼저 원래 실행/추가 제출 중단과 서버 영수증을 대조한다. `원본과 복구 → 제출 오류 후 재시도 준비`는 원래 dot 연결 권한이 회수됐고 서버에 원문/답변/receipt가 없을 때만 사용할 수 있다. 실행 중단 확인과 사유를 입력하며, 복구 자체는 새 요청을 보내지 않는다. 현재 권한·방을 확인하고 별도 이어가기를 누른다. submit을 하지 않은 경우의 기존 `중단 확인 후 재시도 준비`와 구분한다. 이미 받은 결과는 완료 응답으로 대조하며, 외부 종료를 확인하지 못하면 미확정을 유지한다.
+
 기존 작업실 MCP 권한은 **토의·참여자·도구 목록**에 고정된다. Codex 권한을 포함하려면 그 토의에 binding이 있어야 한다. 페이즈 7 상주 도구는 위의 별도 resident grant만 사용하며 기존 키를 확대하지 않는다. 발급된 접근 키를 모델의 대화 본문에 넣지 않는다. 토의가 바뀌면 새 scope를 발급한다.
 
 HTTP `/mcp`를 직접 사용할 수 있는 클라이언트는 Bearer 인증을 설정한다. dot이 private 서버에 접근할 때는 공식 Secure MCP Tunnel을 사용한다. Tailscale URL만 OpenAI에 등록해서 접근 가능하다고 가정하지 않는다.

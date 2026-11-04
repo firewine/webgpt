@@ -1,12 +1,12 @@
 # dot 페이지 전송 중복 축소·제출 오류 복구 영향 검토 — 2026-11-04
 
-**상태: 제안/미승인.** 이 문서는 사전 영향 보고다. 계획 SSOT의 실행 상태만 갱신했으며 아래 제품/계획 계약을 아직 구현하거나 적용하지 않았다. 기준 제품 main은 `f3a2e34026c37c2bff52e194678b3de795c84d62`, [실환경 증거](../implementation/dot-mcp-resume-live-d5-20261104.md)를 따른다.
+**상태: 2026-11-04 사용자 계획 개정·개발 승인.** 사전 영향 보고 뒤 사용자가 A+B 개발을 승인했다. 아래 제안 표기는 승인된 설계의 이력이며 구현 완료 판정은 별도 검사/구현 기록을 따른다. 서버 적용·추가 실계정 호출은 승인 범위 밖이다. 기준 제품 main은 `f3a2e34026c37c2bff52e194678b3de795c84d62`, [실환경 증거](../implementation/dot-mcp-resume-live-d5-20261104.md)를 따른다.
 
 ## 문제와 근거
 
 1. `src/connections/dot-input-pages.ts::dotToolResult`는 원래 payload를 `content[0].text`와 `structuredContent`에 중복 담는다. `dotInputPage`는 두 표현을 합친 RPC12,000bytes 이내로 나눈다.137,805bytes의 같은 토의 검토2 입력이31페이지로 나뉘었다.
 2. 실제 native는 모든31페이지와 같은 digest를 확인했다. 첫 페이지까지59.046초·페이지 구간235.565초·마지막 조회 후300초 제한까지 약5.5초였다. `DotMcpAdapter.complete/settle`이 미확정으로 정지했고, 서버 reply/receipt는0이다. 모델이 답변을 만들고 submit 오류를 받았다는 사용자 보고는 있지만 구체 오류·호출 시각·외부 최종 상태는 UNVERIFIED다.
-3. `docs/reviews/dot-explicit-retry-impact-20261102.md`의 승인 계약은 **외부 실행 중단과 submit 미실행**을 확인한 경우다. `src/web/control.ts::renderRecovery`의 `stoppedWithoutSubmit`도 이 의미다. 이번 submit1회 오류를 ‘submit 미실행’으로 바꾸지 않는다. 기존 `engine.control(reconcile/completed)`의 `reconcileDotReply`도 서버 reply 없음을 거절한다.
+3. `docs/reviews/dot-explicit-retry-impact-20261102.md`의 승인 계약은 **외부 실행 중단과 submit 미실행**을 확인한 경우다. `src/web/control.ts::renderRecords`의 `stoppedWithoutSubmit`도 이 의미다. 이번 submit1회 오류를 ‘submit 미실행’으로 바꾸지 않는다. 기존 `engine.control(reconcile/completed)`의 `reconcileDotReply`도 서버 reply 없음을 거절한다.
 
 [OpenAI Plugins Reference의 Tool results](https://developers.openai.com/plugins/reference#tool-results)는 `content`와 `structuredContent`를 각각 optional로 정의하고 둘 모두 모델에게 보인다고 설명한다. 이 근거는 단일 표현 설계의 프로토콜 근거이며, 특정 실제 dot의 native 작업/툴 결과 처리 성공을 보장하지 않는다. 그 호환성은 별도 실제 수락 전 **UNVERIFIED**다.
 
@@ -47,7 +47,7 @@ private 오프라인 크기 projection은 제품 코드를 바꾸거나 모델�
 | `src/connections/dot-mcp.ts::DotMcpAdapter.prepare/call` | 새 요청 버전 snapshot·해당 버전 get projection. `Providers.complete`·권한/claim/submit 계약 유지 |
 | `src/workspace/dot-mcp-model.ts::DotRequest`, `dot-mcp-policy.ts::validateDotRequests/assertDotRetryAfterStop` | optional 버전 검증·기존 순수 복구 guard 재사용/추가 사전조건. 기존 row/SQL 변경0 |
 | `src/http/mcp-events.ts`의 도구 결과 wrapping 경로 | 해당 get 페이지에만 단일 표현 적용, 나머지 응답 호환. Events/서명/구독·outbox 유지 |
-| `src/workspace/engine.ts::DiscussionEngine.control`, `src/web/control.ts::renderRecovery` | 별도 제출 오류 복구 선택·확인·감사 기록. 이전 미실행 확인/기타 복구·명시 resume 유지 |
+| `src/workspace/engine.ts::DiscussionEngine.control`, `src/web/control.ts::renderRecords` | 별도 제출 오류 복구 선택·확인·감사 기록. 이전 미실행 확인/기타 복구·명시 resume 유지 |
 | `tests/dot-mcp.test.mjs`, `dot-mcp-restart.test.mjs`, native/브라우저 fixture·연결 UI 검사 | v1/v2·늦은 결과/중복/서버 receipt 존재/재시작·확인 누락 거절을 검증. 실제 호출과 분리 |
 | SSOT·기존 paging/retry 검토서·운영 절차·구현 기록·수락표 | 승인일/새 계약·버전/복귀·fixture와 실제 수락 구분. 원래50 gate 유지 |
 
@@ -67,4 +67,4 @@ private 오프라인 크기 projection은 제품 코드를 바꾸거나 모델�
 
 복귀는 방 off·진행/미확정 대조·유효 claim/권한 정리 뒤 이전 배포로 돌아가는 기존 G0 절차를 따른다. 진행 중 v2 요청을 v1 경계로 바꾸지 않는다. 기존 optional field와 원문/결과/실패 기록을 지우지 않으며 DB 백업으로 현재 상태를 덮어쓰지 않는다. 새 버전 기록의 이전 배포 호환을 fixture에서 확인하지 못하면 코드 롤백 전에 그 요청을 보존·격리해 대조한다.
 
-**승인 대상:** 위 A+B 계획 개정·구현. 서버 적용·추가 실계정 모델 호출·실제 Codex·OAuth 확장은 포함하지 않는다. 사용자 승인 전 제품 코드는 유지한다.
+**승인 범위:** 위 A+B 계획 개정·구현. 서버 적용·추가 실계정 모델 호출·실제 Codex·OAuth 확장은 포함하지 않는다. 승인된 경계 안에서 구현하며 원래 실행 기록/요청을 새 결과로 덮어쓰지 않는다.

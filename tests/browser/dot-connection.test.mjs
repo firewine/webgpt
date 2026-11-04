@@ -29,6 +29,7 @@ test('D4 native stopped retry requires explicit evidence and confirmation and le
   await p.reload(); await p.locator('[data-view=room]').click(); await p.locator('#history button').first().click(); await p.locator('#topic-details-open').click();
   await p.getByRole('button',{name:'원본과 복구',exact:true}).click();
   assert.equal(await p.getByRole('button',{name:'중단 확인 후 재시도 준비',exact:true}).count(),1);
+  assert.equal(await p.getByRole('button',{name:'제출 오류 후 재시도 준비',exact:true}).count(),1);
   for(const name of ['완료 응답 반영','전송되지 않음 확인','이 응답 건너뛰기']) assert.equal(await p.getByRole('button',{name,exact:true}).count(),3);
   // Return the two completed peers to their actual fixture state before recovery.
   f.app.store.transact(s=>{for(const turn of s.discussions[0].turns) if(prior.some(v=>v.id===turn.id)) turn.status='completed';});
@@ -51,6 +52,33 @@ test('D4 native stopped retry requires explicit evidence and confirmation and le
   assert.equal(await p.getByRole('button',{name:'중단 확인 후 재시도 준비',exact:true}).count(),0);
   await p.locator('#topic-details-close').click(); assert.equal(await p.locator('#topic-resume').isEnabled(),true);
   assert.equal(f.calls(),0);assert.deepEqual(f.errors,[]);
+});
+test('D4 submit-error recovery records a distinct confirmation and prepares no new model request', {timeout:30000}, async t => {
+  const source=await stoppedDotTopicFixture(t);
+  source.control({action:'off'});
+  source.app.dotMcp.revoke(source.connectionId,source.state().dotMcp.bindings[0].version,'ui-failed-submit-revoke');
+  const seed=source.state(),d=seed.discussions[0],old=d.turns.find(v=>v.id===source.stoppedRequestId);
+  const prior=structuredClone(d.turns.filter(v=>v.status==='completed')),f=await setup(t),p=f.page;
+  p.setDefaultTimeout(5000);
+  f.app.store.transact(s=>{const password=s.ownerPassword,sessions=s.sessions;Object.assign(s,structuredClone(seed));s.ownerPassword=password;s.sessions=sessions;});
+  await p.reload();await p.locator('[data-view=room]').click();await p.locator('#history button').first().click();await p.locator('#topic-details-open').click();
+  await p.getByRole('button',{name:'원본과 복구',exact:true}).click();
+  await p.getByRole('button',{name:'제출 오류 후 재시도 준비',exact:true}).click();
+  const dialog=p.locator('#action-dialog'),checkbox=dialog.locator('[name=stoppedAfterFailedSubmit]'),note=dialog.locator('[name=note]');
+  assert.equal(await checkbox.isChecked(),false);assert.equal(await dialog.locator('[name=stoppedWithoutSubmit]').count(),0);
+  let controls=0;p.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/control'))controls++;});
+  await note.fill('Native fixture stopped after rejected submit; no receipt.');
+  await dialog.getByRole('button',{name:'재시도 준비',exact:true}).click();assert.equal(controls,0);
+  await checkbox.check();await note.fill('');await dialog.getByRole('button',{name:'재시도 준비',exact:true}).click();assert.equal(controls,0);
+  await note.fill('Native fixture stopped after rejected submit; no receipt.');
+  const request=p.waitForRequest(r=>r.method()==='POST'&&r.url().endsWith('/control'));
+  await dialog.getByRole('button',{name:'재시도 준비',exact:true}).click();
+  const body=(await request).postDataJSON();assert.equal(body.resolution,'retry_after_failed_submit');assert.equal(body.stoppedAfterFailedSubmit,true);assert.equal(body.stoppedWithoutSubmit,undefined);
+  await dialog.waitFor({state:'hidden'});
+  const after=f.app.store.read().discussions[0];assert.equal(controls,1);assert.equal(after.status,'blocked');
+  assert.equal(after.turns.find(v=>v.id===old.id).error,'owner_confirmed_retry_after_failed_submit');
+  assert.equal(after.tasks.find(v=>v.id===old.taskId).status,'pending');assert.equal(after.turns.length,d.turns.length);
+  assert.deepEqual(after.turns.filter(v=>prior.some(a=>a.id===v.id)),prior);assert.equal(f.calls(),0);assert.deepEqual(f.errors,[]);
 });
 test('D4 390/768/1440px owner setup preserves Muse; twenty reloads/views dispatch nothing and never label browser dot as native', {timeout:60000}, async t => {
   const f = await setup(t), p=f.page;

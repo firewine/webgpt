@@ -81,3 +81,7 @@ DB 버전/이관 **0**, 기존 `Providers.complete`, Store transaction, event lo
 승인 범위는 **위 native dot 주제 토의의 명시 재시도 복구 계약·계획 개정·구현·합성 검사/검토 가능한 PR**이다. 이 개발 범위의 미결정 사항은 없다. 실환경 적용·새 native 감시/모델 호출은 코드 검증 뒤 구체 범위로 별도 확인한다.
 
 실호출 재개 시 오늘 API 잔여는 현재6회·165,092 보고 토큰이며 재개 시점에 다시 대조한다. 이전30분 창을 재사용하지 않는다. 원래8개 완료 답변 보존, 같은 토의 잔여 절차와 dot 후속, 시간/예약/DeepSeek High 상한, Muse 잠금 복구 및 종료 정리를 함께 제시해야 한다.
+
+## 2026-11-04 승인 보완
+
+최초 `retry_after_stop`은 submit 미실행 확인을 그대로 요구한다. 사용자가 [제출 오류 뒤 별도 명시 복구](./dot-page-transport-retry-impact-20261104.md)를 추가 승인했다. 새 `retry_after_failed_submit`은 원래 grant 회수·서버 reply/receipt/text0·외부 실행 중단/추가 제출 없음의 별도 확인과 사유를 요구한다. 오류를 미실행으로 바꾸지 않고 감사 기록에 제출 시도를 남긴다. 동일 task의 준비만 수행하고 별도 resume 전 전송0·기존 완료13개·Muse와 기존 안전 경계를 유지한다. 실제 운영 복구는 아직 NOT_RUN이다.

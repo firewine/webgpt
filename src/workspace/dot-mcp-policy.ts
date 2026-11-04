@@ -80,6 +80,11 @@ export function assertDotRetryAfterStop(s: WorkspaceState, d: Discussion, turn: 
       !assertWikiSnapshots(s, room.id, [participant.id], turn.wikiCitations) || !assertWikiSnapshots(s, room.id, [participant.id], d.wikiCitations) ||
       roomContext && !wikiHistoryAllowed(s, room, roomContext)) throw new AppError('dot_retry_input_changed', 409);
 }
+export function assertDotRetryAfterFailedSubmit(s: WorkspaceState, d: Discussion, turn: DiscussionTurn): void {
+  assertDotRetryAfterStop(s, d, turn);
+  const request = s.dotMcp!.requests!.items.find(r => r.id === turn.id)!;
+  if (!s.dotMcp!.grants.some(g => g.id === request.grantId && g.status === 'revoked')) throw new AppError('dot_retry_prior_grant_not_revoked', 409);
+}
 export function dotCanApply(s: WorkspaceState, requestId: string): boolean {
   const r = s.dotMcp?.requests?.items.find(r => r.id === requestId); if (!r) return false;
   const g = s.dotMcp!.grants.find(g => g.id === r.grantId);
@@ -98,7 +103,8 @@ export function validateDotRequests(s: WorkspaceState): void {
   const date = (v: unknown) => text(v) && Number.isFinite(Date.parse(v));
   const count = (v: unknown) => typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
   if (!requests || requests.version !== 1 || !Array.isArray(requests.items) || new Set(requests.items.map(r => r?.id)).size !== requests.items.length || requests.items.some(r =>
-    !r || ![r.id, r.grantId, r.roomId, r.participantId, r.connectionId].every(text) || ![r.grantVersion, r.epoch, r.contextGeneration, r.generation].every(count) ||
+    !r || r.inputTransportVersion !== undefined && r.inputTransportVersion !== 2 ||
+    ![r.id, r.grantId, r.roomId, r.participantId, r.connectionId].every(text) || ![r.grantVersion, r.epoch, r.contextGeneration, r.generation].every(count) ||
     !hash(r.identityDigest) || !date(r.createdAt) || r.discussionId !== null && !text(r.discussionId) || r.revision !== null && !count(r.revision) ||
     typeof r.prompt !== 'string' || r.prompt.length > 180000 || !Array.isArray(r.history) || r.history.some(h => !h || !['user', 'assistant'].includes(h.role) || typeof h.content !== 'string') ||
     r.prompt.length + r.history.reduce((n, h) => n + h.content.length, 0) > 180000 || dotInputDigest(r.prompt, r.history) !== r.inputDigest || !['prepared', 'waiting', 'received', 'held', 'consumed', 'quarantined'].includes(r.status) ||

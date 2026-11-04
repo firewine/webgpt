@@ -70,6 +70,7 @@ const errors: Record<string, string> = { dot_version_conflict: '다른 화면에
   browser_selectors_invalid: '실제 입력란과 전송 버튼 선택자를 확인해 주세요.', browser_not_ready: 'Chrome 대화가 응답 가능한 상태인지 확인해 주세요.',
   reconciliation_required: '미확인 응답이나 실행 결과를 먼저 대조해 주세요.', workspace_not_allowed: '서버에서 허용한 작업 경로 안의 디렉터리를 등록해 주세요.',
   dot_stop_confirmation_required: '원래 dot 실행이 중단됐고 답변을 제출하지 않았는지 확인해 주세요.', dot_retry_requires_native_topic: '공식 dot의 주제 토의에서만 중단 확인 후 재시도를 준비할 수 있습니다.', dot_retry_reply_exists: '이미 받은 답변이 있습니다. 원래 결과를 먼저 대조해 주세요.', dot_retry_scope_changed: '과제나 문맥 상태가 바뀌었습니다. 원래 요청과 현재 토의를 대조해 주세요.', dot_retry_input_changed: '원래 입력이나 자료 접근 범위가 바뀌어 같은 과제를 재시도할 수 없습니다.',
+  dot_failed_submit_stop_confirmation_required: '제출 오류 뒤 원래 dot 실행이 멈췄고 추가 제출이 없는지 확인해 주세요.', dot_retry_prior_grant_not_revoked: '원래 dot 연결 권한을 먼저 회수한 뒤 제출 오류를 대조해 주세요.',
   session_target_mismatch: 'Codex 세션의 작업 경로·호스트·사용자가 일치하지 않습니다.', feature_branch_required: '파일 수정은 작업 브랜치에서만 허용됩니다.',
   existing_browser_context_preserved: '기존 dot·Muse 대화의 문맥은 자동 교체하지 않습니다.', revision_conflict: '다른 변경이 반영됐습니다. 새 상태에서 다시 시도해 주세요.',
   context_limit_requires_handoff: '문맥이 길어졌습니다. 원본과 복구에서 체크포인트를 적용해 주세요.', source_fetch_disabled: '서버에서 공개 출처 조회가 꺼져 있습니다.',
@@ -350,7 +351,12 @@ function renderRecords(target: HTMLElement, d: Discussion): void {
       { name: 'stoppedWithoutSubmit', label: '원래 dot 실행이 중단됐고 답변을 제출하지 않았음을 확인했습니다.', checkbox: true },
       { name: 'note', label: '확인한 실행 시각·중단 단계·미제출 근거', multiline: true },
     ], async data => { await control({ action: 'reconcile', turnId: t.id, resolution: 'retry_after_stop', stoppedWithoutSubmit: data.stoppedWithoutSubmit === 'on', note: data.note }); announce('재시도를 준비했습니다. dot 연결·방 설정을 확인하고 이어가기를 누르세요.'); },
-    '감시 비활성이나 방 끄기만으로 실행 종료를 판단하지 마세요. 원래 실패와 완료된 답변은 보존합니다. 지금 새 요청을 보내지 않으며, 이어가기를 눌러야 실행합니다.', '재시도 준비')));
+    '감시 비활성이나 방 끄기만으로 실행 종료를 판단하지 마세요. 원래 실패와 완료된 답변은 보존합니다. 지금 새 요청을 보내지 않으며, 이어가기를 눌러야 실행합니다.', '재시도 준비')),
+      button('제출 오류 후 재시도 준비', () => modal('dot 제출 오류 재시도 준비', [
+        { name: 'stoppedAfterFailedSubmit', label: '제출 오류 뒤 원래 dot 실행이 중단됐고 추가 제출이 없음을 확인했습니다.', checkbox: true },
+        { name: 'note', label: '확인한 실행 시각·제출 오류·중단 근거', multiline: true },
+      ], async data => { await control({ action: 'reconcile', turnId: t.id, resolution: 'retry_after_failed_submit', stoppedAfterFailedSubmit: data.stoppedAfterFailedSubmit === 'on', note: data.note }); announce('제출 오류를 기록하고 재시도를 준비했습니다. dot 연결·방 설정을 확인하고 이어가기를 누르세요.'); },
+      '제출이 오류로 끝나고 원래 dot 실행이 멈춘 경우에 사용합니다. 기존 dot 연결의 권한을 먼저 회수하세요. 확인된 답변이나 영수증이 있으면 원래 결과를 대조해야 합니다. 원래 실패와 완료된 답변은 보존하며, 이어가기를 눌러야 새 요청을 보냅니다.', '재시도 준비')));
     card.append(row); target.append(card); }
   const handoff = node('section', '', 'panel'); handoff.append(node('h2', '문맥과 참여자 관리'), node('p', '문맥 전환은 기존 원문·근거·미해결 과제를 보존합니다. 주제 revision과 별도로 기록합니다.', 'small muted'));
   for (const p of d.members) { const row = node('div', '', 'toolbar'); row.append(node('span', p.label)); if (p.kind !== 'browser') row.append(button('체크포인트 적용', () => control({ action: 'handoff', participantId: p.id, expectedGeneration: d.contexts.find(c => c.participantId === p.id)!.generation })));
