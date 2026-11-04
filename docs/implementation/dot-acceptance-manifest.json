@@ -52,9 +52,9 @@
       "id": "D5-F",
       "requirement": "Separately authorized deployed native dot ambient >=1 and topic/followup >=2; GPT2+API same room; original Muse thread roundtrip; live Codex read/write and real device acceptance remain distinct",
       "realStatus": "BLOCKED",
-      "files": ["docs/implementation/dot-mcp-acceptance-d5-20261102.md", "docs/implementation/dot-mcp-live-d5-20261102.md", "docs/implementation/dot-mcp-resume-d5-20261102.md", "docs/implementation/dot-input-paging-20261102.md", "docs/implementation/dot-explicit-retry-20261102.md", "docs/implementation/dot-mcp-paged-live-d5-20261102.md", "docs/implementation/dot-mcp-paged-live-d5-20261103.md"],
-      "observed": {"nativeAmbientReplies": 1, "nativeTopicReplies": 2, "nativeFollowupReplies": 0, "mixedParticipants": 5, "independentDrafts": 5, "crossReviewReplies": 5, "completedReviewRounds": 1, "providerReservations": 13, "apiRequests": 2, "unconfirmedAtStop": 1, "unconfirmedAfterReconciliation": 0, "nativePagedReviewPages": 16, "nativePagedReviewMs": 146206},
-      "latestLiveWindow": {
+      "files": ["docs/implementation/dot-mcp-acceptance-d5-20261102.md", "docs/implementation/dot-mcp-live-d5-20261102.md", "docs/implementation/dot-mcp-resume-d5-20261102.md", "docs/implementation/dot-input-paging-20261102.md", "docs/implementation/dot-explicit-retry-20261102.md", "docs/implementation/dot-mcp-paged-live-d5-20261102.md", "docs/implementation/dot-mcp-paged-live-d5-20261103.md", "docs/implementation/dot-mcp-resume-live-d5-20261104.md"],
+      "observed": {"nativeAmbientReplies":1,"nativeTopicReplies":2,"nativeFollowupReplies":0,"mixedParticipants":5,"independentDrafts":5,"crossReviewReplies":8,"completedReviewRounds":1,"providerReservations":17,"apiRequests":3,"unconfirmedAtStop":1,"nativePagedReviewPages":16,"nativePagedReviewMs":146206,"unconfirmedNow":1,"nativeUnconfirmedReviewPages":31},
+      "previousLiveWindow": {
         "date": "2026-11-03",
         "deployedMainSha": "f3a2e34026c37c2bff52e194678b3de795c84d62",
         "firstNewReservationAt": "2026-11-03T07:17:40+09:00",
@@ -67,8 +67,52 @@
         "nativeTopicReview": {"phase": "cross_review1", "status": "ACCEPTED", "inputPagesRead": 16, "inputPagesTotal": 16, "sameInputDigest": true, "rpcBytesAtMost": 12000, "assignedClaims": 12, "structuredReviews": 12},
         "museTopicReview": {"phase": "cross_review1", "status": "UNCONFIRMED", "timeoutSeconds": 300, "partialResponseChars": 1998, "partialResponseValidJson": false, "resends": 0}
       },
+      "latestLiveWindow": {
+        "date": "2026-11-04",
+        "deployedMainSha": "f3a2e34026c37c2bff52e194678b3de795c84d62",
+        "firstNewReservationAt": "2026-11-04T16:11:17+09:00",
+        "stoppedAt": "2026-11-04T16:25:02+09:00",
+        "providerReservationsBeforeWindow": 13,
+        "providerReservations": 4,
+        "apiRequests": 1,
+        "reportedApiTokens": 45335,
+        "originalCompletedTurns": 10,
+        "originalCompletedTurnsUnchanged": true,
+        "completedTurns": 13,
+        "nativeTopicReview": {
+          "phase": "cross_review2",
+          "status": "UNCONFIRMED",
+          "inputBytes": 137805,
+          "inputPagesRead": 31,
+          "inputPagesTotal": 31,
+          "sameInputDigest": true,
+          "maxRpcBytes": 11495,
+          "firstPageDelayMs": 59046,
+          "pageReadSpanMs": 235565,
+          "medianPageGapMs": 7690,
+          "timeoutSeconds": 300,
+          "serverReplyReceived": false,
+          "userReportedSubmitCalls": 1,
+          "userReportedSubmitError": true,
+          "submitErrorMessage": "UNVERIFIED",
+          "externalExecutionFinalStatus": "UNVERIFIED"
+        }
+      },
+      "latestCleanup": {
+        "date": "2026-11-04",
+        "roomOff": true,
+        "browserPaused": true,
+        "membersRestored": true,
+        "normalServiceRestored": true,
+        "dedicatedTunnelProcesses": 0,
+        "activeServerSubscriptions": 0,
+        "ownGrantRevoked": true,
+        "nativeWatchInactive": "USER_REPORTED",
+        "unconfirmedRequests": 1
+      },
       "latestReconciliation": {
         "date": "2026-11-04",
+        "at": "2026-11-04T15:46:24+09:00",
         "kind": "existing_original_response_only",
         "museTopicReview": {"phase": "cross_review1", "status": "ACCEPTED", "identityThreadAndRequestMatched": true, "responseChars": 2679, "assignedClaims": 10, "structuredReviews": 10, "resends": 0},
         "completedTurns": 10,
@@ -85,7 +129,7 @@
         "nativeWatchInactive": "UNVERIFIED"
       },
       "originalGates": ["R3-E", "R4-D", "R6-F", "R8-D"],
-      "blockedPrerequisites": ["next_bounded_live_window_after_muse_recovery", "second_review_round_revision_synthesis_and_native_followup", "same_room_return_and_remaining_real_gates", "native_watch_lifecycle_reconciliation", "real_device_acceptance", "separately_scoped_real_Codex_binding"]
+      "blockedPrerequisites": ["native_round2_input_latency","owner_confirmed_failed_submit_reconciliation","next_bounded_live_window_after_native_fix","second_review_round_revision_synthesis_and_native_followup","same_room_return_and_remaining_real_gates","real_device_acceptance","separately_scoped_real_Codex_binding"]
     }
   ]
 }
