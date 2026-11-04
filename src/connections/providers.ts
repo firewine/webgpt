@@ -10,7 +10,7 @@ import { deepSeekEndpoint, deepSeekService, deepSeekReasoning, deepSeekThinking 
 import { Anthropic } from './anthropic.js';
 import { readCodexJson, type CodexOAuth } from './codex-oauth.js';
 import { modelCatalogError } from './model-catalog-error.js';
-import { CompletionFailure } from './completion-failure.js';
+import { CompletionFailure, responsesFailureDiagnostic } from './completion-failure.js';
 import type { DotMcpAdapter } from './dot-mcp.js';
 
 export interface Completion { text: string; receipt: string | null; usage: { input: number; output: number } | null }
@@ -99,6 +99,11 @@ export class Providers {
       throw new AppError(res.status === 401 || res.status === 403 ? 'auth_required' : res.status === 429 ? 'usage_limit' : 'provider_http_error', 502, res.status >= 500);
     }
     let text = ''; let receipt: string | null = null; let usage: Completion['usage'] = null; let completed = false; let done = false; let finishReason: unknown = null;
+    const responseFailure = (event: Record<string, unknown>) => {
+      try { console.error(JSON.stringify(responsesFailureDiagnostic(p.kind === 'codex-oauth' ? 'codex-oauth' : 'openai-oauth', input.requestId, event))); }
+      catch { /* Logging must not change the failure or trigger another send. */ }
+      return new AppError('response_not_completed', 502);
+    };
     try {
       for await (const data of sse(res)) {
         if (data === '[DONE]') { done = true; continue; }
@@ -108,11 +113,11 @@ export class Providers {
           if (response && typeof response.id === 'string') { receipt = response.id; hooks.receipt(receipt); }
           if (event.type === 'response.output_text.delta' && typeof event.delta === 'string') { text += event.delta; hooks.delta(event.delta); }
           if (event.type === 'response.completed') {
-            if (response?.status !== 'completed') throw new AppError('response_not_completed', 502);
+            if (response?.status !== 'completed') throw responseFailure(event);
             completed = true;
             if (response.usage) { const u = object(response.usage); usage = usagePair(u.input_tokens, u.output_tokens); }
           }
-          if (['response.failed', 'response.incomplete', 'error'].includes(String(event.type))) throw new AppError('response_not_completed', 502);
+          if (['response.failed', 'response.incomplete', 'error'].includes(String(event.type))) throw responseFailure(event);
         } else {
           if (event.error) throw new AppError('response_not_completed', 502);
           if (typeof event.id === 'string') { receipt = event.id; hooks.receipt(receipt); }
