@@ -2,6 +2,22 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
+**2026-11-04 승인 보완 구현·자동 검사 PASS:** 사용자가 [페이지 중복 전송 축소·제출 오류 복구 영향안](./reviews/dot-page-transport-retry-impact-20261104.md)의 A+B를 승인했다. 새 요청에만 표현 버전을 고정한 단일 content 페이지와 별도 `retry_after_failed_submit` 소유자 복구를 D3·D4·D5에 구현했다. **Node553·실제 Chromium156/Chrome MCP1.12 브라우저67·설치 Codex0.166 요청 schema PASS**, 브라우저 SKIP0이다. 기존 dual 요청·고정 원문/digest·300초/12,000bytes·단일 실행·예산/승인·완료13개·Muse는 유지한다. [구현·검사·복귀 기록](./implementation/dot-page-transport-retry-20261104.md)을 따른다. 신규 phase·계정·OAuth 확대는 없으며 **서버 적용·실제 native v2/제출 오류 복구 수락은 NOT_RUN**, D5-F 전체 BLOCKED다. Codex 요청 schema 검사는 실제 세션 실행이 아니다.
+
+**최신 실검증 — 2026-11-04:** 승인된 추가30분/27회·DeepSeek High6회/165,092 보고 토큰 범위에서16:11:17~16:25:02 KST 같은 토의를 재개했다. GPT2·DeepSeek의 검토2 각10건을 수락해 **완료13개·교차검토 수락8개**, 원래10개 불변이다. dot은 원문137,805bytes의31/31페이지를 조회했지만300초 안에 submit 수락이 없어 미확정으로 정지했다. 사용자는 답변 생성·submit1회 오류·감시 비활성을 보고했으며 서버 reply/receipt0, 외부 실행 최종 상태는 UNVERIFIED다. **추가 예약4/API1·보고45,335토큰, D5 누적 예약17/API3, D5-F 전체 BLOCKED**다. 방 off·Muse 잠금·멤버 토글/정상 service 복구·이번 grant 회수·관련 전용 Tunnel0·서버 구독0을 확인했다. 해당 검증의 제품 계약 변경/원래10개 재전송/Codex/새 업무는0이다. [새 범위·실측·종료](./implementation/dot-mcp-resume-live-d5-20261104.md)를 따른다. 후속 보완의 승인 상태는 맨 위 개정 기록을 따른다.
+
+**최신 상태 — 2026-11-04:** 같은 토의에서 dot의 실제 **16/16페이지 조회·검토12건 제출·receipt 수락 PASS**를 확인했다. 이어 Muse가300초에 미확정으로 정지했으나, 원래 대화에 뒤늦게 완성된 응답을 계정·thread·요청 표식·검토10건으로 대조하고 기존 `reconcile` 경로로 재전송 없이 복구했다. **완료10개·5명 전원의 첫 교차검토 완료·미확정0**, 원래8개 불변이다. 이번 창은 추가 예약2/API0, D5 누적 예약13/API2다. 방 off·Muse 잠금·최신 멤버 설정·정상 서비스 entry 복구와 전용 Tunnel 종료를 확인했다. 서버 유효 구독0이며 ChatGPT 측 감시 비활성은 UNVERIFIED다. **D5-F 전체 BLOCKED:** 검토2·수정·종합·같은 방 dot 후속 및 별도 기기/Codex 수락이 남았다. 새 호출은 종료된30분 창을 연장하지 않고 별도 범위를 승인받는다. 제품 코드·계획 범위·300초/예산/승인 계약 변경은 없다. [실측·Muse 복구·서버 정리](./implementation/dot-mcp-paged-live-d5-20261103.md)를 따른다. 아래11/02 관측은 당시 상태의 이력이다.
+
+2026-11-02 PR #44 병합(`f3a2e34`) 후 사용자가 **서버 적용·같은 토의 추가30분/29회·DeepSeek High 잔여6회/165,092 보고 토큰·dot 재연결·Muse 임시 잠금 해제/종료 복구**를 승인했다. 18:52 서버 적용/health·owner API·완료8개 보존·신규 예약0을 확인했다. 승인된 명시 복구로 원래 실패 이력/lease를 보존 정산하고 같은 과제만 준비했다. 실제 도구의 분할 조회 schema·Tunnel readiness와 Muse의 같은 원래 thread/page ID 갱신을 확인했다. 현재 실제 dot 감시 지시 갱신 응답 대기이며 **새 예약/API0·방 off·Muse 잠금 true, D5-F BLOCKED**다. [적용·새 범위·대기 상태](./implementation/dot-mcp-paged-live-d5-20261102.md)를 따른다. 추가 제품 코드/DB·timeout·계정/모델 변경은 없다.
+
+20:50 KST native dot이 이전 schema라 `inputPage`가 없음을 보고해 감시를 활성화하지 않았다. 실서버와 실제 stdio 전달기의 새 schema는 PASS이며 소비자 snapshot 불일치를 대조했다. [공식 새로 고침→새 대화 확인 절차와 진단](./implementation/dot-mcp-paged-live-d5-20261102.md#도구-명세-갱신-대조)을 진행하며 새 모델 호출0을 유지한다. 기존8개·API 정책·Muse 잠금과 두 라운드 수락 기준은 그대로다.
+
+21:14 KST 해당 실제 dot은 여러 대화를 열 수 없다는 사용자 보고를 반영해 새 대화 요청을 취소했다. **기존 dot을 유지하고 같은 private Tunnel에 MCP 연결만 새 이름으로 등록**하는 D4 기존 절차로 discovery를 분리한다. 등록/최신 `inputPage` 확인 대기이며 새 감시·실제 호출0이다. 기존 연결·Muse를 삭제하지 않고 제품/권한 계약을 확대하지 않는다.
+
+21:18 KST 새 `webjjoku_dot_paged` 등록 완료 뒤 **실제 소비자 도구 정의의 선택적 `inputPage` 노출과 읽기 전용 get PASS**를 확인했다. 같은 dot의 native 감시 지시를 새 연결명으로 준비 중이다. 완료8개/원래 실패 기록·Muse를 유지하며 감시 준비가 확인되기 전 실제 토의를 재개하지 않는다.
+
+21:34 KST 감시 등록 성공 직후 소유자 권한 재발급으로 이전 구독이 회수됐음을 대조했다. 현재 소유자 grant/최신 멤버 설정을 보존하고 전달기만 맞춰 조회를 복구했으며, 기존 감시1개의 재연결을 요청했다. 현재 새 예약/API0·원래8개 보존·방 off/Muse 잠금 true다. [시각·서버 대조](./implementation/dot-mcp-paged-live-d5-20261102.md#감시-등록-직후-권한-재발급-대조)를 실제 native 실행 수락과 구분한다.
+
 2026-11-02 PR #43 병합(`2447ada`) 후 D5 재개 준비에서 원래 dot 요청은 이미 전달·claim돼 `not_sent`로 대조할 수 없고, `skip`은 첫 검토 라운드를 완성하지 못함을 확인했다. 사용자가 [소유자 중단 확인 후 명시 재시도 보완](./reviews/dot-explicit-retry-impact-20261102.md)을 승인했다. D3의 주제 토의 dot 복구 선택지·D4 확인 UI·D5 중복/늦은 응답/재시작 검사를 보완한다. 원래 실패 요청·완료8개·Muse·DB·단일 실행·예산/300초 경계를 유지하며 새 phase는 없다. 예상10~12파일·350~650줄. 배포/추가 실계정 호출은 별도이며 D5-F BLOCKED를 유지한다.
 
 [명시 재시도 구현·검사](./implementation/dot-explicit-retry-20261102.md): 소유자 중단·미제출 확인 뒤 같은 과제만 대기시키고 별도 resume 전 전송0. 원래 답변·늦은 응답 격리·권한 회수·실제 SIGKILL을 포함해 **Node529·Chromium/Chrome MCP66 PASS**다. 원래 운영 데이터에 복구 명령을 적용하지 않았고 실제 native 재시도/배포는 NOT_RUN이다.
@@ -17,7 +33,7 @@
 | D2 | Events 구독·callback 검증/서명·영속 outbox | **PR #38 병합 완료**, main `672f081`. 동일 구독20회→ID1, signed challenge·키 교체·공개 IP 고정·유한 재시도·실제 SIGKILL 뒤 보류/ID·cursor 보존. 신규47·전체 Node444 PASS. 운영 callback/배포 NOT_RUN, dot provider 준비는 여전히 false. [계약·수락·복귀](./implementation/dot-mcp-events-d2-20261102.md) |
 | D3 | 기존 provider·topic·상주 발화·응답 대조·복구 결합 | **PR #39 병합 완료**, main `9992f74`. 승인된 연결 권한/발언 세대 분리, 원래 turn의 claim·mailbox·공개/대조 결합. 신규24·전체 Node468·CI browser62 PASS. 운영 연결·실계정·배포 NOT_RUN. [계약·수락·복귀](./implementation/dot-mcp-integration-d3-20261102.md) |
 | D4 | 공식 연결 UI·private plugin·진단/운영 절차 | **PR #40 병합 완료**, main `8affb46`. owner 등록/확인/회수·상태4축·보호된 stdio 전달기·등록 앱 참조 패키지 준비. Node473·실제 Chromium/MCP browser64·Codex0.165 계약 [CI PASS](https://github.com/firewine/webgpt/actions/runs/41380886404). [수락·검사·보존 기록](./implementation/dot-mcp-onboarding-d4-20261102.md)·[연결 절차](./dot-connection-runbook.md). 운영 인증 전달/실제 감시·배포 NOT_RUN |
-| D5 | 기존 50 gate·Muse 보존·혼합 채팅/업무/Wiki/Codex 통합 수락 | **PR #42 병합·서버 적용 / 실제 왕복 일부 PASS, 전체 BLOCKED.** dot 상주1+주제 초안1, GPT2·DeepSeek High·dot·Muse 초안5개와 교차 검토3개 수락. 두 검증 창 합계 예약11/API2회. 재개 중 dot 고정 입력 get은 성공했으나 출력 절단 보고 후 submit0·미확정1로 정지. 방 off·Muse 잠금/정상 service 복구. [최신 관측](./implementation/dot-mcp-resume-d5-20261102.md)·[분할 조회 구현/자동 검사 PASS, 실계정 NOT_RUN](./implementation/dot-input-paging-20261102.md)·[수락 manifest](./implementation/dot-acceptance-manifest.json). 2라운드/후속·기기·실제 Codex 등 미완료 |
+| D5 | 기존 50 gate·Muse 보존·혼합 채팅/업무/Wiki/Codex 통합 수락 | **PR #44 병합·적용 / 실제 왕복 일부 PASS, 전체 BLOCKED.** dot 상주1+주제2, GPT2·DeepSeek High·dot·Muse 초안5개와 교차검토8개 수락. 완료13개·첫 교차검토5명 완료, 검토2는 GPT2/API 완료·dot 미확정1·Muse 대기. dot 검토1의16페이지/검토12건과 Muse 검토1 복구는 PASS. 검토2는31/31페이지 조회 뒤300초 submit 미수락으로 정지. D5 누적 예약17/API3. 방 off·Muse 잠금·멤버 토글/정상 service 복구·전용 Tunnel0·서버 구독0. [최신 실제 관측](./implementation/dot-mcp-resume-live-d5-20261104.md)·[수락 manifest](./implementation/dot-acceptance-manifest.json). 검토2 잔여·수정/종합·후속·기기·실제 Codex 미완료 |
 
 현재 D5 실환경 진행은 [적용·수락 기록](./implementation/dot-mcp-live-d5-20261102.md), 과거 D0 증거는 [D0 기록](./implementation/dot-mcp-events-d0-20261101.md)에서 관리한다. 이 표가 아래 과거 dot browser/기존 thread 기본 경로 설명보다 우선한다. 운영 grant/전달기 준비와 실제 dot 응답·혼합 수락을 구분한다.
 

@@ -64,7 +64,7 @@ export class DotMcpAdapter {
     const r: DotRequest = { id: turn.id, grantId: g.id, grantVersion: g.version, roomId: room.id, participantId: participant.id, connectionId: g.connectionId,
       epoch: room.epoch, contextGeneration: room.contexts?.find(c => c.participantId === participant.id)?.generation ?? 1, generation: turn.generation,
       discussionId: discussion?.id ?? null, revision: discussion?.revision ?? null, identityDigest: participantIdentity(participant), prompt: input.prompt, history: structuredClone(input.history),
-      inputDigest: dotInputDigest(input.prompt, input.history), status: 'prepared', createdAt: now(), claim: null, reply: null };
+      inputDigest: dotInputDigest(input.prompt, input.history), inputTransportVersion: 2, status: 'prepared', createdAt: now(), claim: null, reply: null };
     s.dotMcp!.requests!.items.push(r); this.events.queueTurn(s, emit, g.id, r.id);
     emit({ type: 'dot.request_prepared', discussionId: r.discussionId, data: { requestId: r.id, inputDigest: r.inputDigest } });
   }

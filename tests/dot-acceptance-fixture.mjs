@@ -78,7 +78,10 @@ export async function nativeFixture(t, options = {}) {
   await reconnect();
   Object.assign(f, { access, reconnect,
     request: (method, params = {}) => rpc.request(method, params),
-    call: async (name, args = {}) => (await rpc.request('tools/call', { name, arguments: args })).structuredContent,
+    call: async (name, args = {}) => {
+      const result = await rpc.request('tools/call', { name, arguments: args });
+      return result.structuredContent ?? JSON.parse(result.content[0].text);
+    },
     replyFor: input => input.prompt.startsWith('웹쫀쿠 상주') ? reply() : topicReply(input),
     respond: async (requestId, text, repeats = 1) => {
       const attempt = await f.call('dot_turn_claim', { requestId, commandId: 'claim-' + requestId });
@@ -88,7 +91,7 @@ export async function nativeFixture(t, options = {}) {
         const result = await rpc.request('tools/call', { name: 'dot_turn_get', arguments: { requestId, ...attempt, inputPage: pageIndex } });
         const bytes = Buffer.byteLength(JSON.stringify({ jsonrpc: '2.0', id: 'fixture', result }));
         assert.ok(bytes <= 12_000); maximumBytes = Math.max(maximumBytes, bytes);
-        const r = result.structuredContent.request, page = r.input;
+        const r = (result.structuredContent ?? JSON.parse(result.content[0].text)).request, page = r.input;
         count ??= page.pageCount; digest ??= r.inputDigest;
         assert.equal(r.requestId, requestId); assert.equal(r.inputDigest, digest); assert.equal(page.pageCount, count);
         assert.equal(page.pageIndex, pageIndex); assert.equal(page.nextPage, pageIndex + 1 < count ? pageIndex + 1 : null);

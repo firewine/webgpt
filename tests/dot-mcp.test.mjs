@@ -151,7 +151,9 @@ test('D3 page reads retain legacy get and one winning claim; twenty reads create
   do {
     const rpc = await f.rpc('tools/call', { name: 'dot_turn_get', arguments: { requestId, ...attempt, inputPage: pageIndex } });
     assert.ok(Buffer.byteLength(JSON.stringify(rpc)) <= DOT_INPUT_PAGE_BYTES);
-    const r = rpc.result.structuredContent.request, page = r.input;
+    assert.equal(rpc.result.structuredContent, undefined, 'new pages carry the original JSON once');
+    const r = JSON.parse(rpc.result.content[0].text).request, page = r.input;
+    assert.equal(page.transportVersion, 2);
     assert.equal(r.requestId, requestId); assert.equal(r.inputDigest, original.inputDigest);
     assert.equal(r.prompt, undefined); assert.equal(r.history, undefined);
     count ??= page.pageCount; assert.equal(page.pageCount, count); assert.equal(page.pageIndex, pageIndex);

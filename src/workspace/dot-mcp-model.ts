@@ -20,6 +20,7 @@ export interface DotRequest {
   id: string; grantId: string; grantVersion: number; roomId: string; participantId: string; connectionId: string;
   epoch: number; contextGeneration: number; generation: number; discussionId: string | null; revision: number | null;
   identityDigest: string; prompt: string; history: { role: 'user' | 'assistant'; content: string }[]; inputDigest: string;
+  inputTransportVersion?: 2;
   status: 'prepared' | 'waiting' | 'received' | 'held' | 'consumed' | 'quarantined'; createdAt: string;
   claim: { id: string; commandId: string; hash: string; status: 'prepared' | 'active' } | null;
   reply: { text: string; digest: string; receipt: string; at: string; disposition: 'received' | 'quarantined' } | null;
