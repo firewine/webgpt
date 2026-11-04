@@ -52,7 +52,7 @@
       "id": "D5-F",
       "requirement": "Separately authorized deployed native dot ambient >=1 and topic/followup >=2; GPT2+API same room; original Muse thread roundtrip; live Codex read/write and real device acceptance remain distinct",
       "realStatus": "BLOCKED",
-      "files": ["docs/implementation/dot-mcp-acceptance-d5-20261102.md","docs/implementation/dot-mcp-live-d5-20261102.md","docs/implementation/dot-mcp-resume-d5-20261102.md","docs/implementation/dot-input-paging-20261102.md","docs/implementation/dot-explicit-retry-20261102.md","docs/implementation/dot-mcp-paged-live-d5-20261102.md","docs/implementation/dot-mcp-paged-live-d5-20261103.md","docs/implementation/dot-mcp-resume-live-d5-20261104.md","docs/implementation/dot-mcp-v2-live-d5-20261104.md","docs/implementation/dot-page-transport-retry-20261104.md","docs/implementation/dot-mcp-gpt-diagnostics-live-d5-20261104.md"],
+      "files": ["docs/implementation/dot-mcp-acceptance-d5-20261102.md","docs/implementation/dot-mcp-live-d5-20261102.md","docs/implementation/dot-mcp-resume-d5-20261102.md","docs/implementation/dot-input-paging-20261102.md","docs/implementation/dot-explicit-retry-20261102.md","docs/implementation/dot-mcp-paged-live-d5-20261102.md","docs/implementation/dot-mcp-paged-live-d5-20261103.md","docs/implementation/dot-mcp-resume-live-d5-20261104.md","docs/implementation/dot-mcp-v2-live-d5-20261104.md","docs/implementation/dot-page-transport-retry-20261104.md","docs/implementation/dot-mcp-gpt-diagnostics-live-d5-20261104.md","docs/implementation/dot-mcp-gpt-once-d5-20261104.md"],
       "observed": {
         "nativeAmbientReplies": 1,
         "nativeTopicReplies": 3,
@@ -61,7 +61,7 @@
         "independentDrafts": 5,
         "crossReviewReplies": 10,
         "completedReviewRounds": 2,
-        "providerReservations": 21,
+        "providerReservations": 22,
         "apiRequests": 3,
         "unconfirmedAtStop": 0,
         "nativePagedReviewPages": 16,
@@ -129,84 +129,84 @@
             "submitErrorMessage": "UNVERIFIED",
             "externalExecutionFinalStatus": "UNVERIFIED"
           }
+        },
+        {
+          "date": "2026-11-04",
+          "userApproved": true,
+          "deployedMainSha": "bd19d1f27ccfeb7e691aad86b2533bbca806fdb1",
+          "testedHead": "aecf65f",
+          "sameTreeAsTestedHead": true,
+          "firstNewReservationAt": "2026-11-04T21:35:22+09:00",
+          "stoppedAt": "2026-11-04T21:39:25+09:00",
+          "providerReservationsBeforeWindow": 17,
+          "providerReservations": 3,
+          "apiRequests": 0,
+          "reportedApiTokens": 0,
+          "originalCompletedTurns": 13,
+          "originalCompletedTurnsUnchanged": true,
+          "completedTurns": 15,
+          "unconfirmedRequests": 0,
+          "failedSubmitRecovery": {
+            "action": "retry_after_failed_submit",
+            "ownerConfirmedStoppedAfterFailedSubmit": true,
+            "originalGrantRevoked": true,
+            "originalRequestAndFailedTurnPreserved": true,
+            "sameTaskPendingBeforeResume": true,
+            "unconfirmedAfterRecovery": 0,
+            "newRequestsBeforeResume": 0,
+            "externalExecutionFinalStatus": "UNVERIFIED"
+          },
+          "nativeTopicReview": {
+            "phase": "cross_review2",
+            "status": "ACCEPTED",
+            "inputTransportVersion": 2,
+            "sameTask": true,
+            "inputBytes": 137805,
+            "inputPagesRead": 16,
+            "inputPagesTotal": 16,
+            "sameInputDigest": true,
+            "allPageDigestsMatch": true,
+            "maxRpcBytes": 11736,
+            "elapsedMs": 194591,
+            "assignedClaims": 12,
+            "structuredReviews": 12,
+            "allAssignedClaimsCovered": true,
+            "callbackCount": 1,
+            "callbackHttpStatus": 200,
+            "serverReplyReceived": true,
+            "replyAccepted": true,
+            "receiptAccepted": true
+          },
+          "museTopicReview": {
+            "phase": "cross_review2",
+            "status": "ACCEPTED",
+            "elapsedMs": 39494,
+            "assignedClaims": 10,
+            "structuredReviews": 10,
+            "originalAccountPreserved": true,
+            "originalThreadPreserved": true
+          },
+          "completedReviewRounds": [
+            1,
+            2
+          ],
+          "membersCompletedBothReviewRounds": 5,
+          "firstRevision": {
+            "phase": "revision",
+            "provider": "openai-oauth",
+            "status": "FAILED",
+            "elapsedMs": 4942,
+            "error": "response_not_completed",
+            "receiptPresent": true,
+            "responseChars": 0,
+            "usage": null,
+            "detailsStored": false,
+            "originalResponseReadOnlyGetHttpStatus": 401,
+            "cause": "UNVERIFIED"
+          }
         }
       ],
       "previousLiveWindow": {
-        "date": "2026-11-04",
-        "userApproved": true,
-        "deployedMainSha": "bd19d1f27ccfeb7e691aad86b2533bbca806fdb1",
-        "testedHead": "aecf65f",
-        "sameTreeAsTestedHead": true,
-        "firstNewReservationAt": "2026-11-04T21:35:22+09:00",
-        "stoppedAt": "2026-11-04T21:39:25+09:00",
-        "providerReservationsBeforeWindow": 17,
-        "providerReservations": 3,
-        "apiRequests": 0,
-        "reportedApiTokens": 0,
-        "originalCompletedTurns": 13,
-        "originalCompletedTurnsUnchanged": true,
-        "completedTurns": 15,
-        "unconfirmedRequests": 0,
-        "failedSubmitRecovery": {
-          "action": "retry_after_failed_submit",
-          "ownerConfirmedStoppedAfterFailedSubmit": true,
-          "originalGrantRevoked": true,
-          "originalRequestAndFailedTurnPreserved": true,
-          "sameTaskPendingBeforeResume": true,
-          "unconfirmedAfterRecovery": 0,
-          "newRequestsBeforeResume": 0,
-          "externalExecutionFinalStatus": "UNVERIFIED"
-        },
-        "nativeTopicReview": {
-          "phase": "cross_review2",
-          "status": "ACCEPTED",
-          "inputTransportVersion": 2,
-          "sameTask": true,
-          "inputBytes": 137805,
-          "inputPagesRead": 16,
-          "inputPagesTotal": 16,
-          "sameInputDigest": true,
-          "allPageDigestsMatch": true,
-          "maxRpcBytes": 11736,
-          "elapsedMs": 194591,
-          "assignedClaims": 12,
-          "structuredReviews": 12,
-          "allAssignedClaimsCovered": true,
-          "callbackCount": 1,
-          "callbackHttpStatus": 200,
-          "serverReplyReceived": true,
-          "replyAccepted": true,
-          "receiptAccepted": true
-        },
-        "museTopicReview": {
-          "phase": "cross_review2",
-          "status": "ACCEPTED",
-          "elapsedMs": 39494,
-          "assignedClaims": 10,
-          "structuredReviews": 10,
-          "originalAccountPreserved": true,
-          "originalThreadPreserved": true
-        },
-        "completedReviewRounds": [
-          1,
-          2
-        ],
-        "membersCompletedBothReviewRounds": 5,
-        "firstRevision": {
-          "phase": "revision",
-          "provider": "openai-oauth",
-          "status": "FAILED",
-          "elapsedMs": 4942,
-          "error": "response_not_completed",
-          "receiptPresent": true,
-          "responseChars": 0,
-          "usage": null,
-          "detailsStored": false,
-          "originalResponseReadOnlyGetHttpStatus": 401,
-          "cause": "UNVERIFIED"
-        }
-      },
-      "latestLiveWindow": {
         "date": "2026-11-04",
         "userApproved": true,
         "deployedMainSha": "6aa62ec681dc6a57c14f6fb18dd7b687454b0435",
@@ -246,6 +246,47 @@
           "cause": "UNVERIFIED"
         }
       },
+      "latestLiveWindow": {
+        "date": "2026-11-04",
+        "userApproved": true,
+        "deployedMainSha": "df5be3044eace1bb34109afa5ff552036c6d3a97",
+        "testedHead": "5555d59eeb452badb2b2ac13c13343b1d26614fd",
+        "sameTreeAsTestedHead": true,
+        "scope": "one_failed_gpt_revision_only",
+        "firstNewReservationAt": "2026-11-04T13:54:53.171Z",
+        "stoppedAt": "2026-11-04T13:55:01.249Z",
+        "providerReservationsBeforeWindow": 21,
+        "providerReservations": 1,
+        "apiRequests": 0,
+        "reportedApiTokens": 0,
+        "originalCompletedTurns": 15,
+        "originalCompletedTurnsUnchanged": true,
+        "completedTurns": 15,
+        "unconfirmedRequests": 0,
+        "completedReviewRounds": [
+          1,
+          2
+        ],
+        "membersCompletedBothReviewRounds": 5,
+        "firstRevision": {
+          "phase": "revision",
+          "provider": "openai-oauth",
+          "status": "FAILED",
+          "elapsedMs": 5521,
+          "error": "response_not_completed",
+          "receiptPresent": true,
+          "responseChars": 0,
+          "usage": null,
+          "diagnostic": {
+            "streamEvent": "error",
+            "responseStatus": null,
+            "providerErrorCode": "subscription_sharing_usage_limit_exceeded",
+            "incompleteReason": null
+          },
+          "directCause": "CONFIRMED_THIS_REQUEST",
+          "specificLimitAndResetAt": "UNVERIFIED"
+        }
+      },
       "latestCleanup": {
         "date": "2026-11-04",
         "roomOff": true,
@@ -254,16 +295,15 @@
         "normalServiceRestored": true,
         "normalServiceActive": true,
         "normalEntrypointObserved": true,
-        "dedicatedTunnelProcesses": 0,
-        "dedicatedTunnelStopped": true,
+        "dedicatedTunnelProcessesCreated": 0,
         "validationDropInRemoved": true,
         "activeLeases": 0,
         "activeServerSubscriptions": 0,
-        "ownGrantRevoked": true,
-        "nativeWatchInactive": "USER_REPORTED",
-        "nativeWatchDeactivationUserReply": "CONFIRMED_INACTIVE",
+        "nativeWatchInactive": "PREVIOUS_USER_REPORTED_NO_REACTIVATION",
         "unconfirmedRequests": 0,
-        "cleanupFailures": 0
+        "initialCleanupConflicts": 1,
+        "cleanupConflictReconciled": true,
+        "unresolvedCleanupFailures": 0
       },
       "latestReconciliation": {
         "date": "2026-11-04",
@@ -294,7 +334,7 @@
         "nativeWatchInactive": "UNVERIFIED"
       },
       "originalGates": ["R3-E","R4-D","R6-F","R8-D"],
-      "blockedPrerequisites": ["gpt_revision_failure_diagnosis","remaining_revision_synthesis_and_native_followup","same_room_return_and_remaining_real_gates","real_device_acceptance","separately_scoped_real_Codex_binding","next_bounded_live_window"]
+      "blockedPrerequisites": ["gpt_subscription_sharing_usage_availability","remaining_revision_synthesis_and_native_followup","same_room_return_and_remaining_real_gates","real_device_acceptance","separately_scoped_real_Codex_binding","next_bounded_live_window"]
     }
   ]
 }
