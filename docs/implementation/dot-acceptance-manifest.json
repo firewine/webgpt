@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "date": "2026-11-02",
+  "date": "2026-11-04",
   "baselineSha": "8affb469c3e6ce5b636f465ff693d62ac45071b8",
   "originalManifest": "docs/implementation/resident-acceptance-manifest.json",
   "originalGateCount": 50,
@@ -52,10 +52,40 @@
       "id": "D5-F",
       "requirement": "Separately authorized deployed native dot ambient >=1 and topic/followup >=2; GPT2+API same room; original Muse thread roundtrip; live Codex read/write and real device acceptance remain distinct",
       "realStatus": "BLOCKED",
-      "files": ["docs/implementation/dot-mcp-acceptance-d5-20261102.md", "docs/implementation/dot-mcp-live-d5-20261102.md", "docs/implementation/dot-mcp-resume-d5-20261102.md", "docs/implementation/dot-input-paging-20261102.md"],
-      "observed": {"nativeAmbientReplies": 1, "nativeTopicReplies": 1, "nativeFollowupReplies": 0, "mixedParticipants": 5, "independentDrafts": 5, "crossReviewReplies": 3, "completedReviewRounds": 0, "providerReservations": 11, "apiRequests": 2, "unconfirmedAtStop": 1},
+      "files": ["docs/implementation/dot-mcp-acceptance-d5-20261102.md", "docs/implementation/dot-mcp-live-d5-20261102.md", "docs/implementation/dot-mcp-resume-d5-20261102.md", "docs/implementation/dot-input-paging-20261102.md", "docs/implementation/dot-explicit-retry-20261102.md", "docs/implementation/dot-mcp-paged-live-d5-20261102.md", "docs/implementation/dot-mcp-paged-live-d5-20261103.md"],
+      "observed": {"nativeAmbientReplies": 1, "nativeTopicReplies": 2, "nativeFollowupReplies": 0, "mixedParticipants": 5, "independentDrafts": 5, "crossReviewReplies": 5, "completedReviewRounds": 1, "providerReservations": 13, "apiRequests": 2, "unconfirmedAtStop": 1, "unconfirmedAfterReconciliation": 0, "nativePagedReviewPages": 16, "nativePagedReviewMs": 146206},
+      "latestLiveWindow": {
+        "date": "2026-11-03",
+        "deployedMainSha": "f3a2e34026c37c2bff52e194678b3de795c84d62",
+        "firstNewReservationAt": "2026-11-03T07:17:40+09:00",
+        "providerReservationsBeforeWindow": 11,
+        "providerReservations": 2,
+        "apiRequests": 0,
+        "originalCompletedTurns": 8,
+        "originalCompletedTurnsUnchanged": true,
+        "completedTurns": 9,
+        "nativeTopicReview": {"phase": "cross_review1", "status": "ACCEPTED", "inputPagesRead": 16, "inputPagesTotal": 16, "sameInputDigest": true, "rpcBytesAtMost": 12000, "assignedClaims": 12, "structuredReviews": 12},
+        "museTopicReview": {"phase": "cross_review1", "status": "UNCONFIRMED", "timeoutSeconds": 300, "partialResponseChars": 1998, "partialResponseValidJson": false, "resends": 0}
+      },
+      "latestReconciliation": {
+        "date": "2026-11-04",
+        "kind": "existing_original_response_only",
+        "museTopicReview": {"phase": "cross_review1", "status": "ACCEPTED", "identityThreadAndRequestMatched": true, "responseChars": 2679, "assignedClaims": 10, "structuredReviews": 10, "resends": 0},
+        "completedTurns": 10,
+        "completedReviewRounds": [1],
+        "originalCompletedTurnsUnchanged": true,
+        "unconfirmedRequests": 0,
+        "newRequests": 0,
+        "roomOff": true,
+        "browserPaused": true,
+        "membersRestored": true,
+        "normalServiceRestored": true,
+        "dedicatedTunnelStopped": true,
+        "activeServerSubscriptions": 0,
+        "nativeWatchInactive": "UNVERIFIED"
+      },
       "originalGates": ["R3-E", "R4-D", "R6-F", "R8-D"],
-      "blockedPrerequisites": ["native_long_input_readability", "same_original_request_reconciliation", "next_bounded_live_window_after_input_fix", "two_review_rounds_and_native_followup", "same_room_return_and_remaining_real_gates", "real_device_acceptance", "separately_scoped_real_Codex_binding"]
+      "blockedPrerequisites": ["next_bounded_live_window_after_muse_recovery", "second_review_round_revision_synthesis_and_native_followup", "same_room_return_and_remaining_real_gates", "native_watch_lifecycle_reconciliation", "real_device_acceptance", "separately_scoped_real_Codex_binding"]
     }
   ]
 }

@@ -1,5 +1,7 @@
 # D5 분할 조회·명시 복구의 실환경 수락 — 2026-11-02
 
+**후속 실측:** 아래는11/02 준비 당시 기록이다.11/03 dot16페이지 실제 조회·답변 수락과11/04 Muse 원래 응답 무전송 복구로 완료10개·첫 교차검토5명 완료·미확정0이 됐다. 방 off·Muse 잠금·정상 서비스 복구, D5 전체 BLOCKED다. [최신 결과와 남은 수락](./dot-mcp-paged-live-d5-20261103.md)을 따른다.
+
 ## 병합 기준과 준비
 
 PR #44는18:41:37 KST 병합됐다. 기준 main `f3a2e34026c37c2bff52e194678b3de795c84d62`, tree `fb0b74800428a8cb30e2baa046350386cae9760e`는 검사한 head `a5723d3`과 같다. [CI](https://github.com/firewine/webgpt/actions/runs/41421968229)는 Node529·Chromium/Chrome MCP66·설치 Codex0.165 계약 PASS다. 같은 main을 별도 worktree에서 빌드했다. 동일 소스의 전체 자동 검사는 반복하지 않았다.
@@ -61,3 +63,11 @@ private 추가 증거는 `deployment-observed.json`, `retry-prepared-observed.js
 다음 연결 진단은 D0에서 사용한 기존 방법처럼 **같은 dot/같은 private Tunnel에 새 이름의 custom MCP 연결**을 추가하는 것이다. 이름 `webjjoku_dot_paged`로 기존 세 도구/동일 권한을 새 discovery snapshot에서 확인하도록 요청했다. 기존 `ubuntu_dot_d0_v3`·Muse·계정/원문은 보존하며 새 runtime key·Tunnel·OAuth/공개 ingress·제품 코드/DB 계약 변경은 없다. 관리 플러그인의 이름 검색으로는 기존 private custom 연결이 검색되지 않았으며, 검색 결과 부재를 계정 접근 거부로 단정하지 않는다. 등록/새 명세 확인 전 native 감시 생성·실제 호출은 계속0이다.
 
 21:18 KST 사용자가 새 연결 등록을 완료했다. 새 `webjjoku_dot_paged`의 실제 소비자 도구 정의에 선택적 `inputPage`가 포함되는 것을 확인했고, 같은 연결의 읽기 전용 get이 정상 event filter/현재 요청 없음으로 응답했다. **새 연결의 discovery 갱신 PASS**다. 동일 dot의 감시 준비 지시를 새 연결명으로 전달하도록 요청했다. 옛 연결의 감시는 활성화하지 않는다. 준비용 권한 만료 전에 같은 scope의30분 권한으로 전용 runtime1개를 갱신했으며, 실제 호출 시작 전 현재 grant/구독·Muse·API 잔여를 다시 검사한다. native 답변 수락/두 라운드/후속은 아직 NOT_RUN이다.
+
+### 감시 등록 직후 권한 재발급 대조
+
+21:34 KST 사용자가 새 연결의 감시1개 등록·옛 감시 미활성·실행 기록 없음을 보고했다. 서버에는 **21:29:30 subscribe 성공→21:29:42 owner 권한 재발급** 순서가 기록됐다. 새 발급 동작이 기존 version8 grant/구독을 회수했고 현재 version9만 유효했다. 따라서 작업 서비스의 ‘감시 활성’ 표시와 서버의 유효 구독0이 달랐다. 토의는 아직 resume하지 않았으며 새 예약/API0이다. 이벤트 손실이나 모델 실행 실패로 판정하지 않는다.
+
+현재 소유자가 발급한 grant/설정은 보존하고, 기존 Vault의 그 grant만 새0600 전달기 파일로 연결했다. 새 grant 생성·수명 연장0, 같은 Tunnel runtime1개만 교체했다. 같은 새 플러그인의 metadata get이 다시 정상 응답했다. 기존 감시 하나를 현재 권한으로 재연결하도록 요청했으며, 연결 권한을 재발급하면 같은 재연결이 다시 필요함을 안내했다. 원래8개 digest 보존·유효 구독0을 대조하고 실제 호출은 계속 대기한다.
+
+대기 중 멤버 설정/추가 입력도 바뀌어 검증 직전 별도 private snapshot을 잡았다. 검증 범위는 원래5명으로 유지하고 종료 시 이 최신 멤버 설정을 복원한다. 이전 준비 시점의 설정으로 덮어쓰지 않는다. 같은 Muse 대화의 page ID가2→1로 달라져 기존 읽기 전용 discovery/confirm으로 계정·thread·빈 입력·idle을 확인하고 갱신했다. 실제 메시지를 보내지 않았다. 증거는 `native-watch-user-report-server-reconciliation.json`, `before-native-start-current-user-state.json`, `owner-grant-bridge-aligned.json`, `watch-boundary-reconciled.json`, `muse-page-preflight-latest.json`이다.
