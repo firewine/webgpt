@@ -4,6 +4,7 @@ import { Providers } from '../dist/server/connections/providers.js';
 import { publicAddress, fetchSource } from '../dist/server/connections/sources.js';
 import { storage } from './workspace-helpers.mjs';
 import { responsesFailureDiagnostic } from '../dist/server/connections/completion-failure.js';
+import { AppError } from '../dist/server/workspace/util.js';
 function stream(events, terminate = true) { const bytes = Buffer.from(events.map(e => `data: ${typeof e === 'string' ? e : JSON.stringify(e)}\r\n\r\n`).join('') + (terminate ? '' : 'data: unfinished'));
   let at = 0; return new Response(new ReadableStream({ pull(controller) { if (at >= bytes.length) { controller.close(); return; } controller.enqueue(bytes.subarray(at, at + 3)); at += 3; } }), { headers: { 'Content-Type': 'text/event-stream' } }); }
 async function provider(t, kind, request) { const { store, vault } = await storage(t); store.transact(s => s.connections.push({ id: 'one', kind, label: 'test', status: 'connected', models: [{ id: 'actual-catalog-model', label: '실제 카탈로그' }] })); vault.put('one', { key: 'fixture-secret-key' });
@@ -27,19 +28,47 @@ test('Responses failure diagnostics retain only protocol labels and an opaque lo
   assert.equal(unknown.streamEvent, 'other'); assert.equal(unknown.responseStatus, 'other'); assert.equal(unknown.providerErrorCode, 'other'); assert.equal(unknown.incompleteReason, 'other'); assert.doesNotMatch(JSON.stringify(unknown), /PRIVATE_/);
   assert.equal(responsesFailureDiagnostic('openai-oauth', 'one', { type: 'error', code: 'rate_limit_exceeded' }).providerErrorCode, 'rate_limit_exceeded');
 });
+test('Responses failure diagnostics retain documented subscription-sharing codes only in bounded error envelopes', () => {
+  const codes = [
+    'subscription_sharing_user_not_eligible',
+    'subscription_sharing_usage_limit_exceeded',
+    'subscription_sharing_usage_unavailable',
+    'subscription_sharing_unsupported_capability',
+    'subscription_sharing_route_not_supported',
+    'subscription_sharing_invalid_user',
+    'chatpass_v2_scope_not_authorized',
+    'chatpass_v2_invalid_authorization_context',
+    'subscription_sharing_user_unavailable',
+  ];
+  for (const code of [...codes, 'subscription_sharing_PRIVATE_UNKNOWN', 'chatpass_v2_PRIVATE_UNKNOWN']) {
+    const error = { code, message: 'PRIVATE_PROVIDER_PROSE', param: 'PRIVATE_PARAM' };
+    for (const event of [
+      { type: 'error', ...error },
+      { type: 'error', error },
+      { type: 'response.failed', response: { id: 'PRIVATE_REMOTE_RESPONSE', status: 'failed', error, input: 'PRIVATE_INPUT', output: 'PRIVATE_REASONING' } },
+    ]) {
+      const result = responsesFailureDiagnostic('openai-oauth', 'PRIVATE_LOCAL_REQUEST', { ...event, id: 'PRIVATE_REMOTE_EVENT', input: 'PRIVATE_INPUT', authorization: 'PRIVATE_TOKEN' });
+      assert.deepEqual(result, { event: 'provider.response_not_completed', provider: 'openai-oauth', requestDigest: result.requestDigest,
+        streamEvent: event.type, responseStatus: event.response?.status ?? null, providerErrorCode: codes.includes(code) ? code : 'other', incompleteReason: null });
+      assert.match(result.requestDigest, /^[a-f0-9]{64}$/); assert.doesNotMatch(JSON.stringify(result), /PRIVATE_/);
+    }
+  }
+});
 test('OAuth terminal failures log one bounded diagnostic and preserve receipts, failure semantics and one-send behavior', async t => {
   const original = console.error, logs = []; console.error = line => logs.push(line); t.after(() => { console.error = original; });
   for (const event of [
     { type: 'response.failed', response: { id: 'resp-one', status: 'failed', error: { code: 'server_error', message: 'PRIVATE_DETAIL' } } },
     { type: 'response.incomplete', response: { id: 'resp-one', status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' } } },
     { type: 'error', code: 'rate_limit_exceeded', message: 'PRIVATE_DETAIL' },
+    { type: 'error', code: 'subscription_sharing_usage_limit_exceeded', message: 'PRIVATE_DETAIL' },
     { type: 'response.completed', response: { id: 'resp-one', status: 'incomplete', incomplete_details: { reason: 'content_filter' } } },
   ]) {
     let sends = 0; const f = await provider(t, 'openai-oauth', async () => { sends++; return stream([{ type: 'response.created', response: { id: 'resp-one' } }, event]); });
     const before = logs.length;
-    await assert.rejects(f.providers.complete(f.input), e => e.code === 'response_not_completed' && e.status === 502 && !e.uncertain);
+    await assert.rejects(f.providers.complete(f.input), e => e instanceof AppError && e.code === 'response_not_completed' && e.status === 502 && e.uncertain === false);
     assert.equal(sends, 1); assert.equal(f.seen.dispatched, 1); assert.ok(f.seen.receipts.includes('resp-one')); assert.equal(f.seen.deltas.length, 0);
     assert.equal(logs.length, before + 1); const diagnostic = JSON.parse(logs.at(-1)); assert.equal(diagnostic.streamEvent, event.type); assert.equal(diagnostic.provider, 'openai-oauth'); assert.doesNotMatch(logs.at(-1), /PRIVATE_|fixture-oauth-token|resp-one/);
+    assert.equal(diagnostic.providerErrorCode, event.response?.error?.code ?? event.code ?? null);
   }
   console.error = () => { throw new Error('logger unavailable'); };
   const f = await provider(t, 'openai-oauth', async () => stream([{ type: 'error', code: 'server_error' }]));

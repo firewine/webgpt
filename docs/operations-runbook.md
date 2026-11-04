@@ -307,6 +307,8 @@ SQLite의 online backup API를 사용한다. 백업은 0600이며 대화·실행
 
 GPT의 `response_not_completed`는 정상 완료 응답을 받지 못했다는 판정이다. 진단 보완 버전에서는 해당 종료 이벤트의 `provider.response_not_completed` 운영 로그에 local request digest·허용된 event/status/error code/incomplete reason만 남긴다. `journalctl --user -u webjjoku --since '확인할 시각' --no-pager`에서 대조하되 `other`/null을 특정 원인으로 해석하지 않는다. provider 오류 문장·원문·출력·credential·원격 response ID는 기록하지 않는다. 이 로그가 없는 과거 실패의 원인은 복원되지 않으며, 같은 실패를 새 요청으로 자동 반복하지 않는다. [실패 실측·진단 계약·검사](./implementation/dot-mcp-v2-live-d5-20261104.md)를 따른다.
 
+구독 연결 진단 보완은 공식 SIWC의9개 구독/권한 code도 같은 정적 허용 목록으로 보존한다. `subscription_sharing_usage_limit_exceeded`를 **실제로 관측했을 때** 계정/앱별 허용량을 ChatGPT 설정의 Usage에서 확인한다. 이것은 웹쫀쿠가 API 제공자에만 적용하는 일일 정책과 별개이며, 계정 전체 소진이나 복구 시각을 추정하지 않는다. 현재 UI/엔진의 `response_not_completed`·중지 판정은 유지하며 자동 재시도·로그아웃·다른 과금 경로 전환은 추가하지 않는다. `other`였던 과거 실패를 구독 한도 오류로 재분류하지 않는다. [공식 오류/복구](https://developers.openai.com/siwc/token-sharing-open-source/errors-and-recovery)와 [실제 재검증·누락 보완](./implementation/dot-mcp-gpt-diagnostics-live-d5-20261104.md)을 대조한다.
+
 ## 7. 실환경 완료 판정
 
 아래가 모두 실제 증거를 갖추기 전에는 MVP-1/2를 PASS로 바꾸지 않는다.

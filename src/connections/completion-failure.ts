@@ -11,7 +11,16 @@ export function responsesFailureDiagnostic(provider: 'openai-oauth' | 'codex-oau
   return { event: 'provider.response_not_completed', provider, requestDigest: digest(requestId),
     streamEvent: select(event.type, ['response.completed', 'response.failed', 'response.incomplete', 'error']),
     responseStatus: select(response.status, ['failed', 'incomplete', 'cancelled', 'in_progress', 'queued', 'completed']),
-    providerErrorCode: select(error.code ?? envelopeError.code ?? event.code, ['server_error', 'rate_limit_exceeded', 'context_length_exceeded', 'invalid_prompt', 'invalid_request_error', 'insufficient_quota', 'model_not_found', 'unsupported_value', 'content_policy_violation']),
+    providerErrorCode: select(error.code ?? envelopeError.code ?? event.code, ['server_error', 'rate_limit_exceeded', 'context_length_exceeded', 'invalid_prompt', 'invalid_request_error', 'insufficient_quota', 'model_not_found', 'unsupported_value', 'content_policy_violation',
+      'subscription_sharing_user_not_eligible',
+      'subscription_sharing_usage_limit_exceeded',
+      'subscription_sharing_usage_unavailable',
+      'subscription_sharing_unsupported_capability',
+      'subscription_sharing_route_not_supported',
+      'subscription_sharing_invalid_user',
+      'chatpass_v2_scope_not_authorized',
+      'chatpass_v2_invalid_authorization_context',
+      'subscription_sharing_user_unavailable']),
     incompleteReason: select(record(response.incomplete_details).reason, ['max_output_tokens', 'max_messages', 'content_filter', 'steered']) };
 }
 

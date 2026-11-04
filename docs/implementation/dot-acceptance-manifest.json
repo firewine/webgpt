@@ -52,53 +52,86 @@
       "id": "D5-F",
       "requirement": "Separately authorized deployed native dot ambient >=1 and topic/followup >=2; GPT2+API same room; original Muse thread roundtrip; live Codex read/write and real device acceptance remain distinct",
       "realStatus": "BLOCKED",
-      "files": ["docs/implementation/dot-mcp-acceptance-d5-20261102.md", "docs/implementation/dot-mcp-live-d5-20261102.md", "docs/implementation/dot-mcp-resume-d5-20261102.md", "docs/implementation/dot-input-paging-20261102.md", "docs/implementation/dot-explicit-retry-20261102.md", "docs/implementation/dot-mcp-paged-live-d5-20261102.md", "docs/implementation/dot-mcp-paged-live-d5-20261103.md", "docs/implementation/dot-mcp-resume-live-d5-20261104.md", "docs/implementation/dot-mcp-v2-live-d5-20261104.md", "docs/implementation/dot-page-transport-retry-20261104.md"],
-      "observed": {"nativeAmbientReplies":1,"nativeTopicReplies":3,"nativeFollowupReplies":0,"mixedParticipants":5,"independentDrafts":5,"crossReviewReplies":10,"completedReviewRounds":2,"providerReservations":20,"apiRequests":3,"unconfirmedAtStop":0,"nativePagedReviewPages":16,"nativePagedReviewMs":194591,"unconfirmedNow":0,"currentUnconfirmed":0},
-      "earlierLiveWindows": [{
-        "date": "2026-11-03",
-        "deployedMainSha": "f3a2e34026c37c2bff52e194678b3de795c84d62",
-        "firstNewReservationAt": "2026-11-03T07:17:40+09:00",
-        "providerReservationsBeforeWindow": 11,
-        "providerReservations": 2,
-        "apiRequests": 0,
-        "originalCompletedTurns": 8,
-        "originalCompletedTurnsUnchanged": true,
-        "completedTurns": 9,
-        "nativeTopicReview": {"phase": "cross_review1", "status": "ACCEPTED", "inputPagesRead": 16, "inputPagesTotal": 16, "sameInputDigest": true, "rpcBytesAtMost": 12000, "assignedClaims": 12, "structuredReviews": 12},
-        "museTopicReview": {"phase": "cross_review1", "status": "UNCONFIRMED", "timeoutSeconds": 300, "partialResponseChars": 1998, "partialResponseValidJson": false, "resends": 0}
-      }],
-      "previousLiveWindow": {
-        "date": "2026-11-04",
-        "deployedMainSha": "f3a2e34026c37c2bff52e194678b3de795c84d62",
-        "firstNewReservationAt": "2026-11-04T16:11:17+09:00",
-        "stoppedAt": "2026-11-04T16:25:02+09:00",
-        "providerReservationsBeforeWindow": 13,
-        "providerReservations": 4,
-        "apiRequests": 1,
-        "reportedApiTokens": 45335,
-        "originalCompletedTurns": 10,
-        "originalCompletedTurnsUnchanged": true,
-        "completedTurns": 13,
-        "nativeTopicReview": {
-          "phase": "cross_review2",
-          "status": "UNCONFIRMED",
-          "inputBytes": 137805,
-          "inputPagesRead": 31,
-          "inputPagesTotal": 31,
-          "sameInputDigest": true,
-          "maxRpcBytes": 11495,
-          "firstPageDelayMs": 59046,
-          "pageReadSpanMs": 235565,
-          "medianPageGapMs": 7690,
-          "timeoutSeconds": 300,
-          "serverReplyReceived": false,
-          "userReportedSubmitCalls": 1,
-          "userReportedSubmitError": true,
-          "submitErrorMessage": "UNVERIFIED",
-          "externalExecutionFinalStatus": "UNVERIFIED"
-        }
+      "files": ["docs/implementation/dot-mcp-acceptance-d5-20261102.md","docs/implementation/dot-mcp-live-d5-20261102.md","docs/implementation/dot-mcp-resume-d5-20261102.md","docs/implementation/dot-input-paging-20261102.md","docs/implementation/dot-explicit-retry-20261102.md","docs/implementation/dot-mcp-paged-live-d5-20261102.md","docs/implementation/dot-mcp-paged-live-d5-20261103.md","docs/implementation/dot-mcp-resume-live-d5-20261104.md","docs/implementation/dot-mcp-v2-live-d5-20261104.md","docs/implementation/dot-page-transport-retry-20261104.md","docs/implementation/dot-mcp-gpt-diagnostics-live-d5-20261104.md"],
+      "observed": {
+        "nativeAmbientReplies": 1,
+        "nativeTopicReplies": 3,
+        "nativeFollowupReplies": 0,
+        "mixedParticipants": 5,
+        "independentDrafts": 5,
+        "crossReviewReplies": 10,
+        "completedReviewRounds": 2,
+        "providerReservations": 21,
+        "apiRequests": 3,
+        "unconfirmedAtStop": 0,
+        "nativePagedReviewPages": 16,
+        "nativePagedReviewMs": 194591,
+        "unconfirmedNow": 0,
+        "currentUnconfirmed": 0
       },
-      "latestLiveWindow": {
+      "earlierLiveWindows": [
+        {
+          "date": "2026-11-03",
+          "deployedMainSha": "f3a2e34026c37c2bff52e194678b3de795c84d62",
+          "firstNewReservationAt": "2026-11-03T07:17:40+09:00",
+          "providerReservationsBeforeWindow": 11,
+          "providerReservations": 2,
+          "apiRequests": 0,
+          "originalCompletedTurns": 8,
+          "originalCompletedTurnsUnchanged": true,
+          "completedTurns": 9,
+          "nativeTopicReview": {
+            "phase": "cross_review1",
+            "status": "ACCEPTED",
+            "inputPagesRead": 16,
+            "inputPagesTotal": 16,
+            "sameInputDigest": true,
+            "rpcBytesAtMost": 12000,
+            "assignedClaims": 12,
+            "structuredReviews": 12
+          },
+          "museTopicReview": {
+            "phase": "cross_review1",
+            "status": "UNCONFIRMED",
+            "timeoutSeconds": 300,
+            "partialResponseChars": 1998,
+            "partialResponseValidJson": false,
+            "resends": 0
+          }
+        },
+        {
+          "date": "2026-11-04",
+          "deployedMainSha": "f3a2e34026c37c2bff52e194678b3de795c84d62",
+          "firstNewReservationAt": "2026-11-04T16:11:17+09:00",
+          "stoppedAt": "2026-11-04T16:25:02+09:00",
+          "providerReservationsBeforeWindow": 13,
+          "providerReservations": 4,
+          "apiRequests": 1,
+          "reportedApiTokens": 45335,
+          "originalCompletedTurns": 10,
+          "originalCompletedTurnsUnchanged": true,
+          "completedTurns": 13,
+          "nativeTopicReview": {
+            "phase": "cross_review2",
+            "status": "UNCONFIRMED",
+            "inputBytes": 137805,
+            "inputPagesRead": 31,
+            "inputPagesTotal": 31,
+            "sameInputDigest": true,
+            "maxRpcBytes": 11495,
+            "firstPageDelayMs": 59046,
+            "pageReadSpanMs": 235565,
+            "medianPageGapMs": 7690,
+            "timeoutSeconds": 300,
+            "serverReplyReceived": false,
+            "userReportedSubmitCalls": 1,
+            "userReportedSubmitError": true,
+            "submitErrorMessage": "UNVERIFIED",
+            "externalExecutionFinalStatus": "UNVERIFIED"
+          }
+        }
+      ],
+      "previousLiveWindow": {
         "date": "2026-11-04",
         "userApproved": true,
         "deployedMainSha": "bd19d1f27ccfeb7e691aad86b2533bbca806fdb1",
@@ -154,7 +187,10 @@
           "originalAccountPreserved": true,
           "originalThreadPreserved": true
         },
-        "completedReviewRounds": [1, 2],
+        "completedReviewRounds": [
+          1,
+          2
+        ],
         "membersCompletedBothReviewRounds": 5,
         "firstRevision": {
           "phase": "revision",
@@ -170,6 +206,46 @@
           "cause": "UNVERIFIED"
         }
       },
+      "latestLiveWindow": {
+        "date": "2026-11-04",
+        "userApproved": true,
+        "deployedMainSha": "6aa62ec681dc6a57c14f6fb18dd7b687454b0435",
+        "testedHead": "7823269c0173e355c0fe6516981411efccc9f5cd",
+        "sameTreeAsTestedHead": true,
+        "firstNewReservationAt": "2026-11-04T22:18:55.080+09:00",
+        "stoppedAt": "2026-11-04T22:19:01.304+09:00",
+        "elapsedMs": 6244,
+        "providerReservationsBeforeWindow": 20,
+        "providerReservations": 1,
+        "apiRequests": 0,
+        "reportedApiTokens": 0,
+        "originalCompletedTurns": 15,
+        "originalCompletedTurnsUnchanged": true,
+        "completedTurns": 15,
+        "unconfirmedRequests": 0,
+        "completedReviewRounds": [
+          1,
+          2
+        ],
+        "membersCompletedBothReviewRounds": 5,
+        "firstRevision": {
+          "phase": "revision",
+          "provider": "openai-oauth",
+          "status": "FAILED",
+          "elapsedMs": 2818,
+          "error": "response_not_completed",
+          "receiptPresent": true,
+          "responseChars": 0,
+          "usage": null,
+          "diagnostic": {
+            "streamEvent": "error",
+            "responseStatus": null,
+            "providerErrorCode": "other",
+            "incompleteReason": null
+          },
+          "cause": "UNVERIFIED"
+        }
+      },
       "latestCleanup": {
         "date": "2026-11-04",
         "roomOff": true,
@@ -177,6 +253,7 @@
         "membersRestored": true,
         "normalServiceRestored": true,
         "normalServiceActive": true,
+        "normalEntrypointObserved": true,
         "dedicatedTunnelProcesses": 0,
         "dedicatedTunnelStopped": true,
         "validationDropInRemoved": true,
@@ -192,9 +269,19 @@
         "date": "2026-11-04",
         "at": "2026-11-04T15:46:24+09:00",
         "kind": "existing_original_response_only",
-        "museTopicReview": {"phase": "cross_review1", "status": "ACCEPTED", "identityThreadAndRequestMatched": true, "responseChars": 2679, "assignedClaims": 10, "structuredReviews": 10, "resends": 0},
+        "museTopicReview": {
+          "phase": "cross_review1",
+          "status": "ACCEPTED",
+          "identityThreadAndRequestMatched": true,
+          "responseChars": 2679,
+          "assignedClaims": 10,
+          "structuredReviews": 10,
+          "resends": 0
+        },
         "completedTurns": 10,
-        "completedReviewRounds": [1],
+        "completedReviewRounds": [
+          1
+        ],
         "originalCompletedTurnsUnchanged": true,
         "unconfirmedRequests": 0,
         "newRequests": 0,
@@ -206,7 +293,7 @@
         "activeServerSubscriptions": 0,
         "nativeWatchInactive": "UNVERIFIED"
       },
-      "originalGates": ["R3-E", "R4-D", "R6-F", "R8-D"],
+      "originalGates": ["R3-E","R4-D","R6-F","R8-D"],
       "blockedPrerequisites": ["gpt_revision_failure_diagnosis","remaining_revision_synthesis_and_native_followup","same_room_return_and_remaining_real_gates","real_device_acceptance","separately_scoped_real_Codex_binding","next_bounded_live_window"]
     }
   ]
