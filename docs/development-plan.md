@@ -2,6 +2,8 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
+**2026-11-04 PR #45 병합 뒤 D5 v2 실검증 준비:** main `bd19d1f`와 검사한 head `aecf65f`의 tree가 같고 CI553/67 PASS를 확인했다. 별도 빌드·SQLite/이전 dist 백업·완료13개 digest·원래 미확정의 새 순수 복구 guard PASS·Muse 같은 계정/thread/idle을 대조했다. 운영은 아직 이전 source·방 off/Muse 잠금이며 **서버 적용/복구 명령/새 호출 NOT_RUN·D5-F BLOCKED**다. [구체 적용·새30분/23회·DeepSeek High5회/119,757 보고 토큰 범위](./implementation/dot-mcp-v2-live-d5-20261104.md)는 별도 승인 전 실행하지 않는다. 기존13개와 원래 실패/제출 시도·Muse·50 gate를 보존한다.
+
 **2026-11-04 승인 보완 구현·자동 검사 PASS:** 사용자가 [페이지 중복 전송 축소·제출 오류 복구 영향안](./reviews/dot-page-transport-retry-impact-20261104.md)의 A+B를 승인했다. 새 요청에만 표현 버전을 고정한 단일 content 페이지와 별도 `retry_after_failed_submit` 소유자 복구를 D3·D4·D5에 구현했다. **Node553·실제 Chromium156/Chrome MCP1.12 브라우저67·설치 Codex0.166 요청 schema PASS**, 브라우저 SKIP0이다. 기존 dual 요청·고정 원문/digest·300초/12,000bytes·단일 실행·예산/승인·완료13개·Muse는 유지한다. [구현·검사·복귀 기록](./implementation/dot-page-transport-retry-20261104.md)을 따른다. 신규 phase·계정·OAuth 확대는 없으며 **서버 적용·실제 native v2/제출 오류 복구 수락은 NOT_RUN**, D5-F 전체 BLOCKED다. Codex 요청 schema 검사는 실제 세션 실행이 아니다.
 
 **최신 실검증 — 2026-11-04:** 승인된 추가30분/27회·DeepSeek High6회/165,092 보고 토큰 범위에서16:11:17~16:25:02 KST 같은 토의를 재개했다. GPT2·DeepSeek의 검토2 각10건을 수락해 **완료13개·교차검토 수락8개**, 원래10개 불변이다. dot은 원문137,805bytes의31/31페이지를 조회했지만300초 안에 submit 수락이 없어 미확정으로 정지했다. 사용자는 답변 생성·submit1회 오류·감시 비활성을 보고했으며 서버 reply/receipt0, 외부 실행 최종 상태는 UNVERIFIED다. **추가 예약4/API1·보고45,335토큰, D5 누적 예약17/API3, D5-F 전체 BLOCKED**다. 방 off·Muse 잠금·멤버 토글/정상 service 복구·이번 grant 회수·관련 전용 Tunnel0·서버 구독0을 확인했다. 해당 검증의 제품 계약 변경/원래10개 재전송/Codex/새 업무는0이다. [새 범위·실측·종료](./implementation/dot-mcp-resume-live-d5-20261104.md)를 따른다. 후속 보완의 승인 상태는 맨 위 개정 기록을 따른다.
