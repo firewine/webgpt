@@ -35,7 +35,7 @@ test('modern ChatGPT discovery scopes Korean/English controls and receipts to th
       window.fixtureSends = 0; document.querySelectorAll('button').forEach(b => { b.onclick = () => window.fixtureSends++; });
     });
     const before = await page.locator('body').innerHTML(); const service = new BrowserDiscovery(f.app.browser); const request = { pageId: 7, profile: 'default', presetId: 'chatgpt-v1' };
-    const found = await service.discover(request); assert.equal(found.status, 'ready', JSON.stringify(found)); assert.equal(found.presetVersion, 'chatgpt-v1/3'); assert.equal(found.busy, false);
+    const found = await service.discover(request); assert.equal(found.status, 'ready', JSON.stringify(found)); assert.equal(found.presetVersion, 'chatgpt-v1/4'); assert.equal(found.busy, false);
     const { binding } = await service.resolve({ discoveryId: found.id, confirmed: true });
     for (const key of ['identitySelector', 'inputSelector', 'sendSelector', 'readySelector']) assert.equal(await page.locator(binding[key]).count(), 1);
     const view = await f.app.browser.inspect(binding, '[웹쫀쿠:active-fixture]'); assert.equal(view.matchCount, 1); assert.equal(view.answer, 'Active response'); assert.equal(view.busy, false);
@@ -49,6 +49,48 @@ test('modern ChatGPT discovery scopes Korean/English controls and receipts to th
     const draft = await service.discover(request); assert.equal(draft.reason, 'browser_discovery_draft_present'); assert.equal(await active.locator('[role=textbox]').textContent(), 'KEEP OWNER DRAFT'); assert.equal(await page.evaluate(() => window.fixtureSends), 0);
     await page.close();
   }
+});
+
+test('modern ChatGPT long prompts ignore nested blank-line copy spans when associating the owned answer', { timeout: 20000 }, async t => {
+  const browser = await launch(t); const f = await workspace(t); const page = await fixturePage(browser, 'chatgpt'); attach(f.app, page, 'chatgpt');
+  const requestId = 'long-blank-lines'; const marker = `[웹쫀쿠:${requestId}]`; const expected = 'First owned answer\nOnly this request belongs to this receipt.';
+  const sections = Array.from({ length: 80 }, (_, i) => `Section ${i + 1}: ${'Long multiline synthetic user prompt. '.repeat(8)}`);
+  const prompt = sections.join('\n\n'); const laterAnswer = 'Unrelated later answer';
+  await page.setContent(`<section data-app-shell-active-page="true"><button aria-label="프로필 메뉴 열기">fixture-account · chatgpt</button><header><h1>Modern dot</h1></header>
+    <div data-user-message-bubble="true"><div id="owned-user" class="whitespace-pre-wrap" style="white-space:pre-wrap"></div></div>
+    <div id="owned-answer" data-markdown-text-style="assistant-message"></div>
+    <div data-user-message-bubble="true"><div id="next-user" class="whitespace-pre-wrap">[웹쫀쿠:next-request]\nNext real user prompt</div></div>
+    <div id="next-answer" data-markdown-text-style="assistant-message"></div>
+    <div role="textbox" contenteditable="true" class="ProseMirror"><p><br class="ProseMirror-trailingBreak"></p></div><button aria-label="메시지 보내기">Send</button><div data-talvt-turn-state="complete"></div></section>`);
+  await page.evaluate(({ marker, sections, expected, laterAnswer }) => {
+    const body = document.querySelector('#owned-user'); body.append(marker + '\n');
+    sections.forEach((section, index) => {
+      if (index) { const decoration = document.createElement('span'); decoration.className = 'whitespace-pre-wrap'; decoration.dataset.markdownCopy = 'blank-lines'; decoration.textContent = '\n\n'; body.append(decoration); }
+      body.append(section);
+    });
+    document.querySelector('#owned-answer').textContent = expected; document.querySelector('#next-answer').textContent = laterAnswer;
+    window.fixtureSends = 0; document.querySelectorAll('button').forEach(button => { button.onclick = () => window.fixtureSends++; });
+    window.fixtureMutations = 0; new MutationObserver(records => { window.fixtureMutations += records.length; }).observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
+  }, { marker, sections, expected, laterAnswer });
+  assert.equal(await page.locator('#owned-user').textContent(), marker + '\n' + prompt);
+  assert.equal(await page.locator('#owned-user [data-markdown-copy="blank-lines"]').count(), sections.length - 1);
+  const beforeDiscovery = await page.locator('body').innerHTML(); const service = new BrowserDiscovery(f.app.browser);
+  const found = await service.discover({ pageId: 7, profile: 'default', presetId: 'chatgpt-v1' }); assert.equal(found.status, 'ready', JSON.stringify(found));
+  const { binding } = await service.resolve({ discoveryId: found.id, confirmed: true });
+  const view = await f.app.browser.inspect(binding, marker); assert.equal(view.matched, true); assert.equal(view.matchCount, 1); assert.equal(view.answer, expected);
+  assert.doesNotMatch(view.answer, /Unrelated later answer/);
+  assert.deepEqual(await page.locator(binding.userSelector).evaluateAll(nodes => nodes.map(node => node.id)), ['owned-user', 'next-user']);
+  assert.equal((await f.app.browser.inspect(binding, '[웹쫀쿠:next-request]')).answer, laterAnswer);
+  assert.equal(await page.locator('body').innerHTML(), beforeDiscovery); assert.equal(await page.evaluate(() => window.fixtureMutations), 0); assert.equal(f.app.store.read().connections.length, 0);
+  f.app.store.transact(s => s.connections.push({ id: 'long-prompt', kind: 'browser', status: 'connected', label: 'fixture', models: [], browser: binding }));
+  await page.locator('[role=textbox]').fill('KEEP OWNER DRAFT'); const beforeRecovery = await page.locator('body').innerHTML();
+  await page.evaluate(() => { window.fixtureMutations = 0; });
+  let dispatches = 0; const receipts = []; let text = '';
+  const result = await f.app.browser.complete({ requestId, participant: { id: 'long-p', connectionId: 'long-prompt', kind: 'browser', label: 'fixture', modelId: 'existing-agent', role: '' }, prompt, history: [], signal: AbortSignal.timeout(5000),
+    hooks: { dispatched() { dispatches++; }, receipt(value) { receipts.push(value); }, delta(value) { text += value; } } });
+  const receipt = page.url() + '#' + requestId; assert.equal(result.text, expected); assert.equal(text, expected); assert.equal(result.receipt, receipt); assert.deepEqual(receipts, [receipt]);
+  assert.equal(dispatches, 0); assert.equal(await page.evaluate(() => window.fixtureSends), 0); assert.equal(await page.evaluate(() => window.fixtureMutations), 0);
+  assert.equal(await page.locator('[role=textbox]').textContent(), 'KEEP OWNER DRAFT'); assert.equal(await page.locator('body').innerHTML(), beforeRecovery);
 });
 
 test('R4-A: two real DOM fixtures x normal/old/ambiguous/thread-change/draft: discovery mutates and sends zero', { timeout: 45000 }, async t => {
