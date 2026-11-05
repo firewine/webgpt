@@ -1,5 +1,7 @@
 # 웹쫀쿠 참여자·OAuth·API 연결 계획
 
+> **2026-11-05 실제 웹 GPT 승인:** 일반 GPT는 실제 ChatGPT 웹 대화도 명시 선택해 참여시킨다. 기존 browser 연결을 재사용하고 OAuth/기기 코드와 구별한다. [승인 영향](./reviews/actual-web-gpt-impact-20261105.md)·[구현/수락](./implementation/web-gpt-selection-20261105.md)을 따르며, 이전 OAuth 실측을 웹 대화 성공으로 세지 않는다.
+
 > **2026-11-01 공식 dot 연결 개정·개발 승인:** dot은 공식 private plugin·MCP Events와 요청별 조회/응답 도구로 연결한다. 일반 GPT OAuth 또는 ChatGPT `/c/...`를 dot으로 간주하지 않는다. Muse는 현재 Chrome 대화 연결을 유지한다. [승인안](./reviews/dot-official-mcp-events-impact-20261101.md)·[단계 SSOT](./development-plan.md)·[D0 증거](./implementation/dot-mcp-events-d0-20261101.md)를 따르며 native dot의 계정/인증·구독·왕복이 통과되기 전 연결 성공으로 표시하지 않는다. 추가 OAuth는 별도 영향 보고·승인 대상이다.
 
 | 항목 | 값 |
@@ -8,7 +10,7 @@
 | 개정일 | 2026-10-29 (KST) |
 | 상위 계획 / 대화 흐름 | [개발 계획](./development-plan.md) / [능동 토론](./discussion-plan.md) |
 | 운영 / 실행 도구 | [Ubuntu 운영](./ubuntu-operations.md) / [Codex 세션](./codex-session-plan.md) |
-| 확정 방향 | 여러 GPT 계정은 OAuth, dot·Muse는 개별 참여자, DeepSeek 등은 API로 같은 토론에 참여 |
+| 확정 방향 | GPT는 실제 ChatGPT 웹 대화 또는 명시 선택한 OAuth/기기 코드, dot·Muse는 개별 참여자, DeepSeek 등은 API로 같은 토론에 참여 |
 
 현재 구현과 검사는 [WJ-002~015 구현 기록](./implementation/wj-002-015.md), 실제 명령과 복구 절차는 [운영 절차](./operations-runbook.md)를 따른다. 이 문서의 실계정·실세션 완료 조건은 아직 통과하지 않았다.
 
@@ -20,7 +22,8 @@
 
 | 참여자 예시 | 인증·연결 | 맥락 보관 |
 | --- | --- | --- |
-| GPT 계정 A | Sign in with ChatGPT OAuth + ChatGPT plan usage + Responses | 웹쫀쿠의 해당 참여자 대화 이력 |
+| 웹 GPT | 서버 Chrome의 실제 ChatGPT 기존 대화 + 기존 browser adapter. 계정/대화/초안 확인 후 명시 선택 | 실제 웹 대화 맥락 + 웹쫀쿠의 해당 참여자 발언/receipt |
+| GPT 계정 A (OAuth 선택) | Sign in with ChatGPT OAuth + ChatGPT plan usage + Responses | 웹쫀쿠의 해당 참여자 대화 이력 |
 | GPT 계정 B | A와 분리된 OAuth 등록·동의·토큰·모델 목록 | B 전용 대화 이력 |
 | dot(may) | 공식 private plugin + Secure MCP Tunnel + MCP Events, D0부터 검증. 지원 인증은 실제 계정에서 확인 | native dot의 기존 맥락 유지 + 해당 turn에 허용된 웹쫀쿠 입력/발언 참조. 기억 가져오기 아님 |
 | Muse | 서버 Chrome의 기존 Muse 대화; 공식 Connector는 별도 검증 | 실제 Muse의 기존 맥락 + 웹쫀쿠 주제·발언 참조 |
@@ -37,11 +40,17 @@
 
 2026-10-31 [승인된 DeepSeek 출력 한도](./reviews/deepseek-output-limit-impact-20261031.md)는 사고 깊이와 별개로 토커에 지정한다. 설정 부재는4,096, 사용자 명시 값은512~32,768이며 실제 catalog가 최대 출력을 보고하면 이를 추가 검증한다. 알려지지 않은 최대치를 context 길이로 추정하지 않는다. 기존 GPT/Anthropic 요청과 키/계정/Chrome 연결은 유지한다. 진행/미확정 발언의 출력 설정을 바꾸거나 과거 turn/업무 입력을 덮어쓰지 않는다. [구현·검사·복귀](./implementation/deepseek-output-limits-20261031.md)를 따르며 실제 실패 해결·배포는 별도 수락이다.
 
-## 2. GPT: OAuth로 연결하고 웹쫀쿠에서 대화
+## 2. GPT: 실제 웹 대화와 선택형 OAuth
+
+### 2.0 실제 ChatGPT 웹 참여
+
+**참여자와 연결 → 대화 참여자 만들기 → GPT · ChatGPT 웹 대화**에서 확인된 ChatGPT browser 연결을 고른다. 연결이 없으면 **ChatGPT 웹 대화 연결 설정**에서 서버 Chrome의 기존 `/c/...` 대화를 읽기 전용으로 확인·등록한다. 기존 사용자/AI 메시지가 있고 입력 초안·응답 중 상태가 없어야 한다. 계정과 대화가 다르면 저장/전송하지 않는다. 실제 로그인은 소유자가 Chrome에서 직접 완료한다.
+
+모델과 사고 깊이는 실제 ChatGPT 웹에서 선택한다. 앱의 browser 모델 `existing-agent`는 그 대화를 가리키며 OAuth xhigh 설정의 자동 적용을 뜻하지 않는다. 웹 GPT는 API 일일 한도에서 제외하지만 서비스 자체 제한과 timeout·미확정 대조는 유지한다. 새 browser 참여자는 앞으로 명시 선택한 대화에만 사용하고 기존 OAuth 발언의 작성자·연결을 덮어쓰지 않는다. 아래 OAuth 절차는 사용자가 그 연결 방식을 선택할 때 적용한다.
 
 2026-10-31 [추가 승인](./reviews/deepseek-anthropic-impact-20261031.md)으로 DeepSeek 제공처별 사고 설정과 Anthropic API 연결을 R8 보완에 포함한다. DeepSeek의 제공처 기본/none/low/high/max는 실제 catalog 또는 정확한 모델 ID의 공식 문서에 따른 허용 값만 표시하고 GPT xhigh와 자동 치환하지 않는다. 기존 설정 부재는 그대로 보존하며 변경은 새 토의 또는 일시정지한 토의의 이후 발언에 적용한다. Anthropic은 API key·필요한 workspace ID·공식 모델 목록·Messages SSE를 기존 Completion 계약에 연결한다. 기존 Store/승인/예산/대조를 유지한다. Claude 구독 OAuth는 공개 외부 앱 지원 경로/허가 확인까지 보류하며 미구현을 성공으로 표시하지 않는다. 실계정 유료 호출/운영 수락은 별도다.
 
-2026-10-29 확인한 [Sign in with ChatGPT 안내](https://developers.openai.com/siwc/quickstart)와 [ChatGPT plan usage](https://developers.openai.com/siwc/token-sharing-open-source)는 대상 앱·계정의 허가 범위에서 OAuth 인증으로 Responses 요청을 수행하는 경로를 제공한다. 웹쫀쿠의 일반 GPT 참여자는 이 경로를 우선 구현한다. 별도의 OpenAI API key 입력이나 일반 ChatGPT DOM 자동화를 기본 경로로 요구하지 않는다.
+2026-10-29 확인한 [Sign in with ChatGPT 안내](https://developers.openai.com/siwc/quickstart)와 [ChatGPT plan usage](https://developers.openai.com/siwc/token-sharing-open-source)는 대상 앱·계정의 허가 범위에서 OAuth 인증으로 Responses 요청을 수행하는 경로를 제공한다. OAuth로 연결한 GPT 참여자는 이 경로를 사용한다. 실제 ChatGPT 웹 대화를 고른 참여자는 위 §2.0의 기존 browser 경로를 사용하며 두 방식의 로그인·맥락·사용 제한을 혼용하지 않는다.
 
 인증과 대화 호출은 다음처럼 구분한다.
 
@@ -50,7 +59,7 @@
 - 대화 맥락: 웹쫀쿠가 참여자별로 저장한 이력을 사용. OAuth 연결로 기존 ChatGPT 대화·메모리·dot의 인격을 자동 가져오지 않는다.
 - 이용 자격: 앱 배포 형태, 사용자·workspace·구독 권한과 실제 consent 결과를 확인. 개인 self-hosted/OSS 경로의 지원을 상용 원격 서비스의 허가로 확대 해석하지 않는다.
 
-따라서 제품에서 말하는 “OAuth 기반 웹 대화”는 **ChatGPT 계정으로 인증해 웹쫀쿠 웹 UI에서 하는 대화**다. `chatgpt.com`의 기존 대화 스레드를 OAuth로 원격 제어한다고 표시하지 않는다. 사용자가 특정 기존 웹 대화를 연결하는 경우에만 별도 browser participant를 등록한다.
+과거 문서의 “OAuth 기반 웹 대화”는 **ChatGPT 계정으로 인증해 웹쫀쿠 웹 UI에서 하는 대화**를 뜻했다. 현재 화면에서는 이 경로를 OAuth/기기 코드로 명시하고 실제 ChatGPT 웹 대화와 구별한다. `chatgpt.com`의 기존 대화 스레드를 OAuth로 원격 제어한다고 표시하지 않는다. 사용자가 특정 기존 웹 대화를 연결하는 경우에만 별도 browser participant를 등록한다.
 
 ### 2.1 계정 등록·갱신
 

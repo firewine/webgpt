@@ -1,16 +1,36 @@
 {
   "id": "chatgpt-v1",
-  "version": 1,
+  "version": 2,
   "label": "ChatGPT 기존 대화",
   "service": "chatgpt",
-  "identity": ["[data-testid=\"accounts-profile-button\"]", "[data-testid=\"profile-button\"]"],
-  "agent": ["header [data-testid=\"gpt-name\"]", "header h1"],
-  "input": ["#prompt-textarea"],
-  "send": ["button[data-testid=\"send-button\"]", "button[aria-label=\"Send prompt\"]"],
-  "ready": ["#prompt-textarea[contenteditable=\"true\"]", "textarea#prompt-textarea:not([disabled])"],
-  "user": "[data-message-author-role=\"user\"]",
-  "assistant": "[data-message-author-role=\"assistant\"]",
-  "busy": "button[data-testid=\"stop-button\"],button[aria-label=\"Stop generating\"]",
+  "identity": [
+    "[data-testid=\"accounts-profile-button\"]:not([data-app-shell-active-page=\"false\"] *)",
+    "[data-testid=\"profile-button\"]:not([data-app-shell-active-page=\"false\"] *)",
+    "button[aria-label=\"프로필 메뉴 열기\"]:not([data-app-shell-active-page=\"false\"] *)",
+    "button[aria-label=\"Open profile menu\"]:not([data-app-shell-active-page=\"false\"] *)"
+  ],
+  "agent": [
+    "header [data-testid=\"gpt-name\"]",
+    "header h1"
+  ],
+  "input": [
+    "#prompt-textarea:not([data-app-shell-active-page=\"false\"] *)",
+    "[data-app-shell-active-page=\"true\"] [role=\"textbox\"][contenteditable=\"true\"]"
+  ],
+  "send": [
+    "button[data-testid=\"send-button\"]:not([data-app-shell-active-page=\"false\"] *)",
+    "button[aria-label=\"Send prompt\"]:not([data-app-shell-active-page=\"false\"] *)",
+    "[data-app-shell-active-page=\"true\"] button[aria-label=\"메시지 보내기\"]",
+    "[data-app-shell-active-page=\"true\"] button[aria-label=\"Send message\"]"
+  ],
+  "ready": [
+    "#prompt-textarea[contenteditable=\"true\"]:not([data-app-shell-active-page=\"false\"] *)",
+    "textarea#prompt-textarea:not([disabled]):not([data-app-shell-active-page=\"false\"] *)",
+    "[data-app-shell-active-page=\"true\"] [role=\"textbox\"][contenteditable=\"true\"]"
+  ],
+  "user": "[data-message-author-role=\"user\"]:not([data-app-shell-active-page=\"false\"] *), [data-app-shell-active-page=\"true\"] [data-user-message-bubble=\"true\"] .whitespace-pre-wrap",
+  "assistant": "[data-message-author-role=\"assistant\"]:not([data-app-shell-active-page=\"false\"] *), [data-app-shell-active-page=\"true\"] [data-markdown-text-style=\"assistant-message\"]",
+  "busy": "button[data-testid=\"stop-button\"]:not([data-app-shell-active-page=\"false\"] *), button[aria-label=\"Stop generating\"]:not([data-app-shell-active-page=\"false\"] *), [data-app-shell-active-page=\"true\"] [data-talvt-turn-state]:not([data-talvt-turn-state=\"complete\"])",
   "sendAppearsAfterInput": true,
   "thread": null,
   "verification": "UNVERIFIED"

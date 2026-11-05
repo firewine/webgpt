@@ -437,7 +437,9 @@ Phase 4A에서는 dot이 실행 프롬프트를 작성해 `codex_send`를 호출
 
 ### 10.3 일반 ChatGPT
 
-일반 GPT는 Sign in with ChatGPT OAuth + ChatGPT plan usage를 우선 구현한다. 계정마다 등록·토큰·모델·이력을 분리하고 공식 Responses stream 완료를 확인한다. 기존 ChatGPT 대화·메모리 접근 권한과 혼동하지 않는다. 사용자 지정 기존 웹 대화에만 별도 browser adapter를 사용할 수 있으며 OAuth 실패를 자동 DOM fallback으로 덮지 않는다.
+2026-11-05 사용자 승인으로 일반 GPT는 **실제 ChatGPT 웹 대화**를 명시 선택해 참여할 수 있게 한다. 기존 browser discovery/probe/complete를 재사용하고 실제 계정·프로필·대화·초안과 응답 완료를 확인한다. 모델·사고 깊이는 원래 웹 화면에서 선택한다. [Nhahan/WebGPT 고정 구현](https://github.com/Nhahan/WebGPT/tree/1d35588e79de288bd8a6d2992fc76e571f7bb75e)의 웹 Chat/사고 설정 확인·1회 전송·원문 대조·후속 대화 원칙을 참고하며 전체 terminal·자동 대화 삭제·공개 forwarding 권한을 가져오지 않는다.
+
+OAuth/기기 코드는 별도 선택형 연결로 보존한다. 계정마다 등록·토큰·모델·이력을 분리하고 공식 Responses stream 완료를 확인한다. OAuth 추론·구독 공유 한도를 실제 웹 Chat 대화와 혼동하지 않으며, OAuth 실패를 자동 DOM fallback으로 덮지 않는다. 기존 답변과 실패 요청의 작성자/연결을 유지하고 웹 GPT는 새 참여자로 등록한다. [승인 영향·후속 수락](./reviews/actual-web-gpt-impact-20261105.md)과 [구현/검사](./implementation/web-gpt-selection-20261105.md)을 따른다.
 
 ### 10.4 Claude / Gemini
 

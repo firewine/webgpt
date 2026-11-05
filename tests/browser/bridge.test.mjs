@@ -4,6 +4,59 @@ import { chromium } from 'playwright';
 import { BrowserBridge, observationScript, sendScript } from '../../dist/server/connections/browser.js';
 import { storage } from '../workspace-helpers.mjs';
 const binding = { pageId: 7, url: 'https://chatgpt.com/c/fixture', accountLabel: 'fixture account', agentLabel: 'dot fixture', identitySelector: '#identity', identityText: 'fixture account · dot', inputSelector: '#input', sendSelector: '#send', userSelector: '.user', assistantSelector: '.assistant', busySelector: '#busy', readySelector: '#ready' };
+test('modern ProseMirror preserves multiline text, owner draft and one receipt without replay', { timeout: 15000 }, async t => {
+  const { store } = await storage(t); const browser = await chromium.launch({ headless: true, ...(process.env.WJ_TEST_CHROMIUM_EXECUTABLE ? { executablePath: process.env.WJ_TEST_CHROMIUM_EXECUTABLE } : {}) }); t.after(() => browser.close());
+  const page = await browser.newPage(); const modern = { ...binding, userSelector: '[data-user-message-bubble=true] .whitespace-pre-wrap', assistantSelector: '[data-markdown-text-style=assistant-message]', readySelector: '#input', busySelector: '[data-talvt-turn-state]:not([data-talvt-turn-state=complete])' };
+  await page.route('**/*', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<div id="identity">fixture account · dot</div><section data-app-shell-active-page="true"><div id="messages"></div><div id="input" role="textbox" contenteditable="true" class="ProseMirror" style="white-space:pre-wrap"><p><br class="ProseMirror-trailingBreak"></p></div><button id="send" disabled>Send</button><div data-talvt-turn-state="complete"></div></section>' })); await page.goto(binding.url);
+  await page.evaluate(() => {
+    window.sends = 0; const input = document.querySelector('#input'); const send = document.querySelector('#send');
+    input.oninput = () => {
+      // Model the observed editor normalization of a raw text node with LF.
+      if (!input.querySelector('p,div')) { const p = document.createElement('p'); p.textContent = input.textContent.replace(/\n/g, ' '); input.replaceChildren(p); }
+      // ProseMirror marks Chromium's empty-paragraph placeholders as trailing breaks.
+      input.querySelectorAll('p > br:only-child, div > br:only-child').forEach(br => br.classList.add('ProseMirror-trailingBreak'));
+      send.disabled = false;
+    };
+    send.onclick = () => {
+      window.sends++; window.sentLines = [...input.children].map(p => p.textContent); window.sentText = window.sentLines.join('\n');
+      const user = document.createElement('div'); user.dataset.userMessageBubble = 'true'; const body = document.createElement('div'); body.className = 'whitespace-pre-wrap'; body.textContent = window.sentText; user.append(body);
+      const answer = document.createElement('div'); answer.dataset.markdownTextStyle = 'assistant-message'; answer.textContent = 'Modern fixture response'; document.querySelector('#messages').append(user, answer);
+      input.innerHTML = '<p><br class="ProseMirror-trailingBreak"></p>'; send.disabled = true;
+    };
+  });
+  store.transact(s => s.connections.push({ id: 'modern', kind: 'browser', label: 'modern fixture', status: 'connected', models: [], browser: modern }));
+  const bridge = new BrowserBridge(store, null); bridge.tool = async (name, args) => { assert.equal(name, 'evaluate_script'); assert.equal(args.pageId, 7); return { structuredContent: { result: await page.evaluate('(' + args.function + ')()') } }; };
+  let dispatched = 0; const receipts = []; const prompt = 'First "quoted" line\n\n  indented \'value\'\n"); window.injected=true; ("\n';
+  const input = { requestId: 'modern-turn', participant: { connectionId: 'modern' }, prompt, history: [], signal: AbortSignal.timeout(10000), hooks: { dispatched() { dispatched++; }, receipt(value) { receipts.push(value); }, delta() {} } };
+  await page.locator('#input').evaluate(e => { e.innerHTML = '<p>Owner "draft"</p><p><br class="ProseMirror-trailingBreak"></p><p>  keep indentation</p>'; }); const draft = await page.locator('#input').innerHTML();
+  await assert.rejects(bridge.complete(input), /browser_requires_intervention/); assert.equal((await page.evaluate('(' + sendScript(modern, prompt) + ')()')).sent, false);
+  assert.equal(await page.locator('#input').innerHTML(), draft); assert.equal(dispatched, 0); assert.equal(await page.evaluate(() => window.sends), 0);
+  await page.locator('#input').evaluate(e => { e.innerHTML = '<p><br class="ProseMirror-trailingBreak"></p>'; });
+  const result = await bridge.complete(input); const expected = '[웹쫀쿠:modern-turn]\n' + prompt;
+  assert.equal(result.text, 'Modern fixture response'); assert.equal(await page.evaluate(() => window.sentText), expected); assert.deepEqual(await page.evaluate(() => window.sentLines), expected.split('\n'));
+  assert.equal(await page.evaluate(() => window.injected), undefined); assert.deepEqual(receipts, [binding.url + '#modern-turn']); assert.equal(result.receipt, receipts[0]);
+  assert.equal((await bridge.complete({ ...input, signal: AbortSignal.timeout(4000) })).text, result.text);
+  assert.equal(await page.evaluate(() => window.sends), 1); assert.equal(dispatched, 1); assert.deepEqual(receipts, [result.receipt, result.receipt]);
+});
+
+test('ProseMirror final comparison rejects normalized spaces and accepts exact p/div/br paragraphs', { timeout: 10000 }, async t => {
+  const browser = await chromium.launch({ headless: true, ...(process.env.WJ_TEST_CHROMIUM_EXECUTABLE ? { executablePath: process.env.WJ_TEST_CHROMIUM_EXECUTABLE } : {}) }); t.after(() => browser.close());
+  const page = await browser.newPage(); const text = 'First "quote"\n\n  indented\nLast';
+  await page.route('**/*', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<div id="identity">fixture account · dot</div><div id="input" role="textbox" contenteditable="true" class="ProseMirror" style="white-space:pre-wrap"><p><br></p></div><button id="send">Send</button><div id="ready">Ready</div>' })); await page.goto(binding.url);
+  for (const normalize of [true, false]) {
+    await page.evaluate(({ text, normalize }) => {
+      const input = document.querySelector('#input'); input.innerHTML = '<p><br class="ProseMirror-trailingBreak"></p>'; window.sends = 0; document.querySelector('#send').onclick = () => window.sends++;
+      input.oninput = () => {
+        if (normalize) { const p = document.createElement('p'); p.textContent = text.replace(/\n/g, ' '); input.replaceChildren(p); }
+        else { const lines = text.split('\n'); input.innerHTML = '<p></p><div><br class="ProseMirror-trailingBreak"></div><div></div>'; input.firstChild.textContent = lines[0]; input.lastChild.append(lines[2], document.createElement('br'), lines[3]); }
+      };
+    }, { text, normalize });
+    const result = await page.evaluate('(' + sendScript(binding, text) + ')()'); assert.equal(result.sent, !normalize); assert.equal(await page.evaluate(() => window.sends), normalize ? 0 : 1);
+    if (normalize) assert.equal(await page.locator('#input').textContent(), text.replace(/\n/g, ' '));
+    assert.notEqual(await page.locator('#input').textContent(), text);
+  }
+});
+
 test('browser DOM adapter pins identity, preserves drafts, correlates receipts and never resends an observed request', { timeout: 30000 }, async t => {
   const { store } = await storage(t); const browser = await chromium.launch({ headless: true, ...(process.env.WJ_TEST_CHROMIUM_EXECUTABLE ? { executablePath: process.env.WJ_TEST_CHROMIUM_EXECUTABLE } : {}) }); t.after(() => browser.close());
   const page = await browser.newPage(); await page.route('**/*', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<div id="identity">fixture account · dot</div><div id="messages"><div class="assistant">기존 대화 원문</div></div><textarea id="input"></textarea><button id="send" disabled>Send</button><div id="ready">Ready</div><div id="busy" hidden>Busy</div>' })); await page.goto(binding.url);

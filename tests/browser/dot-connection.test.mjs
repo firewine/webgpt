@@ -103,7 +103,7 @@ test('D4 390/768/1440px owner setup preserves Muse; twenty reloads/views dispatc
   }
   assert.equal(f.app.store.cursor(),cursor); assert.equal(f.calls(),0); assert.deepEqual(f.app.store.read().connections.find(c=>c.id==='muse'),muse);
   assert.equal(f.app.store.read().resident.rooms[0].desiredOn,false); assert.equal(f.app.store.read().resident.rooms[0].members.find(m=>m.participantId===b.participantId).enabled,false);
-  await p.locator('#participant-mode').selectOption('other'); assert.ok(await p.locator('#participant-connection option[value=old-dot]').count());
+  await p.locator('#participant-mode').selectOption('web-gpt'); assert.ok(await p.locator('#participant-connection option[value=old-dot]').count());
   assert.deepEqual(f.errors,[]);
 });
 

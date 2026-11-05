@@ -243,6 +243,9 @@ async function browseMaterials(path: string): Promise<void> {
 function connectionMode(c: Connection): string {
   if (gptKind(c.kind)) return 'gpt';
   if (c.kind === 'dot-mcp') return 'dot';
+  if (c.kind === 'browser' && c.browser) {
+    try { if (new URL(c.browser.url).hostname === 'chatgpt.com') return 'web-gpt'; } catch { return 'other'; }
+  }
   return 'other';
 }
 function updateConnections(): void {
@@ -251,13 +254,15 @@ function updateConnections(): void {
   selectOptions($('#participant-connection'), connections.map(c => ({ id: c.id, label: `${c.label} · ${c.kind === 'browser' ? c.browser?.agentLabel ?? '기존 대화' : c.kind}` })), '연결 선택');
   if (connections.length === 1) $<HTMLSelectElement>('#participant-connection').value = connections[0]!.id;
   $('#participant-dot-connect').hidden = mode !== 'dot';
+  $('#participant-web-connect').hidden = mode !== 'web-gpt';
   const fields = $<HTMLFieldSetElement>('#participant-fields'); fields.hidden = mode === 'dot'; fields.disabled = mode === 'dot';
-  $('#participant-mode-note').textContent = mode === 'dot' ? '공식 dot 전용 연결에서 방·토커를 함께 등록합니다. 기존 ChatGPT 웹 대화는 dot으로 간주하지 않습니다.' : mode === 'gpt' ? '앱이 관리하는 일반 GPT 대화입니다. ChatGPT 웹·dot의 과거 기억을 가져오지 않습니다.' : 'API와 Muse 등 등록한 기존 연결을 선택합니다. 기존 웹 연결의 원문과 기록은 그대로 유지됩니다.';
+  $('#participant-mode-note').textContent = mode === 'dot' ? '공식 dot 전용 연결에서 방·토커를 함께 등록합니다. 기존 ChatGPT 웹 대화는 dot으로 간주하지 않습니다.' : mode === 'web-gpt' ? '서버 Chrome의 실제 ChatGPT 웹 대화에서 질문을 보내고 답변을 받습니다. 연결할 계정과 대화를 먼저 확인하세요.' : mode === 'gpt' ? 'OAuth 또는 기기 코드로 모델을 호출하며 앱이 대화 이력을 관리합니다. ChatGPT 웹 대화와 별도의 구독 사용 제한이 적용될 수 있습니다.' : 'API와 Muse 등 등록한 기존 연결을 선택합니다. 기존 웹 연결의 원문과 기록은 그대로 유지됩니다.';
   updateModels();
 }
 function updateModels(): void { const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); const select = $<HTMLSelectElement>('#participant-model'); selectOptions(select, c?.models ?? [], c && select.dataset.explicitConnection === c.id ? '모델을 선택하세요' : undefined); updateEffort(); }
 function updateEffort(): void {
   const c = state?.connections.find(c => c.id === $<HTMLSelectElement>('#participant-connection').value); const select = $<HTMLSelectElement>('#participant-effort'); select.disabled = !reasoningKind(c?.kind);
+  select.closest('label')!.hidden = c?.kind === 'browser';
   const modelId = $<HTMLSelectElement>('#participant-model').value, previous = select.value, changed = select.dataset.kind !== (c?.kind ?? ''); select.dataset.kind = c?.kind ?? '';
   selectOptions(select, (c?.kind === 'deepseek' ? effortChoices(c, modelId) : effortOptions).map(o => ({ id: o.value, label: o.label })));
   const allowed: readonly string[] = c?.kind === 'codex-oauth' ? c.models.find(m => m.id === $<HTMLSelectElement>('#participant-model').value)?.reasoningEfforts ?? [] : effortOptions.map(e => e.value);
@@ -267,7 +272,7 @@ function updateEffort(): void {
   else if (gptKind(c?.kind) && (changed || !allowed.includes(previous))) select.value = 'xhigh';
   const source = c?.models.find(m => m.id === modelId)?.reasoningSource;
   const output = $<HTMLInputElement>('#participant-output'); output.disabled = c?.kind !== 'deepseek'; $('#participant-output-controls').hidden = output.disabled; output.max = String(outputMaximum(c, modelId)); if (changed) output.value = ''; $('#participant-output-note').textContent = outputNote(c, modelId);
-  $('#participant-effort-note').textContent = c?.kind === 'deepseek' ? source ? `제공처 기본값은 요청을 덮어쓰지 않습니다. ${source === 'catalog' ? '실제 모델 목록' : '제공처 공식 문서'}에서 확인한 값만 선택합니다.` : '사고 설정 지원 정보가 없어 제공처 기본값만 표시합니다. 연결 카드에서 모델 확인을 눌러 주세요.' : c?.kind === 'browser' ? '기존 웹 대화의 모델과 사고 깊이는 원래 서비스에서 조절합니다.' : c?.kind === 'codex-oauth' ? '이 계정의 모델 목록에서 확인한 사고 깊이만 선택합니다. Extra high를 지원하면 기본으로 사용합니다.' : gptKind(c?.kind) ? '기본 Extra high. 모델이 지원하지 않는 값은 오류로 표시합니다.' : '이 연결은 제공처의 기본 사고 설정을 사용합니다.';
+  $('#participant-effort-note').textContent = c?.kind === 'deepseek' ? source ? `제공처 기본값은 요청을 덮어쓰지 않습니다. ${source === 'catalog' ? '실제 모델 목록' : '제공처 공식 문서'}에서 확인한 값만 선택합니다.` : '사고 설정 지원 정보가 없어 제공처 기본값만 표시합니다. 연결 카드에서 모델 확인을 눌러 주세요.' : c?.kind === 'browser' ? connectionMode(c) === 'web-gpt' ? '모델과 사고 깊이는 원래 ChatGPT 웹 화면에서 조절합니다.' : '기존 웹 대화의 모델과 사고 깊이는 원래 서비스에서 조절합니다.' : c?.kind === 'codex-oauth' ? '이 계정의 모델 목록에서 확인한 사고 깊이만 선택합니다. Extra high를 지원하면 기본으로 사용합니다.' : gptKind(c?.kind) ? '기본 Extra high. 모델이 지원하지 않는 값은 오류로 표시합니다.' : '이 연결은 제공처의 기본 사고 설정을 사용합니다.';
 }
 function control(body: Record<string, unknown>): Promise<unknown> { if (!current) return Promise.resolve(); return api(`/api/discussions/${current.id}/control`, { expectedRevision: current.revision, ...body }).then(refresh); }
 function renderDiscussion(): void {
@@ -560,6 +565,10 @@ $('#participant-mode').addEventListener('change', () => {
   updateConnections();
 });
 click('#participant-dot-connect', async () => dotView.open());
+click('#participant-web-connect', async () => {
+  $<HTMLDetailsElement>('#browser-connection-panel').open = true; $<HTMLSelectElement>('#browser-discovery-preset').value = 'chatgpt-v1';
+  await loadBrowserPages(); $('#browser-connection-panel').scrollIntoView({ block: 'start' }); $('#browser-discovery-page').focus();
+});
 $('#participant-model').addEventListener('change', updateEffort);
 for (const el of document.querySelectorAll<HTMLElement>('[data-view]')) el.addEventListener('click', () => showView(el.dataset.view as View));
 for (const el of document.querySelectorAll<HTMLElement>('[data-tab]')) el.addEventListener('click', () => { tab = el.dataset.tab!; renderDiscussion(); });

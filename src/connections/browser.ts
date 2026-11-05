@@ -172,20 +172,27 @@ function threadGuardScript(): string {
 export function sendScript(b: BrowserBinding, prompt: string): string {
   return `async () => {const b=${JSON.stringify(b)}, text=${JSON.stringify(prompt)};
     ${threadGuardScript()}
+    const proseMirror=e=>new URL(b.url).hostname==='chatgpt.com'&&e.classList.contains('ProseMirror');
+    const editorText=e=>{if('value' in e)return e.value;
+      if(proseMirror(e)&&[...e.childNodes].every(n=>n.nodeType===Node.ELEMENT_NODE&&['P','DIV'].includes(n.nodeName)))return [...e.children].map(p=>{const c=p.cloneNode(true);c.querySelectorAll('br:not(.ProseMirror-trailingBreak)').forEach(br=>br.replaceWith('\\n'));c.querySelectorAll('br.ProseMirror-trailingBreak').forEach(br=>br.remove());return c.textContent||'';}).join('\\n');
+      return e.textContent||'';};
     const u=new URL(location.href);u.hash='';if(u.href!==${JSON.stringify(cleanUrl(b.url))})return {sent:false};
     const identity=document.querySelector(b.identitySelector),input=document.querySelector(b.inputSelector);
     let button=document.querySelector(b.sendSelector);
     const visible=e=>!!e&&e.getClientRects().length>0;
     const unique=()=>!b.discovery||[b.identitySelector,b.inputSelector,b.readySelector].every(s=>document.querySelectorAll(s).length===1)&&document.querySelectorAll(b.sendSelector).length<=1;
     if(!unique()||!identity||!(identity.textContent||'').includes(b.identityText)||!threadMatches()||!visible(input)||(!visible(button)&&!b.sendAppearsAfterInput)||[...document.querySelectorAll(b.busySelector)].some(visible)||!visible(document.querySelector(b.readySelector)))return {sent:false};
-    if(('value' in input?input.value:input.textContent).trim())return {sent:false};
+    if(editorText(input).trim())return {sent:false};
     if(input instanceof HTMLTextAreaElement||input instanceof HTMLInputElement){
       const proto=input instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
       Object.getOwnPropertyDescriptor(proto,'value').set.call(input,text);
-    }else if(input.isContentEditable){input.replaceChildren(document.createTextNode(text));}else return {sent:false};
+    }else if(input.isContentEditable){
+      if(proseMirror(input)){input.focus();if(!document.execCommand('insertText',false,text))return {sent:false};}
+      else input.replaceChildren(document.createTextNode(text));
+    }else return {sent:false};
     input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:text}));
     await new Promise(resolve=>setTimeout(resolve,150));
     button=document.querySelector(b.sendSelector);
     const current=new URL(location.href);current.hash='';
-    if(!unique()||current.href!==u.href||!(document.querySelector(b.identitySelector)?.textContent||'').includes(b.identityText)||!threadMatches()||!input.isConnected||!visible(button)||!button.isConnected||('value' in input?input.value:input.textContent)!==text||button.disabled||button.getAttribute('aria-disabled')==='true'||!visible(document.querySelector(b.readySelector))||[...document.querySelectorAll(b.busySelector)].some(visible))return {sent:false};button.click();return {sent:true};}`;
+    if(!unique()||current.href!==u.href||!(document.querySelector(b.identitySelector)?.textContent||'').includes(b.identityText)||!threadMatches()||!input.isConnected||!visible(button)||!button.isConnected||editorText(input)!==text||button.disabled||button.getAttribute('aria-disabled')==='true'||!visible(document.querySelector(b.readySelector))||[...document.querySelectorAll(b.busySelector)].some(visible))return {sent:false};button.click();return {sent:true};}`;
 }
