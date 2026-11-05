@@ -42,7 +42,7 @@
 | 병합본 적용 | PASS — `f648ea54bd69eae7fe45b5aa995986b5c677047e` 빌드·재시작/health200·적용 전후 state digest 동일. PR head `602fe95`와 source tree 동일, [병합 main CI](https://github.com/firewine/webgpt/actions/runs/42041703156) SUCCESS |
 | AI 업무 제안 | PASS(복구 뒤 흐름) — 새 공개 발언을 참조하는 `work_propose`1개→새 task1개. 소유자 직접 일감 생성0, 과거 실패 task를 재수락하지 않음 |
 | 자동 픽업·보고 | PASS — River High executor의 고정 attempt1개·report1개·receipt. 결정/이견/미확인3개의 문자열 포함 검사를 서버가 observed_pass로 관측. 실제 효과/외부 사실의 검증은 아님 |
-| 독립 검토·완료 | PASS — CoralBricks High manager가 다른 참여자의 현재 reportDigest를 검토해 accept1개, task done·blocker0·수용 기준3개 관측. 이전 blockers 예시 오류는 재발0. 첫 실패 응답은 여전히 과거 task의 blocked 기록 |
+| 독립 검토·완료 | PASS — CoralBricks High manager가 다른 참여자의 현재 reportDigest를 검토해 accept1개, task done·blocker0·수용 기준3개 관측. 이전 blockers 예시 오류는 재발0. 기존 실패 task의 blocked 기록은 보존됨. 이번 첫 format_invalid 응답은 task 생성 없이 별도 원문으로 보존됨 |
 | Wiki 게시 | PASS — 새 report에 대응하는 reported Wiki버전1개·방 알림1개, report 원문/체크/반론·출처 digest 일치. 원래 계약대로 review 전에 게시하며 accept 뒤에도 verified로 승격하지 않음 |
 | 다음 대화 인용 | PASS — 검토 수락 뒤 work/review가 아닌 River의 ambient say1개. 입력 Wiki body/pageId/version/digest/scope/sourceRefs와 공개 말풍선 참조가 일치하고 실제 본문에 새 pageId·version·digest·report ID가 축약 없이 포함됨 |
 | 원래 첫 입력부터 무개입 | **FAIL/잔여** — 처음 kind 누락과 장문 문맥 차단으로 기존 인계1회·새 시작1회가 필요했다. 전체 owner 시작 발언2회. 유효 제안이 나온 뒤에는 픽업/보고/리뷰/Wiki의 owner 중계0이며 이 부분과 첫 시작의 안정성을 구분 |
