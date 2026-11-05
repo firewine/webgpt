@@ -8,7 +8,7 @@
 
 **2026-11-05 추천1 실환경 수락 PASS:** 별도 사용자 승인으로 PR #52 병합 `30ec743d7d412356d87f537b692e3e5fe6ad5b47`를 운영 적용했다. 웹 GPT·DeepSeek High의 새 주제8응답→Wiki1버전/알림1개→다음 두 참여자의 정확한 version/digest/출처 인용·HTTPS PC/390px 링크를 확인했다. 첫 웹 답변 회수 오류는 원문 대조·기존 binding 갱신으로 해결하고 명시 revision2에서 끝까지 수락했다. 총11요청(웹6/API5), 보고 API199,694 token으로 기존 정책을 유지했다. 기존15답변은 보존·사용자 승인 취소, 방 off·Chrome 잠금·참여 설정/정상 서비스 복구까지 확인했다. [실측·한계](./implementation/topic-wiki-live-20261105.md). 업무 순환·원래5인 혼합 최종 수락·실제 Codex·장기 운영은 이 결과로 완료하지 않는다.
 
-**2026-11-05 추천2 개발·부분 실측:** 사용자의 “2번 개발”과 별도 “서버 적용·실검증·임시 한도 승인”에 따라 PR #53 병합 `76540a2`를 적용했다. CoralBricks/River DeepSeek High 실제3요청으로 AI 제안1→자동 수행/보고1→reported Wiki1버전/알림1개를 확인했으나 독립 검토는 `invalid_work_fields`로 FAIL, 수락 뒤 ambient 인용은 NOT_RUN이다. 보고용 필드를 섞어 안내한 검토 예시를 작업 브랜치에서 고치고 읽기 전용 기록 대조·검사를 추가한다. 큐/DB/API/권한·리뷰 전 게시·독립 검토·수락 기준은 유지하며 실패 응답을 고쳐 재수락하지 않는다. 방off·Chrome잠금·원래 참여/역할·API8회/20만token·정상 서비스를 복구했다. **전체 업무 순환 수락은 미완료**이며 수정본 병합/추가 실검증은 별도다. [추천2 구현·실측·한계](./implementation/work-wiki-cycle-20261105.md).
+**2026-11-05 추천2 재검증:** 사용자 병합·재검증 지시와 임시 token 한도 추가 승인으로 PR #54 병합 `f648ea5`를 적용했다. 기존 문맥 인계1회·새 시작1회 뒤 CoralBricks/River DeepSeek High가 AI 제안→자동 수행/보고→다른 참여자의 독립 수락→reported Wiki1버전/알림1개→후속 ambient의 정확한 page/version/digest/원문 인용을 완료했다. 첫 형식 오류까지 총5요청/약11분10초, API274,592token을 사용했고 기존 기록/역할·참여·API8회/20만token·정상 서비스를 복구했다. **복구 후 기능 흐름은 PASS, 원래 첫 입력부터 완전 무개입 수락은 미완료**다. 전체 시작 입력2회·문맥 인계1회였으며 유효 제안 후 owner의 업무 중계는0이다. 이전 `invalid_work_fields` task/원문은 그대로 보존했다. [이전 부분 실측](./implementation/work-wiki-cycle-20261105.md)·[재검증·복구·남은 조건](./implementation/work-wiki-revalidation-20261105.md).
 
 | 페이즈 | 현재 코드·자동 검사 상태 | 실제 운영 수락·남은 조건 |
 | --- | --- | --- |
@@ -16,15 +16,15 @@
 | 2 / R2 상주 실행 | 공통 단일 dispatch·방 on/off·자유 발화·휴면·topic focus·인계 구현 | 실제 자유 발화/일부 혼합 토의 PASS. 업무→Wiki→다음 발화→topic 복귀 전체 무인 실환경 수락은 미완료. [R2 증거](./implementation/phase2-resident-runtime-20261030.md) |
 | 3 / R3 단톡방 GUI | 흑백·고정 주제·주제별 채팅·답장/멘션·작업실 패널 구현·브라우저 검사 PASS | 실제 HTTPS/새로고침/SSE·390px 확인. 실기기 IME/터치·기기 전환 수락은 UNVERIFIED. [GUI](./implementation/phase3-chatroom-gui-20261030.md)·[주제 통합](./reviews/topic-chat-ui-impact-20261101.md) |
 | 4 / R4 연결 편의성 | 웹 GPT·OAuth/기기 코드·DeepSeek·Anthropic API·Muse browser·공식 dot 구현 | 웹 GPT Extra High 1회/후속 맥락·JSON·receipt, dot/Muse 실제 초안/검토 일부 PASS. Anthropic API 실계정·모든 연결의 갱신/격리·전체 혼합 수락은 미완료. [웹 GPT](./implementation/web-gpt-selection-20261105.md)·[dot 실제 기록](./implementation/dot-mcp-v2-live-d5-20261104.md) |
-| 5 / R5 역할·열린 작업큐 | 제안·픽업·의존성·보고/독립 리뷰·재작업 구현·fixture PASS. 검토 예시 불일치 수정은 작업 브랜치 | 실제 AI 제안→자동 수행/보고 PASS, 독립 검토 FAIL·수정본 실수락 미완료. [R5 증거](./implementation/phase5-open-work-queue-20261030.md)·[추천2 실측](./implementation/work-wiki-cycle-20261105.md) |
+| 5 / R5 역할·열린 작업큐 | 제안·픽업·의존성·보고/독립 리뷰·재작업 구현·검토 예시 수정 병합/운영 적용·fixture PASS | 실제 AI 제안→자동 수행/다른 참여자 수락→Wiki/후속 인용 PASS(복구 후). 원래 첫 시작의 무개입 수락은 미완료. [R5 증거](./implementation/phase5-open-work-queue-20261030.md)·[추천2 재검증](./implementation/work-wiki-revalidation-20261105.md) |
 | 6 / R6 실제 업무 수행 | 기존 Codex 연결·scope 재검사·보고/리뷰 구현. **파일 수정 업무는 코드에서 차단** | R6-F 실세션 읽기/승인/쓰기 NOT_RUN. WWG-R2/R3의 남은 권한 수명·repo 비밀/링크/출력 보호를 구현·검증하기 전 쓰기 성공으로 표시하지 않는다. [R6 증거](./implementation/phase6-work-execution-20261030.md) |
-| 7 / R7 공유 Wiki | 저장·편집·버전/CAS·출처/인용·MCP·**업무 보고 자동 게시**와 새 방 연결 주제 결론 자동 기록 구현·fixture PASS | 실제 주제 결론→다음2발화 인용 PASS. 실제 업무 보고의 reported Wiki1버전/알림1개 PASS, 독립 검토 뒤 다음 ambient 인용은 NOT_RUN. [기존 R7](./implementation/phase7-shared-wiki-20261031.md)·[추천1 실측](./implementation/topic-wiki-live-20261105.md)·[추천2 실측](./implementation/work-wiki-cycle-20261105.md) |
-| 8 / R8 통합 실운영 검증 | 자동 통합/장애/부하 fixture PASS. 기존 50 gate와 D5 보완 검사는 별도 추적 | **전체 수락 미완료.** 별도2인 주제의 수정/종합/결론·방 복귀·Wiki 인용 PASS. 원래5인 혼합은 초안5+교차검토10=완료15개·실패 기록을 보존하고 사용자 승인 취소했다. 업무 순환·전체 혼합 최종 수락·실제 Codex·기기/장기 운영을 남김. [R8 기준](./implementation/resident-acceptance.md)·[D5 과거 현황](./implementation/dot-acceptance-manifest.json) |
+| 7 / R7 공유 Wiki | 저장·편집·버전/CAS·출처/인용·MCP·**업무 보고 자동 게시**와 새 방 연결 주제 결론 자동 기록 구현·fixture PASS | 실제 주제 결론→다음2발화 인용 PASS. 업무 보고→reported Wiki1버전/알림1개→독립 검토 수락 뒤 ambient 인용 PASS(복구 후). [기존 R7](./implementation/phase7-shared-wiki-20261031.md)·[추천1 실측](./implementation/topic-wiki-live-20261105.md)·[추천2 재검증](./implementation/work-wiki-revalidation-20261105.md) |
+| 8 / R8 통합 실운영 검증 | 자동 통합/장애/부하 fixture PASS. 기존 50 gate와 D5 보완 검사는 별도 추적 | **전체 수락 미완료.** 별도2인 주제의 결론/방 복귀/Wiki와 복구 후 업무 순환 PASS. 원래5인 혼합은 완료15개·실패 기록 보존/사용자 승인 취소. 원래 첫 입력부터 무개입 업무 순환·전체 혼합 최종 수락·실제 Codex·기기/장기 운영을 남김. [R8 기준](./implementation/resident-acceptance.md)·[D5 과거 현황](./implementation/dot-acceptance-manifest.json) |
 
 현재 남은 작업은 다음처럼 구분한다.
 
 - **추가 개발 필요/부분 구현:** R6 실파일 작업 보호·일반 grant/실행 binding 수명 보강, WWG-R5 묶음 실행 경과·WWG-R6 큰 출력 원문/보관 수명. 기존 개별 job/승인·새 dot/resident 권한 보호는 이미 구현돼 있다.
-- **기존 구현의 실환경 검증 필요:** R5 업무→보고/리뷰→R7 Wiki→다음 인용, R8 전체 혼합 최종 수락, R6-F·R3-E와 장기 운영. 주제 결론의2인 수락은 완료됐으며 이 부분을 모두 새 backend 개발로 취급하지 않는다.
+- **기존 구현의 실환경 검증 필요:** R5 원래 첫 시작부터 오류 복구 개입 없는 업무 순환, R8 전체 혼합 최종 수락, R6-F·R3-E와 장기 운영. 주제 결론의2인 수락과 복구 후 업무→보고/리뷰→Wiki→다음 인용은 확인됐으며 이 부분을 모두 새 backend 개발로 취급하지 않는다.
 - **후속 선택/보류:** WJ-016 Git Writer, WJ-017 추가 provider/병렬 용량·정식 팀 확장, WJ-018 다중 프로젝트/추가 OS. Muse 공식 Connector·Anthropic 구독 OAuth는 보류하며 자동 병합은 사용자 정책상 비활성이다.
 - **추천1 운영·실계정 수락 완료:** [다음 개발 제안과 후속 영향](./reviews/next-development-recommendation-20261105.md)의 주제 결론→Wiki 자동 기록을 R7/R8에서 보완하고 위 범위로 실제 수락했다. 검사·운영 증거는 별도 기록하며 나머지 추천은 제안이다. 새 페이즈를 만들지 않는다.
 
