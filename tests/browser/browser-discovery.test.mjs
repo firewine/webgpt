@@ -22,11 +22,11 @@ function attach(app, page, service) {
 
 test('modern ChatGPT discovery scopes Korean/English controls and receipts to the active page', { timeout: 20000 }, async t => {
   const browser = await launch(t); const f = await workspace(t);
-  for (const english of [false, true]) {
+  for (const { english, sendLabel } of [{ english: false, sendLabel: '메시지 보내기' }, { english: true, sendLabel: 'Send message' }, { english: false, sendLabel: '보내기' }]) {
     const page = await fixturePage(browser, 'chatgpt'); attach(f.app, page, 'chatgpt');
     await page.setContent(`<section data-app-shell-active-page="true"><button aria-label="${english ? 'Open profile menu' : '프로필 메뉴 열기'}">fixture-account · chatgpt</button><header><h1>Modern dot</h1></header>
       <div data-user-message-bubble="true"><div class="whitespace-pre-wrap">[웹쫀쿠:active-fixture]\nEarlier prompt</div></div><div data-markdown-text-style="assistant-message">Active response</div>
-      <div role="textbox" contenteditable="true" class="ProseMirror"><p><br class="ProseMirror-trailingBreak"></p></div><button aria-label="${english ? 'Send message' : '메시지 보내기'}" disabled>Send</button><div data-talvt-turn-state="complete"></div></section>`);
+      <div role="textbox" contenteditable="true" class="ProseMirror"><p><br class="ProseMirror-trailingBreak"></p></div><button aria-label="${sendLabel}" disabled>Send</button><div data-talvt-turn-state="complete"></div></section>`);
     await page.evaluate(() => {
       const active = document.querySelector('section'); const cached = active.cloneNode(true); cached.dataset.appShellActivePage = 'false'; cached.style.display = 'none';
       cached.querySelector('button').dataset.testid = 'accounts-profile-button'; cached.querySelector('[role=textbox]').id = 'prompt-textarea'; cached.querySelector('button[disabled]').dataset.testid = 'send-button';
@@ -35,7 +35,7 @@ test('modern ChatGPT discovery scopes Korean/English controls and receipts to th
       window.fixtureSends = 0; document.querySelectorAll('button').forEach(b => { b.onclick = () => window.fixtureSends++; });
     });
     const before = await page.locator('body').innerHTML(); const service = new BrowserDiscovery(f.app.browser); const request = { pageId: 7, profile: 'default', presetId: 'chatgpt-v1' };
-    const found = await service.discover(request); assert.equal(found.status, 'ready', JSON.stringify(found)); assert.equal(found.presetVersion, 'chatgpt-v1/2'); assert.equal(found.busy, false);
+    const found = await service.discover(request); assert.equal(found.status, 'ready', JSON.stringify(found)); assert.equal(found.presetVersion, 'chatgpt-v1/3'); assert.equal(found.busy, false);
     const { binding } = await service.resolve({ discoveryId: found.id, confirmed: true });
     for (const key of ['identitySelector', 'inputSelector', 'sendSelector', 'readySelector']) assert.equal(await page.locator(binding[key]).count(), 1);
     const view = await f.app.browser.inspect(binding, '[웹쫀쿠:active-fixture]'); assert.equal(view.matchCount, 1); assert.equal(view.answer, 'Active response'); assert.equal(view.busy, false);
@@ -141,11 +141,15 @@ test('connection refresh captured before topic creation cannot discard the newly
   const f = await workspace(t); const browser = await launch(t); const context = await browser.newContext(); await context.request.post(f.url + '/api/login', { data: { token: ownerKey }, headers: { Origin: f.url } });
   const page = await context.newPage(); await page.goto(f.url); await page.waitForFunction(() => !document.querySelector('#workspace').hidden);
   let hold = true; let release; let started; const captured = new Promise(resolve => { started = resolve; }); const released = new Promise(resolve => { release = resolve; });
-  await page.route('**/api/state', async route => { const response = await route.fetch(); if (hold) { hold = false; started(); await released; } await route.fulfill({ response }); });
-  t.after(release);
-  await openNewTopic(page); f.app.store.transact((_s, emit) => emit({ type: 'connection.fixture_refresh', discussionId: null, data: {} })); await captured;
-  await page.locator('#topic').fill('오래된 연결 새로고침 중 만든 토의'); await page.getByRole('button', { name: /토의 시작/ }).click();
-  await page.waitForFunction(() => !!localStorage.getItem('wj.discussion')); const selected = await page.evaluate(() => localStorage.getItem('wj.discussion')); release();
-  await page.waitForFunction(() => document.querySelector('#discussion-state .badge')?.textContent === '완료', undefined, { timeout: 5000 });
-  assert.equal(f.app.store.read().discussions[0].id, selected); assert.equal(f.app.store.read().discussions[0].status, 'completed'); assert.equal(await page.locator('#discussion-title').textContent(), '오래된 연결 새로고침 중 만든 토의');
+  try {
+    await page.route('**/api/state', async route => { const response = await route.fetch(); if (hold) { hold = false; started(); await released; } await route.fulfill({ response }); });
+    await openNewTopic(page); f.app.store.transact((_s, emit) => emit({ type: 'connection.fixture_refresh', discussionId: null, data: {} })); await captured;
+    await page.locator('#topic').fill('오래된 연결 새로고침 중 만든 토의'); await page.getByRole('button', { name: /토의 시작/ }).click();
+    await page.waitForFunction(() => !!localStorage.getItem('wj.discussion')); const selected = await page.evaluate(() => localStorage.getItem('wj.discussion')); release();
+    await page.waitForFunction(() => document.querySelector('#discussion-state .badge')?.textContent === '완료', undefined, { timeout: 5000 });
+    assert.equal(f.app.store.read().discussions[0].id, selected); assert.equal(f.app.store.read().discussions[0].status, 'completed'); assert.equal(await page.locator('#discussion-title').textContent(), '오래된 연결 새로고침 중 만든 토의');
+  } finally {
+    // Drain captured polling requests before the fixture server closes.
+    release(); await page.unrouteAll({ behavior: 'wait' }); await context.close();
+  }
 });

@@ -1,6 +1,6 @@
 {
   "id": "chatgpt-v1",
-  "version": 2,
+  "version": 3,
   "label": "ChatGPT 기존 대화",
   "service": "chatgpt",
   "identity": [
@@ -21,7 +21,8 @@
     "button[data-testid=\"send-button\"]:not([data-app-shell-active-page=\"false\"] *)",
     "button[aria-label=\"Send prompt\"]:not([data-app-shell-active-page=\"false\"] *)",
     "[data-app-shell-active-page=\"true\"] button[aria-label=\"메시지 보내기\"]",
-    "[data-app-shell-active-page=\"true\"] button[aria-label=\"Send message\"]"
+    "[data-app-shell-active-page=\"true\"] button[aria-label=\"Send message\"]",
+    "[data-app-shell-active-page=\"true\"] button[aria-label=\"보내기\"]"
   ],
   "ready": [
     "#prompt-textarea[contenteditable=\"true\"]:not([data-app-shell-active-page=\"false\"] *)",
