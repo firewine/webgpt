@@ -288,7 +288,10 @@ test('D3 three participants and two review rounds keep draft barriers through na
   f.app.engine.control(did, { action: 'resume', expectedRevision: 1 }, key());
   await until(() => f.state().discussions[0].status === 'completed');
   await f.step(); const s = f.state(); assert.equal(f.room().topicLink, null);
-  assert.equal(s.resident.messages.length, s.discussions[0].turns.length);
+  assert.equal(s.resident.messages.filter(m => m.sourceKind === 'topic').length, s.discussions[0].turns.length);
+  assert.equal(s.resident.messages.filter(m => m.sourceKind === 'wiki').length, 1);
+  assert.equal(s.resident.messages.length, s.discussions[0].turns.length + 1);
+  assert.equal(s.discussions[0].wikiPublication.status, 'published');
   const native = f.inputs.filter(i => i.prompt.includes('· cross_review ·'));
   assert.equal(native.length, 2);
   native.forEach((i, round) => { const data = JSON.parse(i.prompt.split('\n\n').find(s => s.startsWith('{"topic":'))); assert.equal(data.sharedReplies.length, round ? 6 : 3); });

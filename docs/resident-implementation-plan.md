@@ -7,7 +7,7 @@
 
 > **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-31 PR #22 사용자 병합 후 페이즈 8 통합 검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
 
-> **2026-11-05 사실 정리:** 아래 R단계/gate는 설계와 검사 근거로 유지한다. 웹 GPT 운영 연결과 native dot/Muse의 실제 초안/검토는 부분 PASS이며 전체 R8/D5-F는 미완료다. R6의 파일 수정 업무는 `WorkExecutionBridge.readyReason`에서 차단하고, R7 저장/보고 게시가 구현됐어도 일반 topic 종료의 자동 Wiki 게시 접점은 없다. [다음 추천](./reviews/next-development-recommendation-20261105.md)은 승인 전 제안이며 기존 계약·순서·50 gate의 변경이 아니다.
+> **2026-11-05 사실 정리:** 아래 R단계/gate는 설계와 검사 근거로 유지한다. 웹 GPT 운영 연결과 native dot/Muse의 실제 초안/검토는 부분 PASS이며 전체 R8/D5-F는 미완료다. R6의 파일 수정 업무는 `WorkExecutionBridge.readyReason`에서 차단하고, R7 저장/보고 게시와 별도 승인된 새 방 연결 topic 종료의 자동 Wiki 접점은 구현됐으며 검사/실환경 상태는 SSOT를 따른다. [추천1](./reviews/next-development-recommendation-20261105.md)은 2026-11-05 별도 개발 승인으로 R7/R8에서 보완한다. 나머지 추천·원래50 gate·페이즈 순서는 유지한다.
 
 설계 근거 C와 계획 P는 [개정 요약](./plan-revision-20261030.md)으로 고정한다. 구현 순서·상태는 맨 위 링크의 SSOT를 따른다. R1~R4는 아래 계약으로 구현하고 [R1 증거](./implementation/phase1-resident-foundation-20261030.md)·[R2 증거](./implementation/phase2-resident-runtime-20261030.md)·[R3 증거](./implementation/phase3-chatroom-gui-20261030.md)·[R4 증거](./implementation/phase4-browser-discovery-20261030.md)를 남겼다. R3-E의 실제 기기 부분과 R4-D 실계정 왕복은 UNVERIFIED이며 자동 검사와 구분한다. R5/R6는 아래 구현 대응과 [R5 증거](./implementation/phase5-open-work-queue-20261030.md)·[R6 증거](./implementation/phase6-work-execution-20261030.md)를 따른다. R7의 실제 타입·파일·심볼·endpoint·검사는 아래 구현 대응과 [R7 증거](./implementation/phase7-shared-wiki-20261031.md)에 기록했다. R8의 통합/복구/부하 fixture와 남은 무인 전환/실환경 조건은 [R8 증거](./implementation/resident-acceptance.md)를 따른다. 아래 원 설계의 제안 표기는 이력을 유지하며 구현 판정은 각 증거를 따른다. 기존 파일/심볼의 E 근거표는 C 기준이며 실계정/DOM/운영 호스트 적합성은 UNVERIFIED다.
 
@@ -176,7 +176,7 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 
 `ResidentMcp`는 별도 `residentGrants`에 room/project/actor·seat version·epoch·generation·identity·도구·만료·hash만 저장한다. 기존 `/mcp`에 새 형식 분기만 추가해 8개 `resident_*` 도구를 명시 grant로 제한한다. 신규 grant 없이는 기존 도구 목록·키 의미가 그대로다. owner API·기존 SSE와 실제 `WikiView`를 연결했으며 원문/이력/충돌·폐기·pin·권한 발급/회수를 제공한다. 신규 SQL 테이블·Store 계약·계정/개인 기억 이식은 없다. R7 gate 숫자와 R8 순서는 변경하지 않았다.
 
-현재 자동 기록은 수락된 업무 보고 또는 확정 상주 응답의 명시 `wiki_edit` 제안에서 발생한다. 일반 `Discussion`의 종료/종합은 Wiki에 자동 게시하지 않는다. 이 연결을 추가하는 [추천안](./reviews/next-development-recommendation-20261105.md)은 새 보완 제안이며 승인 전에는 이 절의 계약이나 제품 코드를 변경하지 않는다. 기존 Wiki 편집/보고 게시의 구현과 실제 자동 축적·인용의 미완료 수락은 구분한다.
+현재 자동 기록은 수락된 업무 보고 또는 확정 상주 응답의 명시 `wiki_edit` 제안에서 발생한다. 과거 metadata 없는 일반 `Discussion`은 자동 게시하지 않고, 승인 후 생성한 새 방 연결 토의부터 `wikiPublication`으로 범위/상태를 고정한다. 이 연결을 추가하는 [추천1](./reviews/next-development-recommendation-20261105.md)은 2026-11-05 개발 승인됐다. 새 방 연결 topic의 공개 completed/partial 결과를 원래 revision/epoch/문맥 범위로 고정하고 기존 Wiki CAS/출처/Store transaction에서 한 번 게시한다. optional `Discussion.wikiPublication`에 대기/게시/보류 상태와 page/version/digest를 남긴다. 과거/독립 주제의 임의 배정·일괄 이관·새 source kind/endpoint·추가 모델 호출·자동 verified 승격은 없다. 기존 Wiki 편집/보고 게시의 구현과 실제 자동 축적·인용의 미완료 수락은 구분한다.
 
 | 수락 ID | 숫자·증거 | 실행 증거 |
 | --- | --- | --- |

@@ -100,6 +100,7 @@ export interface Checkpoint {
   pendingTaskIds: string[]; unresolvedTurnIds: string[]; requestsUsed: number; applied: boolean;
 }
 export interface Discussion {
+  wikiPublication?: TopicWikiPublication;
   wikiCitations?: import('./wiki-model.js').WikiSnapshot[];
   id: string; topic: string; materials: string; criteria: string; revision: number;
   members: Member[]; excludedIds: string[]; contexts: Context[];
@@ -114,6 +115,11 @@ export interface Discussion {
   roomId?: string;
   roomMaterial?: { text: string; digest: string };
   budgetMode?: 'api-daily';
+}
+export interface TopicWikiPublication {
+  revision: number; roomEpoch: number; scopeDigest: string;
+  status: 'pending' | 'published' | 'blocked' | 'skipped'; reason: string | null;
+  pageId: string | null; version: number | null; digest: string | null; inputDigest: string | null;
 }
 export interface ExecutionBinding {
   id: string; label: string; host: string; user: string; cwd: string; threadId: string;

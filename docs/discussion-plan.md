@@ -265,7 +265,7 @@ Phase 4A에서 실제 코드 검사·계산·실험이 필요하면 Verification
 
 계약·fixture 검사와 실제 계정 E2E를 구분한다. 자동 토론·인계·공개 경계·재시작 복구의 구현/자동 검사는 있으며, 실제 혼합 토의도 초안/교차검토 일부를 수락했다. 현재 수정/종합/결론·같은 방 복귀·실제 Codex·기기/장기 운영의 전체 수락은 미완료다. 최신 판정은 [페이즈 SSOT](./development-plan.md)와 [D5 기록](./implementation/dot-mcp-v2-live-d5-20261104.md)을 따른다. 계획을 추가하거나 단일 연결이 성공한 것으로 전체 수락을 완료 표시하지 않는다.
 
-현재 주제 종료는 공개 결과와 checkpoint를 보존하지만 Wiki에 자동 게시하지 않는다. [주제 결론→Wiki 추천안](./reviews/next-development-recommendation-20261105.md)은 승인 전 제안이며 기존 parser/6단계/공개 경계의 변경이 아니다.
+2026-11-05 승인된 [추천1](./reviews/next-development-recommendation-20261105.md)은 새 방 연결 주제의 공개 completed/partial 결과를 Wiki에 한 번 기록하도록 구현했다. optional 게시 metadata·기존 Wiki CAS/출처/Store/SSE를 사용하며 기존 parser/6단계/공개 경계를 유지한다. private/미확정·옛 권한/세대·과대 입력은 무단 게시하지 않는다. [검사·한계](./implementation/topic-wiki-20261105.md)는 실계정 전체 수락과 구분한다.
 
 ## 10. 설계 참고와 변경 이력
 

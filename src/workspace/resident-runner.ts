@@ -17,6 +17,7 @@ import { ResidentFocus, topicPolicy } from './resident-focus.js';
 import { failureObservation } from '../connections/completion-failure.js';
 import { snapshotMember } from './settings.js';
 import { participantWait, nextApiDay } from './api-usage.js';
+import { publishTopicWiki } from './topic-wiki.js';
 
 type Emit = Parameters<Parameters<Store['transact']>[0]>[1];
 const LIVE = ['prepared', 'running', 'unconfirmed'];
@@ -244,6 +245,7 @@ export class ResidentRunner {
       }
       if (['completed', 'partial', 'cancelled'].includes(d.status) && !d.turns.some(t => LIVE.includes(t.status)) &&
           !state.jobs.some(j => j.discussionId === d.id && ['queued', 'running', 'blocked_approval', 'reconciling'].includes(j.status))) {
+        if (this.options.wiki) publishTopicWiki(state, room, d, this.options.wiki, emit);
         room.legacyDiscussionIds.push(d.id); room.topicLink = null; room.version++; room.updatedAt = now();
         room.nextEligibleAt = new Date(this.clock() + (room.pacing?.minIntervalMs ?? 0)).toISOString();
         emit({ type: 'resident.focus_returned', discussionId: null, data: { roomId: room.id, discussionId: d.id } });

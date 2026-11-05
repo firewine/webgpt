@@ -37,6 +37,16 @@ const label = (value: string): string => labels[value] ?? dotLabels[value] ?? va
 labels.not_sent = '미전송';
 const topicPhases: Record<Discussion['phase'], string> = { independent: '독립 초기안', cross_review: '상호 검토', verification: '근거 검증', revision: '수정안', synthesis: '종합안 작성', summary_review: '종합안 동료 검토' };
 const topicReasons: Record<string, string> = { procedure_completed: '예정된 토론 절차 완료', budget_exhausted: '진행 한도에 도달함', user_cancelled: '사용자가 토론을 취소함', participant_excluded: '일부 참여자가 제외됨', partial_unstructured_reply: '일부 응답의 형식을 확인하지 못함', restart_requires_reconciliation: '재시작 전 응답의 대조가 필요함' };
+const topicWikiReasons: Record<string, string> = {
+  topic_wiki_scope_changed: '방이나 주제 조건이 바뀌었습니다.',
+  topic_wiki_sources_required: '공개된 결론의 출처가 필요합니다.',
+  topic_wiki_sources_limit: '출처 수가 저장 한도를 넘었습니다.',
+  topic_wiki_body_limit: '결론 길이가 저장 한도를 넘었습니다.',
+  wiki_context_requires_selection: '참고할 Wiki 버전을 선택해야 합니다.',
+  wiki_version_conflict: 'Wiki 버전이 바뀌어 충돌했습니다.',
+  topic_wiki_cancelled: '토론이 취소되었습니다.',
+  topic_wiki_no_public_result: '공개가 확정된 결론이 없습니다.',
+};
 const waitReasons: Record<string, string> = { dot_subscription_required: 'dot 이벤트 감시 등록 필요', dot_grant_required: 'dot 연결 권한 확인 필요', dot_delivery_requires_reconciliation: 'dot 원래 요청·전달 기록 대조 필요', api_daily_not_configured: 'API 일일 한도 미설정', api_daily_exhausted: 'API 일일 한도 소진 · 다음 KST 자정 대기', browser_manual_control: '서버 Chrome 수동 잠금', participant_not_ready: '계정 연결 확인 필요' };
 Object.assign(topicReasons, waitReasons);
 const workReasons: Record<string, string> = { work_source_required: '근거가 된 공개 발언을 선택해 주세요.', work_acceptance_required: '수용 기준이 필요합니다.', work_assignment_required: '허용 참여자와 범위를 정해 주세요.', work_execution_phase_pending: '실제 코드 실행은 페이즈 6 연결을 기다립니다.', work_dependency_pending: '선행 일감의 완료를 기다립니다.', work_scope_not_authorized: '해당 범위를 허용한 업무 역할이 필요합니다.', work_acceptance_not_observed: '수용 기준의 직접 확인이나 실제 근거가 필요합니다.', room_settings_required: '방의 진행 한도와 속도를 설정해 주세요.', budget_exhausted: '방의 진행 한도에 도달했습니다.', work_reconciliation_required: '원래 요청·응답을 대조해 주세요.', work_scope_or_report_changed: '배정·범위·보고가 바뀌어 결과를 보류했습니다.', owner_cancelled: '소유자가 취소했습니다.' };
@@ -94,6 +104,7 @@ export class RoomView {
   private readonly wiki: WikiView;
   constructor(private readonly deps: Dependencies) {
     this.wiki = new WikiView({ api: deps.api, refresh: deps.refresh, report: deps.report, closeDrawers: () => this.closeDrawers() });
+    const topicWiki = el('div'); topicWiki.id = 'room-topic-wiki'; $('#room-topic-summary').after(topicWiki);
     this.on('#room-power', async () => { if (!this.detail) return; await this.control(this.detail.room.desiredOn ? 'off' : 'on'); });
     this.on('#room-wake', () => this.control('wake'));
     this.on('#room-settings', () => this.settings());
@@ -341,6 +352,19 @@ export class RoomView {
     } catch (error) { this.topic = null; this.topicKey = ''; this.topicUnavailable = true; this.deps.report(error); }
   }
   private openTopic(): Promise<void> | undefined { if (!this.topic) return; const id = this.topic.id; this.closeDrawers(); return this.deps.openDiscussion(id); }
+  private renderTopicWiki(target: HTMLElement, d: Discussion | null): void {
+    if (!d || d.roomId !== this.roomId || this.detail?.room.id !== this.roomId || !d.wikiPublication) return;
+    const p = d.wikiPublication; const row = el('div', '', 'topic-wiki small muted'); row.dataset.status = p.status;
+    const { pageId, version } = p;
+    if (p.status === 'published' && pageId && version !== null && Number.isInteger(version) && version > 0) {
+      row.append(el('span', `자동 Wiki · 게시됨 · 주제 조건 ${p.revision}판`), ' ', this.btn(`게시된 Wiki v${version} 보기`, () => {
+        if (d.roomId !== this.roomId || this.detail?.room.id !== this.roomId) return;
+        return this.wiki.open(pageId, version);
+      }, 'small'));
+    } else if (p.status === 'pending') row.append(el('span', '자동 Wiki · 결론 대기 중'));
+    else row.append(el('span', `자동 Wiki · ${p.status === 'blocked' ? '게시 보류' : p.status === 'skipped' ? '게시 안 함' : '게시 기록 확인 필요'} · ${topicWikiReasons[p.reason ?? ''] ?? '게시 사유를 확인해 주세요.'} 원래 주제와 결과는 보존됩니다.`));
+    target.append(row);
+  }
   private renderTopic(): void {
     const d = this.topic; const active = !!d && this.detail?.room.topicLink === d.id;
     const start = $<HTMLButtonElement>('#room-focus-new'); start.disabled = !this.detail?.enabled || !this.detail.room.desiredOn || !!this.detail.room.topicLink;
@@ -355,6 +379,7 @@ export class RoomView {
     const synthesis = d && publishedTopicResults(d).findLast(t => t.phase === 'synthesis');
     $('#room-topic-summary').hidden = !synthesis;
     $('#room-topic-summary').textContent = synthesis ? '종합안 미리보기 · ' + synthesis.reply!.text : '';
+    const wiki = $('#room-topic-wiki'); wiki.replaceChildren(); this.renderTopicWiki(wiki, d); wiki.hidden = !wiki.childElementCount;
     if (d) {
       const results = publishedTopicResults(d); const terminal = ['completed', 'partial', 'cancelled'].includes(d.status);
       $('#room-topic-result').textContent = results.length ? `종합안·남은 이견 ${terminal ? '보기' : '· 검토 중'}` : terminal ? '결과·미완료 사유' : '종합안 대기';
@@ -365,8 +390,9 @@ export class RoomView {
   private renderTopicResults(): void {
     const d = this.topic; const target = $('#room-result-content');
     if (!d) { target.replaceChildren(el('p', '확인된 주제 결과가 없습니다.')); return; }
-    const signature = JSON.stringify([this.topicKey, d.status]); if (target.dataset.signature === signature) return; target.dataset.signature = signature;
+    const signature = JSON.stringify([this.topicKey, d.status, d.wikiPublication]); if (target.dataset.signature === signature) return; target.dataset.signature = signature;
     target.replaceChildren(el('h3', d.topic), el('p', `${d.status === 'completed' ? '토론 절차 완료' : label(d.status)} · 주제 조건 ${d.revision}판${d.reason ? ' · ' + (topicReasons[d.reason] ?? '상세 사유는 전체 비교·근거에서 확인하세요.') : ''}`, 'small muted'));
+    this.renderTopicWiki(target, d);
     const results = publishedTopicResults(d);
     if (!results.length) target.append(el('p', '현재 조건에서 공개가 확정된 종합안은 없습니다. 미완료·차단·취소는 목표 달성으로 표시하지 않습니다.', 'small'));
     for (const t of results) {
@@ -543,7 +569,7 @@ export class RoomView {
   }
   private renderPanels(): void {
     const d = this.detail!; const s = this.snapshot!; const r = d.room;
-    const signature = JSON.stringify([r, this.selectedTopic?.id, this.selectedTopic?.excludedIds, s.apiDaily, d.contexts, d.status.members, s.participants, s.connections, s.jobs, s.materialPackages, this.turns, this.topicKey, this.work]);
+    const signature = JSON.stringify([r, this.selectedTopic?.id, this.selectedTopic?.excludedIds, this.selectedTopic?.roomId, this.selectedTopic?.wikiPublication, s.apiDaily, d.contexts, d.status.members, s.participants, s.connections, s.jobs, s.materialPackages, this.turns, this.topicKey, this.work]);
     if (signature === this.panelsSignature) return; this.panelsSignature = signature;
     this.renderMembers(s, r.members, d.status.members); this.renderWork();
     const usage = $('#room-usage'); usage.replaceChildren();
@@ -555,6 +581,7 @@ export class RoomView {
     if (this.selectedTopic) focus.append(el('p', this.selectedTopic.topic), el('p', '선택한 주제의 상세 정보입니다. 작업큐·Wiki는 방 전체에서 공유합니다.', 'small muted'), this.btn('주제의 비교·근거·제어', () => this.deps.openDiscussion(this.selectedTopic!.id)));
     else if (topic) focus.append(el('p', topic.topic), this.btn('토론·비교·검증 열기', () => { this.closeDrawers(); return this.deps.openDiscussion(topic.id); }));
     else focus.append(el('p', this.topic ? '자유 대화로 복귀 · 마지막 주제와 결과는 대화 상단에 보존합니다.' : '자유 대화 · 상단에서 주제를 정하면 검토·검증·종합을 이어갑니다.', 'small muted'));
+    this.renderTopicWiki(focus, this.selectedTopic ?? this.topic);
     const statuses = $('#room-status'); statuses.replaceChildren();
     for (const c of d.status.members) { const card = el('section', '', 'status-card'); card.append(el('h3', this.name(c.participantId) + ` · 문맥 ${c.generation}${c.previousGeneration ? ' · 이전 세대 응답' : ''}`));
       const sources: Record<string, string> = { connection: '등록한 연결', resident_turn: '발언 기록', unobserved: '확인된 관측 없음', work_queue_pending: '할당된 업무 없음', work_queue: '업무 큐 기록', codex_job: 'Codex 실행 기록', fake: '모의 관측', browser: 'Chrome 관측', 'openai-oauth': 'GPT 응답', deepseek: 'DeepSeek 응답' };
