@@ -141,11 +141,15 @@ test('connection refresh captured before topic creation cannot discard the newly
   const f = await workspace(t); const browser = await launch(t); const context = await browser.newContext(); await context.request.post(f.url + '/api/login', { data: { token: ownerKey }, headers: { Origin: f.url } });
   const page = await context.newPage(); await page.goto(f.url); await page.waitForFunction(() => !document.querySelector('#workspace').hidden);
   let hold = true; let release; let started; const captured = new Promise(resolve => { started = resolve; }); const released = new Promise(resolve => { release = resolve; });
-  await page.route('**/api/state', async route => { const response = await route.fetch(); if (hold) { hold = false; started(); await released; } await route.fulfill({ response }); });
-  t.after(release);
-  await openNewTopic(page); f.app.store.transact((_s, emit) => emit({ type: 'connection.fixture_refresh', discussionId: null, data: {} })); await captured;
-  await page.locator('#topic').fill('오래된 연결 새로고침 중 만든 토의'); await page.getByRole('button', { name: /토의 시작/ }).click();
-  await page.waitForFunction(() => !!localStorage.getItem('wj.discussion')); const selected = await page.evaluate(() => localStorage.getItem('wj.discussion')); release();
-  await page.waitForFunction(() => document.querySelector('#discussion-state .badge')?.textContent === '완료', undefined, { timeout: 5000 });
-  assert.equal(f.app.store.read().discussions[0].id, selected); assert.equal(f.app.store.read().discussions[0].status, 'completed'); assert.equal(await page.locator('#discussion-title').textContent(), '오래된 연결 새로고침 중 만든 토의');
+  try {
+    await page.route('**/api/state', async route => { const response = await route.fetch(); if (hold) { hold = false; started(); await released; } await route.fulfill({ response }); });
+    await openNewTopic(page); f.app.store.transact((_s, emit) => emit({ type: 'connection.fixture_refresh', discussionId: null, data: {} })); await captured;
+    await page.locator('#topic').fill('오래된 연결 새로고침 중 만든 토의'); await page.getByRole('button', { name: /토의 시작/ }).click();
+    await page.waitForFunction(() => !!localStorage.getItem('wj.discussion')); const selected = await page.evaluate(() => localStorage.getItem('wj.discussion')); release();
+    await page.waitForFunction(() => document.querySelector('#discussion-state .badge')?.textContent === '완료', undefined, { timeout: 5000 });
+    assert.equal(f.app.store.read().discussions[0].id, selected); assert.equal(f.app.store.read().discussions[0].status, 'completed'); assert.equal(await page.locator('#discussion-title').textContent(), '오래된 연결 새로고침 중 만든 토의');
+  } finally {
+    // Drain captured polling requests before the fixture server closes.
+    release(); await page.unrouteAll({ behavior: 'wait' }); await context.close();
+  }
 });
