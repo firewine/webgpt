@@ -47,3 +47,15 @@
 이 기록 시점에는 수정 프리셋의 운영 배포와 **남은 실제 웹1회 최종 확인이 아직 미실행**이다. 사용자가 담당하는 PR 병합 후 반영/재검증해야 하며 전체 페이즈8을 완료 처리하지 않는다. 기존 프리셋v2로 저장된 검증 바인딩은 남기지 않았으므로 기존 사용자 바인딩을 자동 수정하는 이관도 필요 없다.
 
 첫 CI에서는 제품/새 버튼 검사는 통과했으나 기존 새로고침 회귀가 종료 정리 중 `route.fetch`→테스트 서버 연결 거부로 실패했다. 해당 검사만 `finally`에서 지연 응답 해제·요청 drain·브라우저 context 종료를 먼저 수행하도록 수정했다. 제품 실행·응답 판정·검사 조건은 바꾸지 않았다.
+
+## PR #50 병합본 운영 적용·최종 검증 — 2026-11-05
+
+사용자 병합 및 운영 반영/검증 승인 뒤 main `4ca2ffb5b24778f2d080b24033410d38e5513dd8`을 10:19 KST 운영 폴더에 반영했다. 검사 head `654daf8952007a9355c368beb1aebd804d07788e`와 동일 tree를 확인하고 기존 dist를 비공개 보관한 뒤 빌드·정상 서비스 재기동·health200을 확인했다. `.env`와 기존 state·완료15개는 적용 전후 동일했다. 위 절의 “아직 미실행”은 수정 PR 제출 당시 상태이며 아래 실측으로 보완한다.
+
+- [최종 CI](https://github.com/firewine/webgpt/actions/runs/41947021662): Node556·실제 browser71 PASS, FAIL/SKIP0. Codex0.165.0 설치 schema 계약 PASS이며 실제 Codex 실행은0이다.
+- 실제 HTTPS UI에서 `chatgpt-v1/3` 탐지→기존 검증용 웹 대화 연결→웹 GPT 참여자 등록을 확인했다. 영속 binding도 v3이며 새로고침 유지·SSE2회·390px 표시·화면 오류0이다. 새 연결/참여자는 각각1개다.
+- 그 등록된 binding을 복사해 **운영 빌드의 Providers→BrowserBridge**로 실제 웹 요청을1회 보냈다. 검증 Store만 분리했으며 운영 토의 엔진을 재개한 검사는 아니다. 실제 웹 Extra High·25,621ms 완료·이전 확인 단어/맥락·JSON 계약/새 probe·receipt 수락을 확인했다. 웹의 같은 요청 marker1개·마지막 응답과 반환 text 동일·빈 초안·응답 중0을 최종 대조했다. 전송 전 hook 횟수만으로 외부 전송1회를 주장하지 않는다.
+- 이번 최종 검증 창의 실제 웹 요청1회, 모델 API/dot/Muse/Codex 새 요청0이다. usage는 미제공이며 token·요금을 추정하지 않았다. 앞선 PR #49의 실제 웹2회와 이번 창1회는 별개다.
+- 새 웹 연결/참여자를 제외한 **기존 운영 state 전체**·완료15개·환경 hash를 보존했다. 종료 시 방 off·Muse 잠금·원래 OAuth 토의 blocked/revision을 유지했다. 현재 상태로 일반화하지 않고 이 검증 종료 시각의 관측으로 기록한다.
+
+비공개 증거의 `deployment-completed`, `ui-completed`, `provider-completed`, `state-after-provider`, `final-verified`, `final-audit` 기록을 대조했다. 요청/계정/대화 ID·개인 원문·접속 키·화면 이미지는 공개 저장소에 넣지 않는다. 실제 웹 연결의 운영 확인은 PASS이며 **R8 전체 무인 업무/Wiki·수정/종합·Codex·실기기/장기 운영 수락은 여전히 미완료**다.

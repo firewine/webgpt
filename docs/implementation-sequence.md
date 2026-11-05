@@ -7,13 +7,15 @@
 
 > **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 현재 승인 범위와 결과는 위 SSOT를 따른다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
 
+> **2026-11-05 사실 정리:** 아래 C/P와 WJ·R1~R8·원래50 gate는 역사적 기준과 수락 조건으로 보존한다. 이후의 구현·부분 실환경 PASS와 전체 수락 미완료를 구분하며, 최신 상태는 위 SSOT와 [실제 웹 GPT 구현·운영 검증 기록](./implementation/web-gpt-selection-20261105.md)을 따른다. 이번 정리는 범위·순서·계약·gate를 변경하지 않는다.
+
 > 지정 코드 C=8f81d861b3f170ef2024b90d9eeba56ce34f0f79, 계획 P=8db0f42f499f674c66c3a0df0a4d8e0f25fb216e를 고정한 개정이다. 먼저 [1쪽 요약·기준 차이·근거](./plan-revision-20261030.md), [104항목 판정](./reviews/plan-decision-register-20261030.md), [운영 계약](./company-workflow-plan.md), [8단계 변경·이관·수락·롤백](./resident-implementation-plan.md)을 읽는다. backend 재사용이 기본이며 구현 상태는 위 SSOT, 실계정·DOM·호스트 적합성은 별도 검증 전 UNVERIFIED다. 과거 PASS 보고를 이번 실행 결과로 승계하지 않는다. 계획 개정 당시에는 문서만 수정했다. 현재 구현 지시는 위 SSOT가 관리하며 실계정·배포는 별도 범위다. 개발 시 [디자인 패턴 지침](./development-guidelines.md)의 작은 Adapter/DI·명시 상태 전이·기존 transaction·coordinator/CAS·검사/롤백 기준을 함께 적용한다.
 
 | 항목 | 값 |
 | --- | --- |
 | 상태 | 기존 backend 재사용·상주 8단계 매핑, 구현 상태는 SSOT |
 | 작성일 | 2026-10-29 (KST) |
-| 개정일 | 2026-10-30 (KST) |
+| 계획 개정 기준일 / 사실 갱신일 | 2026-10-30 / 2026-11-05 (KST) |
 | 기준 | 지정 계획 P의 v0.11을 본 개정으로 재심사, 코드 C=PR #11 병합 tree |
 | 원 계획 기준 main(C) | `8f81d861b3f170ef2024b90d9eeba56ce34f0f79` |
 | 제품 범위 | Tailscale 웹 접속, 여러 GPT OAuth 계정·dot·Muse·API 모델의 능동 토론·검증·비교 |
@@ -24,6 +26,8 @@
 
 2026-10-31 사용자가 [DeepSeek 사고 설정·Anthropic API 변경안](./reviews/deepseek-anthropic-impact-20261031.md)을 승인했다. 과거 Phase 5의 추가 provider 범위 중 Anthropic API 연결만 R8 보완으로 앞당기며 동시 실행·Git Writer·자동 병합은 확장하지 않는다. 먼저 제공처별 effort/기본값·기존 turn 보존을 검사하고, 이어 작은 Messages adapter와 owner 등록/모델/키 갱신/삭제·혼합 토론 fixture를 결합한다. 기존 50 gate와 실계정/유료 호출 별도 수락은 유지한다. 구독 OAuth는 공식 지원 경로/앱 허가 확인까지 보류한다.
 
+이 승인 범위의 Anthropic API adapter·관리 UI·혼합 토론 fixture는 [구현·검사 PASS](./implementation/deepseek-reasoning-anthropic-20261031.md)이며 실제 Anthropic 호출은 NOT_RUN이다. 구독 OAuth 보류와 실계정 별도 수락은 유지한다.
+
 기존 코드/검사 이력은 아래처럼 보존하되 새 상주 기능의 근거로 세지 않는다. 기준 P의 각 WJ/CHAT 결정은 판정표 S01~S08/P38~P44, 다음 변경은 R1~R8에 대응한다. 새 인증/DB/provider/실행기를 만드는 단계가 아니라 있는 backend를 결합하는 단계다.
 
 PR #1~11이 main에 병합됐다. 연결 adapter·영속 Core·토론 UI·MCP·Codex 실행, Ubuntu 서비스·HTTPS·noVNC, Muse thread·첫 응답 복구, 토커 계정·사고 깊이·라운드 설정과 로컬 자료·권한 조회를 반영했다. 전체 실계정·실세션 완료 판정은 남아 있다. [통합 구현 기록](./implementation/wj-002-015.md), [Ubuntu 운영](./implementation/ubuntu-services-20261030.md), [Muse 연결·복구](./implementation/muse-thread-binding-20261030.md), [토커 설정](./implementation/talker-settings-rounds-20261030.md), [로컬 자료·권한 조회](./implementation/local-materials-capabilities-20261030.md)를 함께 따른다. 인증·대화·운영·Codex의 상세 계약은 각 원문을 따른다.
@@ -31,6 +35,8 @@ PR #1~11이 main에 병합됐다. 연결 adapter·영속 Core·토론 UI·MCP·C
 **실환경 검증은 연결 → 혼합 토론 → Codex 환류 순서다.** 실제 계정·Ubuntu 접근이 없는 동안 독립 구현과 fixture 검증을 진행했다. 이제 구현된 UI에서 각 연결의 실응답을 확인하고 N인 토론·근거·비교를 판정한다.
 
 2026-10-30 다음 단계 승인으로 [상시 운영·HTTPS·원격 Chrome](./implementation/ubuntu-services-20261030.md)을 적용했다. 서버에서의 HTTPS·noVNC 입력·서비스 재시작은 PASS이며, 다른 기기·실제 호스트 재부팅·계정·Codex turn은 이 결과로 완료 판정하지 않는다.
+
+실제 웹 GPT 선택·호환성 보완은 PR #49/#50에 구현됐고, PR #50 병합 main `4ca2ffb`는 2026-11-05 10:19 KST 운영 적용됐다. 적용 후 최종 검증 창의 실제 웹1회는 Extra High·후속 맥락·JSON·receipt를 약25.6초에 확인해 PASS이며, 그 창의 API/dot/Muse/Codex 호출은0이다. 앞선 웹 검증 창과 합산하거나 혼합 토론 전체 완료로 승계하지 않는다. 최종 실측 상세는 [웹 GPT 기록](./implementation/web-gpt-selection-20261105.md)에 연결한다.
 
 - 작업 ID는 실행 순서와 의존성을 추적하는 식별자이며 실제 GitHub PR 번호가 아니다. 한 작업을 기본 PR 단위로 삼되 규모가 커지면 논리적으로 분리한다.
 - 기본 진행은 아래 표의 번호순이다. 앞 작업의 외부 인증·서버 준비가 막히면 선행 조건이 충족된 독립 작업이나 offline fixture를 진행한다.
@@ -43,7 +49,9 @@ PR #1~11이 main에 병합됐다. 연결 adapter·영속 Core·토론 UI·MCP·C
 
 WJ-001~018은 기존 모듈 이력이다. R1은 WJ-007/011에 additive state, R2는 WJ-008의 최소 공통 dispatch, R3/R4는 WJ-010/006 GUI/연결 UX, R5/R6는 WJ-007/014/015에 열린 업무 연결, R7은 같은 Store/MCP 위 Wiki와 scope, R8은 기존 WJ-012/015를 포함한 전체 수락이다. 기존 완료 구현을 다시 만드는 것이 아니다.
 
-WJ-001은 PR #3 병합 상태다. WJ-002~011 및 WJ-014~015는 코드와 자동 검사가 준비됐고, WJ-013은 scoped 도구·stdio 전달기가 구현됐다. MCP Events/Muse Connector는 미구현·비활성이다. WJ-012 및 계정·운영 서버·실세션에 의존하는 완료 판정은 NOT_RUN이며 WJ-016~018은 후속 선택 범위다. 아래 표는 원래 의존성과 실제 완료 기준을 유지한다. 상세 코드 상태는 [구현 기록](./implementation/wj-002-015.md)을 따른다.
+WJ-001은 PR #3 병합 상태다. WJ-002~011 및 WJ-014~015의 기존 코드·자동 검사 이력과 WJ-013의 scoped 도구·stdio 전달기는 [초기 구현 기록](./implementation/wj-002-015.md)에 보존한다. 이후 native dot D0~D4의 공식 plugin·MCP Events/outbox·provider 결합·연결 UI도 구현됐다. 실제 dot은 상주1회·주제3회 수락됐고, GPT2·DeepSeek·dot·Muse의5명은 초안5개와 두 교차검토 라운드10개, 합계15개를 완료했다. [dot/Muse 두 번째 검토 수락](./implementation/dot-mcp-v2-live-d5-20261104.md)을 따르며, Muse 공식 Connector는 현재 경로에서 제외·보류한다.
+
+전체 D5-F는 기존 OAuth 연결을 사용한 수정 단계의 `subscription_sharing_usage_limit_exceeded`로 BLOCKED다. 웹 GPT 단독 PASS가 이 기존 토의의 수정·종합·후속·Codex 환류를 완료시키지는 않는다. [직접 원인과 남은 수락](./implementation/dot-mcp-gpt-once-d5-20261104.md)을 유지하며 WJ-012/MVP-1·WJ-015/MVP-2 전체 수락도 미완료다. Ubuntu 서비스·HTTPS·SSE·noVNC·재시작의 실제 PASS와 실기기 IME/터치·호스트 재부팅·장기 운영 미검증은 구분한다. 아래 표의 원래 의존성·완료 기준과 WJ-016~018의 후속 범위는 유지한다.
 
 | 순서 | 작업 | 상위 단계 | 선행 조건 | 산출물·완료 기준 |
 | --- | --- | --- | --- | --- |
@@ -143,9 +151,9 @@ SSE snapshot/cursor, 새 탭·다른 기기·절전 후 복구, 중복 제어, P
 | 판정 지점 | 반드시 확인할 것 | 현재 |
 | --- | --- | --- |
 | 최소 프로젝트 — WJ-001 | 새 checkout 시작·빌드·기본 검사, fake 진단·반응형 브라우저 확인 | PASS / PR #3 병합 |
-| 연결 PoC — Phase 0 | Ubuntu/Tailscale 접속, GPT OAuth 2계정, DeepSeek, dot·Muse 각각의 실제 왕복·맥락·복구 | NOT_RUN |
+| 연결 PoC — Phase 0 | Ubuntu/Tailscale 접속, GPT OAuth 2계정, DeepSeek, dot·Muse 각각의 실제 왕복·맥락·복구 | 개별 연결·운영 일부 실제 PASS, 전체 조건 미완료 — SSOT·연결별 증거 참조 |
 | Core — Phase 1 | 계정·맥락 격리, 영속 turn/event·checkpoint·세대, 초안 공개·예산·검증 큐, 미확정 전송·재시작 fixture | 구현·fixture PASS |
-| 대화 MVP-1 — WJ-012 | 한 주제로 N인의 초안·반론·근거 확인·수정·비교·종합까지 사용자 중계 없이 진행 | NOT_RUN |
+| 대화 MVP-1 — WJ-012 | 한 주제로 N인의 초안·반론·근거 확인·수정·비교·종합까지 사용자 중계 없이 진행 | 초안·두 검토 라운드 실제 PASS, 수정 이후 미완료 / D5-F BLOCKED |
 | 실행 MVP-2 — WJ-015 | 토론 검증 과제가 기존 Codex 세션으로 전달되고 실행 증거·후속 수정·참여자 재평가로 돌아옴 | NOT_RUN |
 
 WJ-012의 실제 검증은 다음 묶음으로 수행한다.
@@ -162,7 +170,7 @@ WJ-012의 실제 검증은 다음 묶음으로 수행한다.
 
 ## 6. 세 번째 구현 묶음과 후속 확장
 
-WJ-013에서는 공식 MCP와 dot Events를 기존 Task 계약에 붙인다. Tailscale 사용자 접속과 Secure MCP Tunnel의 dot 도구 호출은 별도 통로로 검증한다. dot Events나 Muse Connector의 미지원이 이미 구현한 browser 대화 전체를 막지 않게 한다.
+WJ-013의 공식 MCP·dot Events는 이후 D0~D4에서 구현·결합됐다. Tailscale 사용자 접속과 Secure MCP Tunnel의 dot 도구 호출은 별도 통로로 검증한다. native dot의 실제 부분 수락과 전체 D5-F를 구분하며, 제외·보류한 Muse 공식 Connector가 기존 Muse browser 경로를 막지 않게 한다.
 
 WJ-014~015에서는 [Codex 세션 실행 계획](./codex-session-plan.md)에 따라 host·사용자·cwd·thread/turn을 등록하고 queue·steer·승인·단일 작성자를 구현한다. dot이 프롬프트를 만들고 결과를 읽는 왕복을 먼저 검증한 뒤, 원래 Discussion의 모든 참여자가 같은 증거로 재평가하도록 연결한다. 토론만 요청한 작업에 코드 수정 권한을 자동 부여하지 않는다.
 
@@ -174,7 +182,9 @@ WJ-016은 [Git Writer 계획](./git-writer-plan.md)의 별도 sandbox·remote br
 
 ### WWG 참고 검토에서 보강한 완료 조건
 
-[개발 계획 9.3](./development-plan.md#93-wwg-사례에서-추가할-계획)과 [검토서](./reviews/wwg-plan-review-20261030.md)의 WWG-R1~R7은 기존 WJ 작업에 연결한 후속 범위다. R1의 읽기 전용 자료와 R4의 권한 조회를 [구현·검증](./implementation/local-materials-capabilities-20261030.md)했으며 R2/R3/R5/R6/R7은 미구현이다. 실계정 토론과 실파일 Codex 실행의 완료 판정은 별도다.
+[개발 계획 9.3](./development-plan.md#93-wwg-사례에서-추가할-계획)과 [검토서](./reviews/wwg-plan-review-20261030.md)의 WWG-R1~R7은 기존 WJ 작업에 연결한 보강 범위이며 상주 페이즈 R1~R8과 구분한다. WWG-R1의 읽기 전용 자료와 WWG-R4의 권한 조회는 [구현·검증](./implementation/local-materials-capabilities-20261030.md)됐다. WWG-R2/R3는 부분 구현이다. 새 resident/dot grant에는 만료·회수·scope/세대 guard가 있지만 일반 discussion grant·execution binding의 전체 수명 관리는 미완료이며, 기존 state/profile 가림만으로 repo·실행 출력의 비밀 보호를 완료한 것은 아니다. [업무 실행 구현](./implementation/phase6-work-execution-20261030.md)과 [현재 쓰기 차단](../src/workspace/work-execution.ts)을 따른다. `readyReason`은 `allowWrite` binding에 `work_write_safety_unverified`를 반환한다.
+
+기존 역할·작업큐와 Task/job·실행 근거·방 보고·기록 기능은 [페이즈5](./implementation/phase5-open-work-queue-20261030.md)·[페이즈6](./implementation/phase6-work-execution-20261030.md)에 구현됐다. WWG-R5의 다중 job 묶음 확대와 WWG-R6의 확장 이력·archive/상세 정리 수명 보완은 미완료다. WWG-R7의 여러 파일 쓰기·경합 동기화는 선택 Writer의 후속 범위다. 이들을 모두 미구현으로 묶거나 실제 Codex 쓰기 수락을 완료로 표시하지 않는다.
 
 - 실계정 연결·토론 MVP-1을 먼저 검증한다. 읽기 자료 패키지·capability·로그 UI는 WJ-009/010/013의 독립 후속 보강으로 진행할 수 있다.
 - Codex의 실제 파일 변경을 검증하기 전에는 WWG-R2/R3의 권한 회수·늦은 승인·repo 비밀 경계를 확인한다. 읽기 전용 PoC와 비교하여 실제로 추가 허용되는 범위를 명시한다.
@@ -200,6 +210,8 @@ WJ-016은 [Git Writer 계획](./git-writer-plan.md)의 별도 sandbox·remote br
 
 실행 증거에는 작업 ID, commit, 환경·버전, 사용한 참여자/계정의 비밀이 아닌 참조, 실제 입력·관측 결과·종료 상태, PASS/FAIL/NOT_RUN/BLOCKED와 이유를 남긴다. credential·로그인 화면·개인 대화 전체를 공개 저장소에 넣지 않는다. 공개 문서에는 필요한 요약과 보호된 증거 참조만 기록한다.
 
-이번 산출물은 계획 개정이다. 후속 구현은 R1부터 진행하고 실제 계정/호스트 수락은 R8의 별도 허용·U3 선택 뒤 수행한다. 현재 실행 상태·인증 적합성은 UNVERIFIED이며 이 문서 작업에서 설치·재시작·로그인·모델 호출을 하지 않는다.
+2026-10-30 계획 개정 당시의 “R1부터 구현·실계정/호스트 UNVERIFIED”는 역사적 기준이다. R8의 별도 허용·U3 선택 조건은 유지하며 이후의 구현·운영 및 부분 실계정 수락은 위 SSOT·실행 증거를 따른다. 이번 사실 정리에서는 문서만 수정하며 설치·재시작·로그인·모델 호출을 수행하지 않는다.
+
+다음 권고는 SSOT의 R8/D5-F에 남은 수정·종합·후속 수락을 기존 증거와 대조하고, 재개할 연결·계정·요청/시간/API 예산을 구체화하는 것이다. 새 웹 GPT를 기존 OAuth 토의로 전환하는 선택이나 추가 실계정 실행은 별도 승인 범위를 따른다. 실제 파일 쓰기 전에는 기존 WWG-R2/R3의 미완료 조건을 확인하며, 선택 Writer·동시 실행 확대를 선행 작업으로 추가하지 않는다.
 
 이번 [FlowDesk 사례 적용](./development-plan.md#92-flowdesk-사례에서-반영할-아이디어)은 기존 번호·선행 조건·초기 순차 실행을 유지하면서 WJ-007 이후의 인계·검증·UI 완료 기준을 보강한다. WJ-006은 확보 가능한 관측을, WJ-014는 실제 실행기 증거를 담당한다. 이번 통합 구현도 root 1개·활성 provider turn 1개 원칙을 유지한다. 후속 동시 실행 확대는 여전히 별도 범위다.

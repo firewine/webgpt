@@ -6,13 +6,14 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | v0.2 — OAuth/API/browser adapter 구현·fixture PASS, 실계정 검증 NOT_RUN |
-| 개정일 | 2026-10-29 (KST) |
+| 상태 | OAuth/API/browser·native dot 구현, 실계정 부분 PASS·전체 혼합 수락 미완료 |
+| 원 계획 기준 | v0.2 — 2026-10-29 당시 adapter·fixture PASS, 실계정 검증 NOT_RUN |
+| 최초 작성 / 사실 갱신일 | 2026-10-29 / 2026-11-05 (KST) |
 | 상위 계획 / 대화 흐름 | [개발 계획](./development-plan.md) / [능동 토론](./discussion-plan.md) |
 | 운영 / 실행 도구 | [Ubuntu 운영](./ubuntu-operations.md) / [Codex 세션](./codex-session-plan.md) |
 | 확정 방향 | GPT는 실제 ChatGPT 웹 대화 또는 명시 선택한 OAuth/기기 코드, dot·Muse는 개별 참여자, DeepSeek 등은 API로 같은 토론에 참여 |
 
-현재 구현과 검사는 [WJ-002~015 구현 기록](./implementation/wj-002-015.md), 실제 명령과 복구 절차는 [운영 절차](./operations-runbook.md)를 따른다. 이 문서의 실계정·실세션 완료 조건은 아직 통과하지 않았다.
+현재 순서·범위·상태는 [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)를 따른다. [WJ-002~015 구현 기록](./implementation/wj-002-015.md)은 초기 기준이며, 이후 native dot·Muse·실제 웹 GPT의 부분 수락은 아래 실행 증거로 구분한다. 실제 명령과 복구 절차는 [운영 절차](./operations-runbook.md)를 따른다. 개별 PASS를 원래 WJ/R1~R8/50 gate의 전체 완료로 승계하지 않는다.
 
 ## 1. 참여자는 연결 방식과 별개다
 
@@ -25,8 +26,8 @@
 | 웹 GPT | 서버 Chrome의 실제 ChatGPT 기존 대화 + 기존 browser adapter. 계정/대화/초안 확인 후 명시 선택 | 실제 웹 대화 맥락 + 웹쫀쿠의 해당 참여자 발언/receipt |
 | GPT 계정 A (OAuth 선택) | Sign in with ChatGPT OAuth + ChatGPT plan usage + Responses | 웹쫀쿠의 해당 참여자 대화 이력 |
 | GPT 계정 B | A와 분리된 OAuth 등록·동의·토큰·모델 목록 | B 전용 대화 이력 |
-| dot(may) | 공식 private plugin + Secure MCP Tunnel + MCP Events, D0부터 검증. 지원 인증은 실제 계정에서 확인 | native dot의 기존 맥락 유지 + 해당 turn에 허용된 웹쫀쿠 입력/발언 참조. 기억 가져오기 아님 |
-| Muse | 서버 Chrome의 기존 Muse 대화; 공식 Connector는 별도 검증 | 실제 Muse의 기존 맥락 + 웹쫀쿠 주제·발언 참조 |
+| dot(may) | 공식 private plugin + Secure MCP Tunnel + MCP Events. D0~D4 구현·실제 부분 왕복 PASS, 전체 D5-F BLOCKED | native dot의 기존 맥락 유지 + 해당 turn에 허용된 웹쫀쿠 입력/발언 참조. 기억 가져오기 아님 |
+| Muse | 서버 Chrome의 기존 Muse 대화·실제 검토 수락; 공식 Connector는 현재 범위에서 제외·보류 | 실제 Muse의 기존 맥락 + 웹쫀쿠 주제·발언 참조 |
 | DeepSeek | 서버에서 보관하는 API key + 공식 대화 API | 웹쫀쿠의 해당 참여자 대화 이력 |
 | Anthropic / Claude API | 연결별 API key + 인증된 모델 목록 + Messages API. 구현·fixture PASS, 실계정 NOT_RUN·구독 OAuth 보류 | 웹쫀쿠의 해당 참여자 대화 이력 |
 
@@ -47,6 +48,8 @@
 **참여자와 연결 → 대화 참여자 만들기 → GPT · ChatGPT 웹 대화**에서 확인된 ChatGPT browser 연결을 고른다. 연결이 없으면 **ChatGPT 웹 대화 연결 설정**에서 서버 Chrome의 기존 `/c/...` 대화를 읽기 전용으로 확인·등록한다. 기존 사용자/AI 메시지가 있고 입력 초안·응답 중 상태가 없어야 한다. 계정과 대화가 다르면 저장/전송하지 않는다. 실제 로그인은 소유자가 Chrome에서 직접 완료한다.
 
 모델과 사고 깊이는 실제 ChatGPT 웹에서 선택한다. 앱의 browser 모델 `existing-agent`는 그 대화를 가리키며 OAuth xhigh 설정의 자동 적용을 뜻하지 않는다. 웹 GPT는 API 일일 한도에서 제외하지만 서비스 자체 제한과 timeout·미확정 대조는 유지한다. 새 browser 참여자는 앞으로 명시 선택한 대화에만 사용하고 기존 OAuth 발언의 작성자·연결을 덮어쓰지 않는다. 아래 OAuth 절차는 사용자가 그 연결 방식을 선택할 때 적용한다.
+
+이 선택·호환성 보완은 PR #49/#50에 구현됐고, PR #50 병합 main `4ca2ffb`는 2026-11-05 10:19 KST 운영 적용됐다. 적용 후 최종 검증 창에서 실제 웹1회·웹 Extra High·후속 맥락·JSON·receipt를 약25.6초에 확인해 PASS였다. 그 창의 API/dot/Muse/Codex 호출은0이다. 앞선 웹 검증 창의 요청 수와 합산하지 않으며 최종 상세는 [웹 GPT 구현·운영 검증 기록](./implementation/web-gpt-selection-20261105.md)을 따른다. 이 단독 왕복으로 전체 혼합 토론·다중 계정 격리·기존 OAuth 토의의 수정/종합을 완료 처리하지 않는다.
 
 2026-10-31 [추가 승인](./reviews/deepseek-anthropic-impact-20261031.md)으로 DeepSeek 제공처별 사고 설정과 Anthropic API 연결을 R8 보완에 포함한다. DeepSeek의 제공처 기본/none/low/high/max는 실제 catalog 또는 정확한 모델 ID의 공식 문서에 따른 허용 값만 표시하고 GPT xhigh와 자동 치환하지 않는다. 기존 설정 부재는 그대로 보존하며 변경은 새 토의 또는 일시정지한 토의의 이후 발언에 적용한다. Anthropic은 API key·필요한 workspace ID·공식 모델 목록·Messages SSE를 기존 Completion 계약에 연결한다. 기존 Store/승인/예산/대조를 유지한다. Claude 구독 OAuth는 공개 외부 앱 지원 경로/허가 확인까지 보류하며 미구현을 성공으로 표시하지 않는다. 실계정 유료 호출/운영 수락은 별도다.
 
@@ -89,9 +92,11 @@ OSS OAuth의 loopback callback은 **로그인 브라우저가 실행되는 컴�
 
 dot은 실제 native agent의 공식 plugin·이벤트 구독·입력 조회·답변 제출을 같은 turn 계약에 연결한다. 일반 GPT OAuth 모델이나 웹 대화를 dot으로 이름만 바꿔 성공으로 표시하지 않는다. Muse는 로그인된 Ubuntu Chrome의 기존 서비스 adapter로 전송·관측하며 대화/profile/thread와 초안을 보존한다. 두 경로로 같은 turn을 이중 전송하지 않는다.
 
+native dot D0~D4의 연결·영속 grant·MCP Events/outbox·provider 결합·UI는 구현됐다. 실제 수락은 dot 상주1회·주제3회이며, GPT2·DeepSeek·dot·Muse의5명은 초안5개와 두 교차검토 라운드10개, 합계15개를 완료했다. [두 번째 검토 수락 기록](./implementation/dot-mcp-v2-live-d5-20261104.md)을 따른다. 전체 D5-F는 기존 OAuth 연결의 수정 요청에서 확인한 사용 제한으로 BLOCKED이며, 수정·종합·같은 방 후속·실제 Codex/Wiki 환류·실기기 수락을 남긴다. [직접 원인과 남은 조건](./implementation/dot-mcp-gpt-once-d5-20261104.md)을 웹 GPT 단독 PASS로 덮어쓰지 않는다.
+
 브라우저 계정·프로필·agent·대화 식별과 OAuth의 account registration은 서로 다른 binding이다. 같은 계정이라는 이유만으로 대화 맥락이나 credential을 섞지 않는다. dot·Muse가 토론에 포함되지 않아도 OAuth GPT와 API 모델만으로 새 토론을 시작할 수 있다.
 
-2026-10-30 사용자가 지정한 실제 Muse 사이드 채팅의 DOM thread ID를 고정해 연결·참여자를 등록했다. URL이 같아도 thread가 다르면 전송을 거절하며, 입력 후 생성되는 전송 버튼과 분할 응답을 처리한다. 이후 사용자가 시작한 첫 실제 요청·응답을 대조하고 표시용 prefix로 인한 수신 누락을 재전송 없이 복구했다. [실제 연결 기록](./implementation/muse-thread-binding-20261030.md)에 정적 probe·등록·fixture·원문 대조 복구를 구분했다. 후속 질문·전체 혼합 토론은 미검증이다.
+2026-10-30 사용자가 지정한 실제 Muse 사이드 채팅의 DOM thread ID를 고정해 연결·참여자를 등록했다. URL이 같아도 thread가 다르면 전송을 거절하며, 입력 후 생성되는 전송 버튼과 분할 응답을 처리한다. 이후 사용자가 시작한 첫 실제 요청·응답을 대조하고 표시용 prefix로 인한 수신 누락을 재전송 없이 복구했다. [초기 연결 기록](./implementation/muse-thread-binding-20261030.md)의 후속 질문 미검증은 당시 상태다. 이후 원래 thread의 [검토1 결과를 신규 전송 없이 복구·수락](./implementation/dot-mcp-paged-live-d5-20261103.md)했고 [검토2의 실제 JSON·receipt도 수락](./implementation/dot-mcp-v2-live-d5-20261104.md)했다. 전체 혼합 토론 완료와 공식 Muse Connector 지원은 이 결과로 판정하지 않으며 Connector는 제외·보류 상태다.
 
 ## 4. DeepSeek 및 API 참여자
 
@@ -135,4 +140,4 @@ API provider에는 저장된 요청·입력·출력 token 및 비용 예산을 �
 - 서버·클라이언트: Tailscale 웹 접속에서 결과를 보며 클라이언트 종료·다른 기기 재접속에도 서버 토론이 유지된다. OAuth 등록 callback과 일상 HTTPS 접속을 구분한다.
 - 증거: 참여자·계정 참조·모델·입력 snapshot·응답 완료 근거·비용 판정을 기록하되 토큰·키는 제외한다.
 
-이는 릴리스 검증 조건이다. 계정 자격·key·로그인·실제 호출은 아직 NOT_RUN이며 문서 작성 중 유료 모델 요청이나 계정 연결을 수행하지 않았다. 부적격·미지원 연결은 BLOCKED로 남기고 OAuth 요구를 임의로 API key나 DOM 자동화로 대체하지 않는다.
+이는 원래 릴리스 검증 조건으로 보존한다. Ubuntu 운영·native dot·Muse 검토·웹 GPT 등 실제 PASS와 남은 전체 수락은 SSOT·각 실행 기록을 따른다. Anthropic API는 구현·fixture PASS지만 실제 키/권한·추론·usage는 NOT_RUN이며 구독 OAuth는 보류한다. 기존 OAuth 수정 요청의 차단과 미검증 후속 조건도 유지한다. 이번 사실 정리에서는 모델 요청·계정 연결을 수행하지 않는다. 부적격·미지원 연결은 BLOCKED로 남기고 연결 방식·기존 작성자를 자동 대체하지 않는다.
