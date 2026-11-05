@@ -20,6 +20,37 @@ function attach(app, page, service) {
   return { setPageId: id => { pageId = id; }, setProfile: p => { isolatedContext = p; } };
 }
 
+test('modern ChatGPT discovery scopes Korean/English controls and receipts to the active page', { timeout: 20000 }, async t => {
+  const browser = await launch(t); const f = await workspace(t);
+  for (const english of [false, true]) {
+    const page = await fixturePage(browser, 'chatgpt'); attach(f.app, page, 'chatgpt');
+    await page.setContent(`<section data-app-shell-active-page="true"><button aria-label="${english ? 'Open profile menu' : '프로필 메뉴 열기'}">fixture-account · chatgpt</button><header><h1>Modern dot</h1></header>
+      <div data-user-message-bubble="true"><div class="whitespace-pre-wrap">[웹쫀쿠:active-fixture]\nEarlier prompt</div></div><div data-markdown-text-style="assistant-message">Active response</div>
+      <div role="textbox" contenteditable="true" class="ProseMirror"><p><br class="ProseMirror-trailingBreak"></p></div><button aria-label="${english ? 'Send message' : '메시지 보내기'}" disabled>Send</button><div data-talvt-turn-state="complete"></div></section>`);
+    await page.evaluate(() => {
+      const active = document.querySelector('section'); const cached = active.cloneNode(true); cached.dataset.appShellActivePage = 'false'; cached.style.display = 'none';
+      cached.querySelector('button').dataset.testid = 'accounts-profile-button'; cached.querySelector('[role=textbox]').id = 'prompt-textarea'; cached.querySelector('button[disabled]').dataset.testid = 'send-button';
+      cached.querySelector('[data-user-message-bubble]').dataset.messageAuthorRole = 'user'; cached.querySelector('[data-markdown-text-style]').dataset.messageAuthorRole = 'assistant'; cached.querySelector('[data-markdown-text-style]').textContent = 'Cached response';
+      cached.querySelector('[data-talvt-turn-state]').dataset.talvtTurnState = 'streaming'; const stop = document.createElement('button'); stop.dataset.testid = 'stop-button'; cached.append(stop); active.before(cached);
+      window.fixtureSends = 0; document.querySelectorAll('button').forEach(b => { b.onclick = () => window.fixtureSends++; });
+    });
+    const before = await page.locator('body').innerHTML(); const service = new BrowserDiscovery(f.app.browser); const request = { pageId: 7, profile: 'default', presetId: 'chatgpt-v1' };
+    const found = await service.discover(request); assert.equal(found.status, 'ready', JSON.stringify(found)); assert.equal(found.presetVersion, 'chatgpt-v1/2'); assert.equal(found.busy, false);
+    const { binding } = await service.resolve({ discoveryId: found.id, confirmed: true });
+    for (const key of ['identitySelector', 'inputSelector', 'sendSelector', 'readySelector']) assert.equal(await page.locator(binding[key]).count(), 1);
+    const view = await f.app.browser.inspect(binding, '[웹쫀쿠:active-fixture]'); assert.equal(view.matchCount, 1); assert.equal(view.answer, 'Active response'); assert.equal(view.busy, false);
+    assert.equal(await page.locator('body').innerHTML(), before); assert.equal(await page.evaluate(() => window.fixtureSends), 0);
+    const active = page.locator('[data-app-shell-active-page=true]');
+    await active.locator('[data-talvt-turn-state]').evaluate(e => { e.dataset.talvtTurnState = 'streaming'; });
+    const busy = await service.discover(request); assert.equal(busy.status, 'blocked'); assert.equal(busy.reason, 'browser_not_ready'); assert.equal(busy.busy, true);
+    await active.locator('[data-talvt-turn-state]').evaluate(e => { e.dataset.talvtTurnState = 'complete'; });
+    await active.locator('[role=textbox]').evaluate(e => e.after(e.cloneNode(true))); const ambiguous = await service.discover(request); assert.equal(ambiguous.reason, 'browser_discovery_ambiguous');
+    await active.locator('[role=textbox]').nth(1).evaluate(e => e.remove()); await active.locator('[role=textbox]').fill('KEEP OWNER DRAFT');
+    const draft = await service.discover(request); assert.equal(draft.reason, 'browser_discovery_draft_present'); assert.equal(await active.locator('[role=textbox]').textContent(), 'KEEP OWNER DRAFT'); assert.equal(await page.evaluate(() => window.fixtureSends), 0);
+    await page.close();
+  }
+});
+
 test('R4-A: two real DOM fixtures x normal/old/ambiguous/thread-change/draft: discovery mutates and sends zero', { timeout: 45000 }, async t => {
   const browser = await launch(t); const f = await workspace(t); const evidence = [];
   for (const preset of browserPresets) for (const mode of ['normal', 'old_dom', 'ambiguous', 'thread_changed', 'draft']) {
