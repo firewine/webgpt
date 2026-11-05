@@ -7,6 +7,8 @@
 
 > **현재 구현 지시**: [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)가 순서·범위·상태의 단일 기준이다. 2026-10-31 PR #22 사용자 병합 후 페이즈 8 통합 검증을 승인받았다. 아래 문서의 과거 “계획만/구현 금지”는 당시 개정 작업의 이력이며 현재 페이즈 지시를 대체하지 않는다.
 
+> **2026-11-05 사실 정리:** 아래 R단계/gate는 설계와 검사 근거로 유지한다. 웹 GPT 운영 연결과 native dot/Muse의 실제 초안/검토는 부분 PASS이며 전체 R8/D5-F는 미완료다. R6의 파일 수정 업무는 `WorkExecutionBridge.readyReason`에서 차단하고, R7 저장/보고 게시가 구현됐어도 일반 topic 종료의 자동 Wiki 게시 접점은 없다. [다음 추천](./reviews/next-development-recommendation-20261105.md)은 승인 전 제안이며 기존 계약·순서·50 gate의 변경이 아니다.
+
 설계 근거 C와 계획 P는 [개정 요약](./plan-revision-20261030.md)으로 고정한다. 구현 순서·상태는 맨 위 링크의 SSOT를 따른다. R1~R4는 아래 계약으로 구현하고 [R1 증거](./implementation/phase1-resident-foundation-20261030.md)·[R2 증거](./implementation/phase2-resident-runtime-20261030.md)·[R3 증거](./implementation/phase3-chatroom-gui-20261030.md)·[R4 증거](./implementation/phase4-browser-discovery-20261030.md)를 남겼다. R3-E의 실제 기기 부분과 R4-D 실계정 왕복은 UNVERIFIED이며 자동 검사와 구분한다. R5/R6는 아래 구현 대응과 [R5 증거](./implementation/phase5-open-work-queue-20261030.md)·[R6 증거](./implementation/phase6-work-execution-20261030.md)를 따른다. R7의 실제 타입·파일·심볼·endpoint·검사는 아래 구현 대응과 [R7 증거](./implementation/phase7-shared-wiki-20261031.md)에 기록했다. R8의 통합/복구/부하 fixture와 남은 무인 전환/실환경 조건은 [R8 증거](./implementation/resident-acceptance.md)를 따른다. 아래 원 설계의 제안 표기는 이력을 유지하며 구현 판정은 각 증거를 따른다. 기존 파일/심볼의 E 근거표는 C 기준이며 실계정/DOM/운영 호스트 적합성은 UNVERIFIED다.
 
 ## 1. 공통 변경·검증 원칙
@@ -108,7 +110,7 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 | R4-A | 2서비스×정상/구버전DOM/다중후보/thread변경/기존초안 10종 fixture에서 전송 0·목표 불명확 자동저장 0 | 제안 `tests/browser-discovery.test.mjs`·DOM fixture(모두 제안) |
 | R4-B | 정상 후보→기존 probe→binding 저장, advanced 선택자 필수 입력 0개 | browser 온보딩 화면/기존 API fixture |
 | R4-C | account/thread 불일치·draft·busy에서 실제 send 0, 기존 selector/receipt 회귀 통과 | 기존 bridge 검사+제안 discovery 검사 |
-| R4-D | 실제 dot 1개는 공식 plugin·Events→MCP 입력 조회/응답 제출, Muse 1개는 기존 profile/identity/thread·왕복 확인 | D0~D5와 사용자 허용된 계정·화면·receipt 기록. dot native 경로 UNVERIFIED, Muse의 기존 thread 기준 유지 |
+| R4-D | 실제 dot 1개는 공식 plugin·Events→MCP 입력 조회/응답 제출, Muse 1개는 기존 profile/identity/thread·왕복 확인 | [D5 실제 초안·검토 일부 PASS](./implementation/dot-mcp-v2-live-d5-20261104.md). 후속 맥락/전체 혼합·R8 수락 미완료, Muse의 기존 thread 기준 유지 |
 
 **롤백:** discovery UI/preset 비활성, 기존 수동 폼과 이미 검증된 binding으로 돌아간다. 이전 selector 버전도 보존하고 probe 실패 시 자동 입력만 차단한다. Chrome/profile/원래 대화/작성 중 초안을 초기화하지 않는다.
 
@@ -145,6 +147,8 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 
 **구현 대응:** 실제 [WorkExecutionBridge](../src/workspace/work-execution.ts)가 기존 ResidentRunner.evaluate의 접점에서 동작한다. WorkJobLink/WorkExecutionEvidence는 work-model.ts, optional workExecutionSchemaVersion=1은 기존 resident JSON에 저장한다. 실제 CodexExecutor에는 새 업무 prefix만 검사하는 workScopeGuard를 dispatch/늦은 승인/결과·입력 변경 경계에 추가했다. 결과 거절은 원래 완료 transaction의 link에 고정해 나중에 guard를 복구해도 되살리지 않는다. 기존 submit/RPC/승인 reviewer/sandbox/bwrap/작업 공간 단일 writer는 불변이다.
 
+**남은 구현:** `readyReason`은 `allowWrite`인 업무를 `work_write_safety_unverified`로 거절한다. 따라서 R6 전체를 실검증만 남은 완료 구현으로 표시하지 않는다. 일반 grant/실행 binding 수명·repo 비밀/링크/출력 경계의 남은 WWG-R2/R3 구현·호스트 검사를 수락한 뒤 실제 쓰기를 검증해야 한다. 이 문서 정리로 차단을 해제하지 않는다.
+
 복구 대조에는 기존 Store journal의 `readCommand` SELECT 접점 6줄을 추가했다. 기존 read/transact·명령 저장·원자성·물리 스키마를 바꾸지 않고, job 유실을 미전송으로 오판하지 않기 위해 원래 submit의 전체 input digest와 결과 ID를 읽는다. 실제 job과 영수증이 모두 없는 전송 전 취소만 not_sent로 기록한다. 역할·원문·의존성·binding·epoch/generation과 입력 해시를 계속 검사한다. 사용자 지시의 R6 범위·아래 gate 숫자·R7/R8 순서는 그대로다. [실행 증거·한계](./implementation/phase6-work-execution-20261030.md)를 참조한다.
 
 | 수락 ID | 숫자·증거 | 방법·현재 판정 |
@@ -172,6 +176,8 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 
 `ResidentMcp`는 별도 `residentGrants`에 room/project/actor·seat version·epoch·generation·identity·도구·만료·hash만 저장한다. 기존 `/mcp`에 새 형식 분기만 추가해 8개 `resident_*` 도구를 명시 grant로 제한한다. 신규 grant 없이는 기존 도구 목록·키 의미가 그대로다. owner API·기존 SSE와 실제 `WikiView`를 연결했으며 원문/이력/충돌·폐기·pin·권한 발급/회수를 제공한다. 신규 SQL 테이블·Store 계약·계정/개인 기억 이식은 없다. R7 gate 숫자와 R8 순서는 변경하지 않았다.
 
+현재 자동 기록은 수락된 업무 보고 또는 확정 상주 응답의 명시 `wiki_edit` 제안에서 발생한다. 일반 `Discussion`의 종료/종합은 Wiki에 자동 게시하지 않는다. 이 연결을 추가하는 [추천안](./reviews/next-development-recommendation-20261105.md)은 새 보완 제안이며 승인 전에는 이 절의 계약이나 제품 코드를 변경하지 않는다. 기존 Wiki 편집/보고 게시의 구현과 실제 자동 축적·인용의 미완료 수락은 구분한다.
+
 | 수락 ID | 숫자·증거 | 실행 증거 |
 | --- | --- | --- |
 | R7-A | 사용자/AI 같은 baseVersion 2편집→1개 채택·1개 409, 원문/과거 인용 digest 동일 | PASS · resident-wiki HTTP/CAS와 browser stale 폼→명시 조정 |
@@ -197,7 +203,7 @@ lease를 얻지 못했을 때 기존 loop가 같은 pending task를 즉시 반�
 | R8-A | 3모의 참여자·1방 on→사용자 추가 지시 없이 자유 대화→업무1 pickup→결과/반려1회→재작업/완료→Wiki1갱신→다음 발화 인용→topic1회→같은 방 복귀 | PASS(fixture) · 명시 허용 뒤 모의3인 전체 흐름, owner focus0·topic1·복귀1. 실계정 별도 |
 | R8-B | 8단계별 crash/off/budget/scope negative gate 전부 PASS, provider 동시≤1·중복 외부 start0·비공개 유출0 | PASS · 전체 회귀+Wiki 실제 SIGKILL3·수락 manifest |
 | R8-C | 4viewport·2탭·새로고침/재접속 후 이력·읽기 위치·예산/승인·단일dispatch 유지 | PASS(Chrome fixture) · 2탭/4폭·SSE/읽기 위치·중복 승인409·job/turn1 |
-| R8-D | 실제 GPT2계정+DeepSeek, dot은 공식 plugin·Events 왕복/후속 맥락, Muse는 기존 thread 포함 흐름. 실제 읽기 Codex와 허용된 쓰기 gate 별도 | 사용자 허용 뒤 receipt/카탈로그·stream/usage·검사·화면 기록. 기존 gate 수준 유지, native dot 실계정 왕복은 NOT_RUN |
+| R8-D | 실제 GPT2계정+DeepSeek, dot은 공식 plugin·Events 왕복/후속 맥락, Muse는 기존 thread 포함 흐름. 실제 읽기 Codex와 허용된 쓰기 gate 별도 | [실제 혼합 초안5·교차검토10](./implementation/dot-mcp-v2-live-d5-20261104.md), [웹 GPT 운영1회](./implementation/web-gpt-selection-20261105.md) 부분 PASS. 수정/종합/복귀·Codex·기기/장기 운영을 남겨 전체 미완료. 원래 gate 수준 유지 |
 | R8-E | G0→flag off/legacy 화면 복귀→다시 resident on에서 기존/새 원문·commands/receipt 누락0·재전송0 | PASS(fixture) · 동일 DB flag off/re-enable·legacy paused·각100tick 호출0 |
 | R8-F | 1,000메시지/100업무/100Wiki fixture에서 /api/state 새 raw 본문 노출0·history limit=50 초과0·본문 원문 누락0, state transaction 비용 측정값 기록 | PASS(fixture) · 50개 요청 page·모든 원문/상태 bytes/12개 transaction·heap JSON. 실제 장기 호스트 UNVERIFIED |
 | R8-G | ready/review 업무·Wiki·규칙·예산 actor 인계1회+중복 등록2회 뒤 원래 ID/예산 보존·확정 report의 다른 담당자 리뷰 가능, task/job 재전송0·새 scope 확대0 | PASS(fixture) · 인계/같은 명령2·room 멤버 중복 등록2·예산/ID·다른 리뷰·옛 grant 거절 |

@@ -2,28 +2,31 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | v0.3 — 설치·Serve·desktop·gateway 구현, 실제 배포·기기 검증 NOT_RUN |
-| 개정일 | 2026-10-29 (KST) |
+| 상태 | systemd·HTTPS·SSE·noVNC·서비스 재시작 실제 PASS, 실기기·호스트 재부팅·장기 운영 수락 미검증 |
+| 원 계획 기준 | v0.3 — 2026-10-29 당시 설치·Serve·desktop·gateway 구현, 실제 배포·기기 검증 NOT_RUN |
+| 최초 작성 / 사실 갱신일 | 2026-10-29 / 2026-11-05 (KST) |
 | 상위 계획 | [development-plan.md](./development-plan.md) |
 | 실행 연동 | [Codex 세션 실행 계획](./codex-session-plan.md) |
 | 사용자 확정 방향 | Ubuntu 서버 상시 실행, Tailscale이 설치·연결된 허용 기기의 브라우저에서 공동 대화·검증·비교 |
 | 참여자 / 대화 | [OAuth·API·browser 연결](./participant-connections.md) / [능동 토론](./discussion-plan.md) |
 | 초기 포트 예시 | Tailnet HTTPS 8443 → 서버 loopback HTTP 3000 |
 
-현재 구현과 검사는 [WJ-002~015 구현 기록](./implementation/wj-002-015.md), 실제 명령과 복구 절차는 [운영 절차](./operations-runbook.md)를 따른다. 이 문서의 실계정·실세션 완료 조건은 아직 통과하지 않았다.
+현재 순서·범위·상태는 [개발 페이즈 SSOT](./development-plan.md#개발-페이즈-ssot--구현-순서상태의-단일-기준)를 따른다. [WJ-002~015 구현 기록](./implementation/wj-002-015.md)은 초기 기준이며, [Ubuntu 실제 운영 기록](./implementation/ubuntu-services-20261030.md)에서 systemd·HTTPS·SSE 재연결·noVNC 입력·앱/Chrome 재시작 PASS를 확인했다. 실제 적용 경로는 HTTPS8443 → loopback4090이며 아래3000은 초기 예시다. 실제 명령과 복구 절차는 [운영 절차](./operations-runbook.md)를 따른다. 다른 기기의 전체 조작·한국어 IME/터치·실제 호스트 재부팅·장기 운영 수락은 미검증이다.
+
+실제 웹 GPT 선택·호환성 보완 PR #49/#50 중 PR #50 병합 main `4ca2ffb`는 2026-11-05 10:19 KST 운영 적용됐다. 적용 후 최종 검증 창의 실제 웹1회는 Extra High·후속 맥락·JSON·receipt를 약25.6초에 확인해 PASS이며 API/dot/Muse/Codex 호출은0이다. [웹 GPT 구현·최종 운영 검증 기록](./implementation/web-gpt-selection-20261105.md)을 따른다. 서비스 적용·단독 웹 왕복을 전체 혼합 토론·Codex·실기기 수락으로 확대하지 않는다.
 
 ## 1. 운영 배치
 
 | 구성요소 | 위치·책임 | 지속 상태 |
 | --- | --- | --- |
 | Core / Control Room / gateway | Ubuntu 서버, 주제·발언·검증 배정·공동 대화·비교 | Discussion·Turn·Claim·Evidence·Task·Event DB |
-| OAuth/API runtime | Ubuntu, GPT 계정별 OAuth·DeepSeek 등 모델 요청 | credential 참조·참여자별 이력·usage; secret은 보호 저장소 |
-| Chrome / 가상 데스크톱 | 같은 Ubuntu 서버, dot·Muse의 실제 로그인·대화 | 사용자 소유 persistent profile |
+| OAuth/API runtime | Ubuntu, GPT 계정별 OAuth/기기 코드·DeepSeek/Anthropic 등 모델 요청 | credential 참조·참여자별 이력·usage; secret은 보호 저장소 |
+| Chrome / 가상 데스크톱 | 같은 Ubuntu 서버, 실제 웹 GPT·Muse의 로그인·대화 | 사용자 소유 persistent profile |
 | Browser Bridge | Chrome이 실행되는 Ubuntu, 서비스별 UI 입력·관측 | 계정·대화 바인딩과 송수신 journal |
 | Codex 실행기 | Ubuntu의 등록된 실행 사용자·프로젝트 환경 | 기존 Codex 세션과 실행 job 기록 |
 | noVNC / WebSocket proxy / VNC 서버 | 동일 Chrome이 보이는 가상 데스크톱 | 재로그인·Chrome 연결 승인·수동 개입 |
 | Tailscale Serve | Ubuntu, 웹 클라이언트용 TLS 종단과 private reverse proxy | Tailnet HTTPS 설정과 접근 정책 |
-| MCP / tunnel-client | Ubuntu, dot의 공식 도구 호출 연결 | 권한·구독·job 매핑; secret은 별도 보호 |
+| MCP / tunnel-client | Ubuntu, native dot의 공식 도구·Events 연결 | 권한·구독·outbox/receipt; Codex job 왕복 수락은 별도, secret은 별도 보호 |
 | 사용자 웹 브라우저 | Tailscale이 연결되고 접근이 허용된 PC·노트북·휴대전화·태블릿 | 화면·입력·일시적인 조회 cursor |
 
 Ubuntu를 첫 지원 OS로 고정한다. 정확한 Ubuntu 릴리스·CPU architecture·Node·Chrome·Codex·Tailscale 버전은 Phase 0의 실제 서버 점검으로 기록한다. 기존 Linux x86_64 계획은 초기 후보이며 다른 architecture를 지원한다고 추정하지 않는다. macOS 서버 이식은 후속 확장이다. Mac에서 브라우저로 Ubuntu에 접속하는 기능은 첫 웹 UI 범위이며 서버 OS 적합성과 클라이언트 호환성을 혼동하지 않는다.
@@ -79,7 +82,7 @@ tailscale serve status
 
 사용자는 웹 UI에서 주제를 입력하고 참여자들의 대화·반론·검증·비교를 보며 추가 조건·질문을 보낸다. 요청은 HTTPS API로 보내고, 서버의 새 상태·메시지·로그는 SSE로 전달하는 구성을 기본으로 한다.
 
-- GPT OAuth·DeepSeek API의 실제 응답 stream과 dot·Muse 화면에서 관측한 내용을 공통 event로 변환한다. browser 관측을 공식 token stream이라고 표시하지 않는다.
+- GPT OAuth/기기 코드·API 응답 stream, 웹 GPT·Muse의 browser 관측, native dot의 Events·조회/제출 결과를 공통 event로 변환한다. browser 관측을 공식 token stream이라고 표시하지 않는다.
 - Codex는 검증된 App Server 이벤트 또는 CLI JSONL 출력을 작업별로 전달한다.
 - `accepted`, `running`, `blocked`, 실행 완료, 검토 대기, 업무 완료를 구분한다.
 - 이벤트마다 project/discussion/participant/turn/task/job·topic revision과 서버 cursor를 연결하고 접근 범위를 검사한다.
@@ -97,7 +100,7 @@ Ubuntu에 가상 디스플레이·VNC 서버·WebSocket proxy·noVNC를 구성�
 
 용도:
 
-- 서버 Chrome에서 dot·Muse 최초 로그인과 만료 후 재로그인, GPT OAuth 등록 창 조작.
+- 서버 Chrome에서 웹 GPT·Muse 최초 로그인과 만료 후 재로그인, 선택한 GPT OAuth 등록 창 조작.
 - Chrome autoConnect 연결 허용 창 처리.
 - 계정·대화 선택과 자동화가 막힌 화면의 수동 확인.
 - 실제 브라우저 화면 관찰이 필요한 디버깅.
@@ -108,12 +111,14 @@ noVNC는 웹 VNC 클라이언트이며 브라우저에서 화면·키보드·포
 
 ## 4. Ubuntu Chrome의 로그인·지속 실행
 
+아래는 browser 경로의 설정 절차다. 현재 웹 GPT·Muse가 이 경로를 사용하며 native dot의 공식 plugin·grant·MCP Events 연결은 [dot 연결 절차](./dot-connection-runbook.md)를 따른다.
+
 1. 서버의 고정된 OS 사용자와 실제 사용할 Chrome profile을 확인한다.
 2. 기존 서버 프로필이 있으면 재사용한다. 새 서버 환경이면 사용자가 원격 화면에서 로그인하고 persistent profile에 보존한다.
 3. Chrome 144+의 해당 기능과 `chrome://inspect/#remote-debugging`을 확인한다.
 4. 같은 서버의 bridge가 고정 버전 `chrome-devtools-mcp --autoConnect`로 연결을 요청한다.
 5. 사용자가 원격 화면에서 Chrome의 허용 요청을 처리한다.
-6. dot(may)과 Muse의 계정·agent·대화·tab을 실제 화면과 대조해 등록한다.
+6. 웹 GPT·Muse의 계정·agent·대화·tab을 실제 화면과 대조해 등록한다.
 
 다른 PC나 웹 클라이언트의 로그인 상태가 서버 Chrome에 자동 이전된다고 가정하지 않는다. 쿠키·프로필 파일을 기기 간 복사하는 설치 흐름을 만들지 않는다. 서버의 프로필 디렉터리는 source·target workspace·Codex 작업 입력과 분리하고 공개 로그·Git에 포함하지 않는다.
 
@@ -132,16 +137,18 @@ Chrome 연결 시마다 허용 창이 나타날 수 있다. 서버 재시작 뒤
 | 통신 | 경로 | 검증할 조건 |
 | --- | --- | --- |
 | 허용 기기의 웹 브라우저 → 웹쫀쿠 | Tailscale Serve HTTPS | 같은 Tailnet·접근 정책·인증서·UI 인증 |
-| Ubuntu → GPT OAuth / DeepSeek API | 각 provider의 공식 outbound HTTPS | 계정별 동의·key·모델·완료·사용량 |
-| Browser Bridge → dot/Muse | Ubuntu Chrome의 기존 로그인 대화 | 계정·대화·전송/응답 증거 |
+| Ubuntu → GPT OAuth/기기 코드 / API | 각 provider의 공식 outbound HTTPS | 계정별 동의·key·모델·완료·사용량; Anthropic 실제 호출은 NOT_RUN |
+| Browser Bridge → 웹 GPT/Muse | Ubuntu Chrome의 기존 로그인 대화 | 계정·대화·전송/응답 증거 |
 | dot → 웹쫀쿠 MCP → Codex | OpenAI Secure MCP Tunnel → Ubuntu private MCP → 실행기 | Platform/ChatGPT 권한·도구 발견·실제 job 왕복 |
 | 웹쫀쿠 → dot 이벤트 | 검증된 MCP Events 구독의 callback으로 outbound HTTPS | 서명·구독·수신·결과 확인 |
+
+native dot D0~D4의 공식 연결·Events/outbox·provider 결합·UI는 구현됐고 상주1회·주제3회의 실제 수락이 있다. Muse도 원래 browser thread의 실제 검토 결과를 수락했다. [dot/Muse 검토 수락](./implementation/dot-mcp-v2-live-d5-20261104.md)과 [기존 OAuth 수정 요청 차단](./implementation/dot-mcp-gpt-once-d5-20261104.md)을 따르며, 전체 D5-F는 BLOCKED다. 터널·서비스 연결이나 단독 웹 GPT PASS로 실제 Codex 실행·전체 혼합 완료를 판정하지 않는다.
 
 OpenAI 서비스가 사용자의 Tailnet에 가입돼 있다고 가정하지 않는다. Tailscale HTTPS 주소만 custom MCP URL로 등록하는 것으로 dot 호출이 가능해지지 않는다.
 
 Secure MCP Tunnel의 `tunnel-client`는 Ubuntu에서 outbound HTTPS로 OpenAI에 연결하고 로컬 stdio 또는 HTTP MCP로 요청을 전달한다. 관제실·Chrome·Codex 포트를 공용 인터넷에 공개할 필요가 없다. Platform tunnel ID·runtime key와 권한, ChatGPT workspace 연결·custom MCP 사용 가능 여부를 실제 계정에서 확인한다. GPT OAuth와 DeepSeek API의 모델 요청은 별도의 outbound 경로이며 이 터널의 설치를 요구하지 않는다.
 
-터널의 상태와 dot 이벤트 구독 상태는 별도 표시한다. 이벤트의 HTTP 접수와 업무 완료도 구분한다. Muse Connector에는 OpenAI 터널을 그대로 적용하지 않으며, Muse의 외부 호출·인증·승인은 별도 capability 검증을 따른다.
+터널의 상태와 dot 이벤트 구독 상태는 별도 표시한다. 이벤트의 HTTP 접수와 업무 완료도 구분한다. Muse 공식 Connector는 현재 범위에서 제외·보류하며, 기존 Muse browser 경로를 유지한다.
 
 ## 6. 서버 수명과 운영 기록
 
@@ -155,6 +162,8 @@ Secure MCP Tunnel의 `tunnel-client`는 Ubuntu에서 outbound HTTPS로 OpenAI에
 - 서비스 장애, 로그인 필요, 승인 필요, 마지막 이벤트 시각을 관제실에서 구분한다.
 
 ## 7. 단계별 검증
+
+아래 Phase 구분은 원래 수락 목록으로 보존하며 현재 R1~R8 순서·원래50 gate를 대체하지 않는다. dot의 현재 연결 방식은 2026-11-01 승인된 공식 plugin·MCP Events를 따르고, 과거 dot browser 전제를 현재 구현으로 읽지 않는다.
 
 ### Phase 0 — 서버 접속과 브라우저 기반
 
@@ -182,7 +191,7 @@ Secure MCP Tunnel의 `tunnel-client`는 Ubuntu에서 outbound HTTPS로 OpenAI에
 - terminal job, 승인 대기, 연결 중단을 정확히 복원한다.
 - 웹 클라이언트 private 접속과 OpenAI MCP 연결 중 하나가 끊겨도 다른 연결을 성공으로 오표시하지 않는다.
 
-모든 실서버·실계정·실기기 검증은 현재 NOT_RUN이다. 실행 대상 hostname·포트 확정·설치·로그인·권한 설정을 완료했다고 표시하지 않는다.
+실제 서버의 설치·systemd·HTTPS·SSE·noVNC·서비스 재시작과 위 연결별 부분 수락은 PASS다. 실기기 IME/터치·호스트 재부팅·장기 운영, 전체 혼합 토론과 실제 Codex 실행/쓰기 수락은 미완료다. 업무 쓰기는 [현재 구현](../src/workspace/work-execution.ts)의 `work_write_safety_unverified`로 차단되며 repo·출력 비밀 보호 등 남은 조건을 서비스 설치 성공으로 대체하지 않는다. 개별 설정·로그인·권한은 해당 시점의 실제 증거로 판정하며 이번 문서 정리에서는 runtime·계정·운영 DB·모델을 조작하지 않는다.
 
 ## 8. 공식 근거
 

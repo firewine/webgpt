@@ -2,109 +2,39 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
-**2026-11-05 실제 ChatGPT 웹 참여 보완 승인:** 사용자가 일반 GPT를 실제 `chatgpt.com` 대화로 사용하도록 화면·계획 보완과 검증을 승인했다. [영향 검토](./reviews/actual-web-gpt-impact-20261105.md)에 따라 R3/R4에서 웹 GPT 선택과 연결 안내를 보완하고 기존 browser discovery/probe·Providers.complete·Store·수동 잠금·미확정 대조를 재사용한다. OAuth/기기 코드 연결은 명시 선택형으로 보존하며 웹 대화로 표시하지 않는다. 모델/사고 깊이는 실제 웹 화면에서 설정하고 xhigh 자동 적용을 주장하지 않는다. Muse·공식 dot·완료15개 작성자/원문·기존50 gate·R5~R7은 유지한다. R8 웹 왕복/후속 맥락은 별도 실측하며 기존 실패 요청을 다른 연결로 자동 대체하지 않는다. 새 페이즈·DB 이관·새 인증/추론 경로는 없고 예상6~8파일·100~250줄이다. 최신 웹 실측에서 필요한 R4 호환성 보완으로 ChatGPT ProseMirror 입력·활성 페이지 프리셋과 회귀도 추가했으며 Providers/Store·Muse 분기는 유지했다. 실제 Business 웹 Chat/Extra High의 최초 응답·후속 JSON/맥락/receipt·자동 탐지 PASS, 실제 웹2회/API·dot·Muse·Codex0회·운영 state/완료15개 hash 보존이다. 현재 최종 검사와 정확한 변경량·원래50 gate와 구분한 실계정 상태는 [구현 기록](./implementation/web-gpt-selection-20261105.md)을 따른다.
+**현재 정리 기준: 2026-11-05, 코드 main `4ca2ffb5b24778f2d080b24033410d38e5513dd8` (PR #50 병합).** 코드 구현·자동 검사와 실제 계정/기기 수락을 분리한다. 이번 상태 정리는 기존 구현/관측 사실을 맞춘 것이며 페이즈 순서·기존 50 gate·API/권한/예산/복구 계약을 바꾸지 않는다. 새 기능 추천은 승인 전 제안이다.
 
-**2026-11-04 PR #47 적용·GPT 수정1회 직접 원인 확인:** 사용자의 서버 적용/단일 요청 승인으로 main `df5be30`(검사 head `5555d59`와 동일 tree·CI556/67 PASS)을22:52 KST 적용했다. 같은 실패 과제·일반 GPT OAuth/xhigh로22:54:53~22:55:01 KST **딱1회** 실행했고5,521ms 뒤 `subscription_sharing_usage_limit_exceeded`를 실제 종료 로그에서 확인했다. 이번 직접 원인은 OpenAI 구독 연결 사용 제한이며 어떤 계정/앱 한도인지·해제 시각은 **UNVERIFIED**다. 사용자의 Usage 여유 보고를 보존하고 계정 전체 소진으로 단정하지 않는다. 완료15개 digest·두 검토 라운드 유지·API/dot/Muse/Codex 새 호출0·누적 D5 예약22/API3다. 방 off·Muse 잠금·정상 서비스·검증 drop-in/lease/미확정/서버 구독0, off 경합409 초기 기록을 보존한 재대조 뒤 남은 정리 실패0이다. [단일 실행·원인·보존 증거](./implementation/dot-mcp-gpt-once-d5-20261104.md)를 따른다. **페이즈8/D5-F 전체 BLOCKED**, 현재 선행 조건은 해당 구독 연결의 사용 가능 상태다. 수정·종합·같은 방 후속·실제 Codex/Wiki 환류·실기기 수락을 남기며 새 페이즈/제품 코드/수락 기준 변경은 없다.
-
-**2026-11-04 PR #46 적용 뒤 GPT 수정 진단 재검증:** 사용자가 같은 토의30분/20회·DeepSeek High5회/119,757보고 token 범위를 승인해 main `6aa62ec`(검사 head `7823269`와 동일 tree·CI555/67 PASS)를 적용했다.22:18:55~22:19:01 KST 첫 GPT 수정이2,818ms에 다시 실패해 즉시 정지했다. 새 예약1/API0·완료15개 digest 동일·누적 예약21/API3·미확정0이다. 원격 stream event=`error`와 허용 목록 밖 code=`other`를 관측했으나 상세 원인은 **UNVERIFIED**다. 공식 ChatGPT 구독 연결 전용9개 오류 code가 진단 목록에 빠진 것을 보완했다(Node556 PASS, 새 보완 미배포). 기존 오류/중단·단일 전송·Store/API·예산/300초/권한 계약은 유지한다. 방 off·Muse 잠금·정상 서비스·이번 grant/전달기/구독 정리 PASS이며 사용자가 dot 감시 비활성과 GPT Usage의 사용 가능/여유 있음 상태를 보고했다. 이 보고만으로 실제 원격 code를 복원하거나 사용량 소진으로 확정하지 않는다. [승인·실측·누락 보완](./implementation/dot-mcp-gpt-diagnostics-live-d5-20261104.md)을 따른다. **페이즈1~7 구현 유지, 페이즈8/D5-F 전체 수락 미완료**다. 수정·종합·같은 방 후속과 실기기/Codex를 남기며 기존50 gate의 수락 기준·계획 범위를 바꾸지 않는다.
-
-**2026-11-04 PR #45 적용 뒤 D5 v2 실제 수락:** main `bd19d1f`·검사 head `aecf65f`의 동일 tree/CI553·67을 확인하고 사용자의 중단 확인·서버 적용·새30분/23회·DeepSeek High5회/119,757 보고 토큰 승인 범위에서 실행했다.21:35:22~21:39:25 KST 새 예약3회·API 제공자 호출0회다. dot 검토2는 **137,805bytes 원문16/16페이지·동일 digest·최대RPC11,736bytes·194,591ms·검토12/12·accepted/receipt PASS**, 원래 Muse 검토2는39,494ms·검토10/10 PASS다. 기존13개를 보존해 완료15개·5명 모두 교차검토2라운드를 끝냈다. 다음 GPT 수정1이4,942ms에 `response_not_completed`로 실패해 정지했다. 상세 원인은 당시 기록에 없어 **UNVERIFIED**이며 같은 응답의 읽기 조회401을 최초 생성의 인증 실패로 단정하지 않는다. **방 off·Muse 잠금·정상 service·미확정/lease/서버 구독0·이번 grant 회수/전달기 종료·정리 실패0**, 사용자가 dot 측 검증 감시 비활성 반환 상태도 확인했다. 누적 예약20/API3이며 수정·종합·같은 방 후속·실기기/Codex와 **D5-F 전체 수락은 BLOCKED**다. [실행·보존·진단 보완 기록](./implementation/dot-mcp-v2-live-d5-20261104.md)을 따른다. 진단 보완은 기존 오류/중단·Provider/Store·단일 전송·300초·권한 계약을 유지하고 운영 로그에 허용된 원인 값만 남기며 별도 서버 적용/재호출은 하지 않는다. 기존50 gate의 범위·판정 기준은 유지한다.
-
-**2026-11-04 승인 보완 구현·자동 검사 PASS:** 사용자가 [페이지 중복 전송 축소·제출 오류 복구 영향안](./reviews/dot-page-transport-retry-impact-20261104.md)의 A+B를 승인했다. 새 요청에만 표현 버전을 고정한 단일 content 페이지와 별도 `retry_after_failed_submit` 소유자 복구를 D3·D4·D5에 구현했다. **Node553·실제 Chromium156/Chrome MCP1.12 브라우저67·설치 Codex0.166 요청 schema PASS**, 브라우저 SKIP0이다. 기존 dual 요청·고정 원문/digest·300초/12,000bytes·단일 실행·예산/승인·완료13개·Muse는 유지한다. [구현·검사·복귀 기록](./implementation/dot-page-transport-retry-20261104.md)을 따른다. 신규 phase·계정·OAuth 확대는 없으며 **서버 적용·실제 native v2/제출 오류 복구 수락은 NOT_RUN**, D5-F 전체 BLOCKED다. Codex 요청 schema 검사는 실제 세션 실행이 아니다.
-
-**최신 실검증 — 2026-11-04:** 승인된 추가30분/27회·DeepSeek High6회/165,092 보고 토큰 범위에서16:11:17~16:25:02 KST 같은 토의를 재개했다. GPT2·DeepSeek의 검토2 각10건을 수락해 **완료13개·교차검토 수락8개**, 원래10개 불변이다. dot은 원문137,805bytes의31/31페이지를 조회했지만300초 안에 submit 수락이 없어 미확정으로 정지했다. 사용자는 답변 생성·submit1회 오류·감시 비활성을 보고했으며 서버 reply/receipt0, 외부 실행 최종 상태는 UNVERIFIED다. **추가 예약4/API1·보고45,335토큰, D5 누적 예약17/API3, D5-F 전체 BLOCKED**다. 방 off·Muse 잠금·멤버 토글/정상 service 복구·이번 grant 회수·관련 전용 Tunnel0·서버 구독0을 확인했다. 해당 검증의 제품 계약 변경/원래10개 재전송/Codex/새 업무는0이다. [새 범위·실측·종료](./implementation/dot-mcp-resume-live-d5-20261104.md)를 따른다. 후속 보완의 승인 상태는 맨 위 개정 기록을 따른다.
-
-**최신 상태 — 2026-11-04:** 같은 토의에서 dot의 실제 **16/16페이지 조회·검토12건 제출·receipt 수락 PASS**를 확인했다. 이어 Muse가300초에 미확정으로 정지했으나, 원래 대화에 뒤늦게 완성된 응답을 계정·thread·요청 표식·검토10건으로 대조하고 기존 `reconcile` 경로로 재전송 없이 복구했다. **완료10개·5명 전원의 첫 교차검토 완료·미확정0**, 원래8개 불변이다. 이번 창은 추가 예약2/API0, D5 누적 예약13/API2다. 방 off·Muse 잠금·최신 멤버 설정·정상 서비스 entry 복구와 전용 Tunnel 종료를 확인했다. 서버 유효 구독0이며 ChatGPT 측 감시 비활성은 UNVERIFIED다. **D5-F 전체 BLOCKED:** 검토2·수정·종합·같은 방 dot 후속 및 별도 기기/Codex 수락이 남았다. 새 호출은 종료된30분 창을 연장하지 않고 별도 범위를 승인받는다. 제품 코드·계획 범위·300초/예산/승인 계약 변경은 없다. [실측·Muse 복구·서버 정리](./implementation/dot-mcp-paged-live-d5-20261103.md)를 따른다. 아래11/02 관측은 당시 상태의 이력이다.
-
-2026-11-02 PR #44 병합(`f3a2e34`) 후 사용자가 **서버 적용·같은 토의 추가30분/29회·DeepSeek High 잔여6회/165,092 보고 토큰·dot 재연결·Muse 임시 잠금 해제/종료 복구**를 승인했다. 18:52 서버 적용/health·owner API·완료8개 보존·신규 예약0을 확인했다. 승인된 명시 복구로 원래 실패 이력/lease를 보존 정산하고 같은 과제만 준비했다. 실제 도구의 분할 조회 schema·Tunnel readiness와 Muse의 같은 원래 thread/page ID 갱신을 확인했다. 현재 실제 dot 감시 지시 갱신 응답 대기이며 **새 예약/API0·방 off·Muse 잠금 true, D5-F BLOCKED**다. [적용·새 범위·대기 상태](./implementation/dot-mcp-paged-live-d5-20261102.md)를 따른다. 추가 제품 코드/DB·timeout·계정/모델 변경은 없다.
-
-20:50 KST native dot이 이전 schema라 `inputPage`가 없음을 보고해 감시를 활성화하지 않았다. 실서버와 실제 stdio 전달기의 새 schema는 PASS이며 소비자 snapshot 불일치를 대조했다. [공식 새로 고침→새 대화 확인 절차와 진단](./implementation/dot-mcp-paged-live-d5-20261102.md#도구-명세-갱신-대조)을 진행하며 새 모델 호출0을 유지한다. 기존8개·API 정책·Muse 잠금과 두 라운드 수락 기준은 그대로다.
-
-21:14 KST 해당 실제 dot은 여러 대화를 열 수 없다는 사용자 보고를 반영해 새 대화 요청을 취소했다. **기존 dot을 유지하고 같은 private Tunnel에 MCP 연결만 새 이름으로 등록**하는 D4 기존 절차로 discovery를 분리한다. 등록/최신 `inputPage` 확인 대기이며 새 감시·실제 호출0이다. 기존 연결·Muse를 삭제하지 않고 제품/권한 계약을 확대하지 않는다.
-
-21:18 KST 새 `webjjoku_dot_paged` 등록 완료 뒤 **실제 소비자 도구 정의의 선택적 `inputPage` 노출과 읽기 전용 get PASS**를 확인했다. 같은 dot의 native 감시 지시를 새 연결명으로 준비 중이다. 완료8개/원래 실패 기록·Muse를 유지하며 감시 준비가 확인되기 전 실제 토의를 재개하지 않는다.
-
-21:34 KST 감시 등록 성공 직후 소유자 권한 재발급으로 이전 구독이 회수됐음을 대조했다. 현재 소유자 grant/최신 멤버 설정을 보존하고 전달기만 맞춰 조회를 복구했으며, 기존 감시1개의 재연결을 요청했다. 현재 새 예약/API0·원래8개 보존·방 off/Muse 잠금 true다. [시각·서버 대조](./implementation/dot-mcp-paged-live-d5-20261102.md#감시-등록-직후-권한-재발급-대조)를 실제 native 실행 수락과 구분한다.
-
-2026-11-02 PR #43 병합(`2447ada`) 후 D5 재개 준비에서 원래 dot 요청은 이미 전달·claim돼 `not_sent`로 대조할 수 없고, `skip`은 첫 검토 라운드를 완성하지 못함을 확인했다. 사용자가 [소유자 중단 확인 후 명시 재시도 보완](./reviews/dot-explicit-retry-impact-20261102.md)을 승인했다. D3의 주제 토의 dot 복구 선택지·D4 확인 UI·D5 중복/늦은 응답/재시작 검사를 보완한다. 원래 실패 요청·완료8개·Muse·DB·단일 실행·예산/300초 경계를 유지하며 새 phase는 없다. 예상10~12파일·350~650줄. 배포/추가 실계정 호출은 별도이며 D5-F BLOCKED를 유지한다.
-
-[명시 재시도 구현·검사](./implementation/dot-explicit-retry-20261102.md): 소유자 중단·미제출 확인 뒤 같은 과제만 대기시키고 별도 resume 전 전송0. 원래 답변·늦은 응답 격리·권한 회수·실제 SIGKILL을 포함해 **Node529·Chromium/Chrome MCP66 PASS**다. 원래 운영 데이터에 복구 명령을 적용하지 않았고 실제 native 재시도/배포는 NOT_RUN이다.
-
-2026-11-02 PR #42 병합(`3bc031e`) 후 **D5 동일 주제의 남은 실계정 검증**을 진행했다. 운영 제품 소스와 기존7개 답변을 유지하고, 별도 승인된 추가30분·최대31회·DeepSeek High 잔여7회/189,610 보고 토큰 범위에서15:17 재개했다. DeepSeek 검토1개 수락 뒤 dot은 고정 입력 조회 성공·`Warning: truncated output`으로 생성 중단/submit 미호출을 보고했고 서버는300초 뒤 미확정으로 정지했다. 추가 예약2/API1회,15:23 방 off·Muse 잠금/멤버 토글,15:29 정상 서비스 복구. native 감시 비활성·구독0·전용 grant 회수/Tunnel 종료도 확인했다. 원래 요청을 보존하며 D5-F BLOCKED다. [실제 관측·남은 대조](./implementation/dot-mcp-resume-d5-20261102.md)와 [긴 입력 분할 조회 — 추가 승인](./reviews/dot-input-paging-impact-20261102.md)를 따른다. 사용자가 이어서 선택적 분할 조회 계획 개정·개발을 승인했다. D3 조회/D4 감시 안내/D5 검사를 보완했으며 기존 get 호환·Muse·DB·timeout·50 gate는 유지한다. [분할 조회 구현·자동 검사](./implementation/dot-input-paging-20261102.md)는 Node490·Chrome/MCP65 PASS다. 추가 실계정 호출/배포는 NOT_RUN이다.
-
-2026-11-01 **공식 dot 플러그인·MCP Events 전환 계획 개정·개발 승인**: 사용자가 [영향·변경량·수락·복귀 검토서](./reviews/dot-official-mcp-events-impact-20261101.md)의 기본안을 승인하고 D0부터 진행하도록 지시했다. dot은 일반 ChatGPT `/c/...`/Chrome 연결과 분리하며 **Muse는 현재 browser 연결을 유지**한다. Providers.complete·Store transaction·단일 dispatch·원래 turn/세대·업무 큐·Wiki CAS·Codex 승인·API 전용 일일 한도는 재사용한다. 예상 고유40~52파일·2,700~4,200줄(검사/문서 포함)이며 추가 OAuth/공개 ingress/timeout 확대는 영향·변경량을 재보고하고 승인받는다. 아래 D0 관문이 통과되기 전 D1 이후 종속 구현·운영 적용은 진행하지 않는다. 원래50 gate와 Muse thread 수락은 유지하고 dot의 잘못된 기존 thread 전제만 공식 이벤트 왕복으로 정정한다.
-
-| 보완 단계 | 승인 범위 | 현재 상태 |
+| 페이즈 | 현재 코드·자동 검사 상태 | 실제 운영 수락·남은 조건 |
 | --- | --- | --- |
-| D0 | 대상 dot의 private plugin·Tunnel·지원 인증·Events→입력 조회→응답 제출 검증 | **합성 왕복·구독 종료 PASS / PR #36 병합.** challenge200·이벤트200·native 답변1건/receipt 일치 뒤 11/02 서버 UNSUBSCRIBED·subscription NONE 확인. 원래 receipt 보존, 검사 runtime 종료. native actor 증명·운영 grant 전달은 후속 검증 대상. [실측과 종료](./implementation/dot-mcp-events-d0-20261101.md#11-감시-해제-확인과-d0-종료) |
-| D1 | additive dot kind·identity/grant·영속 namespace·이관 | **PR #37 병합 완료**, main `159e13b`. 기존 Store/Vault·권한/세대 fencing·삭제 cleanup 기반. 신규22·Node397·CI 브라우저62 PASS. 운영 이관/실계정 grant 전달은 NOT_RUN. [계약·수락·복귀](./implementation/dot-mcp-foundation-d1-20261102.md) |
-| D2 | Events 구독·callback 검증/서명·영속 outbox | **PR #38 병합 완료**, main `672f081`. 동일 구독20회→ID1, signed challenge·키 교체·공개 IP 고정·유한 재시도·실제 SIGKILL 뒤 보류/ID·cursor 보존. 신규47·전체 Node444 PASS. 운영 callback/배포 NOT_RUN, dot provider 준비는 여전히 false. [계약·수락·복귀](./implementation/dot-mcp-events-d2-20261102.md) |
-| D3 | 기존 provider·topic·상주 발화·응답 대조·복구 결합 | **PR #39 병합 완료**, main `9992f74`. 승인된 연결 권한/발언 세대 분리, 원래 turn의 claim·mailbox·공개/대조 결합. 신규24·전체 Node468·CI browser62 PASS. 운영 연결·실계정·배포 NOT_RUN. [계약·수락·복귀](./implementation/dot-mcp-integration-d3-20261102.md) |
-| D4 | 공식 연결 UI·private plugin·진단/운영 절차 | **PR #40 병합 완료**, main `8affb46`. owner 등록/확인/회수·상태4축·보호된 stdio 전달기·등록 앱 참조 패키지 준비. Node473·실제 Chromium/MCP browser64·Codex0.165 계약 [CI PASS](https://github.com/firewine/webgpt/actions/runs/41380886404). [수락·검사·보존 기록](./implementation/dot-mcp-onboarding-d4-20261102.md)·[연결 절차](./dot-connection-runbook.md). 운영 인증 전달/실제 감시·배포 NOT_RUN |
-| D5 | 기존 50 gate·Muse 보존·혼합 채팅/업무/Wiki/Codex 통합 수락 | **PR #44 병합·적용 / 실제 왕복 일부 PASS, 전체 BLOCKED.** dot 상주1+주제2, GPT2·DeepSeek High·dot·Muse 초안5개와 교차검토8개 수락. 완료13개·첫 교차검토5명 완료, 검토2는 GPT2/API 완료·dot 미확정1·Muse 대기. dot 검토1의16페이지/검토12건과 Muse 검토1 복구는 PASS. 검토2는31/31페이지 조회 뒤300초 submit 미수락으로 정지. D5 누적 예약17/API3. 방 off·Muse 잠금·멤버 토글/정상 service 복구·전용 Tunnel0·서버 구독0. [최신 실제 관측](./implementation/dot-mcp-resume-live-d5-20261104.md)·[수락 manifest](./implementation/dot-acceptance-manifest.json). 검토2 잔여·수정/종합·후속·기기·실제 Codex 미완료 |
+| 1 / R1 방 데이터 기반 | 기존 Store 위 방/메시지·이관·제어 API 구현·검사 PASS | 운영 이관·원래 기록 보존 확인. [R1 증거](./implementation/phase1-resident-foundation-20261030.md) |
+| 2 / R2 상주 실행 | 공통 단일 dispatch·방 on/off·자유 발화·휴면·topic focus·인계 구현 | 실제 자유 발화/일부 혼합 토의 PASS. 업무→Wiki→다음 발화→topic 복귀 전체 무인 실환경 수락은 미완료. [R2 증거](./implementation/phase2-resident-runtime-20261030.md) |
+| 3 / R3 단톡방 GUI | 흑백·고정 주제·주제별 채팅·답장/멘션·작업실 패널 구현·브라우저 검사 PASS | 실제 HTTPS/새로고침/SSE·390px 확인. 실기기 IME/터치·기기 전환 수락은 UNVERIFIED. [GUI](./implementation/phase3-chatroom-gui-20261030.md)·[주제 통합](./reviews/topic-chat-ui-impact-20261101.md) |
+| 4 / R4 연결 편의성 | 웹 GPT·OAuth/기기 코드·DeepSeek·Anthropic API·Muse browser·공식 dot 구현 | 웹 GPT Extra High 1회/후속 맥락·JSON·receipt, dot/Muse 실제 초안/검토 일부 PASS. Anthropic API 실계정·모든 연결의 갱신/격리·전체 혼합 수락은 미완료. [웹 GPT](./implementation/web-gpt-selection-20261105.md)·[dot 실제 기록](./implementation/dot-mcp-v2-live-d5-20261104.md) |
+| 5 / R5 역할·열린 작업큐 | 제안·픽업·의존성·보고/독립 리뷰·재작업 구현·fixture PASS | 실제 AI의 업무 제안→수행→리뷰→Wiki 순환은 NOT_RUN. [R5 증거](./implementation/phase5-open-work-queue-20261030.md) |
+| 6 / R6 실제 업무 수행 | 기존 Codex 연결·scope 재검사·보고/리뷰 구현. **파일 수정 업무는 코드에서 차단** | R6-F 실세션 읽기/승인/쓰기 NOT_RUN. WWG-R2/R3의 남은 권한 수명·repo 비밀/링크/출력 보호를 구현·검증하기 전 쓰기 성공으로 표시하지 않는다. [R6 증거](./implementation/phase6-work-execution-20261030.md) |
+| 7 / R7 공유 Wiki | 저장·편집·버전/CAS·출처/인용·MCP·**업무 보고 자동 게시** 구현·fixture PASS | 일반 주제 결론의 자동 Wiki 게시 연결은 없음. 실제 자동 축적/다음 발화 인용 수락은 미완료. [R7 증거](./implementation/phase7-shared-wiki-20261031.md) |
+| 8 / R8 통합 실운영 검증 | 자동 통합/장애/부하 fixture PASS. 기존 50 gate와 D5 보완 검사는 별도 추적 | **전체 수락 미완료.** 혼합 5인 초안5+교차검토10=완료15개·2라운드 보존. 원래 OAuth 수정 요청은 BLOCKED; 수정/종합/결론·같은 방 복귀·실제 Codex·기기/장기 운영을 남김. [R8 기준](./implementation/resident-acceptance.md)·[D5 현황](./implementation/dot-acceptance-manifest.json) |
 
-현재 D5 실환경 진행은 [적용·수락 기록](./implementation/dot-mcp-live-d5-20261102.md), 과거 D0 증거는 [D0 기록](./implementation/dot-mcp-events-d0-20261101.md)에서 관리한다. 이 표가 아래 과거 dot browser/기존 thread 기본 경로 설명보다 우선한다. 운영 grant/전달기 준비와 실제 dot 응답·혼합 수락을 구분한다.
+현재 남은 작업은 다음처럼 구분한다.
 
-2026-11-02 PR #41 병합 후 서버 적용·제한된 혼합 검증을 진행했다. 첫 dot 요청은 감시 환경의 `crypto` 오류로 답변 없이 중단돼 대조 종료했다. 기존 감시 지시 보완 후 원래30분 창 안에서 dot 답변2건과 GPT2/API/Muse의 실제 초안·일부 교차 검토를 확인했다. 방과 dot 발언은 off, 동일 주제는 일시정지이며 원문/receipt를 보존한다. API 일일8회·200,000 보고 토큰 설정은 유지한다. D5 종료 제어는 검증용이며 일반 제품 전역 한도는 추가하지 않는다. 실제 Codex 실행은 이번 범위에서 제외했다.
+- **추가 개발 필요/부분 구현:** R6 실파일 작업 보호·일반 grant/실행 binding 수명 보강, WWG-R5 묶음 실행 경과·WWG-R6 큰 출력 원문/보관 수명. 기존 개별 job/승인·새 dot/resident 권한 보호는 이미 구현돼 있다.
+- **기존 구현의 실환경 검증 필요:** R5 업무→보고/리뷰→R7 Wiki→다음 인용, R8 수정/종합/복귀, R6-F·R3-E와 장기 운영. 이 부분을 모두 새 backend 개발로 취급하지 않는다.
+- **후속 선택/보류:** WJ-016 Git Writer, WJ-017 추가 provider/병렬 용량·정식 팀 확장, WJ-018 다중 프로젝트/추가 OS. Muse 공식 Connector·Anthropic 구독 OAuth는 보류하며 자동 병합은 사용자 정책상 비활성이다.
+- **추천·승인 전:** [다음 개발 제안과 후속 영향](./reviews/next-development-recommendation-20261105.md)의 주제 결론→Wiki 자동 기록을 먼저 검토한다. 이 제안은 R7/R8 보완 후보이며 승인된 순서·수락 기준이나 새 페이즈를 만들지 않는다.
 
-14:13 KST 검증 종료 정리: native 감시 비활성·서버 구독0·전용 grant 회수·Tunnel1개 종료를 확인했다. 다음 실계정 창을 허용받으면 동일 주제의 남은 검토를 이어가며, 그 전에는 dot을 상시 연결 완료로 표시하지 않는다. Muse 수동 잠금과 정상 서비스는 복구했다.
+실제 웹 GPT는 PR #50 병합본을 운영에 빌드·적용한 뒤 1회 요청으로 확인했다. 기존 15개 답변·설정은 보존하고 원래 토의는 재개하지 않았다. 상세 판정과 원문을 공개하지 않는 증거는 [운영 적용 후 최종 검증](./implementation/web-gpt-selection-20261105.md#pr-50-병합본-운영-적용최종-검증--2026-11-05)을 따른다. 이 문서 정리 자체는 추가 모델 호출·배포 승인이 아니다.
 
-2026-11-02 PR #40 병합 후 D5 진행 지시. 기준 main `8affb469c3e6ce5b636f465ff693d62ac45071b8`에서 기존 엔진·Store·큐·Wiki·Codex·Muse 계약을 바꾸지 않고 통합 수락을 추가한다. 원래50 gate의 역사적 상태/실계정 부분 결과는 유지하며 새6개 관문은 별도 manifest로 추적한다. D5 전체 완료는 운영 인증 전달·실제 dot/Muse/혼합 수락까지 확인해야 한다. 승인 계획 §6의 배포/실호출 별도 허용 조건을 따르며 자동 검사만으로 계정·서버·실행 완료를 선언하지 않는다.
+원래 [50개 수락표](./implementation/resident-acceptance-manifest.json)의 2026-10-31 fixture PASS46·UNVERIFIED3·NOT_RUN1 판정과 문구는 보존한다. 이후 부분 실측은 최신 구현 기록·D5 manifest로 보완하며 합격률로 환산하지 않는다. 과거 승인/예상량/검증 창은 [날짜별 이력](./development-status-history-20261105.md)에 원문 그대로 보존했다.
 
-2026-11-02 사용자가 PR #39 병합 후 다음 단계 진행을 지시해 D4를 별도 worktree에서 구현한다. 기존 D1 owner 명령·D2 구독/outbox·D3 mailbox/세대 검사와 기존 scoped stdio 전달기를 재사용한다. 일반 GPT/Chrome 대화의 dot 오표시를 제거하고 Muse 경로는 유지한다. D4에 DB 이관·추가 OAuth·공개 ingress·timeout 확대·실계정 호출·운영 배포는 없다. 실제 native actor 증명과 개인 전용 Tunnel의 운영 인증 경계는 UI 준비/패키지 생성만으로 PASS 처리하지 않으며, D5에서 원래 50 gate·Muse·혼합 왕복과 함께 확인한다. 추가 인증 설계가 필요하면 기존 사전 영향 보고·승인 규칙을 따른다.
-
-2026-11-02 PR #38 병합 후 D3 진행 및 **권한·발언 세대 분리 보완 승인**. 기준 main `672f08114aea25b7fe59a914f98ac0355b3205be`에서 기존 방 on/focus가 epoch를 바꿔 연결까지 무효화하는 충돌을 확인했다. 연결 권한은 room/member/connection identity·owner 확인·도구·version·만료/회수로 검사하고, 각 발언은 별도의 epoch/generation/revision/lease/input digest로 차단한다. 옛 grant 필드는 이력으로 유지하며 옛 요청을 현재 세대로 승격하지 않는다. 추가4~6파일·150~250줄, D3 총14~18파일·850~1,250줄 예상(검사/문서 포함). D4는 정상 on/focus 전환과 권한 재연결을 구분하고 D5는 off→on/주제 왕복의 새 요청 허용·옛 응답 적용0을 검증한다. [개정 계약](./reviews/dot-official-mcp-events-impact-20261101.md#53-답변단일-실행복구)을 따르며 기존 timeout/단일 실행·승인·API 한도·Muse·50 gate는 유지한다. 추가 OAuth·실계정 호출·배포는 포함하지 않는다.
-
-2026-11-02 사용자가 PR #36 병합 후 다음 단계를 지시했다. D0 구독 해제와 원래 receipt를 먼저 대조한 뒤 D1을 독립 worktree에서 구현했다. 추가 OAuth·공개 ingress·기존 MCP 권한 확대·provider 전송 계약 변경은 없다. 아래 D2~D5 순서와 수락 기준을 유지하며 D1의 owner 내부 서비스만으로 실제 plugin/운영 방 연결이 완료됐다고 표시하지 않는다.
-
-2026-11-02 사용자가 PR #37 병합 후 D2 진행을 지시했다. 기준 main `159e13b10301fa1a249b66d805c971f0b35ace16`에서 기존 `/mcp`·D1 grant·Vault·Store에 Events와 outbox를 추가했다. 승인된 D2 범위의 구현이며 단계/수락/후속 범위 변경은 없다. D3는 원래 dispatch transaction에서 이벤트를 예약하고 입력 조회·claim·submit·mailbox를 연결하며, D4는 UI/플러그인 운영 연결, D5는 실계정 수락을 담당한다. 이번 단계는 운영 서비스·Muse·계정·터널을 변경하지 않는다.
-
-2026-11-01 사용자 명시 변경: **비밀번호 최소 길이를6자로 지정**했다. `passwordValue`와 웹 설정/변경 검증·안내를6~128자로 맞춘다. salt/scrypt·동일 비밀번호 확인·소유자 최초 설정/재설정·12시간 세션·실패 제한은 유지하며 DB 이관과 R1~R8 실행/계정/예산 계약 변경은 없다. 기존15자 이상 비밀번호도 계속 유효하다. [구현·검증 기록](./implementation/password-login-20261101.md)의 후속 변경을 따른다. 운영 비밀번호 변경·서비스 배포는 별도다.
-
-2026-11-01 **주제별 채팅 작업실 통합 승인**: 사용자가 [변경안](./reviews/topic-chat-ui-impact-20261101.md)의 계획 개정·개발을 승인했다. 기본 진입을 **채팅방 → 자유 대화/모든 주제별 토의**로 통합하고, 선택 주제의 말풍선·사용자 개입·검토/검증·종합과 기존 상세 제어를 같은 shell/보조 화면에 결합한다. 모든 현재 토커와 미등록 연결의 설정/참여/오류를 표시하며 별도 지시로 제거한 운영 모의 A/B는 재등록하지 않는다. 과거 토의/작성자 snapshot·원문·ID·room scope는 보존한다. R3 GUI 보완/R8 회귀이며 새 페이즈·backend 재작성은 없다. 예상18~26파일·900~1,600줄, 후속 R1~R8·데이터 불변/조회 전환 호출0·복귀·PR #33 의존 관계는 검토서를 따른다. [구현·검사·사용/복귀 기록](./implementation/topic-chat-workspace-20261101.md): Node359·Chrome/MCP62 PASS, 마지막 위치 보완의 신규 UI5 PASS. GUI 구현은 검토 브랜치에 있으며 병합/운영 적용·실기기/실계정 수락은 별도다.
-
-2026-11-01 개인 비밀번호 로그인 승인: 사용자가 첫 설정의 **새 비밀번호/비밀번호 확인2칸**, 서버 보호 저장, 이후 기기에서 비밀번호1칸 로그인을 지정했다. [사전 영향·범위·R1~R8/복귀](./reviews/password-login-impact-20261101.md)에 따라 owner 인증/화면/설정·복구만 변경한다. 기존12시간 세션·Host/Origin·provider/대화·MCP/실행 승인·API/도구 한도는 유지한다. 예상18~24파일·700~1,200줄. [구현·검사 기록](./implementation/password-login-20261101.md): Node354·Chrome/MCP57 PASS. 실제 비밀번호 등록은 사용자 직접 입력이며 운영 비밀번호 변경·새 배포/실계정 호출은 미실행이다.
-
-2026-11-01 후속 사용자 지시: **상주방 전체 채팅 한도와 legacy/API 방식 선택을 제거**한다. API 일일 정책은 별도 설정으로 유지하고 GPT/dot/Muse 방 on·발언은 옛 누적 요청/토큰/만료 시각 때문에 막지 않는다. 속도 부재 시 기존 표준을 사용하고 도구 횟수/deadline·승인·미확정·원문 보호는 유지한다. [사전 영향·R1~R8/수락 변경·복귀 검토](./reviews/room-chat-limit-removal-20261101.md)를 기준으로 진행한다. 이는 아래 PR #31의 선택형 모드를 대체하는 명시 승인이다. 예상24~34파일·500~1,000줄. [구현·검사/운영 차단 해소 기록](./implementation/room-chat-limit-removal-20261101.md): Node345·Chrome/MCP54 PASS. 꺼진 운영 방은 기존 configure 명령으로 API 전용에 맞췄고 원문·멤버·API 정책/도구 권한은 보존했다. 새 바이너리 배포·방 on·실제 호출은 별도다.
-
-2026-11-01 API 일일 한도·일반 GPT/dot 선택 UI 개발 승인: 사용자가 [변경 검토서](./reviews/api-daily-budget-impact-20261031.md)의 범위를 승인했다. R8 보완으로 API key 참여자만 작업실 합산 KST 일일24회/보고20만 token 한도를 적용하고, owner가 선택한 새 상주 모드의 GPT OAuth/browser는 방의 채팅 횟수/token/종료 시각 제한에서 제외한다. API 대기 중 GPT 진행·혼합 주제 partial/같은 방 복귀와 기존 단일 dispatch·미확정 대조·도구 승인/실행 deadline·이력/50 gate를 공존시킨다. 일반 GPT/dot은 기존 연결/탐지/참여자 API를 재사용해 명시 선택하며 현재 일반 GPT를 dot으로 간주하지 않는다. 예상26~36파일·1,400~2,400줄, R1~R8 이관/수락/복귀는 검토서를 따른다. 기준 main은 PR #30 병합 `1b6c005e0b1b02162c3f294535219cd2757adeb9`. 기존 운영 방·데이터는 보존하며 배포/실제 호출은 별도다. [구현·검사 기록과 미검증 범위](./implementation/api-daily-gpt-choice-20261101.md)를 별도로 남긴다.
-
-2026-10-31 상주방 설정 승인·표준 선택: 기존 DeepSeek 토커를 High로 변경하고 resident flag 활성화·기존 additive 이관·GPT2+Coral3명/방 내부 analysis 역할·초기 표준24요청/보고20만 token/60분/30초 간격을 저장했다. [설정·실제 UI·보존 기록](./implementation/phase8-resident-setup-20261031.md): 방 off·모델 호출0·기존12요청 partial/과거 Max 기록·다른 설정 보존. 초기 종료 시각은20:07:03 KST이며 자동 갱신/자동 주제 시작·Codex 권한은 추가하지 않았다. U1/U2의 이번 방 설정을 선택한 것이고 미래 기본값/장기 운영 정책은 미정으로 유지한다. 실계정 상주 흐름·R8-D 전체 수락은 미완료다.
-
-2026-10-31 PR #29 병합 후 R8 재검증: main `2f3ca34e454f07c294c7e6eaa87cf052b7c79475`에서 사용자가 서버 적용·테스트를 별도 승인했다. 병합 버전을 빌드/서비스 재시작하고 기존 토의의 DeepSeek만 Max/출력16,384로 설정해 **추가6요청 모두 완료, 총12요청에서 PARTIAL**이다. 상호 검토2라운드·검증2개까지 진행했으나 기존100,000 보고 token soft limit이 소진됐다. 보고 합계123,013·마지막1요청의23,013 초과를 숨기지 않으며 과거 실패 usage는 UNKNOWN이다. 이후 호출0·예산/원문/기존6turn·다른 계정/방/실행 보존을 [실제 재검증 기록](./implementation/phase8-continuation-20261031.md)에 남겼다. 수정/종합·실제 dot/Muse/상주 업무·Wiki/Codex/실기기와 R8-D 전체는 미완료다. src/기존 계약·50 gate를 바꾸거나 새 페이즈를 만들지 않았다.
-
-2026-10-31 출력 한도 추가 승인: 사용자가 [DeepSeek 토커별 출력 한도 변경안](./reviews/deepseek-output-limit-impact-20261031.md)을 승인했다. R8 보완으로 기본4,096을 유지하고 512~32,768 범위의 명시 설정·실제 catalog 한도 검증·새 turn snapshot·등록/사후/일시정지 UI를 구현했다. [실행 기록](./implementation/deepseek-output-limits-20261031.md): Node326·Chrome/MCP52 PASS, FAIL/SKIP0. 기존 turn/업무 입력·Provider complete/Store·예산/승인/단일 dispatch·50 gate는 유지한다. ResidentTurn은 기존 participant snapshot을 재사용하고 별도 중복 필드/SQL 이관을 만들지 않는다. 승인 예상12~17파일·350~600줄 중 실제17파일이며 후속 R1~R8 영향·복귀는 승인 검토서를 따른다. 기존6요청/blocked 토의·운영 설정을 바꾸지 않았으며 배포·유료 재검증은 별도다.
-
-2026-10-31 실제 호출 추가 승인: 사용자가 GPT2+CoralBricks 새 토의1개·최대24회/20분과 기존 중단 토의의 원문 보존 종료를 허용했다. [실제 수락 기록](./implementation/phase8-real-api-20261031.md)은 **6요청에서 부분 성공 후 FAIL**이다. 3초안·GPT2개 첫 상호 검토/실제 HTTPS·기록 보존/동시1은 확인했으나 DeepSeek Max 재검토가 정상 완료되지 않아 정지했다. 정확한 원격 finish_reason과 실패 usage는 과거 adapter가 보존하지 않아 UNVERIFIED이며 자동 재전송하지 않았다. 종료/보고 usage 진단 보강 때에는 원래 출력 한도·사고·예산·수락 기준을 유지했다. 당시 제안이던 [출력 한도 설정 변경안](./reviews/deepseek-output-limit-impact-20261031.md)은 위 추가 승인으로 구현 범위에 들어왔다. 실제 dot/Muse·상주 업무/Wiki·Codex/실기기 포함 R8-D 전체는 NOT_RUN으로 남긴다.
-
-2026-10-31 실제 호출 전 준비 관측: PR #27 병합 후 R8의 [준비·격리 점검과 doctor 보완](./implementation/phase8-live-preflight-20261031.md)에서 Ubuntu bwrap mount/PID/proc 가림 PASS, 운영 health/도구 확인과 당시 미등록 토커·상주 off·중단 root·Codex 미등록을 구분했다. 이 준비 점검 시점에는 실제 모델 호출도 미실행이었으며 후속 승인/실측은 위 기록을 따른다. Codex thread 실행·쓰기 및 원래 전체 실계정 gate는 별도 미검증이며 새 페이즈를 신설하거나 50개 기준을 바꾸지 않는다.
-
-2026-10-30 사용자 지시에 따라 **이 표를 페이즈 범위·순서·진행 상태의 SSOT**로 사용한다. 아래 설계/검토 문서의 과거 “계획 문서만” 제한은 당시 작업 이력이며, 현재 승인 작업은 **페이즈 8 통합 수락·복구·부하 검증**이다. PR #22의 병합 main `8f7866388823e46ade64446343d53351c7ef85e5`에서 기존 R1~R7 구현·흑백 GUI·상단 주제·큐·Wiki·Codex·MCP를 그대로 결합해 검증한다. 2026-10-31 사용자 승인으로 [R8-A B안](./reviews/r8-topic-transition-decision-20261031.md)의 명시 허용 자동 주제 전환을 추가한다. optional 설정/intent·기존 configure 접점만 확장하며 Providers/Store·topic·승인/격리·기존 50 gate·단계 순서는 유지한다. R2/R3·업무 경쟁·Wiki 인용을 회귀하고 추가 페이즈는 만들지 않는다. 예상 변경은 16~20파일·450~850줄이다. 추가로 사용자가 [Codex 기기 코드 연결](./reviews/opencodex-login-review-20261031.md)을 별도 추가하도록 승인했다. 일반 GPT OAuth·기존 계정/전역 Codex 인증을 보존하고, 새 kind의 로그인/refresh·모델/stream 어댑터·owner UI만 결합한다. 예상 14~20파일·800~1,500줄이며 기존 큐/Wiki/단일 dispatch·수락 기준은 유지한다. R8 준비에 포함하며 후속 페이즈 신설은 없다. 제품 목표·기존 데이터·승인/미확정 대조는 유지한다. 세부 수락 gate·롤백은 [단계별 계약](./resident-implementation-plan.md)을 참조한다. 계획 변경이 필요하면 **현재 단계와 남은 모든 페이즈의 영향·총변경량을 먼저 검토해 사용자 승인을 받은 뒤** 이 SSOT와 관련 계획서를 함께 변경한다. 구현 결과에 맞춰 계획을 사후 정당화하지 않는다. 구체적인 변경 승인 절차는 [개발 지침](./development-guidelines.md#5-계획-변경-사전-승인과-후속-페이즈-영향-검토)을 따른다.
-
-2026-10-31 추가 승인: 사용자가 **DeepSeek 설정·Anthropic API부터 구현**하는 [변경안](./reviews/deepseek-anthropic-impact-20261031.md)을 승인했다. R8 연결 보완으로 제공처별 실제 지원 사고 값과 Anthropic API key/모델/완료 stream 어댑터를 기존 Providers·vault·Store·토론/방에 결합한다. GPT의 기존 설정과 DeepSeek 설정 부재를 보존하며 자동 effort 변환·계정/과금 fallback은 추가하지 않는다. Anthropic 구독 OAuth는 공식 지원 경로/앱 허가 확인까지 **보류**한다. 예상 20~28파일·700~1,300줄이며 R1~R8·50개 수락 기준·큐/Wiki/Codex 승인·단일 dispatch는 유지하고 회귀한다. [구현·검사 기록](./implementation/deepseek-reasoning-anthropic-20261031.md): Node306·Chrome/MCP51 PASS, 실제 CoralBricks/River catalog만 읽기 관측. 실계정 추론·운영 배포는 NOT_RUN이며 R8 전체 수락을 완료로 바꾸지 않는다. 실계정 유료 호출·배포·병합은 이번 승인에 포함하지 않는다.
-
-| 페이즈 | R단계 | 개발 범위 | 완료 판정 | 상태 |
-| --- | --- | --- | --- | --- |
-| 1. 방 데이터 기반 | R1 | optional resident state·기존 DB 이관·방/메시지 조회·설정 제어 API·기능 flag | 기존 데이터/원문/event cursor/명령 보존, 중복 이관/명령 방지·인증·꺼짐 복구 | **완료 / PR #13 병합** ([증거](./implementation/phase1-resident-foundation-20261030.md)) |
-| 2. 상주 실행 | R2 | 공통 dispatch·방 on/off·발화/JSON·예산/휴면·topic focus·문맥 인계 | provider 최대1·미확정 재전송0·초안 공개/세대 대조·인계/복구 | **완료 / PR #14 병합** ([증거](./implementation/phase2-resident-runtime-20261030.md)) |
-| 3. 단톡방 GUI | R3 | 기존 control.*의 멤버·말풍선·답장/멘션·미읽음·보조 패널·상태 알림 | 4 viewport·IME/접근성·장문·재접속·기존 승인/복구 UI 보존 | **PR #15·#17·#18·#19 병합 · 실기기 UNVERIFIED** ([R3 증거](./implementation/phase3-chatroom-gui-20261030.md)·[디자인](./implementation/chatroom-design-refinement-20261030.md)·[주제/결과](./implementation/pinned-topic-conclusions-20261030.md)) |
-| 4. 연결 편의성 | R4 | browser discovery/preset→기존 probe·advanced fallback | 사용자 CSS 입력 최소화·identity/thread/draft 불일치 전송0 | **PR #16 병합 · R4-D 실계정 왕복 UNVERIFIED** ([증거](./implementation/phase4-browser-discovery-20261030.md)) |
-| 5. 역할·열린 작업큐 | R5 | 일감 제안·완료 조건/의존성·역할/가용 자원·pickup·보고/리뷰/재작업 | 동시 claim1·불완전/권한 밖 ready0·자기 승인/근거 없는 done0 | **PR #20 병합 · 실계정 UNVERIFIED** ([R5 증거](./implementation/phase5-open-work-queue-20261030.md)) |
-| 6. 실제 업무 수행 | R6 | 기존 Codex·scope 재검사·실행 근거/방 보고·독립 리뷰 | 중복 실행0·늦은 승인/결과 대조·실파일 안전 gate·업무 리뷰 | **PR #21 병합 · R6-F 실세션 UNVERIFIED** ([R6 증거](./implementation/phase6-work-execution-20261030.md)) |
-| 7. 공유 Wiki | R7 | private DB Wiki/version/CAS·자동 reported 게시·인용·scoped MCP | 충돌 보존·원문/출처/인용 고정·타 scope/세대 거절 | **PR #22 병합 · 실운영 UNVERIFIED** ([R7 증거](./implementation/phase7-shared-wiki-20261031.md)) |
-| 8. 통합 실운영 검증 | R8 | 방→업무→리뷰/보고→Wiki→다음 대화→topic 복귀·기기/부하/rollback | 기존/신규 50 gate의 fixture/실계정 증거와 UNVERIFIED 분리 | **자동 통합/복구/부하 fixture PASS · R8-A B안 모의 무인 흐름 PASS · 실제 API 재검증 PARTIAL(12요청/예산 소진)·나머지 실계정 NOT_RUN · 전체 수락 미완료** ([R8 증거](./implementation/resident-acceptance.md)·[재검증](./implementation/phase8-continuation-20261031.md)) |
-
-페이즈마다 작업 브랜치·검토 가능한 PR, 사용자 병합을 유지한다. 큰 단계는 2를 dispatch/발화/인계, 6을 안전 경계/실행 연결, 7을 Wiki/인용·MCP로 나눌 수 있다. 다음 단계가 아직 없으면 성공처럼 응답하지 않는다. 실계정·서비스 반영은 별도 검증 범위로 두고 독립 fixture 개발을 계속한다. U1/U2/U3는 [사용자 결정 목록](./resident-implementation-plan.md#11-사용자-결정-필요)을 유지한다. 디자인 패턴은 [개발 지침](./development-guidelines.md)의 작은 Adapter/DI·명시 상태 전이·기존 transaction·검사/롤백 기준을 따른다.
-
-본문의 Phase 0~4A/4B는 이전 릴리스 범위 구분이다. 현재 구현 순서·상태는 위 페이즈 1~8로만 관리한다. 페이즈 8의 [50개 수락표](./implementation/resident-acceptance-manifest.json)는 fixture PASS46·UNVERIFIED3·NOT_RUN1로 구분한다. 최종 통합 Node270 PASS·Chrome/MCP46 PASS이며 전체 Chrome/MCP 회귀 결과는 [R8 실행 기록](./implementation/resident-acceptance.md)을 따른다. 자동 업무·Wiki 인용·주제 시작·같은 방 복귀는 방 on 이후 사용자 중계 없이 모의 참여자3명으로 검증했다. [B안 승인](./reviews/r8-topic-transition-decision-20261031.md)에 따른 optional 허용·intent와 기존 엔진을 사용했으며 owner focus 요청0·topic1·복귀1이다. 실제 계정/기기 수락은 별개다. 기존 Codex 0.165.0 계약과 쓰기 차단은 유지한다. 최초 R8 fixture 시점의 운영 DB 이관·서비스 반영·실계정 호출은 NOT_RUN이었다. 이후 별도 승인된 서비스 반영·API 부분 실측은 위 최신 기록을 따른다. Wiki의 자동 최신/고정 선택·과대 입력 차단과 명시 예산/속도·역할/범위를 유지하며 미정 U1/U2 기본값을 만들지 않는다. R6-F 실세션·쓰기, R3-E 실기기 IME/터치, R4-D 실제 dot/Muse 왕복과 R8-D 혼합 실계정 수락은 미확인이다. 자동 검사 PASS로 이 조건을 낮추거나 완료로 바꾸지 않는다.
+페이즈마다 작업 브랜치·검토 가능한 PR, 사용자 병합을 유지한다. 제품 범위·계약·순서·수락/롤백 변경은 [사전 승인 절차](./development-guidelines.md#5-계획-변경-사전-승인과-후속-페이즈-영향-검토)에 따라 현재 및 후속 영향·변경량을 먼저 보고한다. 사실에 근거한 상태/검사 증거 정리는 새 기능 승인으로 해석하지 않는다. 디자인 패턴은 [개발 지침](./development-guidelines.md)을 따른다.
 
 > 계획 개정의 고정 근거는 C=8f81d861b3f170ef2024b90d9eeba56ce34f0f79, P=8db0f42f499f674c66c3a0df0a4d8e0f25fb216e다. [1쪽 요약·기준 차이·근거](./plan-revision-20261030.md), [104항목 판정](./reviews/plan-decision-register-20261030.md), [운영 계약](./company-workflow-plan.md), [8단계 변경·이관·수락·롤백](./resident-implementation-plan.md)은 설계 근거로 유지한다. 구현은 병합 main 05684f83d229acc86769ce8675f632bb21743dd6에서 시작했으며 runtime은 C와 동일했다. 신규 기능의 실제 상태는 위 SSOT와 단계별 실행 증거로 판정하고, 실계정·DOM·호스트 적합성은 별도 검증 전까지 UNVERIFIED다.
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | v0.18-R8-connections — 승인된 자동 주제·기기 코드/추가 DeepSeek 연결·통합/복구/부하 검사·50개 수락 증거, 실제 기기·실계정·R6-F·최종 실운영 수락 UNVERIFIED. 진행 상태는 맨 위 SSOT 참조 |
+| 상태 | R1~R7 기반 구현·R6 쓰기 차단/추가 보호 필요·R8 부분 실측. 현재 상태는 맨 위 SSOT, 다음 기능은 승인 전 제안 |
 | 최초 작성일 | 2026-08-15 |
-| 개정일 | 2026-10-31 (KST) |
+| 개정일 | 2026-11-05 (KST), 상태 정리·기존 승인/수락 유지 |
 | 저장소 | [firewine/webgpt](https://github.com/firewine/webgpt) |
 | 전체 제품 설계 | [webjjoku_living_design.md](./webjjoku_living_design.md) |
 | 구현 작업·선행 조건 | [implementation-sequence.md](./implementation-sequence.md) |
@@ -118,18 +48,18 @@
 
 ## 1. 제품과 문서의 범위
 
-웹쫀쿠의 목표는 **단톡방에 참여자들이 상주하며 자유롭게 논의하고, 일감을 큐에 넣어 가능한 작업자가 수행·보고하고, Wiki를 스스로 갱신해 공유 기억으로 쓰는 작업실**이다. 주제 토론은 이 방 안의 한 focus mode다. 사용자는 방을 켜고 관전하거나 중간에 참여한다. GPT OAuth·DeepSeek API·dot/Muse browser, 기존 Store·기록·승인·Codex는 그대로 재사용한다. 현재 구현된 토론 파이프라인을 전체 시스템으로 확대 해석하지 않는다.
+웹쫀쿠의 목표는 **단톡방에 참여자들이 상주하며 자유롭게 논의하고, 일감을 큐에 넣어 가능한 작업자가 수행·보고하고, Wiki를 스스로 갱신해 공유 기억으로 쓰는 작업실**이다. 주제 토론은 이 방 안의 한 focus mode다. 사용자는 방을 켜고 관전하거나 중간에 참여한다. 실제 웹 GPT·선택형 OAuth/기기 코드·DeepSeek/Anthropic API·공식 dot·Muse browser, 기존 Store·기록·승인·Codex는 그대로 재사용한다. 현재 구현된 토론 파이프라인을 전체 시스템으로 확대 해석하지 않는다.
 
 | 영역 | 책임 |
 | --- | --- |
 | Core / Discussion Scheduler | 주제·참여자·발언·상호 검토·검증·비교·결론, 진행 예산과 영속 복구 |
 | Control Room | 공동 대화 타임라인, 참여자별 결과 비교, 사용자 개입·연결 상태 |
-| Participant Adapter | GPT OAuth Responses, DeepSeek 등 API, dot·Muse browser와 검증된 공식 연결 |
+| Participant Adapter | 실제 웹 GPT, 선택형 OAuth/기기 코드, DeepSeek/Anthropic API, 공식 dot·Muse browser |
 | Ubuntu / Web Client | 서버 상시 실행, Tailscale HTTPS, 실시간 상태·대화, 원격 Chrome 보조 화면 |
 | Codex 실행 어댑터 | 허용된 검증·개발 지시를 기존 세션에 전달하고 결과를 원래 토론에 환류 |
 | Git Writer | 별도 선택 모듈: 격리된 코드 변경·검사·draft PR 발행 |
 
-일반 GPT는 **OAuth 로그인·ChatGPT plan usage를 통한 웹쫀쿠 내 대화**를 우선 경로로 한다. 로그인만으로 기존 ChatGPT 대화·메모리나 dot이 이전되지 않는다. dot·Muse는 실제 기존 agent와 대화에 연결한다. API 참여자도 1차 제품 범위에 포함하며 이전의 모델 API 비사용 원칙을 이 혼합 구조로 대체한다.
+일반 GPT는 **실제 ChatGPT 웹 대화**를 명시 선택할 수 있고 OAuth/기기 코드는 별도 선택형으로 보존한다. 로그인만으로 기존 ChatGPT 대화·메모리나 dot이 이전되지 않는다. dot은 공식 plugin/MCP Events로, Muse는 기존 browser 대화로 참여한다. API 참여자도 1차 제품 범위에 포함하며 이전의 모델 API 비사용 원칙을 이 혼합 구조로 대체한다.
 
 Ubuntu는 서버 실행 OS다. 접속 기기는 데스크톱·노트북·휴대전화·태블릿을 포함하며 Tailscale과 웹 브라우저로 같은 기능을 사용한다. 사용자가 여러 기기로 접속해도 서버의 같은 Discussion을 이어서 본다. 클라이언트에 Codex·개발 도구를 설치하도록 요구하지 않는다.
 
@@ -149,6 +79,8 @@ Ubuntu는 서버 실행 OS다. 접속 기기는 데스크톱·노트북·휴대�
 v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위를 일반 웹 접속과 N인 능동 토론으로 정정한다. OAuth·API와 여러 GPT 참여자를 Phase 1~2에 포함한다. Ubuntu 우선, Codex 우선 코드 실행, 대화 보존·중복 방지·증거 기반 판정은 유지한다.
 
 ## 2. 확인된 현재 상태
+
+**아래는 2026-10-30 Ubuntu 개발 재개 당시 기준선/당시 판정의 이력이다.** 이 절의 옛 미구현/NOT_RUN과 도구·검사 수를 현재 상태로 읽지 않는다. 현재 구현·이후 실계정 결과는 맨 위 SSOT와 날짜별 구현 기록이 우선한다.
 
 2026-10-30 Ubuntu 개발 재개 점검 기준:
 
@@ -182,7 +114,7 @@ v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위�
 
 1. 상주 Room에서 자유 대화·업무 제안/픽업·보고·Wiki를 이어간다. 필요할 때 기존 독립 초안→검토→검증→비교를 focus mode로 사용하고 종료 후 같은 방으로 복귀한다. 사용자가 답을 복사해 중계하지 않는다.
 2. 참여자와 연결 방식을 분리한다. GPT OAuth 계정 여러 개, dot·Muse, API 모델에 동일한 Participant·Turn 계약을 적용한다.
-3. 일반 GPT OAuth, DeepSeek API, 기존 agent의 browser 연결을 각각 검증한다. 실제 사용 가능하지 않은 연결을 성공으로 표시하거나 다른 인증 방식으로 몰래 대체하지 않는다.
+3. 실제 웹 GPT·선택형 OAuth/기기 코드·API·공식 dot·Muse browser 연결을 각각 검증한다. 실제 사용 가능하지 않은 연결을 성공으로 표시하거나 다른 인증 방식으로 몰래 대체하지 않는다.
 4. 여러 초기안을 모두 수집하기 전에는 서로의 답을 전달하지 않는다. 같은 모델·공통 출처에 의한 상관과 실제 맥락 차이를 표시한다.
 5. 동의와 사실 검증을 분리한다. 주장·출처·실행 근거·수정 이력·미확인 상태를 연결하고 의견 차이를 보존한다.
 6. Core는 진행 규칙을 관리한다. 특정 dot이나 모델을 영구 진행자·정답 심판으로 두지 않는다. 요약 작성자와 검토 역할은 참여자에 배정할 수 있다.
@@ -214,7 +146,7 @@ v0.4에서는 태블릿 전용 관제·dot/Muse 두 서비스 중심의 범위�
 - 영속 Discussion·Turn·Claim·Evidence·Task·Event·송수신 기록과 재시작 복구.
 - 원문을 참조하는 인계 checkpoint·대화 세대, 검증 과제 큐·의존성·배정·진행 한도.
 - 공동 대화 타임라인, 참여자별 비교·근거·미해결 쟁점, 후속 질문·조건 추가.
-- 상주 운영 필수 보강(미구현): 단톡방형 참여자/말풍선/자료 패널, 답장·@멘션, 사용자가 시작한 범위 안의 자유 대화·자동 수다. 지도·건축 월드는 제외하며 주제 토론과 활성 실행 슬롯을 공유한다.
+- 상주 운영 보강(R1~R7 기반 구현, 현재 실환경 수락은 SSOT): 단톡방형 참여자/말풍선/자료 패널, 답장·@멘션, 사용자가 시작한 범위 안의 자유 대화·자동 수다. 지도·건축 월드는 제외하며 주제 토론과 활성 실행 슬롯을 공유한다.
 - 참여자 상태 카드, 관측 시각·차단 이유, 실제 확보한 도구 활동·주장/증거 연결.
 - Pause/Resume/Cancel, 진행 한도·API 사용량·비용, 연결별 인증·개입 상태.
 - Tailscale private HTTPS, 반응형 UI, SSE snapshot/cursor 복구, noVNC 보조 화면.
@@ -473,7 +405,7 @@ DiscussionCheckpoint는 기준 event cursor·주제 revision, 결론/근거/반�
 
 ### 9.3 WWG 사례에서 추가할 계획
 
-사용자 제공 [웹쫀쿠 만듬](https://m.dcinside.com/board/ai_utilize/109771)과 글이 연결한 bangak684/WWG의 `77b6d227fcfa35b1b3e78ed61351e70c29b380bb`을 2026-10-30 정적 검토했다. WWG는 웹 ChatGPT의 MCP 호출을 로컬 파일·명령에 연결하는 도구 앱이다. 기존 공동 토론 Core를 교체하지 않고 [대조 검토서](./reviews/wwg-plan-review-20261030.md)의 제안을 다음 계획에 추가했다. 외부 프로그램·테스트는 실행하지 않았다. 이후 R1/R4를 구현했으며 나머지는 미구현이다. [자료·권한 구현 기록](./implementation/local-materials-capabilities-20261030.md)을 따른다.
+사용자 제공 [웹쫀쿠 만듬](https://m.dcinside.com/board/ai_utilize/109771)과 글이 연결한 bangak684/WWG의 `77b6d227fcfa35b1b3e78ed61351e70c29b380bb`을 2026-10-30 정적 검토했다. WWG는 웹 ChatGPT의 MCP 호출을 로컬 파일·명령에 연결하는 도구 앱이다. 기존 공동 토론 Core를 교체하지 않고 [대조 검토서](./reviews/wwg-plan-review-20261030.md)의 제안을 다음 계획에 추가했다. 외부 프로그램·테스트는 실행하지 않았다. 이후 WWG-R1/R4를 구현했다. R2의 새 dot/resident 권한 수명·R6 업무 scope 재검사는 구현됐지만 일반 토의 grant/실행 binding의 전체 수명은 남아 있다. R3의 repo 비밀/링크/출력 보호와 R5/R6의 묶음/원문 보관 확장, R7의 선택 Writer 파일 경합은 미완성이다. [자료·권한 구현 기록](./implementation/local-materials-capabilities-20261030.md)을 따른다.
 
 | 제안 | 적용할 내용 | 우선순위·착수 조건 |
 | --- | --- | --- |
@@ -656,14 +588,14 @@ PASS / FAIL / NOT_RUN / BLOCKED를 구분한다. 증거에는 버전·OS·provid
 
 ## 12. 바로 다음에 할 작업
 
-구현 범위와 남은 실제 완료 조건은 [개발 실행 순서](./implementation-sequence.md)와 [통합 구현 기록](./implementation/wj-002-015.md)을 따른다. 다음 작업은 새 Core를 만드는 것이 아니라 **구현된 작업실을 사용자 Ubuntu에 배포하고 실제 연결을 검증하는 것**이다.
+현재 승인 범위는 기존 R8 실운영 수락과 합의된 연결/복구 보완이다. Ubuntu 재설치·새 Core·Wiki 저장소 재작성을 다음 단계로 되풀이하지 않는다. 다음 개발 **추천과 추정 변경량은 [별도 제안](./reviews/next-development-recommendation-20261105.md)**이며 승인 전에는 기능·계약을 바꾸지 않는다. 아래는 잔여 조건 목록이며 승인된 페이즈 실행 순서의 변경이 아니다.
 
-1. **WJ-002 운영 검증:** 지정 Ubuntu 사용자·경로·버전 확인, 서비스 기동, Tailscale HTTPS·SSE·noVNC와 재부팅 복구.
-2. **WJ-003~006 연결 검증:** GPT OAuth 1계정 후 2계정 격리, DeepSeek 실제 응답, 기존 dot·Muse의 선택자·대화 왕복·복구.
-3. **WJ-012 대화 MVP-1:** 혼합 참여자의 독립 초안·반론·검증·수정·비교, 조건 변경·기기 전환·서버 재시작을 실제 기록으로 판정.
-4. **WJ-013~015 실행 MVP-2:** 실제 Secure MCP Tunnel과 등록 Codex 세션, 승인·실행 근거·모든 참여자 재평가를 확인. Events/Connector는 지원·권한을 확인한 뒤 별도 구현한다.
+1. R7의 실제 구현/제약을 기준으로 주제 결론 자동 기록 보완 여부를 결정한다. 업무 보고 자동 게시·Wiki 편집/인용은 재사용한다.
+2. 기존 R5/R7의 실환경 업무→리뷰→Wiki→다음 발화 순환과 R8 혼합 토의의 남은 수정·종합·복귀를 각각 지정 범위로 수락한다. 실제 모델 호출은 별도 승인한다.
+3. R6 실파일 쓰기는 WWG-R2/R3 보호 구현·호스트 검사 후에만 읽기→승인→작은 작업 브랜치 수정→독립 검토로 검증한다. 현재 쓰기 차단을 해제하는 것으로 대신하지 않는다.
+4. R3-E 실기기·기기 전환·재부팅/장기 운영과 남은 R8 gate를 채운다. fixture·단일 연결 성공을 전체 완료로 표시하지 않는다.
 
-Git Writer·추가 provider/병렬 실행·자동 병합은 WJ-016~018의 후속 범위다. 필수 실제 연동이 막히면 이유를 남기고 가능한 연결을 먼저 검증하되 전체 MVP 완료로 표시하지 않는다. 사용자 병합 정책은 유지한다.
+Git Writer·추가 provider/병렬 실행·자동 병합은 WJ-016~018 후속 범위다. 사용자 병합 정책과 현재 8개 페이즈/50 gate를 유지한다.
 
 ## 13. 참고 자료와 확인 범위
 

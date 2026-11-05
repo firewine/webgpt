@@ -10,7 +10,7 @@
 
 유지: Providers.complete/CompletionInput/Completion/Hooks, OAuth/API/browser 인증·vault, BrowserBridge.probe/complete/receipt, Store.transact/events/cursor/commands, 기존 DiscussionEngine의 6단계·세대·대조, CodexExecutor의 submit/승인/reconcile/격리, Access/Host/Origin/SSE/noVNC, Ubuntu/Serve, usage·예산. 새로운 provider/DB/서버/자격 증명 저장소를 만들지 않는다(E5/E10~E18).
 
-“상주”는 웹쫀쿠의 Room·문맥·예약·이력 수명이다. OAuth GPT/DeepSeek는 현재 API를 호출하고 앱이 이력을 관리하며 ChatGPT 웹 대화/기억을 가져오지 않는다. browser dot/Muse만 기존 서버 Chrome의 실제 대화에 연결된다. GUI가 웹 단톡방처럼 보인다고 모든 참여자의 연결이 웹 ChatGPT로 바뀌는 것은 아니다. 이 차이는 유지 판정이며 새 연결/모델 적격성은 UNVERIFIED다.
+“상주”는 웹쫀쿠의 Room·문맥·예약·이력 수명이다. OAuth/기기 코드·DeepSeek/Anthropic API는 앱이 해당 이력을 관리하며 로그인만으로 ChatGPT 웹 대화/기억을 가져오지 않는다. 승인된 실제 웹 GPT와 Muse browser는 서버 Chrome의 확인된 대화에 연결하고, 공식 dot은 plugin/MCP Events로 참여한다. 연결 방식을 GUI 이름으로 자동 변경하지 않는다. 실제 적격성/수락 범위는 [현재 SSOT](./development-plan.md)와 각 실측을 따른다.
 
 최소 변경 예외: 기존 엔진은 다른 loop를 모르므로 전송 전 transaction에 공통 dispatch lease 접점이 필요하다(E3/E12). 새 WorkTask job에는 기존 submit API를 보존하며 실행/늦은 승인/결과 시점의 WorkScope 검사 접점을 추가해야 한다(E13/E16). Providers HTTP/auth/JSON 요청·물리 Store 스키마·기존 topic parser 변경은 채택하지 않는다. 상세는 R2/R6이다.
 
