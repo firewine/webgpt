@@ -14,9 +14,12 @@ import { budget, pacing } from './resident-fixture.mjs';
 import { storage, until, topic, response } from './workspace-helpers.mjs';
 const script = fileURLToPath(new URL('fixtures/codex-rpc.mjs', import.meta.url));
 async function fixture(t, mode = 'normal') {
-  const { store } = await storage(t); const cwd = await mkdtemp(join(tmpdir(), 'wj-codex-'));
+  let codex;
+  // Node runs after hooks in registration order. Stop the watchdog before the
+  // storage hook closes SQLite and awaits directory removal.
+  const { store } = await storage({ after: cleanup => t.after(async () => { codex?.close(); await cleanup(); }) }); const cwd = await mkdtemp(join(tmpdir(), 'wj-codex-'));
   execFileSync('git', ['init', '-q', '-b', 'work-fixture'], { cwd }); execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '--allow-empty', '-qm', 'fixture'], { cwd });
-  const codex = new CodexExecutor(store, [process.execPath, script, mode], [cwd]); t.after(async () => { codex.close(); await rm(cwd, { recursive: true, force: true }); });
+  codex = new CodexExecutor(store, [process.execPath, script, mode], [cwd]); t.after(async () => { codex.close(); await rm(cwd, { recursive: true, force: true }); });
   return { store, codex, cwd, register: () => codex.register({ cwd, label: 'fixture', threadId: 'fixture-thread', allowWrite: true }), trace: async () => (await readFile(join(cwd, 'rpc-trace.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse) };
 }
 test('Codex uses observed target and actual schema, queues exactly once and records command evidence', async t => {

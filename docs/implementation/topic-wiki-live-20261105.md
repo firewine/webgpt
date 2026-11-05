@@ -37,4 +37,6 @@ private 증거에는 적용 전 backup/digest, 첫 실패·DOM 구조·원문 �
 - `npm run check`: strict TypeScript·빌드·Node589/589 PASS, FAIL0·SKIP0.
 - 설치된 Chromium156.0.8078.4·Chrome DevTools MCP1.12.0으로 `node --test tests/browser/*.test.mjs`:76/76 PASS, FAIL0·SKIP0. 별도 fixture이며 실제 계정 검사를 반복하지 않았다.
 
+첫 CI에서는589개 중 기존 `tests/codex.test.mjs`의 첫 검사가 정리 중 `database is not open`으로 실패했다. Node의 after hook 등록 순서상 storage가 SQLite를 닫고 디렉터리 삭제를 기다리는 동안 아직 살아 있던 fixture 실행기의 watchdog이 읽기를 시도했다. 해당 fixture의 storage 정리 직전에 실행기를 닫도록 수정했으며 제품 Codex 실행/승인/시간 정책이나 검사 조건은 바꾸지 않았다. 수정 뒤 관련 Codex 검사와 전체 Node 검사를 다시 확인했다. 실제 Codex 호출을 추가한 것은 아니다.
+
 실패 시 새 요청을 멈추고 미확정 원문/receipt와 기존 대조 경로를 사용한다. Wiki/완료 답변/실패 기록을 삭제하거나 DB 복원으로 숨기지 않는다. 정상 서비스 복구와 기존15답변/전체 연결/참여자/API정책 보존을 각각 확인한다.
