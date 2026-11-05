@@ -689,7 +689,7 @@ Control Room은 Event를 사람이 읽기 좋은 메시지로 렌더링하고 SS
 
 Wiki는 필수 공유 기억이다. 아래 /wiki 구조는 논리적 분류 예시이며 repo 자동 쓰기 지시가 아니다. R7은 기존 Store private DB의 version/CAS/sourceRefs를 쓴다. owner/허용 참여자가 reported 버전을 자동 게시하고 출처·검토/관측·충돌/대체 이력을 보존한다. 다음 대화/업무에서 pinned page/version/digest로 인용하며 현재 상태의 권위는 큐다. 자료/checkpoint/provider 기억과 구분한다. Wiki의 version/CAS/source·이력·pin·UI·MCP와 수락한 업무 보고의 자동 게시는 [구현됐다](./implementation/phase7-shared-wiki-20261031.md). 자동 게시는 reported 상태이며 충돌 본문은 보존 후 명시 조정한다.
 
-일반 주제의 결론→Wiki 자동 게시 훅은 아직 없다. 다음 개발 후보인 **미승인 제안**이며 영향 검토와 사용자 승인 전에는 구현 범위에 추가하지 않는다. 관련도 순위화·압축도 미구현이지만 새 필수 범위로 지정하지 않는다. 현재 완료 판정과 남은 수락은 [SSOT](./development-plan.md)를 따른다.
+2026-11-05 사용자가 [추천1](./reviews/next-development-recommendation-20261105.md)의 개발을 승인해 새 방 연결 주제의 공개 completed/partial 결과→Wiki 자동 기록을 구현했다. 원래 revision/epoch·참여/문맥/원래 dot 권한을 고정하고 같은 transaction에서 게시/보류를 기록한다. 추가 모델 호출 없이 reported 결과·원문 참조를 보존하며, [검사·수락 상태](./implementation/topic-wiki-20261105.md)를 따른다. 과거/독립 주제 일괄 이관·실계정 전체 수락은 별도다. 관련도 순위화·압축도 미구현이지만 새 필수 범위로 지정하지 않는다. 현재 완료 판정과 남은 수락은 [SSOT](./development-plan.md)를 따른다.
 
 ```text
 /wiki

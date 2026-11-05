@@ -91,10 +91,13 @@ test('D5-A: private stdio and signed callback carry native dot through mixed amb
   } finally { unsubscribe(); }
   await f.step();
   await until(() => f.answers.length === f.state().dotMcp.requests.items.length); f.assertClean();
-  const s = f.state(), task = s.resident.workItems[0], wiki = s.resident.wikiVersions.at(-1), d = s.discussions[0];
+  const s = f.state(), task = s.resident.workItems[0], d = s.discussions[0];
+  const reportVersions = s.resident.wikiVersions.filter(v => v.editId.startsWith('report:')), wiki = reportVersions.at(-1);
   assert.equal(task.proposedBy, f.participantId); assert.equal(task.status, 'done'); assert.equal(task.reports.length, 2);
   assert.deepEqual(task.reviews.map(r => r.decision), ['rework', 'accept']); assert.ok(task.reviews.every(r => r.reviewerId !== f.participantId));
-  assert.equal(s.resident.wikiVersions.length, 2); assert.equal(wiki.sourceRefs[0].id, task.reports[1].id);
+  assert.equal(reportVersions.length, 2); assert.equal(wiki.sourceRefs[0].id, task.reports[1].id);
+  assert.equal(s.resident.wikiVersions.length, 3); assert.equal(d.wikiPublication.status, 'published');
+  assert.equal(s.resident.wikiVersions.at(-1).editId, `topic:${d.id}:${d.revision}`);
   assert.equal(d.wikiCitations[0].digest, wiki.digest); assert.ok(d.turns.every(t => t.wikiCitations[0].digest === wiki.digest));
   assert.equal(seenLong.size, 3); assert.equal(maximum, 1); assert.equal(f.room().topicLink, null);
   assert.equal(f.room().id, f.roomId); assert.equal(s.resident.messages.filter(m => m.authorId === 'owner').length, 1);

@@ -146,6 +146,8 @@ WorkReviewV1은 reportDigest·reviewerId·decision(accept/rework/blocked)·accep
 
 ## 8. Wiki 저장·자동 편집·충돌·인용
 
+2026-11-05 사용자가 [추천1](./reviews/next-development-recommendation-20261105.md)의 개발을 승인했다. 명시 연결된 새 topic의 공개 completed/partial 결과를 추가 모델 요청 없이 Wiki reported 기록으로 투영한다. 생성 때 고정한 revision/room epoch/참여·문맥 범위, 고정 게시 ID·입력 digest·기존 CAS로 중복/옛 범위 게시를 막는다. 불완전 결과·이견·미실행을 보존하며 한도/출처/범위 문제는 기록 보류로 표시한다. 기존 업무 보고·수동/AI Wiki 편집·pin·sourceRefs와 물리 Store는 재사용하고 기존50 gate·R6 쓰기 차단을 유지한다. 독립/과거 토의 일괄 게시와 새 권한·외부 호출은 이 범위가 아니다.
+
 앱 private SQLite의 resident.wikiPages/wikiVersions에 저장하며 repo /wiki를 자동 쓰거나 파일 권한을 요구하지 않는다. owner와 허용된 참여자는 자기 room/project에 wiki_edit를 제출한다. scope·sourceRefs·baseVersion·크기를 검사해 `reported` 버전을 자동 게시하므로 편집마다 인간 승인을 요구하지 않는다. 검토/도구 근거가 있어야 관측/검증 상태를 올리며 AI가 verified라고 썼다고 승격하지 않는다.
 
 expectedVersion CAS: 같은 head의 편집 2건은 정확히 1건만 채택, 다른 1건은 409+충돌 제안으로 보존한다. 덮어쓰기/무제한 모델 재시도 없음. 필요한 조정은 큐 또는 사용자 diff 처리다. 삭제/정정은 tombstone/대체 이력, 과거 인용은 원래 version을 유지한다.

@@ -11,6 +11,7 @@ import type { LocalMaterials } from './materials.js';
 import { DispatchCoordinator, budgetReason } from './dispatch.js';
 import { contextWiki, visibleRoomMessages } from './wiki-policy.js';
 import { dailyRoom, participantWait } from './api-usage.js';
+import { prepareTopicWiki } from './topic-wiki.js';
 
 interface Executor { submit(input: { bindingId: string; prompt: string; requestId: string; discussionId: string; taskId: string; revision: number; maxDurationMs?: number }): string; kick?(): void }
 export class DiscussionEngine {
@@ -104,6 +105,7 @@ export class DiscussionEngine {
         d.roomMaterial = { text: material, digest: digest(material) };
         if (d.tasks.some(t => promptFor(d, t).length > 180_000)) throw new AppError('focus_material_requires_selection', 409);
         d.roomId = roomId; room.topicLink = d.id; room.epoch++; room.version++; room.updatedAt = now();
+        prepareTopicWiki(state, room, d);
         emit({ type: 'resident.focus_changed', discussionId: null, data: { roomId, discussionId: d.id } });
       }
       state.discussions.push(d);
@@ -143,6 +145,8 @@ export class DiscussionEngine {
         d.phase = 'independent'; d.round = 1;
         d.tasks.push(...activeMembers(d).map(p => taskFor(d, p.id, 'independent', 1)));
         d.status = hasUnconfirmed ? 'blocked' : d.status === 'paused' ? 'paused' : 'running';
+        const room = d.wikiPublication && state.resident?.rooms.find(r => r.id === d.roomId && r.topicLink === d.id && r.desiredOn);
+        if (room) prepareTopicWiki(state, room, d);
       } else if (action === 'exclude') {
         const pid = string(body.participantId);
         if (!d.members.some(p => p.id === pid) || d.excludedIds.includes(pid)) throw new AppError('participant_not_found', 404);
