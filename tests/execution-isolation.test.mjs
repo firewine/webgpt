@@ -59,6 +59,11 @@ test('requires canonical, separate private copies and refuses an unverified laun
 });
 test('real App Server can register a new protected-read session without any model turn', { skip: !process.env.WJ_TEST_OUTER_BWRAP }, async t => {
   const f = await fixture(t); const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+  if (existsSync('/etc/resolv.conf')) {
+    const argv = f.isolation.wrap(f.source, f.binding.cwd, f.copy, f.auth, [f.state, f.chrome], ['/bin/cat', '/etc/resolv.conf'], true);
+    const resolver = await run(argv[0], argv.slice(1), { env, timeout: 10000 });
+    assert.equal(resolver.stdout, await readFile('/etc/resolv.conf', 'utf8'), 'trusted server retains the host resolver after /run is masked');
+  }
   const git = args => execFileSync('/usr/bin/git', ['-c', 'core.hooksPath=/dev/null', '-c', 'init.templateDir=', ...args], { cwd: f.source, env });
   git(['init', '-q', '-b', 'r6-preflight']); git(['add', 'tracked']);
   git(['-c', 'user.name=R6 Fixture', '-c', 'user.email=r6@example.invalid', 'commit', '-qm', 'synthetic baseline']);

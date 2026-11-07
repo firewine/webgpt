@@ -33,6 +33,8 @@
 
 독립 검토에서 readonly 검사 완료 뒤 manifest가 유실/변조되면 보고 게시 전 다시 확인할 필요가 있음을 발견했다. 게시 시 봉인 검증과 기록된 digest 대조를 추가하고 두 회귀 검사를 통과했다. 별도 실계정 준비에서는 새 세션 등록과 readonly metadata 저장이 성공했으나 `account/read(refreshToken:false)`가 거절돼 모델 전송 전에 중단했다. 준비 실패 DB는 별도로 보존했고 실제 모델 job은0이다.
 
+계정 거절의 원문은 `workspace routing discovery timed out`이었다. 동일 계정의 공식 accounts 메타데이터 조회는 호스트에서 HTTP200이었고, Ubuntu의 `/etc/resolv.conf`는 `/run/systemd/resolve/stub-resolv.conf`를 가리켰다. 외부 실행기가 `/run`을 가릴 때 이 파일까지 사라지는 것을 보완해 해당 시스템 파일 하나만 readonly로 보존한다. 호스트 파일/정책 변경은0이며 모델 도구의 network-disabled profile은 유지한다. 실제 외부 실행기에서 resolver 내용 일치와 기존 결합 read/write 보호2건 PASS/0 SKIP을 확인했다. 실계정의 계정 확인 재개와 모델 실행은 이후 별도 관측으로 기록한다.
+
 ## R6 실제 검증·운영과 복귀
 
 다음 단계는 별도 normal Git repo/state/전용 Codex home에서 실제 read job → 원래 보고를 소유자가 확인·재작업 요청 → 보호 write job → 실제 diff 제시/소유자1파일 반영 → 실제 owner 독립 검토다. 최대2job/30분, job당300초를 유지하고 준비용 모델 호출0이다. 별도 provider/API·dot·Muse 호출/자동 Git commit·push·merge/운영 DB·방·Serve 변경은0이다. 구체 command 승인/반영/owner 검토는 실제 결과를 제시한 뒤 기록한다. 설치된 CLI 구독 인증의 실행에 필요한 자료만 전용 home에서 사용하고 원래 인증·세션 이력을 변경하지 않는다.

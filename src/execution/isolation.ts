@@ -139,6 +139,16 @@ export class ExecutionIsolation {
     const path = this.outerBwrap ? `/usr/bin:/bin:${dirname(process.execPath)}` : process.env.PATH ?? '/usr/bin:/bin';
     for (const [key, value] of Object.entries({ PATH: path, HOME: homedir(), CODEX_HOME: auth, LANG: 'C.UTF-8' })) argv.push('--setenv', key, value);
     for (const p of masks) argv.push(...(statSync(p).isDirectory() ? ['--tmpfs', p] : ['--ro-bind', '/dev/null', p]));
+    // Ubuntu's resolver is commonly a symlink into /run. Keep just that system
+    // file readable to the trusted server after masking transient directories;
+    // model tools still use their separate network-disabled permission profile.
+    if (existsSync('/etc/resolv.conf')) {
+      const resolver = realpathSync('/etc/resolv.conf');
+      if (['/run', '/tmp', '/var/tmp'].some(root => inside(root, resolver))) {
+        if (!statSync(resolver).isFile() || masks.some(mask => inside(mask, resolver))) throw denied('resolver_overlaps_private_state');
+        argv.push('--ro-bind', '/etc/resolv.conf', resolver);
+      }
+    }
     // Sources are resolved in the host namespace, even when the state parent is masked.
     argv.push(readOnly ? '--ro-bind' : '--bind', copy, repo);
     for (const path of [join(auth, 'config.toml')]) {
