@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, writeFile, readFile, chmod, rm, rename, symlink, link, 
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
 import { ProtectedWorkspaces } from '../dist/server/execution/workspace-protection.js';
 
@@ -80,7 +80,8 @@ test('prepares a private bounded text tree with persistent authenticated manifes
   assert.equal(m.branch, f.binding.branch); assert.equal(m.head, f.binding.head);
   assert.deepEqual(m.files.map(x => x.path), ['README.md', 'src/one.ts']);
   assert.equal((await stat(m.copyRoot)).mode & 0o777, 0o700);
-  assert.deepEqual((await readdir(m.copyRoot)).sort(), ['README.md', 'src']);
+  assert.deepEqual((await readdir(m.copyRoot)).sort(), ['.agents', '.aws', '.codex', '.git', 'README.md', 'src']);
+  for (const name of ['.agents', '.aws', '.codex', '.git']) { const target = join(m.copyRoot, name); assert.equal((await stat(target)).mode & 0o777, 0o700); assert.deepEqual(await readdir(target), []); }
   const baseline = m.files.find(x => x.path === 'src/one.ts'), original = await stat(join(f.source, baseline.path), { bigint: true });
   assert.equal(baseline.digest, digest(initial)); assert.equal(baseline.size, Buffer.byteLength(initial));
   assert.equal(baseline.dev, original.dev.toString()); assert.equal(baseline.ino, original.ino.toString());
@@ -90,6 +91,28 @@ test('prepares a private bounded text tree with persistent authenticated manifes
   const recovered = new ProtectedWorkspaces(f.storage).manifest('job-a'); assert.notEqual(recovered.files[0].digest, 'caller mutation');
   assert.equal((await f.protection.inspect('job-a')).status, 'unchanged');
   await assert.rejects(f.protection.prepare('job-a', f.binding));
+});
+
+for (const damage of ['mode', 'content', 'missing', 'link']) test(`sealed native targets reject ${damage} changes and never copy source agent settings`, async t => {
+  const f = await fixture(t, { 'src/one.ts': initial, '.agents/private.txt': 'FAKE PRIVATE SETTING' });
+  const m = await f.protection.prepare('job-a', f.binding), target = join(m.copyRoot, '.agents');
+  assert.equal(m.files.some(file => file.path.startsWith('.agents/')), false); assert.deepEqual(await readdir(target), []);
+  if (damage === 'mode') await chmod(target, 0o755);
+  if (damage === 'content') await writeFile(join(target, 'new.txt'), 'NEW');
+  if (damage === 'missing' || damage === 'link') await rm(target, { recursive: true });
+  if (damage === 'link') await symlink(f.outside, target);
+  assert.equal((await f.protection.inspect('job-a')).status, 'blocked');
+  assert.equal(await readFile(join(f.source, '.agents/private.txt'), 'utf8'), 'FAKE PRIVATE SETTING');
+});
+
+test('an authentic legacy manifest does not silently adopt new native mount targets', async t => {
+  const f = await fixture(t), m = await f.protection.prepare('job-a', f.binding), path = join(dirname(m.copyRoot), 'manifest.json');
+  const envelope = JSON.parse(await readFile(path, 'utf8')), names = ['.agents', '.aws', '.codex', '.git'];
+  for (const name of names) await rm(join(m.copyRoot, name), { recursive: true });
+  envelope.body.directories = envelope.body.directories.filter(dir => !names.includes(dir));
+  envelope.seal = createHmac('sha256', await readFile(join(f.storage, 'seal.key'))).update(JSON.stringify(envelope.body)).digest('hex');
+  await writeFile(path, JSON.stringify(envelope)); assert.equal((await f.protection.inspect('job-a')).status, 'unchanged');
+  await mkdir(join(m.copyRoot, '.git'), { mode: 0o700 }); assert.equal((await f.protection.inspect('job-a')).status, 'blocked');
 });
 
 test('one existing UTF8 content change yields stable actual diff and a working copy cwd', async t => {

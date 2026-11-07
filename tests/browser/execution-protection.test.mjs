@@ -59,6 +59,81 @@ async function open(t, { width = 1380, configure = () => {} } = {}) {
   return { page, snapshot, requests, handlers, refresh, card: id => page.locator(`[data-job-id="${id ?? 'job-a'}"]`), posts: path => requests.filter(r => r.path === path && r.method === 'POST') };
 }
 async function settle(page) { await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); }
+function commandScope(protection = 'draft', state = 'ready') {
+  return { version: 1, state, digest: digest('7'), requestDigest: digest('8'), contextDigest: digest('9'), command: "/bin/bash -c 'cat exact.txt' # <img src=x onerror=window.injected=true>", cwd: '/fixture/protected copy', profileId: protection === 'draft' ? 'webjjoku_copy' : 'webjjoku_read', reason: null };
+}
+function protectApproval(j, protection, state = 'ready') {
+  j.status = 'blocked_approval';
+  if (protection === 'readCopy') { delete j.draft; j.readCopy = { version: 1, status: 'running', manifestDigest: digest('d'), reason: null }; }
+  j.approvals = [{ id: 'approval-scoped', rpcId: 17, method: 'item/commandExecution/requestApproval', params: { command: 'a display hint is not the approved command', cwd: '/untrusted/hint' }, status: 'pending', scope: commandScope(protection, state) }];
+}
+
+for (const protection of ['draft', 'readCopy']) test(`execution owner UI: ${protection} scoped command needs fresh owner consent and sends one exact payload`, { timeout: 30000 }, async t => {
+  const f = await open(t, { configure(s) { protectApproval(s.jobs[0], protection); } }), { page } = f;
+  const form = f.card().locator('.scoped-command-confirmation'), checkbox = form.getByRole('checkbox'), approve = form.getByRole('button', { name: '이 명령 1회 승인', exact: true });
+  const scope = f.snapshot.jobs[0].approvals[0].scope;
+  assert.equal(await form.locator('.scoped-command').textContent(), scope.command); assert.equal(await form.locator('.scoped-cwd').textContent(), scope.cwd); assert.equal(await form.locator('.scoped-profile').textContent(), protection === 'readCopy' ? '읽기 전용' : '보호 사본 수정');
+  assert.equal(await form.locator('img').count(), 0); assert.equal(await checkbox.isChecked(), false); assert.equal(await approve.isDisabled(), true);
+  await form.dispatchEvent('submit'); await settle(page); assert.equal(f.posts('/api/jobs/job-a/approve').length, 0);
+  await checkbox.check(); assert.equal(await approve.isEnabled(), true); await checkbox.uncheck(); assert.equal(await approve.isDisabled(), true);
+  await checkbox.check(); await f.refresh(); assert.equal(await checkbox.isChecked(), false); assert.equal(await approve.isDisabled(), true);
+  assert.equal(f.posts('/api/jobs/job-a/apply').length, 0); assert.equal(f.posts('/api/jobs/job-a/approve').length, 0);
+  let release, received; const held = new Promise(resolve => { release = resolve; }), started = new Promise(resolve => { received = resolve; });
+  f.handlers.set('/api/jobs/job-a/approve', async route => { received(); await held; f.snapshot.jobs[0].approvals[0].scope.state = 'sent'; await route.fulfill({ json: {} }); });
+  await checkbox.check(); await approve.click(); await started; await form.dispatchEvent('submit'); await settle(page);
+  assert.equal(f.posts('/api/jobs/job-a/approve').length, 1);
+  assert.deepEqual(f.posts('/api/jobs/job-a/approve')[0].body, { approvalId: 'approval-scoped', decision: 'accept', expectedScopeDigest: scope.digest, ownerConfirmed: true }); assert.ok(f.posts('/api/jobs/job-a/approve')[0].commandId);
+  release(); await f.card().getByText('이 명령의 1회 승인을 전달했습니다. 원래 실행 결과를 확인해 주세요.', { exact: true }).waitFor();
+  assert.equal(await f.card().getByRole('button', { name: '이 명령 1회 승인', exact: true }).count(), 0); assert.equal(f.posts('/api/jobs/job-a/apply').length, 0);
+});
+
+test('execution owner UI: latest scope, request status and binding authority fence even a retained checked form', { timeout: 45000 }, async t => {
+  const f = await open(t, { configure(s) { protectApproval(s.jobs[0], 'draft'); } }), { page } = f;
+  const baseline = structuredClone(f.snapshot);
+  const changes = [
+    s => { s.jobs[0].approvals[0].scope.digest = digest('6'); },
+    s => { s.jobs[0].approvals[0].scope.state = 'checking'; },
+    s => { s.jobs[0].approvals[0].scope.state = 'selected'; },
+    s => { s.jobs[0].approvals[0].scope.state = 'unconfirmed'; },
+    s => { s.jobs[0].approvals[0].status = 'resolved'; },
+    s => { s.jobs[0].status = 'running'; },
+    s => { s.jobs[0].approvals = []; },
+    s => { s.bindings[0].authority.revokedAt = new Date().toISOString(); },
+    s => { s.bindings[0].authority.epoch++; },
+    s => { s.bindings[0].status = 'blocked'; },
+  ];
+  for (const change of changes) {
+    await f.refresh(s => Object.assign(s, structuredClone(baseline)));
+    const form = f.card().locator('.scoped-command-confirmation'); await form.getByRole('checkbox').check(); const retained = await form.elementHandle();
+    await f.refresh(change);
+    // Simulate a late event retaining its old values, without relying only on DOM replacement.
+    await retained.evaluate(form => { document.querySelector('[data-job-id=job-a]').append(form); form.querySelector('input').checked = true; form.requestSubmit(); });
+    await page.locator('#notice:not([hidden])').waitFor(); await settle(page);
+    assert.equal(f.posts('/api/jobs/job-a/approve').length, 0);
+  }
+});
+
+test('execution owner UI: non-ready scoped states explain the wait and retain decline/cancel only', { timeout: 30000 }, async t => {
+  const f = await open(t, { configure(s) { protectApproval(s.jobs[0], 'readCopy', 'checking'); } });
+  const messages = { checking: '보호 범위를 확인하고 있습니다', blocked: '보호 범위를 확인하지 못했습니다', selected: '승인 선택이 기록되었습니다', sent: '1회 승인을 전달했습니다', unconfirmed: '승인 전달 결과를 확인하지 못했습니다' };
+  for (const [state, message] of Object.entries(messages)) {
+    await f.refresh(s => { s.jobs[0].approvals[0].scope.state = state; });
+    assert.match(await f.card().locator('.scoped-command-status').textContent(), new RegExp(message));
+    assert.equal(await f.card().getByRole('button', { name: '이 명령 1회 승인', exact: true }).count(), 0);
+    assert.doesNotMatch(await f.card().textContent(), /경로·범위를 검증하는 실행 승인은 아직 지원하지/);
+    for (const name of ['거절', '취소']) assert.equal(await f.card().getByRole('button', { name, exact: true }).isEnabled(), true);
+  }
+  assert.equal(f.posts('/api/jobs/job-a/approve').length, 0);
+});
+
+test('execution owner UI: owner lock discards scoped consent and cannot revive a retained form', { timeout: 30000 }, async t => {
+  const f = await open(t, { configure(s) { protectApproval(s.jobs[0], 'readCopy'); } }), { page } = f;
+  const form = f.card().locator('.scoped-command-confirmation'); await form.getByRole('checkbox').check(); const retained = await form.elementHandle();
+  f.handlers.set('/api/logout', route => route.fulfill({ json: {} })); await page.locator('#logout').click(); await page.locator('#login:not([hidden])').waitFor();
+  assert.equal(await page.locator('.scoped-command-confirmation').count(), 0);
+  assert.equal(await retained.evaluate(form => form.querySelector('input').checked), false);
+  await retained.evaluate(form => { document.body.append(form); form.requestSubmit(); }); await settle(page); assert.equal(f.posts('/api/jobs/job-a/approve').length, 0);
+});
 
 test('execution owner UI: explicit new-session choice omits an old ID and restores existing-session validation', { timeout: 30000 }, async t => {
   const f = await open(t), { page } = f, form = page.locator('#binding-form'), mode = form.locator('[name=sessionMode]'), thread = form.locator('[name=threadId]');

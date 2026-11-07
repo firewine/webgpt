@@ -3,6 +3,7 @@ import type { ApiDailySummary, Connection, Member, CodexJob, Discussion, Materia
 import type { RoomSummary, RoomMessage, ResidentTurn, ResidentCheckpoint } from '../workspace/resident-model.js';
 import type { ResidentStatusProjection } from '../workspace/resident-model.js';
 import type { WorkTask, WorkAttempt, SeatAssignment, WorkJobLink } from '../workspace/work-model.js';
+import type { ScopedCommandApproval } from '../execution/execution-model.js';
 import { WikiView } from './wiki-view.js';
 import { topicPublishedTurns, unregisteredConnections } from './topic-chat-view.js';
 type WorkItem = Omit<WorkTask, 'reports' | 'reviews'> & { reportCount: number; reviewCount: number };
@@ -53,6 +54,46 @@ Object.assign(topicReasons, waitReasons);
 const workReasons: Record<string, string> = { work_source_required: '근거가 된 공개 발언을 선택해 주세요.', work_acceptance_required: '수용 기준이 필요합니다.', work_assignment_required: '허용 참여자와 범위를 정해 주세요.', work_execution_phase_pending: '실제 코드 실행은 페이즈 6 연결을 기다립니다.', work_dependency_pending: '선행 일감의 완료를 기다립니다.', work_scope_not_authorized: '해당 범위를 허용한 업무 역할이 필요합니다.', work_acceptance_not_observed: '수용 기준의 직접 확인이나 실제 근거가 필요합니다.', room_settings_required: '방의 진행 한도와 속도를 설정해 주세요.', budget_exhausted: '방의 진행 한도에 도달했습니다.', work_reconciliation_required: '원래 요청·응답을 대조해 주세요.', work_scope_or_report_changed: '배정·범위·보고가 바뀌어 결과를 보류했습니다.', owner_cancelled: '소유자가 취소했습니다.' };
 const workReason = (reason: string): string => workReasons[reason] ?? '추가 확인이 필요합니다. 원래 요청·응답에서 사유를 확인해 주세요.';
 Object.assign(workReasons, { work_execution_binding_required: 'Codex 업무에 등록된 작업 공간을 선택해 주세요.', execution_binding_not_ready: '등록한 Codex 세션 연결을 확인해 주세요.', work_write_safety_unverified: '저장소 비밀·링크·출력 가림 검증이 필요해 쓰기 업무를 보류합니다. 읽기 전용 연결을 사용할 수 있습니다.', room_tool_budget_exhausted: '실행 한도나 방의 현재 진행 상태를 확인해 주세요.', work_execution_scope_changed: '방·역할·업무 버전이 달라 원래 실행 결과를 보관하고 현재 업무 반영을 보류했습니다.', work_execution_binding_changed: '등록한 작업 공간·세션·권한이 달라 대조가 필요합니다.', work_execution_input_too_large: '원문과 재작업 입력이 실행기 한도를 넘었습니다. 원문을 보존하며 일감 범위를 조정해 주세요.' });
+
+export function scopedCommandReady(scope: ScopedCommandApproval | undefined): scope is ScopedCommandApproval {
+  return scope?.version === 1 && scope.state === 'ready' && /^[a-f0-9]{64}$/.test(scope.digest) && ['webjjoku_read', 'webjjoku_copy'].includes(scope.profileId) && [scope.command, scope.cwd].every(v => typeof v === 'string' && v.length > 0);
+}
+export function scopedCommandStatus(scope: ScopedCommandApproval): string {
+  const messages: Record<ScopedCommandApproval['state'], string> = {
+    checking: '명령의 보호 범위를 확인하고 있습니다. 확인이 끝날 때까지 기다려 주세요.',
+    ready: '아래 명령과 작업 위치·허용 범위를 확인한 뒤 이번 1회만 승인하세요.',
+    blocked: '이 명령의 보호 범위를 확인하지 못했습니다. 거절하거나 취소해 주세요.',
+    selected: '이 명령의 승인 선택이 기록되었습니다. 전달 결과를 확인하고 있습니다.',
+    sent: '이 명령의 1회 승인을 전달했습니다. 원래 실행 결과를 확인해 주세요.',
+    unconfirmed: '승인 전달 결과를 확인하지 못했습니다. 원래 실행 기록을 대조해 주세요.',
+  };
+  return messages[scope.state] ?? messages.blocked;
+}
+export function resetScopedCommandConfirmations(container: HTMLElement): void {
+  for (const form of container.querySelectorAll<HTMLFormElement>('.scoped-command-confirmation')) form.reset();
+}
+// Both owner views bind confirmation to the values actually shown. Replacing or
+// resetting the form discards consent; render and refresh never send approvals.
+export function scopedCommandConfirmation(scope: ScopedCommandApproval, approve: (digest: string) => Promise<unknown>, report: (error: unknown) => void, unavailable = false): HTMLFormElement {
+  const shown = { ...scope }, form = el('form', '', 'scoped-command-confirmation');
+  form.append(el('h4', '이번 1회 실행할 명령'), el('pre', shown.command, 'scoped-command'), el('h4', '작업 위치'), el('pre', shown.cwd, 'scoped-cwd'), el('h4', '허용 범위'), el('p', shown.profileId === 'webjjoku_read' ? '읽기 전용' : '보호 사본 수정', 'scoped-profile'));
+  const record = el('details'); record.append(el('summary', '승인 확인 기록'), el('pre', shown.profileId + '\n' + shown.digest, 'execution-digest')); form.append(record);
+  const label = el('label', '', 'check'), owner = el('input'); owner.type = 'checkbox'; owner.required = true; owner.autocomplete = 'off'; owner.disabled = unavailable;
+  label.append(owner, el('span', '소유자로서 위 명령·작업 위치·허용 범위를 직접 확인했습니다.'));
+  const submit = el('button', '이 명령 1회 승인'); submit.type = 'submit'; submit.disabled = true;
+  const status = el('p', '', 'small'); status.setAttribute('role', 'status');
+  let selected = false;
+  owner.addEventListener('change', () => { submit.disabled = unavailable || selected || !owner.checked; });
+  form.addEventListener('reset', () => { submit.disabled = true; });
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    if (unavailable || selected || !owner.checked || !form.isConnected || $('#workspace').hidden) return;
+    selected = true; owner.checked = false; owner.disabled = true; submit.disabled = true;
+    status.textContent = '승인 전달 결과를 확인하고 있습니다.';
+    void Promise.resolve().then(() => form.isConnected && !$('#workspace').hidden ? approve(shown.digest) : undefined).catch(error => { status.textContent = '승인 결과를 확인하지 못했습니다. 최신 기록을 확인해 주세요.'; report(error); });
+  });
+  form.append(label, submit, status); return form;
+}
 
 // Match the existing focus publication boundary. A completed speaker alone does
 // not publish an unfinished round, a retry, or a previous topic revision.
@@ -179,6 +220,7 @@ export class RoomView {
   }
   closeNavigation(): void { this.closeDrawers(); }
   clear(): void {
+    resetScopedCommandConfirmations($('#work-detail'));
     this.selectedTopic = null;
     this.inTopic = false;
     this.closeDrawers(); this.detail = null; this.snapshot = null; this.roomId = ''; this.messages.clear(); this.originals.clear(); this.rows.clear(); this.noticeIds.clear(); this.turns = [];
@@ -190,6 +232,7 @@ export class RoomView {
     this.replyTo = null; this.mentions.clear(); this.uncertain = false; this.sending = false; this.panelsSignature = ''; this.restoreOnShow = true; this.loaded = false; this.renderReply();
   }
   async refresh(snapshot: RoomSnapshot): Promise<void> {
+    resetScopedCommandConfirmations($('#work-detail'));
     this.snapshot = snapshot;
     const next = snapshot.resident.rooms.find(r => r.id === this.roomId) ?? snapshot.resident.rooms[0];
     if (!next) {
@@ -295,7 +338,7 @@ export class RoomView {
     const request = ++this.workDetailRequest; const roomId = this.roomId; const wasOpen = $<HTMLDialogElement>('#work-detail-dialog').open;
     const { task: t, attempts, executions } = await this.deps.api<{ task: WorkTask; attempts: WorkAttempt[]; executions: { link: WorkJobLink; job: CodexJob | null }[] }>(this.path('/work/' + taskId));
     if (!this.active || request !== this.workDetailRequest || roomId !== this.roomId || wasOpen && !$<HTMLDialogElement>('#work-detail-dialog').open) return; this.closeDrawers();
-    const target = $('#work-detail'); target.dataset.taskId = t.id; target.dataset.version = String(t.version); target.replaceChildren(el('h3', t.title), el('p', `${label(t.status)}${t.reason ? ' · ' + workReason(t.reason) : ''}`, 'small muted'), el('p', t.description, 'pre-line'));
+    const target = $('#work-detail'); resetScopedCommandConfirmations(target); target.dataset.taskId = t.id; target.dataset.version = String(t.version); target.replaceChildren(el('h3', t.title), el('p', `${label(t.status)}${t.reason ? ' · ' + workReason(t.reason) : ''}`, 'small muted'), el('p', t.description, 'pre-line'));
     target.append(this.btn('기록 새로고침', () => this.openWork(t.id)));
     for (const a of t.acceptance) target.append(el('p', '수용 기준 · ' + a.text, 'small'));
     target.append(el('p', `근거 발언 ${t.sourceMessageIds.length} · 선행 일감 ${t.dependencies.length} · ${this.scopeChoices().find(s => s.id === t.authorizedScopeRef)?.label ?? '등록한 범위 확인 필요'}`, 'small muted'));
@@ -327,10 +370,17 @@ export class RoomView {
     if (link.error) card.append(el('p', workReason(link.error), 'topic-caveat'));
     const original = el('details'); original.append(el('summary', '기록된 요청·가린 출력·근거'), el('pre', JSON.stringify({ requestId: link.input.requestId, jobId: link.codexJobId, threadId: link.binding.threadId, turnId: job?.turnId, intentDigest: link.intentDigest, prompt: link.input.prompt, result: link.result, activities: job?.activities, error: job?.error }, null, 2))); card.append(original);
     const act = async (action: string, body: unknown) => { await this.deps.api(`/api/jobs/${job!.id}/${action}`, body); await this.deps.refresh(); if ($<HTMLDialogElement>('#work-detail-dialog').open) await this.openWork(link.taskId); };
-    for (const a of job?.approvals.filter(a => a.status === 'pending' && job.status === 'blocked_approval') ?? []) {
+    for (const a of job?.approvals.filter(a => a.status === 'pending' && (job.status === 'blocked_approval' || (job.draft || job.readCopy) && a.scope)) ?? []) {
       const pending = el('section'); pending.append(el('h4', '실행 승인 요청'), el('pre', JSON.stringify(a.params, null, 2)));
-      if (job?.draft) pending.append(el('p', '보호 사본 작업의 추가 권한 승인은 지원하지 않습니다. 거절·취소 후 원래 실행을 대조하세요.', 'topic-caveat'));
-      for (const [decision, text] of (job?.draft || job?.readCopy ? [['decline', '이번 실행 요청 거절'], ['cancel', '이번 실행 요청 취소']] : [['accept', '이번 실행 요청 승인'], ['decline', '이번 실행 요청 거절'], ['cancel', '이번 실행 요청 취소']])) pending.append(this.btn(text!, () => act('approve', { approvalId: a.id, decision })));
+      if (job?.draft || job?.readCopy) {
+        if (a.scope) pending.append(el('p', scopedCommandStatus(a.scope), 'small scoped-command-status'));
+        if (job.status === 'blocked_approval' && scopedCommandReady(a.scope)) pending.append(scopedCommandConfirmation(a.scope, async digest => {
+          if (!this.active || !$<HTMLDialogElement>('#work-detail-dialog').open) return;
+          await act('approve', { approvalId: a.id, decision: 'accept', expectedScopeDigest: digest, ownerConfirmed: true });
+        }, this.deps.report));
+        else if (!a.scope) pending.append(el('p', '보호 사본 작업의 추가 권한 승인은 지원하지 않습니다. 거절·취소 후 원래 실행을 대조하세요.', 'topic-caveat'));
+      }
+      if (job?.status === 'blocked_approval') for (const [decision, text] of (job.draft || job.readCopy ? [['decline', '이번 실행 요청 거절'], ['cancel', '이번 실행 요청 취소']] : [['accept', '이번 실행 요청 승인'], ['decline', '이번 실행 요청 거절'], ['cancel', '이번 실행 요청 취소']])) pending.append(this.btn(text!, () => act('approve', { approvalId: a.id, decision })));
       card.append(pending);
     }
     if (job && ['queued', 'running', 'blocked_approval'].includes(job.status)) card.append(this.btn('이 실행만 중단 요청', () => act('cancel', {})));

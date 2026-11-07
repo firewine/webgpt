@@ -13,6 +13,7 @@ import { CodexExecutor } from '../dist/server/execution/codex.js';
 // Synthetic only: no model or user-session fixture. Build before standalone use.
 import { ExecutionIsolation } from '../dist/server/execution/isolation.js';
 import { isolationEnvironment, outerIdentity } from '../dist/server/execution/outer-bwrap.js';
+import { NATIVE_METADATA_DIRECTORIES } from '../dist/server/execution/workspace-protection.js';
 const run = promisify(execFile);
 const sh = s => `'${s.replaceAll("'", "'\\''")}'`;
 const available = name => (process.env.PATH ?? '').split(':').filter(Boolean).some(p => existsSync(join(p, name)));
@@ -117,6 +118,8 @@ test('actual named profile confines persistent writes and denies secret reads/tm
   const f = await fixture(t); const c = f.isolation.context(f.binding, f.copy);
   // The profile grants the original alias, never the physical copy under denied state.
   const alias = join(f.base, 'synthetic-alias'); await mkdir(join(alias, 'sub'), { recursive: true }); await writeFile(join(alias, 'tracked'), 'COPY');
+  // Match the private empty mount targets prepared and sealed by ProtectedWorkspaces.
+  for (const name of NATIVE_METADATA_DIRECTORIES) await mkdir(join(alias, name), { mode: 0o700 });
   const server = createServer(s => { s.destroy(); }); let connections = 0; server.on('connection', () => connections++);
   try { await new Promise((ok, fail) => { server.once('error', fail); server.listen(0, '127.0.0.1', ok); }); }
   catch (e) { if (['EPERM', 'EACCES'].includes(e.code)) return t.skip('Host forbids the synthetic network listener; no profile containment proof'); throw e; }

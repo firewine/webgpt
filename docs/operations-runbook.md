@@ -340,16 +340,19 @@ PR #58 단독의 기존 broad readonly는 인증 파일 차단이 검증되지 �
 
 PR #59의 [최소 읽기·새 세션 보완](./implementation/r6-readonly-session-20261107.md)은 별도 `webjjoku_read` profile/정제 readonly 사본을 사용한다. 과거 readonly 등록은 보호 확인 후 재등록해야 하며 자동 승격하지 않는다. 실행 화면에서 ‘기존 세션’을 고르면 실제 thread ID가 필요하고, ‘새 세션’을 고르면 ID 없이 앱이 생성/첫 요청까지 같은 연결을 유지한다. 첫 요청 전 연결을 잃은 경우 화면의 유실 안내에 따라 명시 재등록하며 준비용 모델 호출로 새 thread를 미리 실행하지 않는다.
 
-Ubuntu의 DNS가 `/run`을 가리키면 trusted App Server에 resolver 시스템 파일1개만 readonly로 보존한다. 원래 호스트 설정이나 모델 도구의 network-disabled profile을 바꾸지 않는다. 실제 계정 확인/동일 연결 최초 전달은 확인됐으나 명령1회 승인 지원이 없어 R6-F 전체는 BLOCKED다. 현재 protected job의 승인/steer를 직접 RPC·정책 변경으로 우회하지 않으며, 후속 기능은 별도 영향 보고·승인과 승인 후 보호 proof가 필요하다.
+Ubuntu의 DNS가 `/run`을 가리키면 trusted App Server에 resolver 시스템 파일1개만 readonly로 보존한다. 원래 호스트 설정이나 모델 도구의 network-disabled profile을 바꾸지 않는다. 실제 계정 확인/동일 연결 최초 전달은 확인됐으나 당시 명령 승인에서 중단돼 R6-F 전체는 BLOCKED다. 후속 [명령1회 승인 보완](./implementation/r6-scoped-command-approval-20261107.md)은 승인 후에도 보호가 유지되는 실제 CLI 합성 proof를 실행한 뒤, 해당 명령·작업 위치·허용 범위를 두 실행 화면에서 확인하고 체크한 경우에만 ‘이 명령 1회 승인’을 허용한다. proof 검사 중/실패·추가 권한·원문 불완전·변경된 권한/세대·오래된 화면에서는 승인할 수 없다. 세션 전체 승인·prefix 저장·steer 허용은 추가하지 않는다. 쓰기 사본의 원본1파일 반영 확인은 별도다.
+
+새 사본은 native CLI의 mount 준비용 `.agents/.aws/.codex/.git` 빈 폴더를 `0700`으로 먼저 만들고 기존 봉인 manifest에 기록한다. 원래 설정은 복사하지 않으며 내용 추가·권한 변경·삭제·링크는 검사를 차단한다. 과거 사본/manifest를 고쳐 새 승인 권한을 부여하지 않는다. 승인 선택과 전송 intent는 전송 전에 저장한다. 재시작/전송 오류 시 미확정으로 남기고 원래 요청/원문을 대조하며 자동 승인·재전송하지 않는다.
 
 ```bash
 npm run build
 WJ_TEST_OUTER_BWRAP=/usr/local/libexec/webjjoku/bwrap \
   setpriv --no-new-privs node --test --test-reporter=spec \
-  --test-name-pattern='full runtime proof is mandatory' tests/execution-isolation.test.mjs
+  --test-name-pattern='^full runtime proof is mandatory|^real App Server can register|^native ' \
+  tests/execution-isolation.test.mjs tests/native-approval.test.mjs
 ```
 
-합성 검사는 실제 모델/사용자 thread/실제 credential을 사용하지 않는다. 최종 도구 label의 `unpriv_bwrap`·전용 launcher 재실행 거절·namespace 재획득 거절과 기존 source/state/auth/Chrome/proc/fd/tmp/network canary가 함께 통과해야 한다. SKIP은 보호 성공이 아니며 WRITE gate를 유지한다. 운영처럼 unconfined/NoNewPrivileges 조건에서 확인한다. 다른 개발 격리 label이 이미 붙어 있으면 전용 예외만으로 그 제한을 제거하지 않는다.
+위 선택 검사는 실제 CLI+가짜 Responses·임시 Git·가짜 auth를 사용하며 현재 호스트에서6 PASS/0 SKIP이다. 실제 모델/사용자 thread/실제 credential을 사용하지 않는다. 최종 도구 label의 `unpriv_bwrap`·전용 launcher 재실행 거절·namespace 재획득 거절과 기존 source/state/auth/Chrome/proc/fd/tmp/network canary가 승인 전후 함께 통과해야 한다. 정상 명령과 추가 실행을 요청한 명령 모두 read/write profile을 확인한다. SKIP은 보호 성공이 아니며 WRITE gate를 유지한다. 운영처럼 unconfined/NoNewPrivileges 조건에서 확인한다. 다른 개발 격리 label이 이미 붙어 있으면 전용 예외만으로 그 제한을 제거하지 않는다. 이 합성 결과로 실계정 R6-F를 완료 처리하지 않는다.
 
 복구는 새 job 준비를 중단하고 기존 running/approval/reconciling/applying/미확정을 원래 ID로 대조한 뒤 권한을 회수해 수행한다. `install`을 `remove`로 바꾸면 진행 중 전용 label/프로세스0을 확인하고 전용 프로필만 unload한 뒤 추가 파일을 제거한다. 다른 AppArmor 프로필/stock binary/전역 설정은 바꾸지 않는다. 패키지/설치 파일이 달라졌으면 제거도 중단하므로 원문·설치 결과를 보존하고 관리자 검토한다. 원래 설정에서 proof가 실패하면 쓰기는 다시 차단된다. `.env`·DB/원문/사본·key·Chrome은 삭제하거나 과거 backup으로 덮어쓰지 않는다.
 

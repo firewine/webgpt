@@ -20,7 +20,7 @@ function finish(status = 'completed') {
 }
 for await (const line of createInterface({ input: process.stdin })) {
   const m = JSON.parse(line); appendFileSync(trace, JSON.stringify({ ...m, pid: process.pid }) + '\n');
-  if (!m.method) { if (m.id === 'managed-approval') finish(m.result?.decision === 'accept' ? 'completed' : 'interrupted'); continue; }
+  if (!m.method) { if (m.id === 'managed-approval' && !(mode === 'scoped-hold' && m.result?.decision === 'accept')) finish(m.result?.decision === 'accept' ? 'completed' : 'interrupted'); continue; }
   let result = {}, error;
   if (m.method === 'initialize') result = { userAgent: 'synthetic-managed-codex' };
   else if (m.method === 'permissionProfile/list') result = { data: ['webjjoku_read', 'webjjoku_copy'].map(id => ({ id, allowed: true })) };
@@ -36,7 +36,8 @@ for await (const line of createInterface({ input: process.stdin })) {
       persist(current); result = { turn: current };
       setTimeout(() => {
         if (!current) return; event('turn/started', { turn: current });
-        if (mode === 'approval') output({ id: 'managed-approval', method: 'item/commandExecution/requestApproval', params: { threadId: thread.id, turnId: current.id, command: 'synthetic content check' } });
+        if (mode === 'scoped-approval' || mode === 'scoped-hold') output({ id: 'managed-approval', method: 'item/commandExecution/requestApproval', params: { kind: 'command', threadId: thread.id, turnId: current.id, itemId: 'command-' + count, environmentId: 'local', command: "/bin/bash -c 'cat source.txt'", cwd: thread.cwd, commandActions: [{ type: 'read', command: 'cat source.txt', name: 'source.txt', path: join(thread.cwd, 'source.txt') }], proposedExecpolicyAmendment: ['cat', 'source.txt'], availableDecisions: ['accept', { acceptWithExecpolicyAmendment: { execpolicy_amendment: ['cat', 'source.txt'] } }, 'cancel'] } });
+        else if (mode === 'approval') output({ id: 'managed-approval', method: 'item/commandExecution/requestApproval', params: { threadId: thread.id, turnId: current.id, command: 'synthetic content check' } });
         else if (mode !== 'hold') finish();
       }, 20);
     }

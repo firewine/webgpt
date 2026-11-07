@@ -1,6 +1,6 @@
 # R6 후속 영향안 — 보호 범위를 유지하는 명령 1회 승인
 
-상태: **제안 / 사용자 승인 전 / 새 승인 기능 미구현.** 현재 승인받은 읽기 보호·새 세션 보완의 실계정 검증에서 발견한 후속 차단 조건이다. 현재 보호 승인 차단은 유지한다. 이 문서를 작성하는 것으로 계획·제품 계약이나 실제 호출 한도를 바꾸지 않는다.
+상태: **2026-11-07 사용자 “계획 개정·명령 1회 승인 보완 개발 승인” / 단계A~D 구현·합성 검사 완료, PR 검토 대상.** 병합된 main `6351fb04fbbed6b433bff1d10ec7a999e128e2ba`에서 진행했다. 단계A의 실제 CLI 승인 후 보호6건 PASS/0 SKIP을 확인했으며 실행 시에도 해당 환경의 증명이 통과해야 승인할 수 있다. 추가 실계정 호출·배포·호스트 설정 변경0. 최신 결과·정확한 계약·변경량은 [구현 기록](../implementation/r6-scoped-command-approval-20261107.md)을 따른다. 아래 영향/예상량은 승인 당시 제안으로 보존한다.
 
 ## 관측과 원인
 
@@ -8,7 +8,7 @@
 
 `src/execution/codex.ts::decide`는 draft/readCopy의 ACCEPT를 `protected_approval_requires_scoped_support`로 막는다. 보호 상태를 추가한 승인안이 유지하기로 한 경계이므로 이번 실검증에서 제거하지 않았다. `untrusted`를 바꾸거나 CLI에 직접 ACCEPT를 보내는 우회도 하지 않았다. 현재 요청은 취소·권한 회수했고 원래 job/원문을 보존했다.
 
-설치 버전과 같은 공식 소스 [ToolOrchestrator](https://github.com/openai/codex/blob/rust-v0.166.0/codex-rs/core/src/tools/orchestrator.rs)의 `run`은 승인 뒤 `sandbox_override_for_first_attempt`와 `for_approved_command`에 따라 별도 실행 범위를 만들 수 있다. 따라서 **plain ACCEPT가 기존 최소 profile을 그대로 유지한다는 것은 UNVERIFIED**다. 현재 canary PASS만으로 승인 후 실행까지 안전하다고 주장할 수 없다.
+설치 버전과 같은 공식 소스 [ToolOrchestrator](https://github.com/openai/codex/blob/rust-v0.166.0/codex-rs/core/src/tools/orchestrator.rs)의 `run`은 승인 뒤 `sandbox_override_for_first_attempt`와 `for_approved_command`에 따라 별도 실행 범위를 만들 수 있다. 따라서 **제안 당시 plain ACCEPT 이후의 보호는 UNVERIFIED**였으며, 승인 전 canary PASS만으로 이후 실행까지 안전하다고 주장하지 않았다. 후속 구현은 실제0.166.0의 정상/추가 실행 요청 각각에서 승인 후 read/write 보호를 합성 검사했다. 다른 CLI·profile·호스트 조합의 성공을 추정하지 않는다.
 
 ## 제안과 변경량
 
@@ -34,8 +34,8 @@
 
 복귀는 새 승인/dispatch를 멈추고 원래 RPC 요청·선택 intent·turn/결과를 대조한 뒤 현재처럼 보호 ACCEPT 차단으로 돌아간다. 이미 보낸 승인을 취소됐다고 추정하거나 원문/사본을 지우지 않는다. 새 승인 proof 실패를 호스트 설정 확대나 전역 격리 해제로 해결하지 않는다.
 
-## 사용자 결정 필요
+## 승인 기록과 남은 수락
 
-권장: A의 실제 무호출 승인 후 보호 증명을 선행 조건으로 한 **계획 개정·개발**. 증명 실패 시 제품의 명령 승인은 계속 차단하고 근거를 보고한다. 현재 계약을 유지하는 대안은 추가 개발0이지만 R6-F는 BLOCKED다. `untrusted` 해제·무조건 ACCEPT·영구 prefix 허용은 제안하지 않는다.
+사용자가 A의 실제 무호출 승인 후 보호 증명을 선행 조건으로 한 **계획 개정·개발**을 승인했다. 증명 실패 시 제품의 명령 승인은 계속 차단하고 근거를 보고한다. `untrusted`·기존 보호·원래50 gate는 유지한다. 단계A~D 구현·합성 검사와 미실시 실계정 수락은 [구현 기록](../implementation/r6-scoped-command-approval-20261107.md)으로 구분한다.
 
 이번 제안에는 추가 실계정 호출·배포가 포함되지 않는다. 이미 사용한 실계정1job은 중단 기록으로 보존하며 완료로 세지 않는다. 후속 실제 읽기/재작업 수락을 위한 새 호출 창과 구체 명령·반영/리뷰는 구현·검사 후 별도 확인한다.

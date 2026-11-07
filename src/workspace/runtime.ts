@@ -88,7 +88,7 @@ export class Workspace {
     this.materials = new LocalMaterials(config.materialRoots, [config.stateDir, config.chromeProfileDir]);
     this.engine.materials = this.materials;
     mkdirSync(config.chromeProfileDir, { recursive: true, mode: 0o700 });
-    this.codex = new CodexExecutor(this.store, config.codexCommand, config.workspaceRoots, [config.stateDir, config.chromeProfileDir], { protectRead: true, ...(config.outerBwrap ? { outerBwrap: config.outerBwrap } : {}), secrets: () => {
+    this.codex = new CodexExecutor(this.store, config.codexCommand, config.workspaceRoots, [config.stateDir, config.chromeProfileDir], { protectRead: true, scopedApprovals: true, ...(config.outerBwrap ? { outerBwrap: config.outerBwrap } : {}), secrets: () => {
       const values = [token!];
       for (const c of this.store.read().connections) { const secret = this.vault.get<Record<string, unknown>>(c.id);
         if (secret) for (const [key, value] of Object.entries(secret)) if (/key|token|secret/i.test(key) && typeof value === 'string') values.push(value); }

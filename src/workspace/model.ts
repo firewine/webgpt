@@ -145,7 +145,7 @@ export interface CodexJob {
   capture?: { version: 1; artifactId: string; jobId: string; digest: string; byteLength: number; pageCount: number; complete: boolean; reason: string | null };
   draft?: { version: 1; status: 'preparing' | 'running' | 'pending' | 'unchanged' | 'blocked' | 'applying' | 'applied' | 'conflict' | 'unconfirmed'; manifestDigest?: string; diffDigest?: string; reason?: string | null; receipt?: { path: string; beforeDigest: string; afterDigest: string; appliedAt: string } };
   activities: { id: string; type: string; status: string; text: string; observedAt: string; command?: { command: string | null; exitCode: number | null; output: string | null }; truncated?: boolean }[];
-  approvals: { id: string; rpcId: number | string; method: string; params: Record<string, unknown>; status: 'pending' | 'resolved' }[];
+  approvals: { id: string; rpcId: number | string; method: string; params: Record<string, unknown>; status: 'pending' | 'resolved'; scope?: import('../execution/execution-model.js').ScopedCommandApproval }[];
 }
 export interface WorkspaceState {
   version: 1; hostId: string; connections: Connection[]; participants: Member[]; discussions: Discussion[];

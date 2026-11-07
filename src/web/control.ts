@@ -1,7 +1,8 @@
 import { DotConnectionsView } from './dot-connections.js';
 import type { DotConnectionStatus } from '../workspace/dot-mcp-model.js';
 import type { Connection, Member, Discussion, ExecutionBinding, CodexJob, DurableEvent, Phase, MaterialPackage, ProviderKind, DeviceSignin } from '../workspace/model.js';
-import { RoomView } from './room-view.js';
+import { RoomView, scopedCommandReady, scopedCommandStatus, scopedCommandConfirmation, resetScopedCommandConfirmations } from './room-view.js';
+import type { ScopedCommandApproval } from '../execution/execution-model.js';
 import { TopicChatView } from './topic-chat-view.js';
 import type { RoomSnapshot } from './room-view.js';
 import type { DiscoveryPage, DiscoveryResult } from '../connections/browser-discovery-model.js';
@@ -505,6 +506,12 @@ const executionReasons: Record<string, string> = {
   protected_draft_required: '보호 사본 기록이 없어 원본에 반영할 수 없습니다.',
   draft_not_applicable: '확인한 diff나 반영 조건이 달라졌습니다. 최신 상태와 새 diff를 확인하세요.',
   protected_approval_requires_scoped_support: '보호 사본의 경로·범위를 검증하는 실행 승인은 아직 지원하지 않습니다. 이 요청은 거절하거나 취소할 수 있습니다.',
+  execution_approval_changed: '확인한 명령이나 승인 상태가 바뀌었습니다. 최신 요청을 열고 범위를 다시 확인하세요.',
+  scoped_approval_scope_changed: '확인한 명령이나 승인 상태가 바뀌었습니다. 최신 요청을 열고 범위를 다시 확인하세요.',
+  scoped_approval_runtime_changed: '실행 연결이나 보호 범위가 바뀌었습니다. 원래 실행 기록을 대조하세요.',
+  protected_approval_confirmation_required: '명령·작업 경로·보호 프로필을 확인한 뒤 소유자 확인란을 체크하세요.',
+  scoped_approval_reconciliation_required: '승인 전달 결과가 미확정입니다. 원래 실행과 전달 기록을 대조하세요.',
+  approval_not_pending: '이 승인 요청은 더 이상 대기 상태가 아닙니다. 최신 실행 기록을 확인하세요.',
   protected_workspace_stale_diff: '보호 사본의 diff가 바뀌었습니다. 새 diff를 직접 확인하세요.',
   protected_workspace_source_changed: '원본 파일이 실행 기준 뒤에 변경되어 반영을 거절했습니다. 원본과 보호 사본을 대조하세요.',
   protected_workspace_source_repository_changed: '원본 저장소의 브랜치·기준이 바뀌어 반영을 거절했습니다. 실행 당시 기준과 대조하세요.',
@@ -547,6 +554,11 @@ function jobAuthorityReason(job: CodexJob): string | null {
   }
   return null;
 }
+function scopedApprovalReason(job: CodexJob | undefined, approvalId: string, shown: ScopedCommandApproval): string | null {
+  const approval = job?.approvals.find(a => a.id === approvalId), scope = approval?.scope;
+  if (!job || !(job.draft || job.readCopy) || job.status !== 'blocked_approval' || approval?.status !== 'pending' || !scopedCommandReady(scope) || scope.digest !== shown.digest || scope.command !== shown.command || scope.cwd !== shown.cwd || scope.profileId !== shown.profileId) return 'execution_approval_changed';
+  return jobAuthorityReason(job) ?? job.resultScopeReason ?? null;
+}
 function scheduleAuthorityExpiry(): void {
   clearTimeout(authorityTimer); if (!state) return;
   const next = [...state.bindings, ...state.grants].map(b => Date.parse(b.authority?.expiresAt ?? '')).filter(t => t > Date.now());
@@ -580,6 +592,7 @@ function prefillBinding(b: ExecutionBinding): void {
   announce('기존 등록 내용을 채웠습니다. 권한 기간과 수정 범위를 확인한 뒤 등록하세요.');
 }
 function clearExecutionPrivate(): void {
+  resetScopedCommandConfirmations($('#jobs-list'));
   clearTimeout(authorityTimer); evidenceViews.clear(); draftViews.clear(); applyConfirmation = null;
   $<HTMLDialogElement>('#draft-apply-dialog').close(); $('#draft-apply-summary').replaceChildren(); $('#draft-apply-state').textContent = '';
   $<HTMLFormElement>('#draft-apply-form').reset(); $('#jobs-list').replaceChildren(); $('#grant-result').textContent = '';
@@ -693,7 +706,7 @@ function renderJobs(): void {
   for (const id of evidenceViews.keys()) if (!state.jobs.some(j => j.id === id)) evidenceViews.delete(id);
   for (const id of draftViews.keys()) if (!state.jobs.some(j => j.id === id)) draftViews.delete(id);
   renderRunAccess(); renderApplyConfirmation();
-  preserve($('#jobs-list'), () => { const target = $('#jobs-list'); target.replaceChildren();
+  preserve($('#jobs-list'), () => { const target = $('#jobs-list'); resetScopedCommandConfirmations(target); target.replaceChildren();
     for (const job of state!.jobs.toReversed()) { const card = node('section', '', 'panel execution-job'); card.dataset.jobId = job.id;
       const head = node('div', '', 'inline'); head.append(node('h2', state!.bindings.find(b => b.id === job.bindingId)?.label ?? 'Codex 작업')); card.append(head, node('p', `${job.id} · ${job.turnId ?? 'turn 수신 전'}`, 'small muted'));
       const statuses = node('dl', '', 'execution-status'); statuses.append(node('dt', '원격 실행'), node('dd', states[job.status] ?? job.status));
@@ -712,7 +725,15 @@ function renderJobs(): void {
       if (job.status === 'reconciling') controls.append(button('실제 turn 결과 대조', async () => { if (!job.turnId) modal('수신되지 않은 Codex turn 대조', [{ name: 'turnId', label: '실제 세션에서 확인한 turn ID' }], async data => { await api(`/api/jobs/${job.id}/reconcile`, data); await refresh(); }, '원격 기록의 입력·시각·세션·완료 상태를 함께 검사합니다. 새 실행을 시작하지 않습니다.'); else { await api(`/api/jobs/${job.id}/reconcile`, {}); await refresh(); } })); card.append(controls);
       for (const approval of job.approvals.filter(a => a.status === 'pending')) {
         const section = node('section', '', 'panel'); section.append(node('h3', '실행 승인 요청'), node('pre', JSON.stringify(approval.params, null, 2)));
-        if (job.draft || job.readCopy) section.append(node('p', executionReason('protected_approval_requires_scoped_support'), 'small execution-warning'));
+        if (job.draft || job.readCopy) {
+          const scope = approval.scope;
+          if (scope) section.append(node('p', scopedCommandStatus(scope), 'small scoped-command-status'));
+          if (scopedCommandReady(scope)) section.append(scopedCommandConfirmation(scope, async digest => {
+            const reason = scopedApprovalReason(state?.jobs.find(j => j.id === job.id), approval.id, scope); if (reason) throw new Error(reason);
+            await api(`/api/jobs/${job.id}/approve`, { approvalId: approval.id, decision: 'accept', expectedScopeDigest: digest, ownerConfirmed: true }); await refresh();
+          }, report, !!scopedApprovalReason(job, approval.id, scope)));
+          else if (!scope) section.append(node('p', executionReason('protected_approval_requires_scoped_support'), 'small execution-warning'));
+        }
         const row = node('div', '', 'toolbar'), decisions = [...(job.draft || job.readCopy ? [] : [['accept', '이번 요청 승인']]), ['decline', '거절'], ['cancel', '취소']];
         for (const [decision, label] of decisions) {
           const action = button(label!, async () => {

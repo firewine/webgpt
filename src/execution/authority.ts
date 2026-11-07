@@ -1,6 +1,7 @@
 import type { WorkspaceState, CodexJob, ExecutionBinding } from '../workspace/model.js';
 import { AppError, integer, digest } from '../workspace/util.js';
 import type { ExecutionAuthority } from './execution-model.js';
+import { validateScopedApproval } from './approval-policy.js';
 export type { ExecutionAuthority, JobAuthority } from './execution-model.js';
 export function issueAuthority(hours: unknown, epoch = 1, clock = Date.now()): ExecutionAuthority {
   const duration = integer(hours, 24, 1, 168);
@@ -41,7 +42,8 @@ export function assertJobAuthority(s: WorkspaceState, j: CodexJob, clock = Date.
 }
 export function initializeExecutionProtection(s: WorkspaceState): void {
   if (s.executionProtectionVersion !== undefined && s.executionProtectionVersion !== 1) throw new AppError('unsupported_execution_protection_schema', 503);
-  if (s.executionProtectionVersion === undefined && (s.bindings.some(b => b.authority || b.readProtection !== undefined || b.managedSession !== undefined) || s.jobs.some(j => j.authority || j.readCopy !== undefined) || s.grants.some(g => g.authority))) throw new AppError('execution_protection_state_missing', 503);
+  if (s.jobs.some(j => j.approvals !== undefined && !Array.isArray(j.approvals))) throw new AppError('invalid_scoped_approval_state', 503);
+  if (s.executionProtectionVersion === undefined && (s.bindings.some(b => b.authority || b.readProtection !== undefined || b.managedSession !== undefined) || s.jobs.some(j => j.authority || j.readCopy !== undefined || j.approvals?.some(a => a.scope !== undefined)) || s.grants.some(g => g.authority))) throw new AppError('execution_protection_state_missing', 503);
   for (const a of [...s.bindings.map(b => b.authority), ...s.grants.map(g => g.authority)]) if (a !== undefined && (!a || authorityReason(a) === 'execution_authority_invalid')) throw new AppError('invalid_execution_authority_state', 503);
   for (const j of s.jobs) if (j.authority && (j.authority.version !== 1 || !j.authority.binding || !Number.isSafeInteger(j.authority.binding.epoch))) throw new AppError('invalid_job_authority_state', 503);
   for (const j of s.jobs) if (j.capture && (j.capture.version !== 1 || j.capture.jobId !== j.id || typeof j.capture.complete !== 'boolean' || !Number.isSafeInteger(j.capture.byteLength) || j.capture.byteLength < 0) || j.draft && j.draft.version !== 1) throw new AppError('invalid_execution_protection_state', 503);
@@ -52,5 +54,9 @@ export function initializeExecutionProtection(s: WorkspaceState): void {
   }
   for (const j of s.jobs) if (j.readCopy !== undefined && (!j.readCopy || j.readCopy.version !== 1 || !['preparing', 'running', 'checked', 'blocked'].includes(j.readCopy.status) ||
     j.draft || ['running', 'checked'].includes(j.readCopy.status) && !/^[a-f0-9]{64}$/.test(j.readCopy.manifestDigest ?? '') || j.readCopy.reason !== null && typeof j.readCopy.reason !== 'string')) throw new AppError('invalid_read_copy_state', 503);
+  for (const j of s.jobs) for (const a of j.approvals ?? []) if (a.scope !== undefined) {
+    validateScopedApproval(a.scope);
+    if (!j.authority || !j.draft && !j.readCopy || a.scope.profileId !== (j.draft ? 'webjjoku_copy' : 'webjjoku_read')) throw new AppError('invalid_scoped_approval_state', 503);
+  }
   s.executionProtectionVersion = 1;
 }
