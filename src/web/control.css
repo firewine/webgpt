@@ -381,3 +381,26 @@ dialog { max-height: calc(100dvh - 20px); overflow-y: auto; background: var(--pa
 .dot-status dd { margin: 0; overflow-wrap: anywhere; }
 #dot-confirm-dialog { max-width: min(560px, calc(100vw - 24px)); }
 #dot-grant-token { font-family: monospace; }
+
+/* Owner execution review uses the same monochrome theme tokens. */
+.authority-card { border-top: 1px solid var(--line); padding: 16px 0; overflow-wrap: anywhere; }
+.authority-card.panel { padding: 20px; }
+.authority-card p { margin: 8px 0; }
+.execution-job h2, .execution-job h3, .execution-job h4 { overflow-wrap: anywhere; }
+.execution-status { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; padding: 14px; background: var(--room-bg); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+.execution-status dt { color: var(--muted); }
+.execution-status dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.execution-private, .execution-draft { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 18px; min-width: 0; }
+.execution-private { border: 1px dashed var(--muted); border-radius: 8px; padding: 16px; background: var(--side-bg); }
+.execution-digest { overflow-wrap: anywhere; white-space: pre-wrap; font-family: ui-monospace, monospace; }
+.execution-warning { border-left: 2px solid var(--muted); padding-left: 10px; overflow-wrap: anywhere; }
+.execution-raw, .execution-diff { max-width: 100%; max-height: 420px; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
+.execution-job .toolbar button { max-width: 100%; white-space: normal; }
+#job-access-note { overflow-wrap: anywhere; }
+#draft-apply-summary { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 18px; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .execution-private { padding: 12px; }
+  .execution-status { gap: 8px 10px; padding: 12px; font-size: 12px; }
+  #draft-apply-dialog { padding: 18px; }
+  #draft-apply-dialog .toolbar { flex-direction: column; align-items: stretch; }
+}

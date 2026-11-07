@@ -1,3 +1,4 @@
+import { assertJobAuthority, bindingReason } from '../execution/authority.js';
 import { assertDotRetryAfterFailedSubmit, assertDotRetryAfterStop, dotCanApply, dotParticipantWait, reconcileDotReply } from './dot-mcp-policy.js';
 import type { Providers } from '../connections/providers.js';
 import { fetchSource } from '../connections/sources.js';
@@ -13,7 +14,7 @@ import { contextWiki, visibleRoomMessages } from './wiki-policy.js';
 import { dailyRoom, participantWait } from './api-usage.js';
 import { prepareTopicWiki } from './topic-wiki.js';
 
-interface Executor { submit(input: { bindingId: string; prompt: string; requestId: string; discussionId: string; taskId: string; revision: number; maxDurationMs?: number }): string; kick?(): void }
+interface Executor { submit(input: { bindingId: string; prompt: string; requestId: string; discussionId: string; taskId: string; revision: number; maxDurationMs?: number }): string; kick?(): void; validateResult?(jobId: string): string | null }
 export class DiscussionEngine {
   private active = false;
   private pendingKick = false;
@@ -84,7 +85,7 @@ export class DiscussionEngine {
         used: { requests: 0, activeMs: 0, inputTokens: 0, outputTokens: 0, unknownUsage: 0, toolJobs: 0 },
         tasks: [], turns: [], claims: [], evidence: [], checkpoints: [], interventions: [],
         executionBindingId: body.executionBindingId ? string(body.executionBindingId) : null, materialPackageIds: packageIds };
-      if (d.executionBindingId && !state.bindings.some(b => b.id === d.executionBindingId && b.status === 'ready')) throw new AppError('execution_binding_not_ready', 409);
+      if (d.executionBindingId) { const denied = bindingReason(state.bindings.find(b => b.id === d.executionBindingId)); if (denied) throw new AppError(denied, 409); }
       if (d.materials) d.evidence.push({ id: id('evidence'), revision: 1, claimIds: [], participantId: null, taskId: null,
         kind: 'user_material', source: '사용자 제공 자료', text: d.materials, observedAt: now(), digest: digest(d.materials), status: 'reported', reason: null });
       for (const pack of packages) for (const file of pack.files) {
@@ -249,12 +250,17 @@ export class DiscussionEngine {
       if (waiting) {
         const job = state.jobs.find(j => j.id === waiting.jobId);
         if (!job || ['queued', 'running', 'blocked_approval', 'reconciling'].includes(job.status)) return;
+        if (job.draft && ['preparing', 'running', 'pending', 'applying'].includes(job.draft.status)) return;
         this.store.transact((s, emit) => { const current = findDiscussion(s, d.id); const task = current.tasks.find(t => t.id === waiting.id)!;
+          let denied = job.resultScopeReason ?? this.executor?.validateResult?.(job.id) ?? null; try { assertJobAuthority(s, job); } catch (error) { denied ??= code(error); }
+          if (job.authority && !job.capture?.complete) denied ??= 'execution_capture_incomplete';
+          if (job.draft && !['unchanged', 'applied'].includes(job.draft.status)) denied ??= 'draft_not_applied';
+          if (denied) { current.status = 'blocked'; current.reason = denied; task.status = 'failed'; emit({ type: 'discussion.blocked', discussionId: current.id, data: { taskId: task.id, jobId: job.id, reason: denied } }); return; }
           task.status = 'pending';
           if (job.finishedAt) current.used.activeMs += Math.max(0, Date.parse(job.finishedAt) - Date.parse(job.createdAt));
           const context = current.contexts.find(c => c.participantId === task.participantId)!; context.observation.tool = job.status;
           current.evidence.push({ id: id('evidence'), revision: task.revision, claimIds: task.claimIds, participantId: task.participantId, taskId: task.id,
-            kind: 'execution', source: `codex:${job.id}`, text: JSON.stringify({ status: job.status, text: job.text, activities: job.activities }),
+            kind: 'execution', source: `codex:${job.id}`, text: JSON.stringify({ status: job.status, text: job.text, activities: job.activities, capture: job.capture, previewTruncated: job.previewTruncated, application: job.draft }),
             observedAt: now(), digest: digest(JSON.stringify(job.activities)), status: job.status === 'completed' ? 'observed' : 'failed', reason: job.error });
           emit({ type: 'evidence.added', discussionId: d.id, data: { taskId: task.id, jobId: job.id } }); }); continue;
       }

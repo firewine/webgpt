@@ -1,3 +1,4 @@
+import { authorityReason, initializeExecutionProtection, issueAuthority } from '../execution/authority.js';
 import { randomBytes } from 'node:crypto';
 import type { Workspace } from '../workspace/runtime.js';
 import type { WorkspaceState } from '../workspace/model.js';
@@ -28,10 +29,11 @@ export class McpEndpoint {
     if (!allowed.length || allowed.some(t => !(TOOLS as readonly string[]).includes(t))) throw new AppError('invalid_tools');
     const token = randomBytes(32).toString('base64url'); const grantId = id('grant');
     this.app.store.transact((state, emit) => {
+      initializeExecutionProtection(state);
       const d = findDiscussion(state, string(body.discussionId)); const pid = string(body.participantId);
       if (!d.members.some(p => p.id === pid)) throw new AppError('participant_not_found', 404);
       if (allowed.some(t => t.startsWith('codex_')) && !d.executionBindingId) throw new AppError('execution_binding_required', 409);
-      state.grants.push({ id: grantId, hash: digest(token), discussionId: d.id, participantId: pid, tools: allowed, revoked: false });
+      state.grants.push({ id: grantId, hash: digest(token), discussionId: d.id, participantId: pid, tools: allowed, revoked: false, authority: issueAuthority(body.expiresInHours) });
       emit({ type: 'mcp.granted', discussionId: d.id, data: { grantId, participantId: pid, tools: allowed } });
     }); return { id: grantId, token };
   }
@@ -78,7 +80,7 @@ export class McpEndpoint {
   }
   private checkGrant(grant: Grant, state: WorkspaceState = this.app.store.read()): void {
     const current = state.grants.find(g => g.id === grant.id);
-    if (!current || current.revoked !== false || grant.revoked !== false || current.hash !== grant.hash || current.discussionId !== grant.discussionId
+    if (!current || authorityReason(current.authority) || current.authority?.epoch !== grant.authority?.epoch || current.authority?.expiresAt !== grant.authority?.expiresAt || current.revoked !== false || grant.revoked !== false || current.hash !== grant.hash || current.discussionId !== grant.discussionId
       || current.participantId !== grant.participantId || current.tools.length !== grant.tools.length || current.tools.some((tool, index) => tool !== grant.tools[index]))
       throw new AppError('mcp_authentication_required', 401);
   }
@@ -93,7 +95,8 @@ export class McpEndpoint {
       const job = state.jobs.find(j => j.id === args.jobId && j.discussionId === d.id && d.tasks.some(t => t.id === j.taskId && t.participantId === grant.participantId));
       if (!job) throw new AppError('job_not_in_scope', 403);
       if (name === 'codex_cancel') { await this.app.codex.cancel(job.id); this.checkGrant(grant); return { jobId: job.id, cancellationRequested: true }; }
-      return job;
+      const reason = ['completed', 'failed', 'interrupted'].includes(job.status) ? this.app.codex.validateResult?.(job.id) : null;
+      return reason ? { ...job, resultScopeReason: reason, ...(reason.startsWith('execution_capture') && job.capture ? { capture: { ...job.capture, complete: false, reason } } : {}) } : job;
     }
     const task = d.tasks.find(t => (args.taskId ? t.id === args.taskId : ['pending', 'running'].includes(t.status)) && t.participantId === grant.participantId && t.revision === d.revision);
     if (!task) throw new AppError('task_not_in_scope', 403);
@@ -117,7 +120,7 @@ export class McpEndpoint {
       if (d.used.toolJobs >= d.limits.maxToolJobs || task.status !== 'running' || !d.turns.some(t => t.id === task.turnId && ['prepared', 'running'].includes(t.status))) throw new AppError('execution_not_in_scope', 403);
       if (d.roomId) this.app.store.transact(s => this.app.dispatch.reserveTool(s, d.id, task.id));
       const jobId = this.app.codex.submit({ bindingId: d.executionBindingId, prompt, requestId: task.id,
-        discussionId: d.id, taskId: task.id, revision: d.revision, maxDurationMs: Math.max(1, d.limits.maxActiveMs - d.used.activeMs) });
+        discussionId: d.id, taskId: task.id, revision: d.revision, grantId: grant.id, maxDurationMs: Math.max(1, d.limits.maxActiveMs - d.used.activeMs) });
       this.app.store.transact((s, emit) => { const current = findDiscussion(s, d.id); const currentTask = current.tasks.find(t => t.id === task.id)!;
         currentTask.jobId = jobId; current.used.toolJobs++; current.contexts.find(c => c.participantId === task.participantId)!.observation.tool = 'queued';
         emit({ type: 'verification.execution_queued', discussionId: d.id, data: { taskId: task.id, jobId, source: 'participant_mcp' } }); });

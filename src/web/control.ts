@@ -5,8 +5,15 @@ import { RoomView } from './room-view.js';
 import { TopicChatView } from './topic-chat-view.js';
 import type { RoomSnapshot } from './room-view.js';
 import type { DiscoveryPage, DiscoveryResult } from '../connections/browser-discovery-model.js';
+type Authority = { version: 1; epoch: number; issuedAt: string; expiresAt: string; revokedAt: string | null };
+type Capture = NonNullable<CodexJob['capture']>;
+type EvidencePage = Omit<Capture, 'version'> & { pageIndex: number; nextPage: number | null; text: string };
+type DraftReview = { status: 'unchanged' | 'ready' | 'blocked'; reason: string | null; manifestDigest?: string; diffDigest?: string;
+  files: { path: string; beforeDigest: string | null; afterDigest: string | null; diff: string }[] };
+type EvidenceView = { capture: Capture; page: EvidencePage | null; loading: boolean; error: string | null };
+type DraftView = { review: DraftReview | null; loading: boolean; error: string | null };
 type Snapshot = { dotMcp?: { enabled: boolean; connections: DotConnectionStatus[] }; cursor: number; connections: Connection[]; participants: Member[]; discussions: Pick<Discussion, 'id' | 'topic' | 'status' | 'phase' | 'revision' | 'createdAt' | 'updatedAt'>[];
-  bindings: ExecutionBinding[]; jobs: CodexJob[]; browserPaused: boolean; grants: { id: string; participantId: string; discussionId: string; revoked: boolean; tools: string[] }[];
+  bindings: ExecutionBinding[]; jobs: CodexJob[]; browserPaused: boolean; grants: { id: string; participantId: string; discussionId: string; revoked: boolean; tools: string[]; authority?: Authority }[];
   capabilities: { sourceFetch: boolean; browserConfigured: boolean; noVncConfigured: boolean; codexConfigured: boolean };
   materialPackages: { id: string; label: string; createdAt: string; files: Omit<MaterialPackage['files'][number], 'text' | 'identity'>[] }[]; materialRoots: string[]; resident: RoomSnapshot['resident']; apiDaily: RoomSnapshot['apiDaily'] };
 type View = 'room' | 'discussion' | 'connections' | 'execution';
@@ -14,6 +21,9 @@ const $ = <T extends HTMLElement = HTMLElement>(selector: string): T => document
 let state: Snapshot | null = null; let current: Discussion | null = null; let selected = sessionStorage.getItem('wj.chat.selection') ?? localStorage.getItem('wj.chat.selection') ?? localStorage.getItem('wj.discussion') ?? '';
 let tab = 'timeline'; let view: View = 'room'; let stream: EventSource | null = null;
 let composingTopic = false;
+const evidenceViews = new Map<string, EvidenceView>(), draftViews = new Map<string, DraftView>();
+let applyConfirmation: { jobId: string; review: DraftReview; commandId: string; submitting: boolean; error: string | null } | null = null;
+let authorityTimer = 0;
 let viewChosen = false; let focusRoomId: string | null = null;
 type AuthStatus = { passwordConfigured: boolean; canSetup: boolean };
 let authStatus: AuthStatus | null = null; let authSequence = 0; let setupToken = '';
@@ -94,7 +104,7 @@ async function api<T>(path: string, body?: unknown, requestId: string = crypto.r
   if (!response.ok) { if (response.status === 401) lock(); throw new Error(result.error?.code ?? 'request_failed'); }
   return result;
 }
-function lock(load = true): void { dotView.clear(); stream?.close(); stream = null; topicChat.clear(); $<HTMLDialogElement>('#topic-details-dialog').close(); roomView.clear(); closeDeviceScreen(); $('#device-code').textContent = ''; $<HTMLDialogElement>('#oauth-login-dialog').close(); $<HTMLDialogElement>('#password-dialog').close(); $<HTMLFormElement>('#password-change-form').reset(); $('#oauth-desktop').replaceChildren(); $('#oauth-result').replaceChildren(); $('#login').hidden = false; $('#workspace').hidden = true; if (load) { authStatus = null; void loadLogin().catch(report); } }
+function lock(load = true): void { clearExecutionPrivate(); dotView.clear(); stream?.close(); stream = null; topicChat.clear(); $<HTMLDialogElement>('#topic-details-dialog').close(); roomView.clear(); closeDeviceScreen(); $('#device-code').textContent = ''; $<HTMLDialogElement>('#oauth-login-dialog').close(); $<HTMLDialogElement>('#password-dialog').close(); $<HTMLFormElement>('#password-change-form').reset(); $('#oauth-desktop').replaceChildren(); $('#oauth-result').replaceChildren(); $('#login').hidden = false; $('#workspace').hidden = true; if (load) { authStatus = null; void loadLogin().catch(report); } }
 async function loadLogin(): Promise<void> { const sequence = ++authSequence; const result = await api<AuthStatus>('/api/auth'); if (sequence === authSequence) { authStatus = result; renderLogin(); } }
 function renderLogin(): void {
   const setup = !authStatus?.passwordConfigured || !!setupToken, allowed = !setup || !!setupToken || !!authStatus?.canSetup;
@@ -113,7 +123,7 @@ function checkPasswords(password: string, confirmation: string): void {
 function form(id: string, handler: (data: Record<string, string>, form: HTMLFormElement) => Promise<unknown>): void {
   $(id).addEventListener('submit', event => { event.preventDefault(); const el = event.currentTarget as HTMLFormElement; const submit = el.querySelector<HTMLButtonElement>('button[type=submit], button:not([type])'); if (submit) submit.disabled = true;
     const data = Object.fromEntries(new FormData(el).entries()) as Record<string, string>;
-    void handler(data, el).catch(report).finally(() => { if (submit) submit.disabled = false; if (id === '#login-form') renderLogin(); if (id === '#discussion-form') renderFocusBudget(); }); });
+    void handler(data, el).catch(report).finally(() => { if (submit) submit.disabled = false; if (id === '#login-form') renderLogin(); if (id === '#discussion-form') renderFocusBudget(); if (id === '#job-form') renderRunAccess(); if (id === '#draft-apply-form') renderApplyConfirmation(); }); });
 }
 function showView(next: View): void {
   if (next === 'discussion') { if (current) openTopicDetails(); else beginTopic(); return; }
@@ -175,7 +185,7 @@ function render(): void {
     selectOptions($('#grant-discussion'), state.discussions.map(d => ({ id: d.id, label: d.topic }))); choiceSignature = signature;
   }
   $('#composer').hidden = !composingTopic; $('#discussion-detail').hidden = composingTopic || !current;
-  dotView.render(state); if (current) renderDiscussion(); renderConnections(); renderJobs(); renderMaterials(); renderFocusBudget(); showView(view);
+  dotView.render(state); if (current) renderDiscussion(); renderConnections(); renderJobs(); renderMaterials(); renderFocusBudget(); showView(view); scheduleAuthorityExpiry();
 }
 async function selectTopic(id: string): Promise<void> {
   roomView.closeNavigation(); $<HTMLDialogElement>('#topic-details-dialog').close(); if (selected !== id) current = null; selected = id;
@@ -419,7 +429,14 @@ function renderConnections(): void {
   $('#browser-state').textContent = `${state.capabilities.browserConfigured ? 'Chrome 명령 설정됨' : 'Chrome 명령 미설정'} · ${state.browserPaused ? '수동 조작 중 · 자동 입력 잠김' : '자동 입력 가능'} · ${state.capabilities.noVncConfigured ? '화면 연결 설정됨' : '화면 연결 미설정'}`;
   const browserSignature = JSON.stringify(state.connections.filter(c => c.kind === 'browser').map(c => [c.id, c.label, c.browser]));
   if (browserSignature !== browserChoices) { browserChoices = browserSignature; selectOptions($('#browser-discovery-connection'), state.connections.filter(c => c.kind === 'browser'), '새 연결'); }
-  const grants = $('#grants-list'); grants.replaceChildren(); for (const grant of state.grants) { const row = node('div', '', 'toolbar'); row.append(node('span', `${grant.participantId} · ${grant.revoked ? '폐기됨' : grant.tools.join(', ')}`, 'small')); if (!grant.revoked) row.append(button('폐기', async () => { await api('/api/grants/revoke', { id: grant.id }); await refresh(); })); grants.append(row); }
+  const grants = $('#grants-list'); grants.replaceChildren();
+  for (const grant of state.grants) {
+    const row = node('section', '', 'authority-card'); row.dataset.grantId = grant.id;
+    const reason = grant.revoked ? 'execution_authority_revoked' : authorityReason(grant.authority);
+    row.append(node('p', `${grant.participantId} · ${reason ? executionReason(reason) : '권한 유효'}`, 'small'), node('p', authorityExpiry(grant.authority), 'small muted'), node('p', grant.tools.join(', '), 'small muted'));
+    if (!grant.revoked && !grant.authority?.revokedAt) row.append(button('폐기', async () => { await api('/api/grants/revoke', { id: grant.id }); await refresh(); }));
+    grants.append(row);
+  }
 }
 function closeDeviceScreen(): void { clearTimeout(deviceTimer); deviceTimer = 0; deviceLogin = null; deviceSequence++; $('#device-code').textContent = ''; $('#device-actions').hidden = true; $<HTMLDialogElement>('#device-login-dialog').close(); }
 async function startDevice(input: Record<string, string>): Promise<void> {
@@ -470,17 +487,234 @@ async function openOAuthScreen(result: { authorizationUrl: string; connectionId:
     status.textContent = '아래 서버 Chrome에서 로그인·동의를 완료하세요. 기존 dot·Muse 대화와 로그인은 유지됩니다. 완료 후 화면을 닫고 모델을 확인하세요.';
   } catch (error) { status.textContent = '로그인 창을 열지 못했습니다. 서버 화면과 오류 알림을 확인하세요. 자동 입력은 잠긴 상태로 유지합니다.'; throw error; }
 }
+const executionReasons: Record<string, string> = {
+  execution_authority_legacy: '이전 권한 · 만료 정보가 없어 재등록·재발급이 필요합니다.',
+  execution_authority_invalid: '권한 정보를 확인할 수 없어 재등록·재발급이 필요합니다.',
+  execution_authority_expired: '권한 만료 · 기간을 선택해 재등록·재발급하세요.',
+  execution_authority_revoked: '권한 회수됨 · 새 실행에는 재등록·재발급이 필요합니다.',
+  execution_authority_changed: '실행 당시 권한과 현재 권한이 다릅니다. 원래 실행 기록을 대조하세요.',
+  execution_grant_revoked_or_changed: '이 실행의 참여자 권한이 만료·회수되었거나 변경되었습니다.',
+  execution_binding_not_ready: '실행할 세션을 등록하고 연결 상태를 확인하세요.',
+  execution_evidence_changed: '원문 페이지의 실행·수집본·digest가 일치하지 않습니다. 최신 수집 기록을 확인하세요.',
+  execution_draft_changed: '확인한 diff가 현재 기록과 다릅니다. 새 diff를 직접 열고 다시 확인하세요.',
+  execution_draft_not_ready: '원격 실행 완료와 보호 사본의 반영 대기 상태를 먼저 확인하세요.',
+  execution_draft_single_file_required: '기존 일반 텍스트 파일 1개의 내용 수정만 반영할 수 있습니다.',
+  execution_capture_incomplete: '원문 수집이 불완전하거나 확인되지 않아 원본에 반영할 수 없습니다.',
+  protected_draft_required: '보호 사본 기록이 없어 원본에 반영할 수 없습니다.',
+  draft_not_applicable: '확인한 diff나 반영 조건이 달라졌습니다. 최신 상태와 새 diff를 확인하세요.',
+  protected_approval_requires_scoped_support: '보호 사본의 경로·범위를 검증하는 실행 승인은 아직 지원하지 않습니다. 이 요청은 거절하거나 취소할 수 있습니다.',
+  protected_workspace_stale_diff: '보호 사본의 diff가 바뀌었습니다. 새 diff를 직접 확인하세요.',
+  protected_workspace_source_changed: '원본 파일이 실행 기준 뒤에 변경되어 반영을 거절했습니다. 원본과 보호 사본을 대조하세요.',
+  protected_workspace_source_repository_changed: '원본 저장소의 브랜치·기준이 바뀌어 반영을 거절했습니다. 실행 당시 기준과 대조하세요.',
+  protected_workspace_exactly_one_file_required: '여러 파일이 변경되어 반영할 수 없습니다. 기존 텍스트 파일 1개의 내용 수정만 지원합니다.',
+  protected_workspace_copy_structure_changed: '보호 사본에 파일 생성·삭제나 경로 변경이 있어 반영할 수 없습니다.',
+  protected_workspace_copy_mode_changed: '보호 사본의 파일 권한이 바뀌어 반영할 수 없습니다.',
+  protected_workspace_draft_not_ready: '보호 사본이 반영 가능한 상태가 아닙니다. 새 diff와 차단 사유를 확인하세요.',
+  protected_workspace_apply_already_attempted: '이미 원본 반영을 시도한 기록이 있습니다. 원래 반영 결과와 영수증을 대조하세요.',
+  protected_workspace_source_apply_lease_exists: '이 원본의 다른 반영 시도가 남아 있습니다. 원래 반영 결과를 대조하세요.',
+  execution_original_unavailable: '이 실행의 보존된 수집 원문을 확인할 수 없습니다.',
+  workspace_busy: '같은 작업 공간에 진행 중인 실행·반영이 있습니다. 원래 실행 상태를 먼저 확인하세요.',
+};
+Object.assign(errors, executionReasons, { invalid_execution_expiry: '권한 기간은 1~168시간의 정수로 선택하세요.' });
+function executionReason(reason: string): string { return executionReasons[reason] ?? errors[reason] ?? reason; }
+function authorityReason(a: Authority | undefined): string | null {
+  if (!a) return 'execution_authority_legacy';
+  const issued = Date.parse(a.issuedAt), expires = Date.parse(a.expiresAt);
+  if (a.version !== 1 || !Number.isSafeInteger(a.epoch) || a.epoch < 1 || !Number.isFinite(issued) || !Number.isFinite(expires) || expires <= issued || expires - issued > 168 * 3_600_000 || a.revokedAt !== null && !Number.isFinite(Date.parse(a.revokedAt))) return 'execution_authority_invalid';
+  if (a.revokedAt) return 'execution_authority_revoked';
+  return expires <= Date.now() || issued > Date.now() ? 'execution_authority_expired' : null;
+}
+function authorityExpiry(a: Authority | undefined): string {
+  return a && Number.isFinite(Date.parse(a.expiresAt)) ? `만료 · ${new Date(a.expiresAt).toLocaleString('ko-KR')} (이 기기 시각)` : '만료 정보 없음 · 이전 권한';
+}
+function bindingReason(b: ExecutionBinding | undefined): string | null { return b ? authorityReason(b.authority) ?? (b.status === 'ready' ? null : 'execution_binding_not_ready') : 'execution_binding_not_ready'; }
+function jobAuthorityReason(job: CodexJob): string | null {
+  const binding = state?.bindings.find(b => b.id === job.bindingId), reason = bindingReason(binding);
+  if (reason) return reason;
+  const a = job.authority;
+  if (!a || a.version !== 1 || a.binding.id !== binding!.id || a.binding.epoch !== binding!.authority!.epoch || a.binding.expiresAt !== binding!.authority!.expiresAt) return 'execution_authority_changed';
+  if (a.grant) {
+    const grant = state?.grants.find(g => g.id === a.grant!.id);
+    if (!grant || grant.revoked || authorityReason(grant.authority) || a.grant.epoch !== grant.authority!.epoch || a.grant.expiresAt !== grant.authority!.expiresAt) return 'execution_grant_revoked_or_changed';
+  }
+  return null;
+}
+function scheduleAuthorityExpiry(): void {
+  clearTimeout(authorityTimer); if (!state) return;
+  const next = [...state.bindings, ...state.grants].map(b => Date.parse(b.authority?.expiresAt ?? '')).filter(t => t > Date.now());
+  if (next.length) authorityTimer = window.setTimeout(() => { if (!$('#workspace').hidden) render(); }, Math.min(2_147_483_647, Math.max(1, Math.min(...next) - Date.now() + 1)));
+}
+function renderRunAccess(): void {
+  const select = $<HTMLSelectElement>('#job-binding'), binding = state?.bindings.find(b => b.id === select.value), reason = bindingReason(binding);
+  $('#job-access-note').textContent = reason ? executionReason(reason) : `${authorityExpiry(binding?.authority)} · 쓰기 작업은 보호 사본에서 실행하고 원본 반영은 별도로 확인합니다.`;
+  $<HTMLButtonElement>('#job-form button[type=submit]').disabled = !!reason;
+  for (const id of ['#job-binding', '#discussion-binding']) {
+    for (const option of $<HTMLSelectElement>(id).options) {
+      const b = state?.bindings.find(b => b.id === option.value); if (!b) continue;
+      const unavailable = bindingReason(b); option.textContent = b.label + (unavailable ? ` · ${executionReason(unavailable)}` : '');
+      if (id === '#discussion-binding') option.disabled = !!unavailable;
+    }
+  }
+}
+function prefillBinding(b: ExecutionBinding): void {
+  const form = $<HTMLFormElement>('#binding-form');
+  for (const name of ['label', 'cwd', 'threadId'] as const) (form.elements.namedItem(name) as HTMLInputElement).value = b[name];
+  (form.elements.namedItem('allowWrite') as HTMLInputElement).checked = b.allowWrite;
+  (form.elements.namedItem('expiresInHours') as HTMLInputElement).value = '24';
+  form.scrollIntoView({ block: 'center' }); (form.elements.namedItem('expiresInHours') as HTMLInputElement).focus();
+  announce('기존 등록 내용을 채웠습니다. 권한 기간과 수정 범위를 확인한 뒤 등록하세요.');
+}
+function clearExecutionPrivate(): void {
+  clearTimeout(authorityTimer); evidenceViews.clear(); draftViews.clear(); applyConfirmation = null;
+  $<HTMLDialogElement>('#draft-apply-dialog').close(); $('#draft-apply-summary').replaceChildren(); $('#draft-apply-state').textContent = '';
+  $<HTMLFormElement>('#draft-apply-form').reset(); $('#jobs-list').replaceChildren(); $('#grant-result').textContent = '';
+}
+function sameCapture(a: Capture, b: Capture | undefined): boolean {
+  return !!b && a.version === b.version && a.jobId === b.jobId && a.artifactId === b.artifactId && a.digest === b.digest && a.byteLength === b.byteLength && a.pageCount === b.pageCount && a.complete === b.complete && a.reason === b.reason;
+}
+async function loadEvidence(jobId: string, pageIndex: number): Promise<void> {
+  const job = state?.jobs.find(j => j.id === jobId); if (!job?.capture || job.capture.jobId !== jobId) throw new Error('execution_evidence_changed');
+  if (!Number.isSafeInteger(pageIndex) || pageIndex < 0 || pageIndex >= job.capture.pageCount || evidenceViews.get(jobId)?.loading) return;
+  const entry: EvidenceView = { capture: { ...job.capture }, page: null, loading: true, error: null }; evidenceViews.set(jobId, entry); renderJobs();
+  try {
+    const page = await api<EvidencePage>(`/api/jobs/${encodeURIComponent(jobId)}/evidence?page=${pageIndex}`);
+    if (evidenceViews.get(jobId) !== entry) return;
+    if (!sameCapture(entry.capture, state?.jobs.find(j => j.id === jobId)?.capture) || page.jobId !== jobId || page.artifactId !== entry.capture.artifactId || page.digest !== entry.capture.digest || page.byteLength !== entry.capture.byteLength || page.pageCount !== entry.capture.pageCount || page.complete !== entry.capture.complete || page.reason !== entry.capture.reason || page.pageIndex !== pageIndex || page.nextPage !== (pageIndex + 1 < page.pageCount ? pageIndex + 1 : null) || typeof page.text !== 'string') throw new Error('execution_evidence_changed');
+    entry.page = page;
+  } catch (error) { if (evidenceViews.get(jobId) === entry) entry.error = error instanceof Error ? error.message : 'request_failed'; }
+  finally { if (evidenceViews.get(jobId) === entry) { entry.loading = false; renderJobs(); } }
+}
+function renderExecutionEvidence(job: CodexJob, card: HTMLElement): void {
+  const capture = job.capture, section = node('section', '', 'execution-private');
+  section.append(node('h3', '소유자 전용 비공개 원문'), node('p', '직접 요청한 페이지 하나만 표시합니다. 공유 채팅·참여자·Wiki로 옮기지 않습니다.', 'small muted'));
+  if (!capture) { section.append(node('p', '보존된 원문 수집 기록이 없습니다.', 'small muted')); card.append(section); return; }
+  section.append(node('p', `수집 ${capture.complete ? '완료' : '불완전'} · ${capture.byteLength.toLocaleString('ko-KR')} bytes · ${capture.pageCount}페이지`, 'small'), node('p', `전체 수집본 digest · ${capture.digest}`, 'small execution-digest'));
+  if (capture.reason) section.append(node('p', executionReason(capture.reason), 'small muted'));
+  let entry = evidenceViews.get(job.id);
+  if (entry && !sameCapture(entry.capture, capture)) { evidenceViews.delete(job.id); entry = undefined; }
+  const row = node('div', '', 'toolbar');
+  if (entry?.loading) row.append(node('p', '원문 한 페이지를 불러오는 중…', 'small'));
+  else if (entry?.page) {
+    const page = entry.page;
+    section.append(node('p', `원문 ${page.pageIndex + 1} / ${page.pageCount}페이지 · 현재 페이지만 표시`, 'small'), node('pre', page.text, 'execution-raw'));
+    if (page.pageIndex > 0) row.append(button('이전 원문 페이지', () => loadEvidence(job.id, page.pageIndex - 1)));
+    if (page.nextPage !== null) row.append(button('다음 원문 페이지', () => loadEvidence(job.id, page.nextPage!)));
+  } else if (capture.pageCount > 0 && capture.jobId === job.id) row.append(button('원문 첫 페이지 보기', () => loadEvidence(job.id, 0)));
+  if (entry) row.append(button('원문 닫기', () => { evidenceViews.delete(job.id); renderJobs(); }));
+  if (entry?.error) section.append(node('p', executionReason(entry.error), 'small execution-warning'));
+  section.append(row); card.append(section);
+}
+function reviewChanged(job: CodexJob, review: DraftReview): boolean {
+  return !!(job.draft?.diffDigest && job.draft.diffDigest !== review.diffDigest || job.draft?.manifestDigest && job.draft.manifestDigest !== review.manifestDigest);
+}
+function applyReason(job: CodexJob | undefined, review: DraftReview): string | null {
+  if (!job || reviewChanged(job, review)) return 'execution_draft_changed';
+  const reason = jobAuthorityReason(job); if (reason) return reason;
+  if (job.resultScopeReason) return job.resultScopeReason;
+  if (job.status !== 'completed' || job.draft?.status !== 'pending') return 'execution_draft_not_ready';
+  if (!job.capture?.complete || job.capture.jobId !== job.id) return 'execution_capture_incomplete';
+  if (review.status !== 'ready' || !review.manifestDigest || !review.diffDigest || review.files.length !== 1 || !review.files[0]?.path || !review.files[0].beforeDigest || !review.files[0].afterDigest || review.files[0].beforeDigest === review.files[0].afterDigest || !review.files[0].diff) return 'execution_draft_single_file_required';
+  return null;
+}
+async function loadDraft(jobId: string): Promise<void> {
+  if (draftViews.get(jobId)?.loading) return;
+  const entry: DraftView = { review: null, loading: true, error: null }; draftViews.set(jobId, entry); renderJobs();
+  try {
+    const review = await api<DraftReview>(`/api/jobs/${encodeURIComponent(jobId)}/draft`);
+    if (draftViews.get(jobId) !== entry) return;
+    if (!['ready', 'blocked', 'unchanged'].includes(review.status) || !Array.isArray(review.files)) throw new Error('execution_draft_not_ready');
+    entry.review = review;
+  } catch (error) { if (draftViews.get(jobId) === entry) entry.error = error instanceof Error ? error.message : 'request_failed'; }
+  finally { if (draftViews.get(jobId) === entry) { entry.loading = false; renderJobs(); } }
+}
+function openApplyConfirmation(job: CodexJob, review: DraftReview): void {
+  const reason = applyReason(state?.jobs.find(j => j.id === job.id), review); if (reason) throw new Error(reason);
+  applyConfirmation = { jobId: job.id, review, commandId: crypto.randomUUID(), submitting: false, error: null };
+  $<HTMLFormElement>('#draft-apply-form').reset();
+  const file = review.files[0]!; $('#draft-apply-summary').replaceChildren(node('p', `실행 · ${job.id}`, 'small'), node('p', `파일 · ${file.path}`), node('p', `확인한 diff digest · ${review.diffDigest}`, 'small execution-digest'), node('p', `수정 전 · ${file.beforeDigest}\n수정 후 · ${file.afterDigest}`, 'small execution-digest'));
+  renderApplyConfirmation(); $<HTMLDialogElement>('#draft-apply-dialog').showModal();
+}
+function renderApplyConfirmation(): void {
+  const c = applyConfirmation, reason = c ? c.error ?? applyReason(state?.jobs.find(j => j.id === c.jobId), c.review) : 'execution_draft_not_ready';
+  $('#draft-apply-state').textContent = c?.submitting ? '원본 반영 결과를 확인하는 중…' : reason ? executionReason(reason) : '위에서 확인한 diff만 반영합니다. 파일이 변경됐다면 서버가 거절합니다.';
+  $<HTMLButtonElement>('#draft-apply-form button[type=submit]').disabled = !c || c.submitting || !!reason;
+}
+function renderDraft(job: CodexJob, card: HTMLElement): void {
+  if (!job.draft) return;
+  const section = node('section', '', 'execution-draft'); section.append(node('h3', '보호 사본의 변경 확인'), node('p', '기존 일반 텍스트 파일 1개의 내용 수정만 지원합니다. 생성·삭제·다중 파일·바이너리는 반영할 수 없습니다. 모델은 원본을 자동 반영하지 않습니다.', 'small muted'));
+  const entry = draftViews.get(job.id);
+  if (!['preparing', 'running', 'applying', 'applied'].includes(job.draft.status)) section.append(button(entry?.loading ? 'diff 확인 중…' : entry?.review ? 'diff 다시 확인' : '보호 사본 diff 확인', () => loadDraft(job.id)));
+  if (entry?.review) {
+    const review = entry.review;
+    if (review.reason) section.append(node('p', executionReason(review.reason), 'small execution-warning'));
+    if (review.status === 'unchanged') section.append(node('p', '보호 사본의 내용 변경이 없습니다.', 'small'));
+    if (review.status === 'blocked') section.append(node('p', '원본 반영이 차단되었습니다.', 'small'));
+    if (review.status === 'ready') {
+      section.append(node('p', `확인한 diff digest · ${review.diffDigest ?? '확인 불가'}`, 'small execution-digest'));
+      for (const file of review.files) section.append(node('h4', file.path), node('p', `수정 전 · ${file.beforeDigest ?? '기존 파일 없음'}\n수정 후 · ${file.afterDigest ?? '파일 없음'}`, 'small execution-digest'), node('pre', file.diff, 'execution-diff'));
+      const reason = applyReason(job, review);
+      if (reason) section.append(node('p', executionReason(reason), 'small execution-warning'));
+      else section.append(button('원본 반영 확인…', () => openApplyConfirmation(job, review)));
+    }
+  }
+  if (entry?.error) section.append(node('p', executionReason(entry.error), 'small execution-warning'));
+  card.append(section);
+}
 function renderJobs(): void {
-  if (!state) return; const bindings = $('#bindings-list'); bindings.replaceChildren();
-  for (const b of state.bindings) bindings.append(details(`${b.label} · ${b.allowWrite ? '수정 허용' : '읽기 전용'} · ${b.branch}`, JSON.stringify(b, null, 2), b.id));
+  if (!state || $('#workspace').hidden) return; const bindings = $('#bindings-list');
+  preserve(bindings, () => {
+    bindings.replaceChildren();
+    for (const b of state!.bindings) {
+      const section = node('section', '', 'panel authority-card'), reason = bindingReason(b); section.dataset.bindingId = b.id;
+      section.append(node('h3', b.label), node('p', `${b.allowWrite ? '보호 사본 수정 · 원본은 별도 확인' : '읽기 전용'} · ${b.branch}`, 'small'), node('p', reason ? executionReason(reason) : '권한 유효', 'small'), node('p', authorityExpiry(b.authority), 'small muted'), details('등록한 세션·작업 경로', JSON.stringify(b, null, 2), b.id));
+      const row = node('div', '', 'toolbar');
+      if (reason) row.append(button('이 설정으로 재등록', () => prefillBinding(b)));
+      if (!b.authority?.revokedAt) row.append(button('실행 권한 회수', async () => { await api(`/api/bindings/${encodeURIComponent(b.id)}/revoke`, {}); await refresh(); }));
+      section.append(row); bindings.append(section);
+    }
+  });
+  for (const id of evidenceViews.keys()) if (!state.jobs.some(j => j.id === id)) evidenceViews.delete(id);
+  for (const id of draftViews.keys()) if (!state.jobs.some(j => j.id === id)) draftViews.delete(id);
+  renderRunAccess(); renderApplyConfirmation();
   preserve($('#jobs-list'), () => { const target = $('#jobs-list'); target.replaceChildren();
-    for (const job of state!.jobs.toReversed()) { const card = node('section', '', 'panel'); const head = node('div', '', 'inline'); head.append(node('h2', state!.bindings.find(b => b.id === job.bindingId)?.label ?? 'Codex 작업'), badge(job.status)); card.append(head, node('p', `${job.id} · ${job.turnId ?? 'turn 수신 전'}`, 'small muted'), details('보낸 명령', job.prompt, `${job.id}:prompt`), node('div', job.text || '실행 결과를 기다리고 있습니다.', 'reply job-output'));
+    for (const job of state!.jobs.toReversed()) { const card = node('section', '', 'panel execution-job'); card.dataset.jobId = job.id;
+      const head = node('div', '', 'inline'); head.append(node('h2', state!.bindings.find(b => b.id === job.bindingId)?.label ?? 'Codex 작업')); card.append(head, node('p', `${job.id} · ${job.turnId ?? 'turn 수신 전'}`, 'small muted'));
+      const statuses = node('dl', '', 'execution-status'); statuses.append(node('dt', '원격 실행'), node('dd', states[job.status] ?? job.status));
+      const draftLabels: Record<string, string> = { preparing: '보호 사본 준비 중', running: '보호 사본에서 실행 중', pending: '소유자 확인·반영 대기', unchanged: '내용 변경 없음', blocked: '반영 차단', applying: '반영 중 · 결과 확인 필요', applied: '원본 반영 완료', conflict: '충돌 · 원본 반영 안 됨', unconfirmed: '반영 결과 미확정 · 대조 필요' };
+      statuses.append(node('dt', '원본 반영'), node('dd', job.draft ? draftLabels[job.draft.status] ?? job.draft.status : state!.bindings.find(b => b.id === job.bindingId)?.allowWrite ? '보호 사본 기록 없음 · 반영 불가' : '반영 대상 없음'));
+      card.append(statuses);
+      for (const reason of [job.resultScopeReason, job.draft?.reason, jobAuthorityReason(job)]) if (reason) card.append(node('p', executionReason(reason), 'small execution-warning'));
+      if (job.draft?.receipt) { const r = job.draft.receipt; card.append(details('원본 반영 영수증', `${r.path}\n수정 전 · ${r.beforeDigest}\n수정 후 · ${r.afterDigest}\n반영 시각 · ${r.appliedAt}`, `${job.id}:receipt`)); }
+      card.append(details('보낸 명령', job.prompt, `${job.id}:prompt`), node('h3', '가려진 결과 미리보기'), node('p', '민감한 값을 가리고 길이를 제한한 표시용 결과입니다. 원문 수집 완료 여부와 별개입니다.', 'small muted'));
+      if (job.previewTruncated) card.append(node('p', '미리보기 일부 생략 · 수집 원문은 별도로 확인하세요.', 'small execution-warning'));
+      card.append(node('div', job.text || '실행 결과를 기다리고 있습니다.', 'reply job-output'));
+      renderExecutionEvidence(job, card); renderDraft(job, card);
       const controls = node('div', '', 'toolbar');
       if (['queued', 'running', 'blocked_approval'].includes(job.status)) controls.append(button('중단 요청', async () => { await api(`/api/jobs/${job.id}/cancel`, {}); await refresh(); }));
-      if (job.status === 'running') controls.append(button('진행 중 지시 보완', () => modal('현재 실행에 지시 추가', [{ name: 'text', label: '추가 지시', multiline: true }], async values => { await api(`/api/jobs/${job.id}/steer`, { expectedTurnId: job.turnId, ...values }); await refresh(); })));
+      if (job.status === 'running' && !jobAuthorityReason(job)) controls.append(button('진행 중 지시 보완', () => modal('현재 실행에 지시 추가', [{ name: 'text', label: '추가 지시', multiline: true }], async values => { const reason = jobAuthorityReason(state?.jobs.find(j => j.id === job.id) ?? job); if (reason) throw new Error(reason); await api(`/api/jobs/${job.id}/steer`, { expectedTurnId: job.turnId, ...values }); await refresh(); })));
       if (job.status === 'reconciling') controls.append(button('실제 turn 결과 대조', async () => { if (!job.turnId) modal('수신되지 않은 Codex turn 대조', [{ name: 'turnId', label: '실제 세션에서 확인한 turn ID' }], async data => { await api(`/api/jobs/${job.id}/reconcile`, data); await refresh(); }, '원격 기록의 입력·시각·세션·완료 상태를 함께 검사합니다. 새 실행을 시작하지 않습니다.'); else { await api(`/api/jobs/${job.id}/reconcile`, {}); await refresh(); } })); card.append(controls);
-      for (const approval of job.approvals.filter(a => a.status === 'pending')) { const section = node('section', '', 'panel'); section.append(node('h3', '실행 승인 요청'), node('pre', JSON.stringify(approval.params, null, 2))); const row = node('div', '', 'toolbar'); for (const [decision, label] of [['accept', '이번 요청 승인'], ['decline', '거절'], ['cancel', '취소']]) row.append(button(label!, async () => { await api(`/api/jobs/${job.id}/approve`, { approvalId: approval.id, decision }); await refresh(); })); section.append(row); card.append(section); }
-      for (const activity of job.activities) card.append(details(`${activity.type} · ${activity.status}`, activity.text, `${job.id}:${activity.id}`)); if (job.error) card.append(node('p', job.error, 'small muted')); target.append(card); }
+      for (const approval of job.approvals.filter(a => a.status === 'pending')) {
+        const section = node('section', '', 'panel'); section.append(node('h3', '실행 승인 요청'), node('pre', JSON.stringify(approval.params, null, 2)));
+        if (job.draft) section.append(node('p', executionReason('protected_approval_requires_scoped_support'), 'small execution-warning'));
+        const row = node('div', '', 'toolbar'), decisions = [...(job.draft ? [] : [['accept', '이번 요청 승인']]), ['decline', '거절'], ['cancel', '취소']];
+        for (const [decision, label] of decisions) {
+          const action = button(label!, async () => {
+            if (decision === 'accept') { const latest = state?.jobs.find(j => j.id === job.id) ?? job; if (latest.draft) throw new Error('protected_approval_requires_scoped_support'); const reason = jobAuthorityReason(latest); if (reason) throw new Error(reason); }
+            await api(`/api/jobs/${job.id}/approve`, { approvalId: approval.id, decision }); await refresh();
+          }); action.disabled = decision === 'accept' && !!jobAuthorityReason(job); row.append(action);
+        }
+        section.append(row); card.append(section);
+      }
+      for (const activity of job.activities) {
+        const item = details(`${activity.type} · ${activity.status}${activity.truncated ? ' · 표시 일부 생략' : ''}`, activity.text, `${job.id}:${activity.id}`);
+        item.append(node('p', activity.truncated ? '이 활동의 표시용 본문·출력 일부가 생략되었습니다. 원문 수집 완료 여부와 별개입니다.' : '민감한 값을 가리고 길이를 제한한 활동 미리보기입니다.', 'small muted'));
+        if (activity.command) {
+          item.append(node('h4', '관측된 명령·종료 상태'), node('pre', activity.command.command ?? '명령 미관측'), node('p', `종료 코드 · ${activity.command.exitCode ?? '미관측'}`, 'small'));
+          if (activity.command.output !== null) item.append(node('pre', activity.command.output));
+        }
+        card.append(item);
+      }
+      if (job.error) card.append(node('p', executionReason(job.error), 'small muted')); target.append(card); }
   });
 }
 type Field = { name: string; label: string; multiline?: boolean; required?: boolean; secret?: boolean; email?: boolean; checkbox?: boolean; number?: { min: number; max: number }; options?: { value: string; label: string }[]; value?: string };
@@ -508,6 +742,7 @@ form('#password-change-form', async (values, el) => {
   checkPasswords(values.password!, values.confirmPassword!); await api('/api/password/change', values); el.reset(); $<HTMLDialogElement>('#password-dialog').close(); stream?.close(); stream = null; await refresh(); announce('비밀번호를 변경했습니다. 다른 기기는 다시 로그인해 주세요.');
 });
 form('#discussion-form', async values => { const participantIds = [...document.querySelectorAll<HTMLInputElement>('#participant-picker input:checked')].map(i => i.value);
+  if (values.executionBindingId) { const reason = bindingReason(state?.bindings.find(b => b.id === values.executionBindingId)); if (reason) throw new Error(reason); }
   const materialPackageIds = [...document.querySelectorAll<HTMLInputElement>('#material-picker input:checked')].map(i => i.value);
   const targetRoom = focusRoomId;
   const result = await api<{ id?: string; discussionId?: string }>(targetRoom ? `/api/rooms/${targetRoom}/focus` : '/api/discussions', { topic: values.topic, criteria: values.criteria, materials: values.materials, materialPackageIds, participantIds, executionBindingId: values.executionBindingId || null,
@@ -554,10 +789,29 @@ form('#browser-discovery-confirm-form', async values => {
   await api('/api/browser/discovery/confirm', { discoveryId: browserCandidate.id, label: values.label, confirmed: values.confirmed === 'on', ...(browserDiscoveryConnection ? { connectionId: browserDiscoveryConnection } : {}) });
   invalidateDiscovery(); announce('기존 대화를 연결했습니다. 참여자를 등록해 방에 초대할 수 있습니다.'); await refresh();
 });
-form('#binding-form', async values => { await api('/api/bindings', { ...values, allowWrite: values.allowWrite === 'on' }); await refresh(); });
-form('#job-form', async values => { await api('/api/jobs', values); await refresh(); });
+form('#binding-form', async values => { await api('/api/bindings', { ...values, allowWrite: values.allowWrite === 'on', expiresInHours: expiryHours(values.expiresInHours) }); await refresh(); });
+form('#job-form', async values => { const reason = bindingReason(state?.bindings.find(b => b.id === values.bindingId)); if (reason) throw new Error(reason); await api('/api/jobs', values); await refresh(); });
+$('#job-binding').addEventListener('change', renderRunAccess);
+function expiryHours(value: string | undefined): number { const hours = Number(value); if (!Number.isSafeInteger(hours) || hours < 1 || hours > 168) throw new Error('invalid_execution_expiry'); return hours; }
 form('#grant-form', async values => { const tools = ['task_get', 'context_get', 'result_submit', 'capabilities_get', ...(values.codex === 'on' ? ['codex_send', 'codex_status', 'codex_result', 'codex_cancel'] : [])];
-  const result = await api<{ id: string; token: string }>('/api/grants', { ...values, tools }); $('#grant-result').textContent = `한 번만 표시되는 접근 키입니다. 대화 본문에 붙여 넣지 마세요.\nMCP URL: ${location.origin}/mcp\nAuthorization: Bearer ${result.token}\nGrant: ${result.id}`; await refresh(); });
+  const result = await api<{ id: string; token: string }>('/api/grants', { ...values, tools, expiresInHours: expiryHours(values.expiresInHours) }); $('#grant-result').textContent = `한 번만 표시되는 접근 키입니다. 대화 본문에 붙여 넣지 마세요.\nMCP URL: ${location.origin}/mcp\nAuthorization: Bearer ${result.token}\nGrant: ${result.id}`; await refresh(); });
+form('#draft-apply-form', async () => {
+  const c = applyConfirmation; if (!c || c.submitting || c.error) return;
+  const reason = applyReason(state?.jobs.find(j => j.id === c.jobId), c.review); if (reason) { renderApplyConfirmation(); throw new Error(reason); }
+  if (!$<HTMLInputElement>('#draft-owner-confirmed').checked) return;
+  c.submitting = true; renderApplyConfirmation();
+  try {
+    await api(`/api/jobs/${encodeURIComponent(c.jobId)}/apply`, { expectedDiffDigest: c.review.diffDigest }, c.commandId);
+    if (applyConfirmation !== c) return;
+    draftViews.delete(c.jobId); await refresh();
+    if (applyConfirmation === c) { $<HTMLDialogElement>('#draft-apply-dialog').close(); announce('원본 반영 요청을 처리했습니다. 반영 상태와 영수증을 확인하세요.'); }
+  } catch (error) {
+    if (applyConfirmation === c) { c.error = error instanceof Error ? error.message : 'request_unconfirmed'; draftViews.delete(c.jobId); renderJobs(); }
+    throw error;
+  } finally { c.submitting = false; renderApplyConfirmation(); }
+});
+$('#draft-apply-close').addEventListener('click', () => $<HTMLDialogElement>('#draft-apply-dialog').close());
+$('#draft-apply-dialog').addEventListener('close', () => { applyConfirmation = null; $('#draft-apply-summary').replaceChildren(); $('#draft-apply-state').textContent = ''; $<HTMLFormElement>('#draft-apply-form').reset(); });
 $('#participant-connection').addEventListener('change', updateModels);
 $('#participant-mode').addEventListener('change', () => {
   const mode = $<HTMLSelectElement>('#participant-mode').value;

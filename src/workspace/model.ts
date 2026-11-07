@@ -1,3 +1,4 @@
+import type { ExecutionAuthority, JobAuthority } from "../execution/execution-model.js";
 import type { ResidentStateV1 } from './resident-model.js';
 
 export type ProviderKind = 'fake' | 'openai-oauth' | 'codex-oauth' | 'deepseek' | 'anthropic' | 'browser' | 'dot-mcp';
@@ -125,6 +126,8 @@ export interface ExecutionBinding {
   id: string; label: string; host: string; user: string; cwd: string; threadId: string;
   allowWrite: boolean; status: 'unverified' | 'ready' | 'blocked';
   repoRoot: string; branch: string; head: string; sessionTreeId: string | null;
+  authority?: ExecutionAuthority;
+  protection?: { version: 1; status: 'ready' | 'unverified'; reason: string | null };
 }
 export interface CodexJob {
   id: string; bindingId: string; discussionId: string | null; taskId: string | null; revision: number | null;
@@ -133,7 +136,12 @@ export interface CodexJob {
   threadId: string; turnId: string | null; createdAt: string; finishedAt: string | null;
   maxDurationMs: number; deadlineAt: string | null;
   text: string; error: string | null;
-  activities: { id: string; type: string; status: string; text: string; observedAt: string }[];
+  previewTruncated?: boolean;
+  authority?: JobAuthority;
+  resultScopeReason?: string | null;
+  capture?: { version: 1; artifactId: string; jobId: string; digest: string; byteLength: number; pageCount: number; complete: boolean; reason: string | null };
+  draft?: { version: 1; status: 'preparing' | 'running' | 'pending' | 'unchanged' | 'blocked' | 'applying' | 'applied' | 'conflict' | 'unconfirmed'; manifestDigest?: string; diffDigest?: string; reason?: string | null; receipt?: { path: string; beforeDigest: string; afterDigest: string; appliedAt: string } };
+  activities: { id: string; type: string; status: string; text: string; observedAt: string; command?: { command: string | null; exitCode: number | null; output: string | null }; truncated?: boolean }[];
   approvals: { id: string; rpcId: number | string; method: string; params: Record<string, unknown>; status: 'pending' | 'resolved' }[];
 }
 export interface WorkspaceState {
@@ -142,7 +150,8 @@ export interface WorkspaceState {
   sessions: { hash: string; expiresAt: number; credentialId?: string }[];
   ownerPassword?: { scheme: 'scrypt-v1'; id: string; salt: string; hash: string; changedAt: string };
   passwordSetup?: { hash: string; expiresAt: number; credentialId: string | null } | null;
-  grants: { id: string; hash: string; discussionId: string; participantId: string; tools: string[]; revoked: boolean }[];
+  grants: { id: string; hash: string; discussionId: string; participantId: string; tools: string[]; revoked: boolean; authority?: ExecutionAuthority }[];
+  executionProtectionVersion?: 1;
   browserPaused: boolean;
   materialPackages?: MaterialPackage[];
   connectionCleanup?: string[];

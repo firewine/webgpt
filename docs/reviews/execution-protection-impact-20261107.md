@@ -1,10 +1,10 @@
 # 추천3 영향 검토 — 실행 권한·보호 작업 사본·원문 근거
 
-**상태: 구체 계약 변경 제안 / 미승인.** 사용자는 “병합했어 3번 개발”로 추천3의 개발을 허용했다. 다만 [기존 계획 변경 절차](../development-guidelines.md#5-계획-변경-사전-승인과-후속-페이즈-영향-검토)는 공개/영속 계약·이관·수락 변경 전에 현재/후속 영향·변경량 보고와 승인을 요구한다. 이 문서는 그 판단을 위한 제안이며 SSOT의 수락·쓰기 차단을 먼저 바꾸지 않는다. 기존 회수 계약의 stale 객체 오류는 별도의 작은 버그 수정으로 진행한다.
+**상태: 권장안 승인 / 구현·검사 진행 중 (2026-11-07).** 사용자는 “병합했어 3번 개발”로 추천3의 개발을 허용했다. 다만 [기존 계획 변경 절차](../development-guidelines.md#5-계획-변경-사전-승인과-후속-페이즈-영향-검토)는 공개/영속 계약·이관·수락 변경 전에 현재/후속 영향·변경량 보고와 승인을 요구한다. 사용자는 “보호 사본·명시 반영까지 개발 승인”으로 권장안과 아래 최소 계약을 허용했다. 실계정 실행·서버 적용은 제외하며, 실제 보호 검사 없이 쓰기 차단을 해제하지 않는다. 기존 회수 계약의 stale 객체 오류는 별도의 작은 버그 수정으로 진행한다.
 
 ## 기준과 실제 확인
 
-- 코드 기준: PR #55 사용자 병합 main `f3384cc8d98f5f71c81bd94fdddba37ee40b83dc`. 운영 소스는 `f648ea5`이고 PR #55는 문서만 바꿨다. 작업 위치는 별도 worktree/branch `codex/execution-protection-20261107`이다. 운영 `.env`·DB·계정/Chrome profile·서비스는 변경하지 않았다.
+- 코드 기준: PR #55 사용자 병합 main `f3384cc8d98f5f71c81bd94fdddba37ee40b83dc`. 운영 소스는 `f648ea5`이고 PR #55는 문서만 바꿨다. 작업 위치는 별도 worktree/branch `codex/protected-execution-20261107`이다. 운영 `.env`·DB·계정/Chrome profile·서비스는 변경하지 않았다.
 - 설치 Node24.18.0/npm11.16.0/Codex0.166.0/bubblewrap0.11.1. 설치 App Server schema의 기존 요청 계약 검사는 PASS, 로그인/thread/model turn 시작0. 기존 기준0.165의 승인을 전역 도구 덮어쓰기로 맞추지 않는다. 실제 namespace/procfs·읽기 전용 mount·network namespace의 `/bin/true` 검사도 성공했다. 사용자 Codex 작업 성공의 증거는 아니다.
 - `src/execution/codex.ts::register/start/connectOnce`: 실제 원본 cwd에 실행하고, outer bwrap는 host root를 bind한 뒤 app state/Chrome profile만 가린다. `work-execution.ts::readyReason/scopeReason`의 `allowWrite` 차단을 제거하는 것만으로 안전한 쓰기가 되지 않는다.
 - 일반 discussion grant는 id/hash/tools/revoked만 가진다. HTTP가 grant를 인증한 뒤 request body를 기다리는 동안 회수되면 기존 grant 객체를 사용할 수 있다. resident/dot에는 별도의 현재 권한/만료 검사가 있다. `CodexJob`에는 권한 출처/세대가 없고 binding에는 만료/회수가 없다.
@@ -66,4 +66,10 @@
 
 G0처럼 방/주제의 새 예약을 멈추고 queued 취소·active/승인/미확정·반영 intent를 대조한 뒤 quiescent 상태에서 이전 binary로 복귀한다. 기존 권한/receipt/원문 artifact·사본/반영 실패·대화/사용량을 보존한다. DB 초기화·credential 재생성·격리 해제·확인되지 않은 apply/turn 재시도로 복구하지 않는다. private 사본의 변경이 원본 반영으로 확인되지 않았으면 수정 완료로 표시하지 않는다.
 
-**사용자 결정 필요:** 권장안(보호 사본·소유자 diff 확인/1파일 반영까지 포함)과 제한안(권한/원문 보강만, 쓰기 계속 차단) 중 선택. 권장안 승인 시 위 만료/legacy/원문 조회/반영 metadata·API/UI의 최소 계약도 같이 허용하는 것으로 요청한다. 실계정·배포는 포함하지 않는다.
+**승인 기록:** 2026-11-07 사용자 “보호 사본·명시 반영까지 개발 승인”. 권장안 및 위 만료/legacy/원문 조회/반영 metadata·API/UI의 최소 계약을 구현한다. 실제 미지원 호스트/도구는 차단하며 실계정·배포는 포함하지 않는다.
+
+## 구현 중 확인한 호스트 조건 (2026-11-07)
+
+PR #56 병합 main `6526279`(첫 수정 `edb9b0a`와 동일 source tree)으로 기준을 갱신했다. 실제 원본 반영은 단일 writer·descriptor baseline 확인과 durable intent/receipt 안에서 구현했고, 같은 OS 사용자의 비협조적인 writer에 대한 kernel atomic CAS는 제공하지 않는다. 감지된 경쟁/부분 쓰기·기록 실패는 미확정으로 보관하며 외부 편집/동시 CLI 중단 조건을 유지한다.
+
+검증 실행 환경의 AppArmor가 외부 bwrap 안의 Codex namespace 생성을 거절했다. 개별 외부 격리/프로필 canary PASS와 결합 runtime proof SKIP/BLOCKED를 구분한다. 쓰기 gate를 유지하고 호스트 정책/권한은 변경하지 않는다. 실계정/운영 적용·실제 파일 수정 수락은 여전히 NOT_RUN이다. 이는 수락 완화/격리 해제 승인이 아니며 [구현·검사 기록](../implementation/execution-protection-20261107.md)을 따른다.

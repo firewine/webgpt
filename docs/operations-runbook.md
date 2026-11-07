@@ -259,6 +259,17 @@ R8-D 실수락은 사용자가 연결 화면에서 GPT2계정 OAuth·DeepSeek·d
 
 키가 없거나 앱이 실행되지 않으면 원인 코드만 반환한다. 인증 전에 `/health`가 웹쫀쿠 workspace인지 확인하며 다른 서비스면 `unexpected_local_service`로 중단한다. 고정 loopback 주소만 사용하고 redirect를 거절해 owner 키가 다른 주소로 전달되지 않게 한다. 출력에는 계정 이메일·토커 이름·대화/모델 원문·thread/approval 내용·키를 포함하지 않는다. `configMatchesService`가 false이면 `.env`의 로컬 설정과 실행 중 서비스의 기록된 활성 설정이 일치하는지 확인한다. [2026-10-31 실제 준비 상태·격리 검사](./implementation/phase8-live-preflight-20261031.md)를 참조한다.
 
+### 추천3: 권한 만료·보호 사본과 명시 반영 (2026-11-07)
+
+- 일반 토의 MCP 키와 Codex 세션 등록 시 유효 시간을1~168시간에서 선택한다(초기24시간). 만료/회수/옛 metadata 연결은 새 사용을 막으며 과거 대화·결과·원문은 보존한다. 만료/회수한 같은 cwd/thread는 기존 클라이언트가 멈춘 유휴 상태에서 다시 대조해 등록한다. 활성/미확정 실행 중에는 다른 세션으로 바꾸지 않는다.
+- 쓰기 허용은 보호 사본에만 적용된다. 실제 profile/schema/OS 검사가 지원될 때만 준비되며 임의 설정값으로 통과시킬 수 없다. source root/branch/HEAD와 파일 baseline을 고정한다. 비밀 파일·Git 이력·link/submodule/위험 설정이 있거나 크기/형식 범위를 넘으면 차단 사유를 확인한다.
+- 원격 `completed` 뒤에도 ‘원본 반영 대기’이면 원본은 바뀌지 않았다. 실행 화면에서 실제 변경 내용을 열고 확인한 **동일 diff**의1파일만 반영한다. 새 파일/삭제/rename/chmod/여러 파일·바이너리는 이 기능에서 반영하지 않는다. 운영 중 다른 편집기/CLI로 원본을 동시에 변경하지 않는다.
+- 원래 branch/HEAD·파일 내용/경로·권한 세대가 달라지면 덮어쓰지 않는다. intent 뒤 실패·재시작·부분 쓰기/감지된 경쟁은 충돌/미확정으로 보존한다. 현재 원본과 private receipt를 대조하기 전 새 job/apply로 반복하지 않는다. 원문/사본을 삭제해서 해결하지 않는다.
+- 원문 버튼은 **가리지 않은 소유자 전용 자료**를 한 페이지씩 연다. 방/Wiki/MCP로 복사하지 않는다. digest/전체 byte 수·page 수·완전성과 화면 미리보기 생략 여부를 구분한다. 원문 수집이 불완전하면 실행 성공 근거로 승격하지 않는다. 예전 출력에 새 원문이 있는 것처럼 표시하지 않는다.
+- 보호 작업은 추가 권한 요청의 ACCEPT와 steer를 지원하지 않는다. 거절/취소 후 원래 turn을 대조한다. 임의 승인/full-access로 우회하지 않는다. 실제 Codex 소유자 세션의 승인·1파일 변경·재검토 수락은 자동 fixture 검사와 별도의 실행 허용/기록이 필요하다.
+
+운영 서버 적용 전 G0와 진행/미확정·applying intent를 확인한다. DB·키·Chrome/Muse/dot·API 한도는 이 개발로 초기화하거나 바꾸지 않는다. [계약·제약·복귀](./adr/0002-protected-execution.md), [자동 검사와 NOT_RUN](./implementation/execution-protection-20261107.md).
+
 ## 4. Codex 실행
 
 Codex 로그인은 서버의 실행 OS 사용자 환경에서 별도로 완료한다. `WJ_WORKSPACE_ROOTS` 안의 Git 작업 디렉터리와 기존 Codex thread ID를 UI에서 등록한다. `.git` branch, canonical cwd, host, OS user와 thread metadata를 확인한다. 코드 수정은 main/master가 아닌 작업 브랜치에서만 허용된다.

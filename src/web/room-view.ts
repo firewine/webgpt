@@ -35,6 +35,7 @@ function dateKst(value: string): string { return new Date(value).toLocaleString(
 const labels: Record<string, string> = { off: '꺼짐', on: '상주 중', sleeping: '휴면', blocked: '확인 필요', budget_exhausted: '진행 한도 소진', unknown: '미관측', not_run: '미실행', not_applicable: '해당 없음', unconfirmed: '응답 미확인', stale: '이전 세대', prepared: '전송 준비', running: '진행 중', paused: '일시정지', completed: '완료', partial: '부분 완료', cancelled: '취소', failed: '실패', fixture: '모의', connected: '연결됨', auth_required: '로그인 필요', queued: '실행 대기', blocked_approval: '승인 대기', reconciling: '대조 필요', interrupted: '중단', waiting: '응답 대기', ready: '준비됨', backlog: '조건 대기', claimed: '픽업됨', review: '독립 검토', rework: '재작업', done: '업무 완료', observed_pass: '관측 검사 통과', observed_fail: '관측 검사 실패', reported: '참여자 보고' };
 const label = (value: string): string => labels[value] ?? dotLabels[value] ?? value;
 labels.not_sent = '미전송';
+const draftLabels: Record<string, string> = { pending: '원본 반영 대기', applying: '원본 반영 중', applied: '원본 반영 완료', unchanged: '원본 변경 없음', conflict: '원본 반영 충돌' };
 const topicPhases: Record<Discussion['phase'], string> = { independent: '독립 초기안', cross_review: '상호 검토', verification: '근거 검증', revision: '수정안', synthesis: '종합안 작성', summary_review: '종합안 동료 검토' };
 const topicReasons: Record<string, string> = { procedure_completed: '예정된 토론 절차 완료', budget_exhausted: '진행 한도에 도달함', user_cancelled: '사용자가 토론을 취소함', participant_excluded: '일부 참여자가 제외됨', partial_unstructured_reply: '일부 응답의 형식을 확인하지 못함', restart_requires_reconciliation: '재시작 전 응답의 대조가 필요함' };
 const topicWikiReasons: Record<string, string> = {
@@ -319,13 +320,17 @@ export class RoomView {
     $<HTMLDialogElement>('#work-detail-dialog').showModal();
   }
   private renderWorkExecution(target: HTMLElement, link: WorkJobLink, job: CodexJob | null): void {
-    const card = el('section', '', 'work-card'); card.dataset.jobId = job?.id ?? ''; card.append(el('h4', 'Codex 실행 · ' + label(job?.status ?? link.status)), el('p', `${link.binding.label} · 읽기 전용\n실행 결과의 수용 여부는 독립 검토 기록을 확인하세요. Codex token 사용량은 미확인입니다.`, 'small pre-line'));
+    const card = el('section', '', 'work-card'); card.dataset.jobId = job?.id ?? ''; card.append(el('h4', 'Codex 실행 · ' + label(job?.status ?? link.status)), el('p', `${link.binding.label} · ${link.binding.allowWrite ? '보호 사본 수정' : '읽기 전용'}\n실행 결과의 수용 여부는 독립 검토 기록을 확인하세요. Codex token 사용량은 미확인입니다.`, 'small pre-line'));
+    if (job?.capture && ['completed', 'failed', 'interrupted'].includes(job.status) && !job.capture.complete) card.append(el('p', '원문 수집이 불완전해 현재 업무 수락을 보류했습니다. 원래 실행과 근거는 보존됩니다.', 'topic-caveat'));
+    if (job?.draft) card.append(el('p', '원격 실행 상태와 별도 · ' + (draftLabels[job.draft.status] ?? label(job.draft.status)), 'small'));
+    if (job) card.append(this.btn('실행 원문·변경 확인', () => this.navigate('execution')));
     if (link.error) card.append(el('p', workReason(link.error), 'topic-caveat'));
-    const original = el('details'); original.append(el('summary', '실행 원문·요청·근거'), el('pre', JSON.stringify({ requestId: link.input.requestId, jobId: link.codexJobId, threadId: link.binding.threadId, turnId: job?.turnId, intentDigest: link.intentDigest, prompt: link.input.prompt, result: link.result, activities: job?.activities, error: job?.error }, null, 2))); card.append(original);
+    const original = el('details'); original.append(el('summary', '기록된 요청·가린 출력·근거'), el('pre', JSON.stringify({ requestId: link.input.requestId, jobId: link.codexJobId, threadId: link.binding.threadId, turnId: job?.turnId, intentDigest: link.intentDigest, prompt: link.input.prompt, result: link.result, activities: job?.activities, error: job?.error }, null, 2))); card.append(original);
     const act = async (action: string, body: unknown) => { await this.deps.api(`/api/jobs/${job!.id}/${action}`, body); await this.deps.refresh(); if ($<HTMLDialogElement>('#work-detail-dialog').open) await this.openWork(link.taskId); };
     for (const a of job?.approvals.filter(a => a.status === 'pending' && job.status === 'blocked_approval') ?? []) {
       const pending = el('section'); pending.append(el('h4', '실행 승인 요청'), el('pre', JSON.stringify(a.params, null, 2)));
-      for (const [decision, text] of [['accept', '이번 실행 요청 승인'], ['decline', '이번 실행 요청 거절'], ['cancel', '이번 실행 요청 취소']]) pending.append(this.btn(text!, () => act('approve', { approvalId: a.id, decision })));
+      if (job?.draft) pending.append(el('p', '보호 사본 작업의 추가 권한 승인은 지원하지 않습니다. 거절·취소 후 원래 실행을 대조하세요.', 'topic-caveat'));
+      for (const [decision, text] of (job?.draft ? [['decline', '이번 실행 요청 거절'], ['cancel', '이번 실행 요청 취소']] : [['accept', '이번 실행 요청 승인'], ['decline', '이번 실행 요청 거절'], ['cancel', '이번 실행 요청 취소']])) pending.append(this.btn(text!, () => act('approve', { approvalId: a.id, decision })));
       card.append(pending);
     }
     if (job && ['queued', 'running', 'blocked_approval'].includes(job.status)) card.append(this.btn('이 실행만 중단 요청', () => act('cancel', {})));
