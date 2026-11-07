@@ -15,10 +15,11 @@ export function authorityReason(a: ExecutionAuthority | undefined, clock = Date.
   return null;
 }
 export function bindingReason(b: ExecutionBinding | undefined, clock = Date.now()): string | null {
+  if (b?.managedSession?.state === 'lost') return 'managed_session_lost';
   if (!b || b.status !== 'ready') return 'execution_binding_not_ready';
   return authorityReason(b.authority, clock);
 }
-export function bindingDigest(b: ExecutionBinding): string { return digest(JSON.stringify({ id: b.id, host: b.host, user: b.user, cwd: b.cwd, threadId: b.threadId, repoRoot: b.repoRoot, branch: b.branch, head: b.head, allowWrite: b.allowWrite, authority: b.authority })); }
+export function bindingDigest(b: ExecutionBinding): string { return digest(JSON.stringify({ id: b.id, host: b.host, user: b.user, cwd: b.cwd, threadId: b.threadId, repoRoot: b.repoRoot, branch: b.branch, head: b.head, allowWrite: b.allowWrite, authority: b.authority, readProtection: b.readProtection, managedSessionVersion: b.managedSession?.version })); }
 export function grantDigest(g: WorkspaceState['grants'][number]): string { return digest(JSON.stringify({ id: g.id, hash: g.hash, discussionId: g.discussionId, participantId: g.participantId, tools: g.tools, authority: g.authority })); }
 export function discussionDigest(s: WorkspaceState, j: Pick<CodexJob, 'discussionId' | 'taskId' | 'revision'>): string {
   const d = s.discussions.find(d => d.id === j.discussionId); const task = d?.tasks.find(t => t.id === j.taskId);
@@ -40,9 +41,16 @@ export function assertJobAuthority(s: WorkspaceState, j: CodexJob, clock = Date.
 }
 export function initializeExecutionProtection(s: WorkspaceState): void {
   if (s.executionProtectionVersion !== undefined && s.executionProtectionVersion !== 1) throw new AppError('unsupported_execution_protection_schema', 503);
-  if (s.executionProtectionVersion === undefined && (s.bindings.some(b => b.authority) || s.jobs.some(j => j.authority) || s.grants.some(g => g.authority))) throw new AppError('execution_protection_state_missing', 503);
+  if (s.executionProtectionVersion === undefined && (s.bindings.some(b => b.authority || b.readProtection !== undefined || b.managedSession !== undefined) || s.jobs.some(j => j.authority || j.readCopy !== undefined) || s.grants.some(g => g.authority))) throw new AppError('execution_protection_state_missing', 503);
   for (const a of [...s.bindings.map(b => b.authority), ...s.grants.map(g => g.authority)]) if (a !== undefined && (!a || authorityReason(a) === 'execution_authority_invalid')) throw new AppError('invalid_execution_authority_state', 503);
   for (const j of s.jobs) if (j.authority && (j.authority.version !== 1 || !j.authority.binding || !Number.isSafeInteger(j.authority.binding.epoch))) throw new AppError('invalid_job_authority_state', 503);
   for (const j of s.jobs) if (j.capture && (j.capture.version !== 1 || j.capture.jobId !== j.id || typeof j.capture.complete !== 'boolean' || !Number.isSafeInteger(j.capture.byteLength) || j.capture.byteLength < 0) || j.draft && j.draft.version !== 1) throw new AppError('invalid_execution_protection_state', 503);
+  for (const b of s.bindings) {
+    const m = b.managedSession;
+    if (b.readProtection !== undefined && b.readProtection !== 1 || m !== undefined && (!m || m.version !== 1 || !['initial', 'dispatched', 'lost'].includes(m.state) ||
+        m.firstRequestId !== null && (typeof m.firstRequestId !== 'string' || !m.firstRequestId) || m.state !== 'dispatched' && m.firstRequestId !== null || m.state === 'dispatched' && !m.firstRequestId || !b.allowWrite && b.readProtection !== 1)) throw new AppError('invalid_managed_session_state', 503);
+  }
+  for (const j of s.jobs) if (j.readCopy !== undefined && (!j.readCopy || j.readCopy.version !== 1 || !['preparing', 'running', 'checked', 'blocked'].includes(j.readCopy.status) ||
+    j.draft || ['running', 'checked'].includes(j.readCopy.status) && !/^[a-f0-9]{64}$/.test(j.readCopy.manifestDigest ?? '') || j.readCopy.reason !== null && typeof j.readCopy.reason !== 'string')) throw new AppError('invalid_read_copy_state', 503);
   s.executionProtectionVersion = 1;
 }

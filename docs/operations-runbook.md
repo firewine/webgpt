@@ -336,7 +336,11 @@ sudo /home/firewine/.nvm/versions/node/v24.18.0/bin/node /home/firewine/webgpt-w
 
 `install`을 `check`로 바꾸면 설치 파일과 enforce 상태를 대조한다. 이 PASS는 실행 보호 PASS가 아니다. 패키지가 업데이트돼 전용 binary와 바이트가 달라지거나 정책 revision/identity가 바뀌면 기존 proof를 재사용하지 않는다. `WJ_OUTER_BWRAP=/usr/local/libexec/webjjoku/bwrap`은 검토된 별도 검증 인스턴스에만 설정한다. 설치 디렉터리를 PATH에 추가하지 않으며, 내부 CLI는 시스템 bwrap을 선택해야 한다. 실제 서비스 설정은 PR 병합/배포 범위 확인 없이 변경하지 않는다.
 
-전용 모드의 기존 broad readonly는 인증 파일 차단이 검증되지 않아 `protected_readonly_profile_required`로 차단된다. 쓰기 profile의 proof PASS로 readonly의 보호를 대신하지 않는다. 실제 readonly 검증은 후속 최소 profile 보완 이후 수행하며, 단지 이 오류를 없애려고 전용 설정을 제거해 실계정을 재호출하지 않는다.
+PR #58 단독의 기존 broad readonly는 인증 파일 차단이 검증되지 않아 `protected_readonly_profile_required`로 차단된다. 쓰기 profile의 proof PASS로 readonly의 보호를 대신하지 않는다. 단지 이 오류를 없애려고 전용 설정을 제거해 실계정을 재호출하지 않는다.
+
+PR #59의 [최소 읽기·새 세션 보완](./implementation/r6-readonly-session-20261107.md)은 별도 `webjjoku_read` profile/정제 readonly 사본을 사용한다. 과거 readonly 등록은 보호 확인 후 재등록해야 하며 자동 승격하지 않는다. 실행 화면에서 ‘기존 세션’을 고르면 실제 thread ID가 필요하고, ‘새 세션’을 고르면 ID 없이 앱이 생성/첫 요청까지 같은 연결을 유지한다. 첫 요청 전 연결을 잃은 경우 화면의 유실 안내에 따라 명시 재등록하며 준비용 모델 호출로 새 thread를 미리 실행하지 않는다.
+
+Ubuntu의 DNS가 `/run`을 가리키면 trusted App Server에 resolver 시스템 파일1개만 readonly로 보존한다. 원래 호스트 설정이나 모델 도구의 network-disabled profile을 바꾸지 않는다. 실제 계정 확인/동일 연결 최초 전달은 확인됐으나 명령1회 승인 지원이 없어 R6-F 전체는 BLOCKED다. 현재 protected job의 승인/steer를 직접 RPC·정책 변경으로 우회하지 않으며, 후속 기능은 별도 영향 보고·승인과 승인 후 보호 proof가 필요하다.
 
 ```bash
 npm run build

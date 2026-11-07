@@ -38,7 +38,7 @@ test('dedicated host exception never enables broad legacy readonly while its aut
   t.after(() => guarded.close());
   assert.throws(() => guarded.submit({ bindingId: prior, prompt: 'read fixture only', requestId: 'blocked-legacy-read' }), /protected_readonly_profile_required/);
   f.store.transact(s => { s.bindings[0].authority.revokedAt = new Date().toISOString(); });
-  await assert.rejects(guarded.register({ label: 'readonly', cwd: f.cwd, threadId: f.store.read().bindings[0].threadId }), /protected_readonly_profile_required/);
+  await assert.rejects(guarded.register({ label: 'readonly', cwd: f.cwd, threadId: f.store.read().bindings[0].threadId }), /protected_execution_unavailable/);
   assert.equal(f.store.read().jobs.length, 0);
   assert.equal((await f.trace()).filter(m => m.method === 'turn/start').length, 0);
 });

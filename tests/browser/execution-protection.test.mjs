@@ -60,6 +60,53 @@ async function open(t, { width = 1380, configure = () => {} } = {}) {
 }
 async function settle(page) { await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); }
 
+test('execution owner UI: explicit new-session choice omits an old ID and restores existing-session validation', { timeout: 30000 }, async t => {
+  const f = await open(t), { page } = f, form = page.locator('#binding-form'), mode = form.locator('[name=sessionMode]'), thread = form.locator('[name=threadId]');
+  f.handlers.set('/api/bindings', route => route.fulfill({ json: {} }));
+  assert.equal(await mode.inputValue(), 'existing'); assert.equal(await thread.isVisible(), true); assert.equal(await thread.getAttribute('required'), '');
+  await form.locator('[name=label]').fill('새 작업 세션'); await form.locator('[name=cwd]').fill('/fixture/selected');
+  await form.locator('[name=allowWrite]').check(); await form.locator('[name=expiresInHours]').fill('48');
+  await form.locator('button[type=submit]').click(); assert.equal(f.posts('/api/bindings').length, 0); assert.equal(await thread.evaluate(el => el.validity.valueMissing), true);
+  await thread.fill('unused-old-thread'); await mode.selectOption('new');
+  assert.equal(await thread.isVisible(), false); assert.equal(await thread.isDisabled(), true); assert.equal(await thread.getAttribute('required'), null);
+  assert.match(await page.locator('#binding-new-session-note').textContent(), /같은 연결/);
+  assert.equal(await page.locator('#binding-new-session-note').isVisible(), true); assert.equal(f.posts('/api/bindings').length, 0);
+  let response = page.waitForResponse(res => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/bindings');
+  await form.locator('button[type=submit]').click(); await response;
+  assert.deepEqual(f.posts('/api/bindings')[0].body, { label: '새 작업 세션', cwd: '/fixture/selected', sessionMode: 'new', allowWrite: true, expiresInHours: 48 });
+  assert.equal(Object.hasOwn(f.posts('/api/bindings')[0].body, 'threadId'), false); assert.ok(f.posts('/api/bindings')[0].commandId);
+  await mode.selectOption('existing'); assert.equal(await thread.isVisible(), true); assert.equal(await thread.isEnabled(), true); assert.equal(await thread.getAttribute('required'), '');
+  assert.equal(await page.locator('#binding-new-session-note').isVisible(), false); await thread.fill('');
+  await form.locator('button[type=submit]').click(); assert.equal(f.posts('/api/bindings').length, 1); assert.equal(await thread.evaluate(el => el.validity.valueMissing), true);
+  await thread.fill('thread-existing'); response = page.waitForResponse(res => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/bindings');
+  await form.locator('button[type=submit]').click(); await response;
+  assert.deepEqual(f.posts('/api/bindings')[1].body, { label: '새 작업 세션', cwd: '/fixture/selected', sessionMode: 'existing', threadId: 'thread-existing', allowWrite: true, expiresInHours: 48 });
+  assert.equal(f.posts('/api/jobs').length, 0);
+});
+
+test('execution owner UI: initial and lost managed sessions need explicit registration and preserve revoke controls', { timeout: 30000 }, async t => {
+  const f = await open(t, { configure(s) {
+    const initial = binding('initial'); initial.allowWrite = false; initial.readProtection = 1; initial.managedSession = { version: 1, state: 'initial', firstRequestId: null };
+    const lost = binding('lost'); lost.managedSession = { version: 1, state: 'lost', firstRequestId: null }; s.bindings.push(initial, lost);
+  } }), { page } = f;
+  const initial = page.locator('[data-binding-id=initial]'), lost = page.locator('[data-binding-id=lost]');
+  assert.match(await initial.textContent(), /새 세션 준비됨.*아직 첫 요청.*자동 실행하지/); assert.match(await initial.textContent(), /최소 읽기 범위 확인/);
+  await page.locator('#job-binding').selectOption('initial'); assert.equal(await page.locator('#job-form button[type=submit]').isEnabled(), true);
+  assert.match(await page.locator('#job-access-note').textContent(), /새 세션 준비됨/); assert.match(await page.locator('#job-access-note').textContent(), /최소 읽기 범위 확인/);
+  assert.match(await lost.textContent(), /연결이 끊겼습니다.*권한을 회수.*다시 등록/);
+  await page.locator('#job-binding').selectOption('lost'); assert.equal(await page.locator('#job-form button[type=submit]').isDisabled(), true);
+  assert.match(await page.locator('#job-access-note').textContent(), /자동으로 새 세션을 만들지/); assert.equal(await page.locator('#discussion-binding option[value=lost]').evaluate(el => el.disabled), true);
+  await page.locator('#binding-session-mode').selectOption('new');
+  await lost.getByRole('button', { name: '이 설정으로 재등록' }).click();
+  assert.equal(await page.locator('#binding-session-mode').inputValue(), 'existing'); assert.equal(await page.locator('#binding-form [name=threadId]').inputValue(), 'thread-lost');
+  assert.equal(await page.locator('#binding-form [name=threadId]').isVisible(), true); assert.equal(await page.locator('#binding-form [name=allowWrite]').isChecked(), true);
+  await f.refresh(s => { s.bindings.find(b => b.id === 'initial').managedSession.state = 'lost'; });
+  await page.locator('#job-binding').selectOption('initial'); assert.equal(await page.locator('#job-form button[type=submit]').isDisabled(), true);
+  assert.equal(f.posts('/api/bindings').length, 0); assert.equal(f.posts('/api/jobs').length, 0);
+  f.handlers.set('/api/bindings/lost/revoke', route => route.fulfill({ json: {} })); await lost.getByRole('button', { name: '실행 권한 회수' }).click();
+  assert.deepEqual(f.posts('/api/bindings/lost/revoke')[0].body, {}); assert.ok(f.posts('/api/bindings/lost/revoke')[0].commandId);
+});
+
 test('execution owner UI: authority expiry, legacy/revocation, explicit re-registration and numeric durations', { timeout: 30000 }, async t => {
   const f = await open(t, { configure(s) {
     const legacy = binding('legacy'); delete legacy.authority;
@@ -155,6 +202,60 @@ test('execution owner UI: truncated display is separate from complete capture; p
   assert.equal(await f.card('readonly-job').getByRole('button', { name: '이번 요청 승인', exact: true }).isEnabled(), true);
   f.handlers.set('/api/jobs/job-a/approve', route => route.fulfill({ json: {} })); await f.card().getByRole('button', { name: '거절', exact: true }).click();
   await f.card().getByRole('button', { name: '취소', exact: true }).click(); assert.deepEqual(f.posts('/api/jobs/job-a/approve').map(r => r.body.decision), ['decline', 'cancel']);
+});
+
+test('execution owner UI: readCopy approvals warn and only decline/cancel, including after a stale ACCEPT click', { timeout: 30000 }, async t => {
+  const f = await open(t, { configure(s) {
+    for (const id of ['readonly', 'legacy-readonly']) {
+      const b = binding(id); b.allowWrite = false; if (id === 'readonly') b.readProtection = 1; s.bindings.push(b);
+      const j = job(b, id + '-job'); delete j.draft; j.status = 'blocked_approval';
+      if (id === 'readonly') j.readCopy = { version: 1, status: 'running', manifestDigest: digest('f'), reason: null };
+      j.approvals.push({ id: 'approval-' + id, rpcId: 2, method: 'fixture/approval', params: {}, status: 'pending' }); s.jobs.push(j);
+    }
+  } }), { page } = f;
+  const protectedCard = f.card('readonly-job'), legacyCard = f.card('legacy-readonly-job');
+  assert.match(await protectedCard.locator('.execution-warning').textContent(), /경로·범위를 검증하는 실행 승인은 아직 지원하지/);
+  assert.equal(await protectedCard.getByRole('button', { name: '이번 요청 승인', exact: true }).count(), 0);
+  assert.equal(await legacyCard.getByRole('button', { name: '이번 요청 승인', exact: true }).isEnabled(), true);
+  assert.equal(await legacyCard.locator('.execution-warning').count(), 0);
+  f.handlers.set('/api/jobs/readonly-job/approve', route => route.fulfill({ json: {} }));
+  for (const name of ['거절', '취소']) {
+    const response = page.waitForResponse(res => new URL(res.url()).pathname === '/api/jobs/readonly-job/approve');
+    await protectedCard.getByRole('button', { name, exact: true }).click(); await response;
+  }
+  assert.deepEqual(f.posts('/api/jobs/readonly-job/approve').map(r => r.body), [
+    { approvalId: 'approval-readonly', decision: 'decline' }, { approvalId: 'approval-readonly', decision: 'cancel' },
+  ]);
+  f.handlers.set('/api/jobs/legacy-readonly-job/approve', route => route.fulfill({ json: {} }));
+  const response = page.waitForResponse(res => new URL(res.url()).pathname === '/api/jobs/legacy-readonly-job/approve');
+  await legacyCard.getByRole('button', { name: '이번 요청 승인', exact: true }).click(); await response; await f.refresh();
+  assert.deepEqual(f.posts('/api/jobs/legacy-readonly-job/approve')[0].body, { approvalId: 'approval-legacy-readonly', decision: 'accept' });
+  const staleAccept = await legacyCard.getByRole('button', { name: '이번 요청 승인', exact: true }).elementHandle();
+  await f.refresh(s => { s.jobs.find(j => j.id === 'legacy-readonly-job').readCopy = { ...s.jobs.find(j => j.id === 'readonly-job').readCopy }; });
+  assert.equal(await legacyCard.getByRole('button', { name: '이번 요청 승인', exact: true }).count(), 0);
+  await staleAccept.evaluate(button => button.click());
+  await page.locator('#notice').filter({ hasText: /경로·범위를 검증하는 실행 승인은 아직 지원하지/ }).waitFor();
+  assert.equal(f.posts('/api/jobs/legacy-readonly-job/approve').length, 1);
+});
+
+test('execution owner UI: running draft/readCopy jobs hide steering while legacy readonly keeps it', { timeout: 30000 }, async t => {
+  const f = await open(t, { configure(s) {
+    s.jobs[0].status = 'running'; s.jobs[0].finishedAt = null; s.jobs[0].draft.status = 'running';
+    for (const id of ['readonly', 'legacy-readonly']) {
+      const b = binding(id); b.allowWrite = false; if (id === 'readonly') b.readProtection = 1; s.bindings.push(b);
+      const j = job(b, id + '-job'); delete j.draft; j.status = 'running'; j.finishedAt = null;
+      if (id === 'readonly') j.readCopy = { version: 1, status: 'running', manifestDigest: digest('f'), reason: null }; s.jobs.push(j);
+    }
+  } }), { page } = f;
+  for (const id of ['job-a', 'readonly-job']) assert.equal(await f.card(id).getByRole('button', { name: '진행 중 지시 보완', exact: true }).count(), 0);
+  for (const id of ['job-a', 'readonly-job', 'legacy-readonly-job']) assert.equal(await f.card(id).getByRole('button', { name: '중단 요청', exact: true }).isEnabled(), true);
+  f.handlers.set('/api/jobs/legacy-readonly-job/steer', route => route.fulfill({ json: {} }));
+  await f.card('legacy-readonly-job').getByRole('button', { name: '진행 중 지시 보완', exact: true }).click();
+  await page.locator('#action-form [name=text]').fill('기존 읽기 전용 지시 보완'); await page.locator('#action-form button[type=submit]').click();
+  await page.locator('#action-dialog').waitFor({ state: 'hidden' });
+  assert.deepEqual(f.posts('/api/jobs/legacy-readonly-job/steer')[0].body, { expectedTurnId: 'turn-legacy-readonly-job', text: '기존 읽기 전용 지시 보완' });
+  assert.ok(f.posts('/api/jobs/legacy-readonly-job/steer')[0].commandId);
+  assert.deepEqual(f.requests.filter(r => r.path.endsWith('/steer')).map(r => r.path), ['/api/jobs/legacy-readonly-job/steer']);
 });
 
 test('execution owner UI: incomplete capture, unsupported file changes and unavailable authority block apply while recovery stays available', { timeout: 30000 }, async t => {

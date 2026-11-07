@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 import { promisify } from 'node:util';
 import { OUTER_BWRAP, outerIdentity } from './outer-bwrap.js';
 
-type Binding = { repoRoot: string; cwd: string };
+type Binding = { repoRoot: string; cwd: string; allowWrite?: boolean };
 const execute = promisify(execFile);
 const lifetime = 60_000;
 const toolStarted = 'ISOLATION_TOOL_STARTED\n';
@@ -69,6 +69,8 @@ function property(value: unknown, key: string): Record<string, unknown> | undefi
  */
 export class ExecutionIsolation {
   readonly profileId = 'webjjoku_copy';
+  readonly readProfileId = 'webjjoku_read';
+  profileFor(binding: Binding): string { return binding.allowWrite === false ? this.readProfileId : this.profileId; }
   private readonly command: string[];
   private readonly protectedPaths: string[];
   private readonly privateDirectory: string;
@@ -82,8 +84,11 @@ export class ExecutionIsolation {
     const repo = directory(binding.repoRoot); const cwd = directory(binding.cwd);
     if (repo === '/' || !inside(repo, cwd)) throw denied('cwd_outside_repository');
     const auth = directory(realpathSync(process.env.CODEX_HOME ?? join(homedir(), '.codex')));
-    const masks = [...new Set([...this.protectedPaths, this.privateDirectory,
+    const candidates = [...new Set([...this.protectedPaths, this.privateDirectory,
       join(homedir(), '.config', 'google-chrome'), join(homedir(), '.config', 'chromium')].filter(p => existsSync(p)).map(p => realpathSync(p)))];
+    // A denied parent already covers its descendants. Redundant child masks can
+    // make the CLI's filesystem helper try mkdir under an already read-only mask.
+    const masks = candidates.filter(p => !candidates.some(parent => parent !== p && inside(parent, p)));
     if (inside(repo, auth) || inside(auth, repo) || masks.some(p => p === '/' || inside(p, repo) || inside(p, auth) || inside(auth, p))) throw denied('protected_path_overlap');
     if (!isAbsolute(this.privateDirectory) || inside(repo, resolve(this.privateDirectory))) throw denied('private_directory_overlap');
     if (copyRoot) {
@@ -106,23 +111,24 @@ export class ExecutionIsolation {
     const key = JSON.stringify([this.command, identity(cli), identity(bwrap), outer, runtimes.map(identity), identity(process.execPath), existsSync(empty) ? identity(empty) : null, inode(auth), masks.map(inode), process.env.PATH, host, readFileSync('/proc/sys/kernel/random/boot_id', 'utf8')]);
     return { repo, cwd, cli, bwrap, runtime, auth, masks, key };
   }
-  private config(root: string, runtime: string, auth: string, masks = this.protectedPaths): string[] {
+  private config(root: string, runtime: string, auth: string, masks = this.protectedPaths, readOnly = false): string[] {
     // Override the entire permissions table, not dotted path keys (paths may contain dots).
     const node = dirname(dirname(realpathSync(process.execPath)));
     if (node === '/' || node === homedir()) throw denied('unsafe_node_runtime');
-    const fs: Record<string, string> = { ':root': 'deny', ':minimal': 'read', ':tmpdir': 'deny', ':slash_tmp': 'deny', [runtime]: 'read', [node]: 'read', [auth]: 'deny', [root]: 'write' };
+    const fs: Record<string, string> = { ':root': 'deny', ':minimal': 'read', ':tmpdir': 'deny', ':slash_tmp': 'deny', [runtime]: 'read', [node]: 'read', [auth]: 'deny', [root]: readOnly ? 'read' : 'write' };
     for (const p of runtimeRoots(runtime)) fs[p] = 'read';
     for (const p of masks) fs[p] = 'deny';
     const filesystem = Object.entries(fs).map(([p, access]) => `${JSON.stringify(p)}=${JSON.stringify(access)}`).join(',');
     const path = this.outerBwrap ? `/usr/bin:/bin:${join(node, 'bin')}` : `${join(node, 'bin')}:/usr/bin:/bin`;
-    return [`permissions={${this.profileId}={filesystem={${filesystem}},network={enabled=false}}}`,
-      `default_permissions=${JSON.stringify(this.profileId)}`, 'approval_policy="never"', 'allow_login_shell=false',
+    const profile = readOnly ? this.readProfileId : this.profileId;
+    return [`permissions={${profile}={filesystem={${filesystem}},network={enabled=false}}}`,
+      `default_permissions=${JSON.stringify(profile)}`, 'approval_policy="never"', 'allow_login_shell=false',
       `shell_environment_policy={inherit="none",include_only=[],exclude=["*"],set={PATH=${JSON.stringify(path)}}}`,
       'mcp_servers={}', 'plugins={}', 'hooks={}', 'notify=[]', 'apps={_default={enabled=false}}',
       'features.codex_hooks=false', 'features.hooks=false', 'features.apps=false', 'features.plugins=false', 'features.multi_agent=false',
       'features.js_repl=false', 'web_search="disabled"'].flatMap(c => ['-c', c]);
   }
-  private wrap(repo: string, cwd: string, copy: string, auth: string, masks: string[], command: string[]): string[] {
+  private wrap(repo: string, cwd: string, copy: string, auth: string, masks: string[], command: string[], readOnly = false): string[] {
     const empty = join(this.privateDirectory, 'empty.config.toml');
     if (this.outerBwrap) outerIdentity(this.outerBwrap);
     const argv = [this.outerBwrap ?? executable('bwrap'), '--die-with-parent', '--new-session', '--unshare-pid', '--unshare-ipc', '--unshare-uts',
@@ -133,8 +139,18 @@ export class ExecutionIsolation {
     const path = this.outerBwrap ? `/usr/bin:/bin:${dirname(process.execPath)}` : process.env.PATH ?? '/usr/bin:/bin';
     for (const [key, value] of Object.entries({ PATH: path, HOME: homedir(), CODEX_HOME: auth, LANG: 'C.UTF-8' })) argv.push('--setenv', key, value);
     for (const p of masks) argv.push(...(statSync(p).isDirectory() ? ['--tmpfs', p] : ['--ro-bind', '/dev/null', p]));
+    // Ubuntu's resolver is commonly a symlink into /run. Keep just that system
+    // file readable to the trusted server after masking transient directories;
+    // model tools still use their separate network-disabled permission profile.
+    if (existsSync('/etc/resolv.conf')) {
+      const resolver = realpathSync('/etc/resolv.conf');
+      if (['/run', '/tmp', '/var/tmp'].some(root => inside(root, resolver))) {
+        if (!statSync(resolver).isFile() || masks.some(mask => inside(mask, resolver))) throw denied('resolver_overlaps_private_state');
+        argv.push('--ro-bind', '/etc/resolv.conf', resolver);
+      }
+    }
     // Sources are resolved in the host namespace, even when the state parent is masked.
-    argv.push('--bind', copy, repo);
+    argv.push(readOnly ? '--ro-bind' : '--bind', copy, repo);
     for (const path of [join(auth, 'config.toml')]) {
       if (existsSync(path)) argv.push('--ro-bind', empty, path);
     }
@@ -179,13 +195,13 @@ export class ExecutionIsolation {
     }
   }
   private bindingKey(binding: Binding, copy: string): string {
-    return JSON.stringify([this.context(binding, copy).key, binding.repoRoot, binding.cwd, inode(binding.repoRoot), inode(binding.cwd), inode(copy)]);
+    return JSON.stringify([this.context(binding, copy).key, this.profileFor(binding), binding.repoRoot, binding.cwd, inode(binding.repoRoot), inode(binding.cwd), inode(copy)]);
   }
   commandFor(binding: Binding, copyRoot: string): string[] {
     if (!this.ready.size) throw denied('verify_copy_required');
     const c = this.context(binding, copyRoot);
     if ((this.ready.get(this.bindingKey(binding, copyRoot)) ?? 0) < Date.now()) throw denied('verify_copy_required');
-    return this.wrap(c.repo, c.cwd, copyRoot, c.auth, c.masks, [c.cli, ...this.command.slice(1), ...this.config(c.repo, c.runtime, c.auth, c.masks)]);
+    return this.wrap(c.repo, c.cwd, copyRoot, c.auth, c.masks, [c.cli, ...this.command.slice(1), ...this.config(c.repo, c.runtime, c.auth, c.masks, binding.allowWrite === false)], binding.allowWrite === false);
   }
   private async probe(cli: string, runtime: string): Promise<void> {
     const base = await mkdtemp(join(this.privateDirectory, 'isolation-')); await chmod(base, 0o700);
@@ -211,7 +227,7 @@ export class ExecutionIsolation {
         if (found.length !== 1) throw denied('schema_file_ambiguous_or_missing');
         return JSON.parse(await readFile(join(schema, found[0]!), 'utf8')) as unknown;
       };
-      for (const name of ['TurnStartParams', 'ThreadResumeParams']) {
+      for (const name of ['TurnStartParams', 'ThreadResumeParams', 'ThreadStartParams']) {
         const type = property(await load(name), 'permissions')?.type;
         if (!(type === 'string' || Array.isArray(type) && type.includes('string'))) throw denied('permissions_schema_missing');
       }
@@ -226,7 +242,7 @@ export class ExecutionIsolation {
         `/proc/${process.pid}/root${sibling}/secret`, `/proc/${process.pid}/fd/${canary.fd}`, `/proc/1/root${auth}/auth.json`];
       // bwrap can create disposable scaffold files at denied paths. Check host canaries
       // afterward as well as read denials; a successful write must never reach the host.
-      const forbidden = secrets.map(p => `if /bin/cat ${quote(p)} >/dev/null 2>&1; then exit 81; fi; (printf BAD >> ${quote(p)}) 2>/dev/null || :;`).join('\n');
+      const forbidden = secrets.map((p, i) => `if /bin/cat ${quote(p)} >/dev/null 2>&1; then printf CANARY_READ_${i} >&2; exit 81; fi; (printf BAD >> ${quote(p)}) 2>/dev/null || :;`).join('\n');
       const hostGuards = this.outerBwrap ? `\nlabel=$(/bin/cat /proc/self/attr/current)\ncase "$label" in *webjjoku_outer_bwrap*) ;; *) exit 90;; esac\ncase "$label" in *unpriv_bwrap*) ;; *) exit 91;; esac\nif ${quote(OUTER_BWRAP)} --version >/dev/null 2>&1; then exit 88; fi\nif /usr/bin/unshare --user --map-root-user --mount /bin/true >/dev/null 2>&1; then exit 89; fi\n` : '';
       const tool = `printf 'ISOLATION_TOOL_STARTED\\n'\nset -eu\n[ "$PWD" = ${quote(join(source, 'sub'))} ]\n[ "$(/bin/cat ../tracked)" = SANITIZED-COPY ]\nprintf COPY-EDIT > ../tracked\nprintf CREATED > new-file\n${forbidden}\nif /bin/ls /tmp >/dev/null 2>&1 || (printf BAD > /tmp/webjjoku-probe) 2>/dev/null; then exit 86; fi\n/bin/bash -c 'exit 0'\n${quote(process.execPath)} -e 'if (process.versions.node !== ${JSON.stringify(process.versions.node)}) process.exit(87)'\nif /bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/${port}' 2>/dev/null; then exit 84; fi\n${hostGuards}\nprintf 'ISOLATION_READY\\n'\nread -r release\n[ ! -e ../late-secret ]\nprintf 'ISOLATION_OK\\n'`;
       const inner = [cli, 'sandbox', '--include-managed-config', '-P', this.profileId, '-C', join(source, 'sub'), ...this.config(source, runtime, auth, [state, chrome, sibling]), '--', '/bin/sh', '-c', tool];
@@ -234,6 +250,13 @@ export class ExecutionIsolation {
       await this.runProbe(this.wrap(source, join(source, 'sub'), copy, auth, [state, chrome], ['/bin/sh', '-c', outer]), base, async () => {
         await writeFile(join(source, 'late-secret'), 'FAKE-LATE-SECRET');
       });
+      // The write canary may create a disposable .env in the alias copy while
+      // attempting host writes. It contains no host secret; start read proof clean.
+      await rm(join(copy, '.env'), { force: true });
+      // A successful write proof must never stand in for least-read containment.
+      const readTool = `printf 'ISOLATION_TOOL_STARTED\\n'\nset -eu\n[ "$(/bin/cat ../tracked)" = COPY-EDIT ]\nif (printf BAD > ../tracked) 2>/dev/null || (printf BAD > ../read-created) 2>/dev/null; then exit 92; fi\n${forbidden}\n${hostGuards}\nif /bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/${port}' 2>/dev/null; then exit 84; fi\nprintf 'ISOLATION_READY\\n'\nread -r release\nprintf 'ISOLATION_OK\\n'`;
+      const readInner = [cli, 'sandbox', '--include-managed-config', '-P', this.readProfileId, '-C', join(source, 'sub'), ...this.config(source, runtime, auth, [state, chrome, sibling], true), '--', '/bin/sh', '-c', readTool];
+      await this.runProbe(this.wrap(source, join(source, 'sub'), copy, auth, [state, chrome], readInner, true), base, async () => {});
       if (connections || await readFile(join(source, 'tracked'), 'utf8') !== 'FAKE-CANARY' ||
           await readFile(join(copy, 'tracked'), 'utf8') !== 'COPY-EDIT' || await readFile(join(copy, 'sub', 'new-file'), 'utf8') !== 'CREATED' ||
           await readFile(join(auth, 'server.log'), 'utf8') !== 'LOG') throw denied('canary_mismatch');

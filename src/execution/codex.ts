@@ -23,6 +23,8 @@ export class CodexExecutor {
   readonly workspaces: ProtectedWorkspaces;
   private readonly isolation: ExecutionIsolation;
   private readonly outerBwrap: string | undefined;
+  private readonly protectRead: boolean;
+  private readonly managedOwners = new Map<string, { rpc: RpcProcess; jobId: string }>();
   private readonly previews = new Map<string, OutputPreview>();
   private readonly applying = new Set<string>();
   private readonly draftsFinishing = new Set<string>();
@@ -40,66 +42,78 @@ export class CodexExecutor {
     if (!this.workScopeGuard) throw new AppError('work_execution_guard_required', 409);
     this.workScopeGuard(state, job, phase);
   }
-  constructor(private readonly store: Store, private readonly command: string[], private readonly roots: string[], private readonly protectedPaths: string[] = [], options: { secrets?: () => string[]; outerBwrap?: string } = {}) {
+  constructor(private readonly store: Store, private readonly command: string[], private readonly roots: string[], private readonly protectedPaths: string[] = [], options: { secrets?: () => string[]; outerBwrap?: string; protectRead?: boolean } = {}) {
     initializeExecutionProtection(this.store.read());
     if (this.store.read().executionProtectionVersion === undefined) this.store.transact(initializeExecutionProtection);
     this.secrets = options.secrets ?? (() => []);
     this.evidence = new ExecutionEvidenceStore(join(store.directory, 'execution-evidence'), this.secrets);
     this.workspaces = new ProtectedWorkspaces(join(store.directory, 'execution-drafts'));
     this.outerBwrap = options.outerBwrap;
+    this.protectRead = options.protectRead === true || !!options.outerBwrap;
     this.isolation = new ExecutionIsolation(command, protectedPaths, join(store.directory, 'execution-probes'), options.outerBwrap);
     this.watchdog = setInterval(() => this.expire(), 1000); this.watchdog.unref();
   }
   recover(): void {
-    this.store.transact((state, emit) => { for (const job of state.jobs) if (['running', 'blocked_approval'].includes(job.status)) {
+    this.store.transact((state, emit) => {
+      for (const b of state.bindings) if (b.managedSession?.state === 'initial') { b.managedSession.state = 'lost'; b.status = 'blocked'; }
+      for (const job of state.jobs) if (['running', 'blocked_approval'].includes(job.status)) {
       this.captureIncomplete(job, 'restart_capture_gap');
       job.status = 'reconciling'; job.error = 'restart_requires_reconciliation';
       emit({ type: 'codex.reconciling', discussionId: job.discussionId, data: { jobId: job.id } });
     }
       for (const job of state.jobs) if (job.draft?.status === 'applying') { job.draft.status = 'unconfirmed'; job.draft.reason = 'restart_requires_application_review'; }
     });
-    for (const job of this.store.read().jobs) if (['completed', 'failed', 'interrupted'].includes(job.status) && job.draft?.status === 'running') {
+    for (const job of this.store.read().jobs) if (['completed', 'failed', 'interrupted'].includes(job.status) && (job.draft?.status === 'running' || job.readCopy?.status === 'running')) {
       if (job.turnId) void this.finishDraftForTurn(job.bindingId, job.turnId);
-      else this.store.transact(s => { const current = s.jobs.find(j => j.id === job.id)!; current.draft = { ...current.draft!, status: 'blocked', reason: 'draft_turn_receipt_missing' }; });
+      else this.store.transact(s => { const current = s.jobs.find(j => j.id === job.id)!;
+        if (current.readCopy) { current.readCopy.status = 'blocked'; current.readCopy.reason = 'read_turn_receipt_missing'; }
+        else current.draft = { ...current.draft!, status: 'blocked', reason: 'draft_turn_receipt_missing' }; });
     }
     this.kick();
   }
   async register(input: unknown): Promise<string> {
     const body = object(input); const cwd = await realpath(string(body.cwd, 2000));
+    const mode = body.sessionMode ?? 'existing';
+    if (!['existing', 'new'].includes(String(mode)) || mode === 'new' && body.threadId !== undefined) throw new AppError('invalid_session_mode');
     const allowed = await Promise.all(this.roots.map(root => realpath(root)));
     if (!allowed.some(root => inside(root, cwd))) throw new AppError('workspace_not_allowed', 403);
     if (this.protectedPaths.some(path => inside(cwd, path) || inside(path, cwd))) throw new AppError('workspace_overlaps_private_state', 403);
     const repository = await gitIdentity(cwd); const allowWrite = body.allowWrite === true;
     if (allowWrite && (!repository.branch || ['main', 'master'].includes(repository.branch))) throw new AppError('feature_branch_required', 409);
     const prior = this.store.read().bindings.find(b => b.threadId === body.threadId || b.cwd === cwd);
-    if (prior && (prior.threadId !== body.threadId || prior.cwd !== cwd || !authorityReason(prior.authority))) throw new AppError('workspace_already_registered', 409);
-    if (prior && this.store.read().jobs.some(j => j.bindingId === prior.id && ACTIVE.includes(j.status))) throw new AppError('workspace_busy', 409);
+    if (prior && (mode === 'existing' && prior.threadId !== body.threadId || prior.cwd !== cwd || !authorityReason(prior.authority) && !(mode === 'new' && prior.managedSession?.state === 'lost'))) throw new AppError('workspace_already_registered', 409);
+    if (prior && this.store.read().jobs.some(j => j.bindingId === prior.id && ['queued', ...ACTIVE].includes(j.status))) throw new AppError('workspace_busy', 409);
     if (prior) this.processes.get(prior.id)?.close();
     const binding: ExecutionBinding = { id: prior?.id ?? id('binding'), label: string(body.label, 80), host: hostname(), user: userInfo().username,
-      cwd, threadId: string(body.threadId, 200), allowWrite, status: 'unverified', ...repository, sessionTreeId: null, authority: issueAuthority(body.expiresInHours, (prior?.authority?.epoch ?? 0) + 1),
+      cwd, threadId: mode === 'new' ? '' : string(body.threadId, 200), allowWrite, status: 'unverified', ...repository, sessionTreeId: null, authority: issueAuthority(body.expiresInHours, (prior?.authority?.epoch ?? 0) + 1),
       protection: { version: 1, status: 'unverified', reason: allowWrite ? 'protected_execution_not_verified' : null } };
+    if (!allowWrite && (this.protectRead || mode === 'new')) binding.readProtection = 1;
     let registrationDraftId: string | undefined;
-    if (allowWrite) {
-      registrationDraftId = id('registration');
+    if (allowWrite || binding.readProtection) {
+      registrationDraftId = id(mode === 'new' ? 'job' : 'registration');
       const manifest = await this.workspaces.prepare(registrationDraftId, binding);
       await this.verifyProtection(binding, manifest.copyRoot); binding.protection = { version: 1, status: 'ready', reason: null };
     }
-    // The combined canary proves the named write profile, not legacy broad read.
-    // Do not let the new host exception expose the trusted server's auth to tools.
-    else if (this.outerBwrap) throw new AppError('protected_readonly_profile_required', 409);
     const rpc = await this.connect(binding, registrationDraftId);
     try {
-      const result = object(await rpc.request('thread/read', { threadId: binding.threadId, includeTurns: false }));
+      const result = object(await rpc.request(mode === 'new' ? 'thread/start' : 'thread/read', mode === 'new'
+        ? { cwd, ephemeral: false, permissions: this.isolation.profileFor(binding), approvalPolicy: 'untrusted', approvalsReviewer: 'user' }
+        : { threadId: binding.threadId, includeTurns: false }));
+      if (mode === 'new') {
+        binding.threadId = string(object(result.thread).id, 200);
+        binding.managedSession = { version: 1, state: 'initial', firstRequestId: null };
+        this.managedOwners.set(binding.id, { rpc, jobId: registrationDraftId! });
+      }
       const thread = object(result.thread); await this.validateThread(binding, thread, true);
       binding.sessionTreeId = typeof thread.sessionId === 'string' ? thread.sessionId : null; binding.status = 'ready';
       this.store.transact((state, emit) => { const old = state.bindings.findIndex(b => b.id === binding.id); if (old >= 0) state.bindings[old] = binding; else state.bindings.push(binding); emit({ type: 'codex.binding_added', discussionId: null, data: { bindingId: binding.id } }); });
       return binding.id;
-    } catch (error) { rpc.close(); this.processes.delete(binding.id); throw error; }
+    } catch (error) { rpc.close(); this.processes.delete(binding.id); this.managedOwners.delete(binding.id); throw error; }
   }
   submit(input: { bindingId: string; prompt: string; requestId: string; discussionId?: string | null; taskId?: string | null; revision?: number | null; maxDurationMs?: number; grantId?: string }): string {
     const preflight = this.store.read(); const denied = bindingReason(preflight.bindings.find(b => b.id === input.bindingId));
     if (denied) throw new AppError(denied, 409);
-    if (this.outerBwrap && preflight.bindings.some(b => b.id === input.bindingId && !b.allowWrite)) throw new AppError('protected_readonly_profile_required', 409);
+    if (this.protectRead && preflight.bindings.some(b => b.id === input.bindingId && !b.allowWrite && !b.readProtection)) throw new AppError('protected_readonly_profile_required', 409);
     if (input.grantId) { const grant = preflight.grants.find(g => g.id === input.grantId); if (!grant || grant.revoked || authorityReason(grant.authority)) throw new AppError('execution_grant_revoked_or_changed', 409); }
     const cached = this.store.readCommand<string>('codex:' + input.requestId, input);
     if (cached.found) { const previous = preflight.jobs.find(j => j.id === cached.result); if (!previous) throw new AppError('execution_job_missing', 409); assertJobAuthority(preflight, previous); this.kick(); return previous.id; }
@@ -111,7 +125,10 @@ export class CodexExecutor {
         if (!d || d.revision !== input.revision || d.executionBindingId !== binding.id || !d.tasks.some(t => t.id === input.taskId)) throw new AppError('execution_scope_mismatch', 403);
       }
       const prompt = string(input.prompt, 30_000);
-      const job: CodexJob = { id: id('job'), bindingId: binding.id, discussionId: input.discussionId ?? null, taskId: input.taskId ?? null, revision: input.revision ?? null,
+      const initial = binding.managedSession?.state === 'initial' ? this.managedOwners.get(binding.id) : null;
+      if (binding.managedSession?.state === 'initial' && (!initial || this.processes.get(binding.id) !== initial.rpc)) throw new AppError('managed_session_lost', 409);
+      if (initial && state.jobs.some(j => j.id === initial.jobId)) throw new AppError('managed_first_request_pending', 409);
+      const job: CodexJob = { id: initial?.jobId ?? id('job'), bindingId: binding.id, discussionId: input.discussionId ?? null, taskId: input.taskId ?? null, revision: input.revision ?? null,
         requestId: input.requestId, prompt, promptDigest: digest(prompt), status: 'queued', threadId: binding.threadId, turnId: null,
         createdAt: now(), finishedAt: null, text: '', error: null, activities: [], approvals: [],
         maxDurationMs: integer(input.maxDurationMs, 300_000, 1, 7_200_000), deadlineAt: null };
@@ -139,8 +156,11 @@ export class CodexExecutor {
           if (['completed', 'failed', 'interrupted'].includes(current.status)) return;
           current.status = current.status === 'queued' ? 'failed' : 'reconciling'; current.error = code(error);
           if (current.draft && current.status === 'failed') { current.draft.status = 'blocked'; current.draft.reason = current.error; }
+          if (current.readCopy && current.status === 'failed') { current.readCopy.status = 'blocked'; current.readCopy.reason = current.error; }
           if (current.status === 'reconciling') this.captureIncomplete(current, 'dispatch_unconfirmed');
           emit({ type: 'codex.failed', discussionId: current.discussionId, data: { jobId: job.id, status: current.status, code: current.error } }); });
+        if (this.store.read().jobs.find(j => j.id === job.id)?.status === 'failed' &&
+            this.store.read().bindings.find(b => b.id === binding.id)?.managedSession?.state === 'initial') this.processes.get(binding.id)?.close();
       }).finally(() => { this.starting.delete(binding.id); this.onProgress(); this.kick(); });
     }
   }
@@ -148,19 +168,27 @@ export class CodexExecutor {
     assertJobAuthority(this.store.read(), job);
     const currentRepo = await gitIdentity(binding.cwd);
     if (currentRepo.repoRoot !== binding.repoRoot || currentRepo.branch !== binding.branch) throw new AppError('workspace_changed', 409);
-    if (this.outerBwrap && !binding.allowWrite) throw new AppError('protected_readonly_profile_required', 409);
-    if (binding.allowWrite) {
-      this.store.transact(s => { s.jobs.find(j => j.id === job.id)!.draft = { version: 1, status: 'preparing' }; });
-      const manifest = await this.workspaces.prepare(job.id, binding);
+    if (this.protectRead && !binding.allowWrite && !binding.readProtection) throw new AppError('protected_readonly_profile_required', 409);
+    const protectedRun = binding.allowWrite || binding.readProtection === 1;
+    const initial = binding.managedSession?.state === 'initial';
+    if (initial && (this.managedOwners.get(binding.id)?.jobId !== job.id || this.processes.get(binding.id) !== this.managedOwners.get(binding.id)?.rpc)) throw new AppError('managed_session_lost', 409);
+    if (protectedRun) {
+      this.store.transact(s => { const current = s.jobs.find(j => j.id === job.id)!;
+        if (binding.allowWrite) current.draft = { version: 1, status: 'preparing' };
+        else current.readCopy = { version: 1, status: 'preparing', reason: null }; });
+      const manifest = initial ? this.workspaces.manifest(job.id) : await this.workspaces.prepare(job.id, binding);
+      if (currentRepo.head !== manifest.head) throw new AppError('workspace_changed', 409);
       await this.verifyProtection(binding, manifest.copyRoot);
       assertJobAuthority(this.store.read(), job);
-      this.processes.get(binding.id)?.close();
-      this.store.transact(s => { s.jobs.find(j => j.id === job.id)!.draft = { version: 1, status: 'running', manifestDigest: manifest.digest }; });
+      if (!initial) this.processes.get(binding.id)?.close();
+      this.store.transact(s => { const current = s.jobs.find(j => j.id === job.id)!;
+        if (binding.allowWrite) current.draft = { version: 1, status: 'running', manifestDigest: manifest.digest };
+        else current.readCopy = { version: 1, status: 'running', manifestDigest: manifest.digest, reason: null }; });
     }
-    const rpc = await this.connect(binding, binding.allowWrite ? job.id : undefined);
+    const rpc = await this.connect(binding, protectedRun ? job.id : undefined);
     const read = object(await rpc.request('thread/read', { threadId: binding.threadId, includeTurns: false }));
     await this.validateThread(binding, object(read.thread), true);
-    const resumed = object(await rpc.request('thread/resume', { threadId: binding.threadId, excludeTurns: true, ...(binding.allowWrite ? { permissions: this.isolation.profileId } : {}) }));
+    const resumed = initial ? read : object(await rpc.request('thread/resume', { threadId: binding.threadId, excludeTurns: true, ...(protectedRun ? { permissions: this.isolation.profileFor(binding) } : {}) }));
     const thread = object(resumed.thread); await this.validateThread(binding, thread, true);
     this.store.transact((s, emit) => {
       const current = s.jobs.find(j => j.id === job.id)!;
@@ -175,6 +203,10 @@ export class CodexExecutor {
       current.status = 'running';
       current.deadlineAt = new Date(Date.now() + current.maxDurationMs).toISOString();
       const b = s.bindings.find(b => b.id === binding.id)!; b.sessionTreeId = typeof thread.sessionId === 'string' ? thread.sessionId : null;
+      if (initial) {
+        if (b.managedSession?.state !== 'initial') throw new AppError('managed_session_changed', 409);
+        b.managedSession = { version: 1, state: 'dispatched', firstRequestId: current.requestId };
+      }
       emit({ type: 'codex.dispatching', discussionId: job.discussionId, data: { jobId: job.id } });
     });
     // Contract checked against the installed codex-cli 0.165.0 schema. Read
@@ -183,7 +215,7 @@ export class CodexExecutor {
       ? { type: 'workspaceWrite', writableRoots: [binding.cwd], networkAccess: false, excludeSlashTmp: true, excludeTmpdirEnvVar: true }
       : { type: 'readOnly', networkAccess: false };
     const result = object(await rpc.request('turn/start', { threadId: binding.threadId, input: [{ type: 'text', text: job.prompt }],
-      cwd: binding.cwd, approvalPolicy: 'untrusted', approvalsReviewer: 'user', ...(binding.allowWrite ? { permissions: this.isolation.profileId } : { sandboxPolicy }) }));
+      cwd: binding.cwd, approvalPolicy: 'untrusted', approvalsReviewer: 'user', ...(protectedRun ? { permissions: this.isolation.profileFor(binding) } : { sandboxPolicy }) }));
     const turn = object(result.turn); const turnId = string(turn.id, 200);
     this.store.transact((s, emit) => { const current = s.jobs.find(j => j.id === job.id)!;
       if (current.turnId && current.turnId !== turnId) throw new AppError('turn_receipt_mismatch', 409, true);
@@ -206,9 +238,14 @@ export class CodexExecutor {
     rpc.onNotification = (method, params) => this.notification(binding.id, method, params);
     rpc.onRequest = (requestId, method, params) => this.approval(binding.id, rpc, requestId, method, params);
     rpc.onClose = () => {
+      if (this.processes.get(binding.id) !== rpc) return;
       this.processes.delete(binding.id);
+      if (this.managedOwners.get(binding.id)?.rpc === rpc) this.managedOwners.delete(binding.id);
       if (this.closed) return;
-      this.store.transact((s, emit) => { for (const job of s.jobs) if (job.bindingId === binding.id && ['running', 'blocked_approval'].includes(job.status)) {
+      this.store.transact((s, emit) => {
+        const b = s.bindings.find(b => b.id === binding.id);
+        if (b?.managedSession?.state === 'initial' && b.authority?.epoch === binding.authority?.epoch) { b.managedSession.state = 'lost'; b.status = 'blocked'; }
+        for (const job of s.jobs) if (job.bindingId === binding.id && ['running', 'blocked_approval'].includes(job.status)) {
         this.captureIncomplete(job, 'transport_capture_gap'); job.status = 'reconciling'; job.error = 'codex_disconnected';
         emit({ type: 'codex.reconciling', discussionId: job.discussionId, data: { jobId: job.id } });
       } }); this.onProgress();
@@ -216,7 +253,7 @@ export class CodexExecutor {
     try { await rpc.request('initialize', { clientInfo: { name: 'webjjoku', title: 'Webjjoku', version: '0.2.0' }, ...(draftJobId ? { capabilities: { experimentalApi: true } } : {}) });
       rpc.notify('initialized');
       if (draftJobId) { const profiles = object(await rpc.request('permissionProfile/list', { cwd: binding.cwd }));
-        if (!Array.isArray(profiles.data) || !profiles.data.some(p => p && typeof p === 'object' && p.id === this.isolation.profileId && p.allowed === true)) throw new AppError('protected_profile_not_allowed', 409); }
+        if (!Array.isArray(profiles.data) || !profiles.data.some(p => p && typeof p === 'object' && p.id === this.isolation.profileFor(binding) && p.allowed === true)) throw new AppError('protected_profile_not_allowed', 409); }
       this.processes.set(binding.id, rpc); return rpc;
     } catch (error) { rpc.close(); throw error; }
   }
@@ -309,7 +346,7 @@ export class CodexExecutor {
     const rpc = job ? this.processes.get(job.bindingId) : null;
     if (!job || !approval || !rpc || job.status !== 'blocked_approval') throw new AppError('approval_not_pending', 409);
     if (decision === 'accept') { assertJobAuthority(this.store.read(), job); this.checkWorkScope(this.store.read(), job, 'approval');
-      if (job.draft) throw new AppError('protected_approval_requires_scoped_support', 409); }
+      if (job.draft || job.readCopy) throw new AppError('protected_approval_requires_scoped_support', 409); }
     rpc.respond(approval.rpcId, { decision });
     this.store.transact((s, emit) => { const current = s.jobs.find(j => j.id === jobId)!;
       current.approvals.find(a => a.id === approvalId)!.status = 'resolved';
@@ -320,7 +357,7 @@ export class CodexExecutor {
     const job = this.store.read().jobs.find(j => j.id === jobId);
     if (!job || job.status !== 'running' || job.turnId !== expectedTurnId) throw new AppError('turn_conflict', 409);
     assertJobAuthority(this.store.read(), job);
-    if (job.draft) throw new AppError('protected_input_immutable', 409);
+    if (job.draft || job.readCopy) throw new AppError('protected_input_immutable', 409);
     this.checkWorkScope(this.store.read(), job, 'steer');
     const rpc = this.processes.get(job.bindingId); if (!rpc) throw new AppError('reconciliation_required', 409);
     await rpc.request('turn/steer', { threadId: job.threadId, expectedTurnId, input: [{ type: 'text', text: string(text, 10_000) }] });
@@ -329,7 +366,8 @@ export class CodexExecutor {
   async cancel(jobId: string): Promise<void> {
     const job = this.store.read().jobs.find(j => j.id === jobId); if (!job) throw new AppError('job_not_found', 404);
     if (job.status === 'queued') {
-      this.store.transact((s, emit) => { const current = s.jobs.find(j => j.id === jobId)!; current.status = 'interrupted'; current.finishedAt = now(); emit({ type: 'codex.cancelled', discussionId: job.discussionId, data: { jobId } }); }); return;
+      this.store.transact((s, emit) => { const current = s.jobs.find(j => j.id === jobId)!; current.status = 'interrupted'; current.finishedAt = now(); emit({ type: 'codex.cancelled', discussionId: job.discussionId, data: { jobId } }); });
+      if (this.managedOwners.get(job.bindingId)?.jobId === job.id) this.processes.get(job.bindingId)?.close(); return;
     }
     const rpc = this.processes.get(job.bindingId);
     if (!rpc || !job.turnId || !['running', 'blocked_approval'].includes(job.status)) throw new AppError('reconciliation_required', 409);
@@ -341,7 +379,9 @@ export class CodexExecutor {
     if (!job) throw new AppError('job_not_reconciling', 409);
     const targetTurnId = job.turnId ?? (observedTurnId ? string(observedTurnId, 200) : null);
     if (!targetTurnId) throw new AppError('unconfirmed_turn_requires_owner_review', 409);
-    const binding = state.bindings.find(b => b.id === job.bindingId)!; const rpc = await this.connect(binding, job.draft ? job.id : undefined);
+    const binding = state.bindings.find(b => b.id === job.bindingId)!;
+    if (job.draft || job.readCopy) await this.verifyProtection(binding, this.workspaces.manifest(job.id).copyRoot);
+    const rpc = await this.connect(binding, job.draft || job.readCopy ? job.id : undefined);
     const read = object(await rpc.request('thread/read', { threadId: binding.threadId, includeTurns: false }));
     await this.validateThread(binding, object(read.thread), false);
     let cursor: string | null = null; let turn: Record<string, unknown> | undefined;
@@ -365,6 +405,10 @@ export class CodexExecutor {
   }
   private expire(): void {
     if (this.closed) return;
+    for (const [bindingId, owner] of [...this.managedOwners]) {
+      const binding = this.store.read().bindings.find(b => b.id === bindingId);
+      if (binding?.managedSession?.state === 'initial' && authorityReason(binding.authority)) owner.rpc.close();
+    }
     let changed = false;
     for (const job of this.store.read().jobs) {
       if (['queued', 'running', 'blocked_approval'].includes(job.status)) {
@@ -407,16 +451,25 @@ export class CodexExecutor {
         exitCode: typeof clean.exitCode === 'number' && Number.isSafeInteger(clean.exitCode) ? clean.exitCode : null, output: output?.slice(0, 60_000) ?? null } } : {}) };
   }
   private async finishDraftForTurn(bindingId: string, turnId: string): Promise<void> {
-    const j = this.store.read().jobs.find(j => j.bindingId === bindingId && j.turnId === turnId && j.draft?.status === 'running');
+    const j = this.store.read().jobs.find(j => j.bindingId === bindingId && j.turnId === turnId && (j.draft?.status === 'running' || j.readCopy?.status === 'running'));
     if (!j || this.draftsFinishing.has(j.id)) return; this.draftsFinishing.add(j.id);
     try {
       const inspection = await this.workspaces.inspect(j.id);
       if (this.closed) return;
-      this.store.transact((s, emit) => { const job = s.jobs.find(job => job.id === j.id)!; if (job.draft?.status !== 'running') return;
+      this.store.transact((s, emit) => { const job = s.jobs.find(job => job.id === j.id)!;
+        if (job.readCopy?.status === 'running') {
+          const reason = job.resultScopeReason ?? (!job.capture?.complete ? 'execution_capture_incomplete' : inspection.status !== 'unchanged' ? 'readonly_copy_changed' : job.status !== 'completed' ? 'readonly_execution_not_completed' : null);
+          job.readCopy = { version: 1, status: reason ? 'blocked' : 'checked', manifestDigest: inspection.manifestDigest, reason };
+          if (reason) job.resultScopeReason ??= reason;
+          emit({ type: 'codex.read_copy_checked', discussionId: job.discussionId, data: { jobId: job.id, status: job.readCopy.status } }); return;
+        }
+        if (job.draft?.status !== 'running') return;
         job.draft = { version: 1, status: job.status !== 'completed' || !job.capture?.complete || job.resultScopeReason ? 'blocked' : inspection.status === 'ready' ? 'pending' : inspection.status,
           manifestDigest: inspection.manifestDigest, diffDigest: inspection.diffDigest, reason: job.resultScopeReason ?? (!job.capture?.complete ? 'execution_capture_incomplete' : inspection.reason) };
         emit({ type: 'codex.draft_ready', discussionId: job.discussionId, data: { jobId: job.id, status: job.draft.status } }); });
-    } catch (error) { if (this.closed) return; this.store.transact(s => { const job = s.jobs.find(job => job.id === j.id)!; job.draft = { ...job.draft!, status: 'blocked', reason: code(error) }; }); }
+    } catch (error) { if (this.closed) return; this.store.transact(s => { const job = s.jobs.find(job => job.id === j.id)!;
+      if (job.readCopy) { job.readCopy.status = 'blocked'; job.readCopy.reason = code(error); job.resultScopeReason ??= code(error); }
+      else job.draft = { ...job.draft!, status: 'blocked', reason: code(error) }; }); }
     finally { this.draftsFinishing.delete(j.id); this.onProgress(); }
   }
   authorityChanged(): void { this.expire(); this.onProgress(); }
@@ -432,6 +485,11 @@ export class CodexExecutor {
     if (job.resultScopeReason) return job.resultScopeReason;
     try { assertJobAuthority(state, job); } catch (error) { return code(error); }
     if (!job.capture?.complete) return 'execution_capture_incomplete';
+    if (job.readCopy && job.readCopy.status !== 'checked') return job.readCopy.reason ?? 'execution_read_copy_unverified';
+    if (job.readCopy) {
+      try { if (this.workspaces.manifest(job.id).digest !== job.readCopy.manifestDigest) return 'execution_read_copy_integrity_changed'; }
+      catch { return 'execution_read_copy_integrity_changed'; }
+    }
     try { const actual = this.evidence.describe(jobId);
       return actual.complete && actual.digest === job.capture.digest && actual.byteLength === job.capture.byteLength && actual.pageCount === job.capture.pageCount ? null : 'execution_capture_integrity_changed';
     } catch { return 'execution_capture_integrity_changed'; }

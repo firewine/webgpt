@@ -17,7 +17,13 @@ test('password UI: first setup stacks password/confirmation, refuses mismatch wi
   await page.locator('#login-confirm').fill(password); await page.locator('#login-submit').click(); await page.waitForFunction(() => !document.querySelector('#workspace').hidden); await page.locator('#notice').filter({ hasText: '비밀번호를 저장했습니다.' }).waitFor(); assert.equal(posts.length, 1); assert.equal(f.app.store.read().ownerPassword.scheme, 'scrypt-v1'); assert.equal(JSON.stringify(f.app.store.read()).includes(password), false);
   assert.equal(await page.locator('#login-password').inputValue(), ''); assert.equal(await page.locator('#login-confirm').inputValue(), '');
   assert.equal(await page.evaluate(p => JSON.stringify([Object.entries(localStorage), Object.entries(sessionStorage)]).includes(p), password), false);
-  await page.reload(); await page.waitForFunction(() => !document.querySelector('#workspace').hidden); await page.locator('#logout').click(); await page.getByRole('heading', { name: '작업실 로그인', exact: true }).waitFor(); assert.equal(await page.locator('#login-confirm').isVisible(), false); assert.equal(await page.locator('#login-password').getAttribute('autocomplete'), 'current-password');
+  await page.reload(); await page.waitForFunction(() => !document.querySelector('#workspace').hidden);
+  let releaseAuth; const authGate = new Promise(resolve => { releaseAuth = resolve; }); t.after(() => releaseAuth());
+  await page.route('**/api/auth', async route => { await authGate; await route.continue(); });
+  await page.locator('#logout').click(); await page.locator('#login').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#login-submit').isDisabled(), true, 'logout cannot submit against stale setup state while auth status is pending');
+  releaseAuth(); await page.waitForFunction(() => !document.querySelector('#login-submit').disabled);
+  await page.getByRole('heading', { name: '작업실 로그인', exact: true }).waitFor(); assert.equal(await page.locator('#login-confirm').isVisible(), false); assert.equal(await page.locator('#login-password').getAttribute('autocomplete'), 'current-password');
   await page.locator('#login-password').fill(password); await page.locator('#login-submit').click(); await page.waitForFunction(() => !document.querySelector('#workspace').hidden); await page.setViewportSize({ width: 390, height: 844 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); assert.deepEqual(errors, []);
 });
 

@@ -105,7 +105,7 @@ async function api<T>(path: string, body?: unknown, requestId: string = crypto.r
   return result;
 }
 function lock(load = true): void { clearExecutionPrivate(); dotView.clear(); stream?.close(); stream = null; topicChat.clear(); $<HTMLDialogElement>('#topic-details-dialog').close(); roomView.clear(); closeDeviceScreen(); $('#device-code').textContent = ''; $<HTMLDialogElement>('#oauth-login-dialog').close(); $<HTMLDialogElement>('#password-dialog').close(); $<HTMLFormElement>('#password-change-form').reset(); $('#oauth-desktop').replaceChildren(); $('#oauth-result').replaceChildren(); $('#login').hidden = false; $('#workspace').hidden = true; if (load) { authStatus = null; void loadLogin().catch(report); } }
-async function loadLogin(): Promise<void> { const sequence = ++authSequence; const result = await api<AuthStatus>('/api/auth'); if (sequence === authSequence) { authStatus = result; renderLogin(); } }
+async function loadLogin(): Promise<void> { const sequence = ++authSequence; $<HTMLButtonElement>('#login-submit').disabled = true; const result = await api<AuthStatus>('/api/auth'); if (sequence === authSequence) { authStatus = result; renderLogin(); } }
 function renderLogin(): void {
   const setup = !authStatus?.passwordConfigured || !!setupToken, allowed = !setup || !!setupToken || !!authStatus?.canSetup;
   $('#login-title').textContent = setup ? setupToken && authStatus?.passwordConfigured ? '비밀번호 재설정' : '처음 비밀번호 설정' : '작업실 로그인';
@@ -495,6 +495,8 @@ const executionReasons: Record<string, string> = {
   execution_authority_changed: '실행 당시 권한과 현재 권한이 다릅니다. 원래 실행 기록을 대조하세요.',
   execution_grant_revoked_or_changed: '이 실행의 참여자 권한이 만료·회수되었거나 변경되었습니다.',
   execution_binding_not_ready: '실행할 세션을 등록하고 연결 상태를 확인하세요.',
+  managed_session_lost: '새 세션 연결이 끊겼습니다. 기존 권한을 회수하고 연결 방식을 직접 선택해 다시 등록하세요. 자동으로 새 세션을 만들지 않습니다.',
+  protected_readonly_profile_required: '최소 읽기 범위를 확인해야 하는 등록입니다. 실행 권한을 회수하고 다시 등록하세요.',
   execution_evidence_changed: '원문 페이지의 실행·수집본·digest가 일치하지 않습니다. 최신 수집 기록을 확인하세요.',
   execution_draft_changed: '확인한 diff가 현재 기록과 다릅니다. 새 diff를 직접 열고 다시 확인하세요.',
   execution_draft_not_ready: '원격 실행 완료와 보호 사본의 반영 대기 상태를 먼저 확인하세요.',
@@ -527,7 +529,13 @@ function authorityReason(a: Authority | undefined): string | null {
 function authorityExpiry(a: Authority | undefined): string {
   return a && Number.isFinite(Date.parse(a.expiresAt)) ? `만료 · ${new Date(a.expiresAt).toLocaleString('ko-KR')} (이 기기 시각)` : '만료 정보 없음 · 이전 권한';
 }
-function bindingReason(b: ExecutionBinding | undefined): string | null { return b ? authorityReason(b.authority) ?? (b.status === 'ready' ? null : 'execution_binding_not_ready') : 'execution_binding_not_ready'; }
+function bindingReason(b: ExecutionBinding | undefined): string | null {
+  return b ? authorityReason(b.authority) ?? (b.managedSession?.state === 'lost' ? 'managed_session_lost' : b.status === 'ready' ? null : 'execution_binding_not_ready') : 'execution_binding_not_ready';
+}
+function bindingSessionNote(b: ExecutionBinding): string {
+  if (b.managedSession?.state === 'lost') return executionReason('managed_session_lost');
+  return b.managedSession?.state === 'initial' ? '새 세션 준비됨 · 아직 첫 요청을 보내지 않았습니다. 등록만으로 자동 실행하지 않으며, 첫 요청 전에 연결이 끊기면 재등록이 필요합니다.' : '';
+}
 function jobAuthorityReason(job: CodexJob): string | null {
   const binding = state?.bindings.find(b => b.id === job.bindingId), reason = bindingReason(binding);
   if (reason) return reason;
@@ -546,7 +554,7 @@ function scheduleAuthorityExpiry(): void {
 }
 function renderRunAccess(): void {
   const select = $<HTMLSelectElement>('#job-binding'), binding = state?.bindings.find(b => b.id === select.value), reason = bindingReason(binding);
-  $('#job-access-note').textContent = reason ? executionReason(reason) : `${authorityExpiry(binding?.authority)} · 쓰기 작업은 보호 사본에서 실행하고 원본 반영은 별도로 확인합니다.`;
+  $('#job-access-note').textContent = reason ? executionReason(reason) : [authorityExpiry(binding?.authority), binding && bindingSessionNote(binding), binding?.readProtection === 1 && !binding.allowWrite ? '최소 읽기 범위 확인 · 읽기 전용' : '쓰기 작업은 보호 사본에서 실행하고 원본 반영은 별도로 확인합니다.'].filter(Boolean).join(' · ');
   $<HTMLButtonElement>('#job-form button[type=submit]').disabled = !!reason;
   for (const id of ['#job-binding', '#discussion-binding']) {
     for (const option of $<HTMLSelectElement>(id).options) {
@@ -556,8 +564,15 @@ function renderRunAccess(): void {
     }
   }
 }
+function renderBindingSessionMode(): void {
+  const existing = $<HTMLSelectElement>('#binding-session-mode').value !== 'new';
+  const thread = $<HTMLInputElement>('#binding-form [name=threadId]'); thread.required = existing; thread.disabled = !existing;
+  $('#binding-thread-field').hidden = !existing; $('#binding-new-session-note').hidden = existing;
+  $('#binding-form button[type=submit]').textContent = existing ? '세션 대조 후 등록' : '새 세션 준비 후 등록';
+}
 function prefillBinding(b: ExecutionBinding): void {
   const form = $<HTMLFormElement>('#binding-form');
+  $<HTMLSelectElement>('#binding-session-mode').value = 'existing'; renderBindingSessionMode();
   for (const name of ['label', 'cwd', 'threadId'] as const) (form.elements.namedItem(name) as HTMLInputElement).value = b[name];
   (form.elements.namedItem('allowWrite') as HTMLInputElement).checked = b.allowWrite;
   (form.elements.namedItem('expiresInHours') as HTMLInputElement).value = '24';
@@ -667,6 +682,8 @@ function renderJobs(): void {
     for (const b of state!.bindings) {
       const section = node('section', '', 'panel authority-card'), reason = bindingReason(b); section.dataset.bindingId = b.id;
       section.append(node('h3', b.label), node('p', `${b.allowWrite ? '보호 사본 수정 · 원본은 별도 확인' : '읽기 전용'} · ${b.branch}`, 'small'), node('p', reason ? executionReason(reason) : '권한 유효', 'small'), node('p', authorityExpiry(b.authority), 'small muted'), details('등록한 세션·작업 경로', JSON.stringify(b, null, 2), b.id));
+      const sessionNote = bindingSessionNote(b); if (sessionNote && sessionNote !== (reason && executionReason(reason))) section.append(node('p', sessionNote, 'small muted'));
+      if (b.readProtection === 1 && !b.allowWrite) section.append(node('p', '최소 읽기 범위 확인 · 읽기 전용', 'small muted'));
       const row = node('div', '', 'toolbar');
       if (reason) row.append(button('이 설정으로 재등록', () => prefillBinding(b)));
       if (!b.authority?.revokedAt) row.append(button('실행 권한 회수', async () => { await api(`/api/bindings/${encodeURIComponent(b.id)}/revoke`, {}); await refresh(); }));
@@ -691,15 +708,15 @@ function renderJobs(): void {
       renderExecutionEvidence(job, card); renderDraft(job, card);
       const controls = node('div', '', 'toolbar');
       if (['queued', 'running', 'blocked_approval'].includes(job.status)) controls.append(button('중단 요청', async () => { await api(`/api/jobs/${job.id}/cancel`, {}); await refresh(); }));
-      if (job.status === 'running' && !jobAuthorityReason(job)) controls.append(button('진행 중 지시 보완', () => modal('현재 실행에 지시 추가', [{ name: 'text', label: '추가 지시', multiline: true }], async values => { const reason = jobAuthorityReason(state?.jobs.find(j => j.id === job.id) ?? job); if (reason) throw new Error(reason); await api(`/api/jobs/${job.id}/steer`, { expectedTurnId: job.turnId, ...values }); await refresh(); })));
+      if (job.status === 'running' && !job.draft && !job.readCopy && !jobAuthorityReason(job)) controls.append(button('진행 중 지시 보완', () => modal('현재 실행에 지시 추가', [{ name: 'text', label: '추가 지시', multiline: true }], async values => { const reason = jobAuthorityReason(state?.jobs.find(j => j.id === job.id) ?? job); if (reason) throw new Error(reason); await api(`/api/jobs/${job.id}/steer`, { expectedTurnId: job.turnId, ...values }); await refresh(); })));
       if (job.status === 'reconciling') controls.append(button('실제 turn 결과 대조', async () => { if (!job.turnId) modal('수신되지 않은 Codex turn 대조', [{ name: 'turnId', label: '실제 세션에서 확인한 turn ID' }], async data => { await api(`/api/jobs/${job.id}/reconcile`, data); await refresh(); }, '원격 기록의 입력·시각·세션·완료 상태를 함께 검사합니다. 새 실행을 시작하지 않습니다.'); else { await api(`/api/jobs/${job.id}/reconcile`, {}); await refresh(); } })); card.append(controls);
       for (const approval of job.approvals.filter(a => a.status === 'pending')) {
         const section = node('section', '', 'panel'); section.append(node('h3', '실행 승인 요청'), node('pre', JSON.stringify(approval.params, null, 2)));
-        if (job.draft) section.append(node('p', executionReason('protected_approval_requires_scoped_support'), 'small execution-warning'));
-        const row = node('div', '', 'toolbar'), decisions = [...(job.draft ? [] : [['accept', '이번 요청 승인']]), ['decline', '거절'], ['cancel', '취소']];
+        if (job.draft || job.readCopy) section.append(node('p', executionReason('protected_approval_requires_scoped_support'), 'small execution-warning'));
+        const row = node('div', '', 'toolbar'), decisions = [...(job.draft || job.readCopy ? [] : [['accept', '이번 요청 승인']]), ['decline', '거절'], ['cancel', '취소']];
         for (const [decision, label] of decisions) {
           const action = button(label!, async () => {
-            if (decision === 'accept') { const latest = state?.jobs.find(j => j.id === job.id) ?? job; if (latest.draft) throw new Error('protected_approval_requires_scoped_support'); const reason = jobAuthorityReason(latest); if (reason) throw new Error(reason); }
+            if (decision === 'accept') { const latest = state?.jobs.find(j => j.id === job.id) ?? job; if (latest.draft || latest.readCopy) throw new Error('protected_approval_requires_scoped_support'); const reason = jobAuthorityReason(latest); if (reason) throw new Error(reason); }
             await api(`/api/jobs/${job.id}/approve`, { approvalId: approval.id, decision }); await refresh();
           }); action.disabled = decision === 'accept' && !!jobAuthorityReason(job); row.append(action);
         }
@@ -789,7 +806,11 @@ form('#browser-discovery-confirm-form', async values => {
   await api('/api/browser/discovery/confirm', { discoveryId: browserCandidate.id, label: values.label, confirmed: values.confirmed === 'on', ...(browserDiscoveryConnection ? { connectionId: browserDiscoveryConnection } : {}) });
   invalidateDiscovery(); announce('기존 대화를 연결했습니다. 참여자를 등록해 방에 초대할 수 있습니다.'); await refresh();
 });
-form('#binding-form', async values => { await api('/api/bindings', { ...values, allowWrite: values.allowWrite === 'on', expiresInHours: expiryHours(values.expiresInHours) }); await refresh(); });
+$('#binding-session-mode').addEventListener('change', renderBindingSessionMode); renderBindingSessionMode();
+form('#binding-form', async values => {
+  const { threadId, sessionMode = 'existing', ...settings } = values;
+  await api('/api/bindings', { ...settings, sessionMode, ...(sessionMode === 'existing' ? { threadId } : {}), allowWrite: values.allowWrite === 'on', expiresInHours: expiryHours(values.expiresInHours) }); await refresh();
+});
 form('#job-form', async values => { const reason = bindingReason(state?.bindings.find(b => b.id === values.bindingId)); if (reason) throw new Error(reason); await api('/api/jobs', values); await refresh(); });
 $('#job-binding').addEventListener('change', renderRunAccess);
 function expiryHours(value: string | undefined): number { const hours = Number(value); if (!Number.isSafeInteger(hours) || hours < 1 || hours > 168) throw new Error('invalid_execution_expiry'); return hours; }
