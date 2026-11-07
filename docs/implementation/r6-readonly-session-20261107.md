@@ -27,13 +27,15 @@
 | 새 수명/읽기 fixture | 12 PASS: 생성0turn, 최초 same process/후속resume, 초기 disconnect·restart/전송 전 실패와 명시 재등록, 미래 상태/marker 유실, 추가 권한/steer, 사본 유실/변조/변경·원문 유실, 검사 후 게시 전 봉인 manifest 유실/변조 |
 | 실제 호스트 opt-in | **2 PASS/0 SKIP**: readonly까지 포함한 combined proof, 실제 App Server 새 세션 등록/초기 상태/모델 job0. 가짜 인증·임시 Git만 사용 |
 | 화면 | 관련 Chromium13 PASS/0 SKIP: 기존/새 선택·필수 thread 필드·새 요청의 threadId 제외·유실 안내와 기존 승인/복구/diff/원문 화면 |
-| 실제 사용자 계정·모델/원본 반영 | 아직 NOT_RUN, job0. 실제 보호 PASS를 R6 실행 성공으로 올리지 않음 |
+| 실제 사용자 계정·모델/원본 반영 | 새 readonly 세션·subscription account 사전 확인 PASS, 모델 job0/원본 반영 NOT_RUN. 실제 보호/계정 확인 PASS를 R6 실행 성공으로 올리지 않음 |
 
 실제 무호출 등록에서 CLI의 AGENTS 읽기 helper가 중복된 ‘가려진 부모/자식’ 경로를 준비하다 readonly 부모 아래 mkdir로 실패했다. 부모 mask가 이미 덮는 자식 mask를 제거하도록 정규화했고 실제 등록이 통과했다. 보호 범위는 그대로 부모 전체를 가린다. 또한 write canary가 사본에 만든 비밀 아닌 임시 `.env`를 읽기 canary 전에 정리해 두 경계를 독립 검사한다. 실제 호스트의 원래 secret은 읽거나 수정하지 않았다.
 
 독립 검토에서 readonly 검사 완료 뒤 manifest가 유실/변조되면 보고 게시 전 다시 확인할 필요가 있음을 발견했다. 게시 시 봉인 검증과 기록된 digest 대조를 추가하고 두 회귀 검사를 통과했다. 별도 실계정 준비에서는 새 세션 등록과 readonly metadata 저장이 성공했으나 `account/read(refreshToken:false)`가 거절돼 모델 전송 전에 중단했다. 준비 실패 DB는 별도로 보존했고 실제 모델 job은0이다.
 
-계정 거절의 원문은 `workspace routing discovery timed out`이었다. 동일 계정의 공식 accounts 메타데이터 조회는 호스트에서 HTTP200이었고, Ubuntu의 `/etc/resolv.conf`는 `/run/systemd/resolve/stub-resolv.conf`를 가리켰다. 외부 실행기가 `/run`을 가릴 때 이 파일까지 사라지는 것을 보완해 해당 시스템 파일 하나만 readonly로 보존한다. 호스트 파일/정책 변경은0이며 모델 도구의 network-disabled profile은 유지한다. 실제 외부 실행기에서 resolver 내용 일치와 기존 결합 read/write 보호2건 PASS/0 SKIP을 확인했다. 실계정의 계정 확인 재개와 모델 실행은 이후 별도 관측으로 기록한다.
+계정 거절의 원문은 `workspace routing discovery timed out`이었다. 동일 계정의 공식 accounts 메타데이터 조회는 호스트에서 HTTP200이었고, Ubuntu의 `/etc/resolv.conf`는 `/run/systemd/resolve/stub-resolv.conf`를 가리켰다. 외부 실행기가 `/run`을 가릴 때 이 파일까지 사라지는 것을 보완해 해당 시스템 파일 하나만 readonly로 보존한다. 호스트 파일/정책 변경은0이며 모델 도구의 network-disabled profile은 유지한다. 실제 외부 실행기에서 resolver 내용 일치와 기존 결합 read/write 보호2건 PASS/0 SKIP을 확인했다. 이후 별도 세션에서 subscription account 확인도 성공했고 원래 인증 파일 변화0·모델 job0을 확인했다.
+
+CI의 기존 비밀번호 화면 검사에서 로그아웃 직후 인증 상태 조회가 끝나기 전에 다시 제출할 수 있는 경쟁을 관측했다. `loadLogin` 시작 시 제출 버튼을 잠그고 현재 조회 완료 시만 다시 열도록 보완했다. 동일 기존 browser 검사에 `/api/auth` 응답을 보류하는 재현을 추가해, 대기 중 제출 차단과 이후 정상 로그인을 함께 검사한다. 비밀번호 정책/서버 인증/계정 정보 계약은 바꾸지 않았다.
 
 ## R6 실제 검증·운영과 복귀
 

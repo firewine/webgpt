@@ -105,7 +105,7 @@ async function api<T>(path: string, body?: unknown, requestId: string = crypto.r
   return result;
 }
 function lock(load = true): void { clearExecutionPrivate(); dotView.clear(); stream?.close(); stream = null; topicChat.clear(); $<HTMLDialogElement>('#topic-details-dialog').close(); roomView.clear(); closeDeviceScreen(); $('#device-code').textContent = ''; $<HTMLDialogElement>('#oauth-login-dialog').close(); $<HTMLDialogElement>('#password-dialog').close(); $<HTMLFormElement>('#password-change-form').reset(); $('#oauth-desktop').replaceChildren(); $('#oauth-result').replaceChildren(); $('#login').hidden = false; $('#workspace').hidden = true; if (load) { authStatus = null; void loadLogin().catch(report); } }
-async function loadLogin(): Promise<void> { const sequence = ++authSequence; const result = await api<AuthStatus>('/api/auth'); if (sequence === authSequence) { authStatus = result; renderLogin(); } }
+async function loadLogin(): Promise<void> { const sequence = ++authSequence; $<HTMLButtonElement>('#login-submit').disabled = true; const result = await api<AuthStatus>('/api/auth'); if (sequence === authSequence) { authStatus = result; renderLogin(); } }
 function renderLogin(): void {
   const setup = !authStatus?.passwordConfigured || !!setupToken, allowed = !setup || !!setupToken || !!authStatus?.canSetup;
   $('#login-title').textContent = setup ? setupToken && authStatus?.passwordConfigured ? '비밀번호 재설정' : '처음 비밀번호 설정' : '작업실 로그인';
