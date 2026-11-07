@@ -128,6 +128,8 @@ export interface ExecutionBinding {
   repoRoot: string; branch: string; head: string; sessionTreeId: string | null;
   authority?: ExecutionAuthority;
   protection?: { version: 1; status: 'ready' | 'unverified'; reason: string | null };
+  readProtection?: 1;
+  managedSession?: { version: 1; state: 'initial' | 'dispatched' | 'lost'; firstRequestId: string | null };
 }
 export interface CodexJob {
   id: string; bindingId: string; discussionId: string | null; taskId: string | null; revision: number | null;
@@ -137,6 +139,7 @@ export interface CodexJob {
   maxDurationMs: number; deadlineAt: string | null;
   text: string; error: string | null;
   previewTruncated?: boolean;
+  readCopy?: { version: 1; status: 'preparing' | 'running' | 'checked' | 'blocked'; manifestDigest?: string; reason: string | null };
   authority?: JobAuthority;
   resultScopeReason?: string | null;
   capture?: { version: 1; artifactId: string; jobId: string; digest: string; byteLength: number; pageCount: number; complete: boolean; reason: string | null };

@@ -7,6 +7,9 @@ import { join } from 'node:path';
 import { createServer } from 'node:net';
 import { promisify } from 'node:util';
 import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { Store } from '../dist/server/workspace/store.js';
+import { CodexExecutor } from '../dist/server/execution/codex.js';
 // Synthetic only: no model or user-session fixture. Build before standalone use.
 import { ExecutionIsolation } from '../dist/server/execution/isolation.js';
 import { isolationEnvironment, outerIdentity } from '../dist/server/execution/outer-bwrap.js';
@@ -53,6 +56,19 @@ test('requires canonical, separate private copies and refuses an unverified laun
   await rm(join(f.copy, 'sub'), { recursive: true }); await symlink(f.source, join(f.copy, 'sub'));
   await assert.rejects(f.isolation.verify(f.binding, f.copy), /canonical_directory_required/);
   assert.equal(await readFile(join(f.source, 'tracked'), 'utf8'), 'FAKE');
+});
+test('real App Server can register a new protected-read session without any model turn', { skip: !process.env.WJ_TEST_OUTER_BWRAP }, async t => {
+  const f = await fixture(t); const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+  const git = args => execFileSync('/usr/bin/git', ['-c', 'core.hooksPath=/dev/null', '-c', 'init.templateDir=', ...args], { cwd: f.source, env });
+  git(['init', '-q', '-b', 'r6-preflight']); git(['add', 'tracked']);
+  git(['-c', 'user.name=R6 Fixture', '-c', 'user.email=r6@example.invalid', 'commit', '-qm', 'synthetic baseline']);
+  const store = new Store(f.state), ex = new CodexExecutor(store, ['codex', 'app-server'], [f.source], [f.state, f.chrome], { protectRead: true, outerBwrap: process.env.WJ_TEST_OUTER_BWRAP });
+  try {
+    const id = await ex.register({ sessionMode: 'new', label: 'No-model preflight', cwd: f.source, expiresInHours: 1 });
+    const binding = store.read().bindings.find(b => b.id === id);
+    assert.equal(binding.readProtection, 1); assert.equal(binding.managedSession.state, 'initial'); assert.equal(binding.status, 'ready');
+    assert.equal(store.read().jobs.length, 0); await ex.revokeBinding(id);
+  } finally { ex.close(); store.close(); }
 });
 test('does not create probe directories through symlinks or in the original repository', async t => {
   const f = await fixture(t); await symlink(f.source, join(f.base, 'redirect'));
@@ -126,13 +142,19 @@ test('full runtime proof is mandatory; no successful version/schema-only fallbac
   const f = await fixture(t);
   try { await f.isolation.verify(f.binding, f.copy); }
   catch (e) {
-    assert.match(e.message, /^execution_isolation_unverified: host_(namespace|network_probe)_unavailable$/);
+    assert.match(e.message, /^execution_isolation_unverified: host_(namespace|network_probe)_unavailable$/, String(e.cause?.message ?? ''));
     assert.throws(() => f.isolation.commandFor(f.binding, f.copy), /verify_copy_required/);
     return t.skip(`No positive runtime proof; WRITE remains blocked: ${e.message}`);
   }
   const argv = f.isolation.commandFor(f.binding, f.copy);
   assert.ok(argv.includes('--ro-bind')); assert.ok(argv.includes('--unshare-pid'));
   assert.ok(argv.includes('default_permissions="webjjoku_copy"')); assert.equal(argv.some(a => /sandboxPolicy/.test(a)), false);
+  const readBinding = { ...f.binding, allowWrite: false };
+  assert.throws(() => f.isolation.commandFor(readBinding, f.copy), /verify_copy_required/);
+  await f.isolation.verify(readBinding, f.copy);
+  const readArgs = f.isolation.commandFor(readBinding, f.copy);
+  assert.ok(readArgs.includes('default_permissions="webjjoku_read"'));
+  const alias = readArgs.indexOf(f.copy); assert.equal(readArgs[alias - 1], '--ro-bind');
   // Reconnect uses the same modified copy; it never prepares or replays source.
   await writeFile(join(f.copy, 'continued'), 'CONTINUE');
   assert.deepEqual(f.isolation.commandFor(f.binding, f.copy), argv);

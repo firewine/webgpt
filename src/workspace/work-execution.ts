@@ -177,6 +177,7 @@ export class WorkExecutionBridge {
       const j = priorJob(this.store, s, l); if (!j) { if (l.codexJobId) throw new AppError('work_execution_job_missing', 409); continue; }
       if (!l.codexJobId) this.attach(l.id, j.id);
       if (terminal.includes(j.status) && j.draft && ['preparing', 'running', 'pending', 'applying'].includes(j.draft.status)) continue;
+      if (terminal.includes(j.status) && j.readCopy && ['preparing', 'running'].includes(j.readCopy.status)) continue;
       if (terminal.includes(j.status)) this.store.transact((state, emit) => {
         const link = state.resident!.jobLinks.find(x => x.id === l.id)!; if (link.reported) return;
         const job = state.jobs.find(x => x.id === j.id)!; const a = state.resident!.workAttempts.find(x => x.id === link.attemptId)!;

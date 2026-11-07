@@ -60,6 +60,53 @@ async function open(t, { width = 1380, configure = () => {} } = {}) {
 }
 async function settle(page) { await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); }
 
+test('execution owner UI: explicit new-session choice omits an old ID and restores existing-session validation', { timeout: 30000 }, async t => {
+  const f = await open(t), { page } = f, form = page.locator('#binding-form'), mode = form.locator('[name=sessionMode]'), thread = form.locator('[name=threadId]');
+  f.handlers.set('/api/bindings', route => route.fulfill({ json: {} }));
+  assert.equal(await mode.inputValue(), 'existing'); assert.equal(await thread.isVisible(), true); assert.equal(await thread.getAttribute('required'), '');
+  await form.locator('[name=label]').fill('새 작업 세션'); await form.locator('[name=cwd]').fill('/fixture/selected');
+  await form.locator('[name=allowWrite]').check(); await form.locator('[name=expiresInHours]').fill('48');
+  await form.locator('button[type=submit]').click(); assert.equal(f.posts('/api/bindings').length, 0); assert.equal(await thread.evaluate(el => el.validity.valueMissing), true);
+  await thread.fill('unused-old-thread'); await mode.selectOption('new');
+  assert.equal(await thread.isVisible(), false); assert.equal(await thread.isDisabled(), true); assert.equal(await thread.getAttribute('required'), null);
+  assert.match(await page.locator('#binding-new-session-note').textContent(), /같은 연결/);
+  assert.equal(await page.locator('#binding-new-session-note').isVisible(), true); assert.equal(f.posts('/api/bindings').length, 0);
+  let response = page.waitForResponse(res => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/bindings');
+  await form.locator('button[type=submit]').click(); await response;
+  assert.deepEqual(f.posts('/api/bindings')[0].body, { label: '새 작업 세션', cwd: '/fixture/selected', sessionMode: 'new', allowWrite: true, expiresInHours: 48 });
+  assert.equal(Object.hasOwn(f.posts('/api/bindings')[0].body, 'threadId'), false); assert.ok(f.posts('/api/bindings')[0].commandId);
+  await mode.selectOption('existing'); assert.equal(await thread.isVisible(), true); assert.equal(await thread.isEnabled(), true); assert.equal(await thread.getAttribute('required'), '');
+  assert.equal(await page.locator('#binding-new-session-note').isVisible(), false); await thread.fill('');
+  await form.locator('button[type=submit]').click(); assert.equal(f.posts('/api/bindings').length, 1); assert.equal(await thread.evaluate(el => el.validity.valueMissing), true);
+  await thread.fill('thread-existing'); response = page.waitForResponse(res => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/bindings');
+  await form.locator('button[type=submit]').click(); await response;
+  assert.deepEqual(f.posts('/api/bindings')[1].body, { label: '새 작업 세션', cwd: '/fixture/selected', sessionMode: 'existing', threadId: 'thread-existing', allowWrite: true, expiresInHours: 48 });
+  assert.equal(f.posts('/api/jobs').length, 0);
+});
+
+test('execution owner UI: initial and lost managed sessions need explicit registration and preserve revoke controls', { timeout: 30000 }, async t => {
+  const f = await open(t, { configure(s) {
+    const initial = binding('initial'); initial.allowWrite = false; initial.readProtection = 1; initial.managedSession = { version: 1, state: 'initial', firstRequestId: null };
+    const lost = binding('lost'); lost.managedSession = { version: 1, state: 'lost', firstRequestId: null }; s.bindings.push(initial, lost);
+  } }), { page } = f;
+  const initial = page.locator('[data-binding-id=initial]'), lost = page.locator('[data-binding-id=lost]');
+  assert.match(await initial.textContent(), /새 세션 준비됨.*아직 첫 요청.*자동 실행하지/); assert.match(await initial.textContent(), /최소 읽기 범위 확인/);
+  await page.locator('#job-binding').selectOption('initial'); assert.equal(await page.locator('#job-form button[type=submit]').isEnabled(), true);
+  assert.match(await page.locator('#job-access-note').textContent(), /새 세션 준비됨/); assert.match(await page.locator('#job-access-note').textContent(), /최소 읽기 범위 확인/);
+  assert.match(await lost.textContent(), /연결이 끊겼습니다.*권한을 회수.*다시 등록/);
+  await page.locator('#job-binding').selectOption('lost'); assert.equal(await page.locator('#job-form button[type=submit]').isDisabled(), true);
+  assert.match(await page.locator('#job-access-note').textContent(), /자동으로 새 세션을 만들지/); assert.equal(await page.locator('#discussion-binding option[value=lost]').evaluate(el => el.disabled), true);
+  await page.locator('#binding-session-mode').selectOption('new');
+  await lost.getByRole('button', { name: '이 설정으로 재등록' }).click();
+  assert.equal(await page.locator('#binding-session-mode').inputValue(), 'existing'); assert.equal(await page.locator('#binding-form [name=threadId]').inputValue(), 'thread-lost');
+  assert.equal(await page.locator('#binding-form [name=threadId]').isVisible(), true); assert.equal(await page.locator('#binding-form [name=allowWrite]').isChecked(), true);
+  await f.refresh(s => { s.bindings.find(b => b.id === 'initial').managedSession.state = 'lost'; });
+  await page.locator('#job-binding').selectOption('initial'); assert.equal(await page.locator('#job-form button[type=submit]').isDisabled(), true);
+  assert.equal(f.posts('/api/bindings').length, 0); assert.equal(f.posts('/api/jobs').length, 0);
+  f.handlers.set('/api/bindings/lost/revoke', route => route.fulfill({ json: {} })); await lost.getByRole('button', { name: '실행 권한 회수' }).click();
+  assert.deepEqual(f.posts('/api/bindings/lost/revoke')[0].body, {}); assert.ok(f.posts('/api/bindings/lost/revoke')[0].commandId);
+});
+
 test('execution owner UI: authority expiry, legacy/revocation, explicit re-registration and numeric durations', { timeout: 30000 }, async t => {
   const f = await open(t, { configure(s) {
     const legacy = binding('legacy'); delete legacy.authority;
