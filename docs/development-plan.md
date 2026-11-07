@@ -2,6 +2,8 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
+**2026-11-07 R6 AppArmor 전용 예외 승인·호스트 보호 PASS:** PR #57 병합 main `436fbc4` 뒤 사용자가 “예외 승인”으로 [전용 실행기/호스트 정책·R6 검증 영향안](./reviews/r6-apparmor-impact-20261107.md)을 허용했다. 전역 sysctl/stock bwrap 정책·운영 DB/방을 유지하며 root 소유 전용 외부 실행기/프로필을 설치했고, 실제 결합 보호1건 PASS/0 SKIP을 확인했다. 신뢰된 App Server 단계에 namespace capability 예외가 생기며 최종 모델 도구의 기존 capability/파일/네트워크 제한을 실제 검사했다. 원래8페이즈/50 gate·추가 보호 권한 ACCEPT 차단을 유지한다. R6 최대2job/30분 계획의 무호출 선행 검사에서 빈 thread의 cold read/resume 실패와 built-in readonly의 가짜 auth 파일 읽기 가능을 관측해 실제 모델 요청0을 유지했다. **R6-F 실세션 수락은 미완료**이며, 읽기 범위·세션 준비 보완은 영향/변경량 보고와 승인 후 진행한다. [실제 검사·미완료·복귀](./implementation/r6-apparmor-20261107.md).
+
 **상태 정리 시점: 2026-11-05, 코드 main `4ca2ffb5b24778f2d080b24033410d38e5513dd8` (PR #50 병합). 추천1 구현 기준: PR #51 병합 `e717340375165e8dbef65181159341fc9bded18e`.** 코드 구현·자동 검사와 실제 계정/기기 수락을 분리한다. 상태 정리는 기존 구현/관측 사실을 맞춘 것이며 페이즈 순서·기존 50 gate·API/권한/예산/복구 계약을 바꾸지 않는다. 추천1·2의 승인·구현 상태는 바로 아래 기록을 따르며 나머지 추천은 승인 전 제안이다.
 
 **2026-11-05 추천1 개발 승인:** 사용자가 “1번 개발 승인”으로 [주제 결론→Wiki→다음 발화 제안](./reviews/next-development-recommendation-20261105.md#3-우선순위1의-최소-변경안--승인)을 승인했다. R7/R8 보완으로 방에 명시 연결된 새 토론의 공개 completed/partial 결과를 기존 Wiki/Store/SSE에 한 번 기록하고 다음 입력에서 인용한다. 생성 시의 방 epoch·참여/문맥 범위와 게시 상태만 기존 JSON의 optional metadata로 고정해 off/권한 회수·옛 revision/generation의 무단 게시를 막는다. 새 SQL/인증/모델 호출·source kind·endpoint·과거 일괄 이관·자동 검증 승격은 추가하지 않는다. 원래8페이즈/50 gate와 R6 쓰기 차단을 유지하며 추천2~후속 개발·실계정 호출/배포는 별도다. 예상12~16파일·500~900줄, 구현/검사 결과는 [기록](./implementation/topic-wiki-20261105.md)을 따른다.
@@ -17,13 +19,13 @@
 | 3 / R3 단톡방 GUI | 흑백·고정 주제·주제별 채팅·답장/멘션·작업실 패널 구현·브라우저 검사 PASS | 실제 HTTPS/새로고침/SSE·390px 확인. 실기기 IME/터치·기기 전환 수락은 UNVERIFIED. [GUI](./implementation/phase3-chatroom-gui-20261030.md)·[주제 통합](./reviews/topic-chat-ui-impact-20261101.md) |
 | 4 / R4 연결 편의성 | 웹 GPT·OAuth/기기 코드·DeepSeek·Anthropic API·Muse browser·공식 dot 구현 | 웹 GPT Extra High 1회/후속 맥락·JSON·receipt, dot/Muse 실제 초안/검토 일부 PASS. Anthropic API 실계정·모든 연결의 갱신/격리·전체 혼합 수락은 미완료. [웹 GPT](./implementation/web-gpt-selection-20261105.md)·[dot 실제 기록](./implementation/dot-mcp-v2-live-d5-20261104.md) |
 | 5 / R5 역할·열린 작업큐 | 제안·픽업·의존성·보고/독립 리뷰·재작업 구현·검토 예시 수정 병합/운영 적용·fixture PASS | 실제 AI 제안→자동 수행/다른 참여자 수락→Wiki/후속 인용 PASS(복구 후). 원래 첫 시작의 무개입 수락은 미완료. [R5 증거](./implementation/phase5-open-work-queue-20261030.md)·[추천2 재검증](./implementation/work-wiki-revalidation-20261105.md) |
-| 6 / R6 실제 업무 수행 | 기존 Codex 연결·scope 재검사·보고/리뷰 구현. **파일 수정 업무는 코드에서 차단** | R6-F 실세션 읽기/승인/쓰기 NOT_RUN. WWG-R2/R3의 남은 권한 수명·repo 비밀/링크/출력 보호를 구현·검증하기 전 쓰기 성공으로 표시하지 않는다. [R6 증거](./implementation/phase6-work-execution-20261030.md) |
+| 6 / R6 실제 업무 수행 | Codex 연결/scope·권한 수명·원문·보호 사본/1파일 명시 반영 구현. 전용 AppArmor 결합 보호 PASS, 보호 검사 실패 시 쓰기 차단 | R6-F 실세션 읽기/승인/쓰기 NOT_RUN. 빈 세션 handoff·readonly 인증 경계의 실제 무호출 검사에서 차단을 확인해 모델 요청0. [기존 R6](./implementation/phase6-work-execution-20261030.md)·[최신 보호/차단](./implementation/r6-apparmor-20261107.md) |
 | 7 / R7 공유 Wiki | 저장·편집·버전/CAS·출처/인용·MCP·**업무 보고 자동 게시**와 새 방 연결 주제 결론 자동 기록 구현·fixture PASS | 실제 주제 결론→다음2발화 인용 PASS. 업무 보고→reported Wiki1버전/알림1개→독립 검토 수락 뒤 ambient 인용 PASS(복구 후). [기존 R7](./implementation/phase7-shared-wiki-20261031.md)·[추천1 실측](./implementation/topic-wiki-live-20261105.md)·[추천2 재검증](./implementation/work-wiki-revalidation-20261105.md) |
 | 8 / R8 통합 실운영 검증 | 자동 통합/장애/부하 fixture PASS. 기존 50 gate와 D5 보완 검사는 별도 추적 | **전체 수락 미완료.** 별도2인 주제의 결론/방 복귀/Wiki와 복구 후 업무 순환 PASS. 원래5인 혼합은 완료15개·실패 기록 보존/사용자 승인 취소. 원래 첫 입력부터 무개입 업무 순환·전체 혼합 최종 수락·실제 Codex·기기/장기 운영을 남김. [R8 기준](./implementation/resident-acceptance.md)·[D5 과거 현황](./implementation/dot-acceptance-manifest.json) |
 
 현재 남은 작업은 다음처럼 구분한다.
 
-- **추가 개발 필요/부분 구현:** R6 실파일 작업 보호·일반 grant/실행 binding 수명 보강, WWG-R5 묶음 실행 경과·WWG-R6 큰 출력 원문/보관 수명. 기존 개별 job/승인·새 dot/resident 권한 보호는 이미 구현돼 있다.
+- **추가 개발 필요/부분 구현:** R6 readonly의 최소 읽기 범위·새 세션 전달 보완은 제안/미승인. WWG-R5 묶음 실행 경과·WWG-R6 원문 보관 수명 확장은 남아 있다. 일반 grant/binding 수명·private 원문 페이지·사본/명시 반영은 PR #57에서 구현했고, AppArmor 결합 보호도 실제 PASS했다. 실세션 전체 수락은 별도다.
 - **기존 구현의 실환경 검증 필요:** R5 원래 첫 시작부터 오류 복구 개입 없는 업무 순환, R8 전체 혼합 최종 수락, R6-F·R3-E와 장기 운영. 주제 결론의2인 수락과 복구 후 업무→보고/리뷰→Wiki→다음 인용은 확인됐으며 이 부분을 모두 새 backend 개발로 취급하지 않는다.
 - **후속 선택/보류:** WJ-016 Git Writer, WJ-017 추가 provider/병렬 용량·정식 팀 확장, WJ-018 다중 프로젝트/추가 OS. Muse 공식 Connector·Anthropic 구독 OAuth는 보류하며 자동 병합은 사용자 정책상 비활성이다.
 - **추천1 운영·실계정 수락 완료:** [다음 개발 제안과 후속 영향](./reviews/next-development-recommendation-20261105.md)의 주제 결론→Wiki 자동 기록을 R7/R8에서 보완하고 위 범위로 실제 수락했다. 검사·운영 증거는 별도 기록하며 나머지 추천은 제안이다. 새 페이즈를 만들지 않는다.

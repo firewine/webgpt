@@ -13,6 +13,16 @@ import { DispatchCoordinator } from '../dist/server/workspace/dispatch.js';
 import { budget, pacing } from './resident-fixture.mjs';
 import { storage, until, topic, response } from './workspace-helpers.mjs';
 const script = fileURLToPath(new URL('fixtures/codex-rpc.mjs', import.meta.url));
+test('protected RPC launch replaces inherited runtime configuration before executing the launcher', async t => {
+  const { RpcProcess } = await import('../dist/server/connections/rpc.js');
+  const { isolationEnvironment } = await import('../dist/server/execution/outer-bwrap.js');
+  const previous = process.env.XDG_CONFIG_HOME; process.env.XDG_CONFIG_HOME = '/private-caller-config';
+  t.after(() => { if (previous === undefined) delete process.env.XDG_CONFIG_HOME; else process.env.XDG_CONFIG_HOME = previous; });
+  const program = `process.stdin.once('data', bytes => { const request=JSON.parse(String(bytes)); process.stdout.write(JSON.stringify({id:request.id,result:{path:process.env.PATH,xdg:process.env.XDG_CONFIG_HOME??null,home:process.env.HOME??null}})+'\\n'); });`;
+  const rpc = new RpcProcess([process.execPath, '-e', program], undefined, false, isolationEnvironment());
+  t.after(() => rpc.close());
+  assert.deepEqual(await rpc.request('environment', {}, 2000), { path: '/usr/bin:/bin', xdg: null, home: null });
+});
 async function fixture(t, mode = 'normal') {
   let codex;
   // Node runs after hooks in registration order. Stop the watchdog before the
@@ -22,6 +32,16 @@ async function fixture(t, mode = 'normal') {
   codex = new CodexExecutor(store, [process.execPath, script, mode], [cwd]); t.after(async () => { codex.close(); await rm(cwd, { recursive: true, force: true }); });
   return { store, codex, cwd, register: () => codex.register({ cwd, label: 'fixture', threadId: 'fixture-thread', allowWrite: false }), trace: async () => (await readFile(join(cwd, 'rpc-trace.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse) };
 }
+test('dedicated host exception never enables broad legacy readonly while its auth protection is unverified', async t => {
+  const f = await fixture(t); const prior = await f.register(); f.codex.close();
+  const guarded = new CodexExecutor(f.store, [process.execPath, script], [f.cwd], [], { outerBwrap: '/usr/local/libexec/webjjoku/bwrap' });
+  t.after(() => guarded.close());
+  assert.throws(() => guarded.submit({ bindingId: prior, prompt: 'read fixture only', requestId: 'blocked-legacy-read' }), /protected_readonly_profile_required/);
+  f.store.transact(s => { s.bindings[0].authority.revokedAt = new Date().toISOString(); });
+  await assert.rejects(guarded.register({ label: 'readonly', cwd: f.cwd, threadId: f.store.read().bindings[0].threadId }), /protected_readonly_profile_required/);
+  assert.equal(f.store.read().jobs.length, 0);
+  assert.equal((await f.trace()).filter(m => m.method === 'turn/start').length, 0);
+});
 test('Codex uses observed target and actual schema, queues exactly once and records command evidence', async t => {
   const f = await fixture(t); const bindingId = await f.register(); const input = { bindingId, prompt: '테스트 전용 프롬프트; 셸 확장 $(touch should-not-exist)', requestId: 'one' };
   const first = f.codex.submit(input); assert.equal(f.codex.submit(input), first); const second = f.codex.submit({ ...input, requestId: 'two' });

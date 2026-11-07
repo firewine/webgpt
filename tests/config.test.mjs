@@ -5,6 +5,16 @@ import { loadConfig, ConfigError } from '../dist/server/config.js';
 import { createLogger } from '../dist/server/logger.js';
 import { loadWorkspaceConfig } from '../dist/server/workspace/config.js';
 
+test('dedicated outer launcher is opt-in and restricted to the reviewed absolute path', () => {
+  assert.equal(loadWorkspaceConfig({}).outerBwrap, undefined);
+  assert.equal(loadWorkspaceConfig({ WJ_OUTER_BWRAP: '/usr/local/libexec/webjjoku/bwrap' }).outerBwrap, '/usr/local/libexec/webjjoku/bwrap');
+  for (const path of ['', '/tmp/bwrap', 'bwrap', '/usr/bin/bwrap', 'private-invalid-outer']) {
+    assert.throws(() => loadWorkspaceConfig({ WJ_OUTER_BWRAP: path }), error => {
+      assert.deepEqual(error.fields, ['WJ_OUTER_BWRAP']); assert.doesNotMatch(error.message, /private-invalid-outer/); return true;
+    });
+  }
+});
+
 test('resident flag defaults off and accepts only literal booleans without leaking invalid values', () => {
   assert.equal(loadWorkspaceConfig({}).residentEnabled, false);
   assert.equal(loadWorkspaceConfig({ WJ_RESIDENT_ENABLED: 'true' }).residentEnabled, true);
