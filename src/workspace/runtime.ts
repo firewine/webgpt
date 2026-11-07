@@ -1,3 +1,4 @@
+import { initializeExecutionProtection } from '../execution/authority.js';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -53,7 +54,7 @@ export class Workspace {
   constructor(readonly config: WorkspaceConfig, fakeDelay = 80, options: { residentProvider?: Pick<Providers, 'complete'>; residentClock?: () => number; residentAutoSchedule?: boolean; webhookTransport?: WebhookTransport; eventClock?: () => number } = {}) {
     this.store = new Store(config.stateDir);
     this.dispatch = new DispatchCoordinator(config.residentEnabled);
-    try { readDotState(this.store.read()); validatePasswordState(this.store.read()); validateApiUsage(this.store.read()); this.resident = new ResidentStore(this.store, config.residentEnabled); validateTopicIntents(this.store.read()); validateWikiState(this.store.read()); validateWorkExecutionState(this.store.read(), this.store); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); this.wiki = new Wiki(this.store, config.residentEnabled); }
+    try { initializeExecutionProtection(this.store.read()); readDotState(this.store.read()); validatePasswordState(this.store.read()); validateApiUsage(this.store.read()); this.resident = new ResidentStore(this.store, config.residentEnabled); validateTopicIntents(this.store.read()); validateWikiState(this.store.read()); validateWorkExecutionState(this.store.read(), this.store); this.workQueue = new WorkQueue(this.store, config.residentEnabled, this.dispatch); this.wiki = new Wiki(this.store, config.residentEnabled); }
     catch (error) { this.store.close(); throw error; }
     this.vault = new Vault(join(config.stateDir, 'credentials'));
     try { this.dotMcp = new DotMcp(this.store, this.vault, config.residentEnabled);
@@ -87,7 +88,12 @@ export class Workspace {
     this.materials = new LocalMaterials(config.materialRoots, [config.stateDir, config.chromeProfileDir]);
     this.engine.materials = this.materials;
     mkdirSync(config.chromeProfileDir, { recursive: true, mode: 0o700 });
-    this.codex = new CodexExecutor(this.store, config.codexCommand, config.workspaceRoots, [config.stateDir, config.chromeProfileDir]);
+    this.codex = new CodexExecutor(this.store, config.codexCommand, config.workspaceRoots, [config.stateDir, config.chromeProfileDir], { secrets: () => {
+      const values = [token!];
+      for (const c of this.store.read().connections) { const secret = this.vault.get<Record<string, unknown>>(c.id);
+        if (secret) for (const [key, value] of Object.entries(secret)) if (/key|token|secret/i.test(key) && typeof value === 'string') values.push(value); }
+      return values;
+    } });
     this.workExecution = new WorkExecutionBridge(this.store, this.workQueue, this.codex, config.residentEnabled, config.turnTimeoutMs);
     this.codex.workScopeGuard = (state, job, phase) => this.workExecution.guard(state, job, phase);
     this.engine.executor = this.codex;

@@ -20,7 +20,9 @@ export async function executionFixture(t, options = {}) {
   const bridge = new WorkExecutionBridge(f.app.store, f.q, codex, true, 300000);
   f.app.codex = codex; f.app.workExecution = bridge; f.app.engine.executor = codex; f.app.residentRunner.options.execution = bridge;
   codex.workScopeGuard = (s, job, phase) => bridge.guard(s, job, phase); codex.onProgress = () => f.app.residentRunner.kick();
-  const bindingId = await codex.register({ cwd, label: '모의 Codex · 실제 모델/코드 실행 없음', threadId: 'fixture-thread', allowWrite: options.allowWrite ?? false });
+  const bindingId = await codex.register({ cwd, label: '모의 Codex · 실제 모델/코드 실행 없음', threadId: 'fixture-thread', allowWrite: false });
+  // An unverified write binding is an adversarial stored fixture, never an owner bypass of the real OS gate.
+  if (options.allowWrite) f.app.store.transact(s => { const binding = s.bindings.find(b => b.id === bindingId); binding.allowWrite = true; binding.protection = { version: 1, status: 'unverified', reason: 'fixture_no_os_proof' }; });
   const room = f.app.store.read().resident.rooms[0]; f.control({ action: 'configure', budgets: { ...room.budgets, maxToolJobs: options.maxToolJobs ?? 4 }, pacing: room.pacing });
   for (const participantId of ['fake-a', 'fake-b']) f.q.seat(f.roomId, { participantId, expectedVersion: 1, role: 'specialist', enabled: true, kinds: ['analysis', 'codex'], scopeRefs: ['room:' + f.roomId, 'binding:' + bindingId] }, crypto.randomUUID());
   if (options.on !== false) f.control({ action: 'on' });

@@ -20,14 +20,14 @@ async function fixture(t, mode = 'normal') {
   const { store } = await storage({ after: cleanup => t.after(async () => { codex?.close(); await cleanup(); }) }); const cwd = await mkdtemp(join(tmpdir(), 'wj-codex-'));
   execFileSync('git', ['init', '-q', '-b', 'work-fixture'], { cwd }); execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '--allow-empty', '-qm', 'fixture'], { cwd });
   codex = new CodexExecutor(store, [process.execPath, script, mode], [cwd]); t.after(async () => { codex.close(); await rm(cwd, { recursive: true, force: true }); });
-  return { store, codex, cwd, register: () => codex.register({ cwd, label: 'fixture', threadId: 'fixture-thread', allowWrite: true }), trace: async () => (await readFile(join(cwd, 'rpc-trace.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse) };
+  return { store, codex, cwd, register: () => codex.register({ cwd, label: 'fixture', threadId: 'fixture-thread', allowWrite: false }), trace: async () => (await readFile(join(cwd, 'rpc-trace.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse) };
 }
 test('Codex uses observed target and actual schema, queues exactly once and records command evidence', async t => {
   const f = await fixture(t); const bindingId = await f.register(); const input = { bindingId, prompt: '테스트 전용 프롬프트; 셸 확장 $(touch should-not-exist)', requestId: 'one' };
   const first = f.codex.submit(input); assert.equal(f.codex.submit(input), first); const second = f.codex.submit({ ...input, requestId: 'two' });
   await until(() => f.store.read().jobs.every(j => j.status === 'completed'));
   const trace = await f.trace(); const starts = trace.filter(m => m.method === 'turn/start'); assert.equal(starts.length, 2); assert.equal(starts[0].params.approvalPolicy, 'untrusted'); assert.equal(starts[0].params.approvalsReviewer, 'user');
-  assert.equal(starts[0].params.sandboxPolicy.networkAccess, false); assert.equal(starts[0].params.sandboxPolicy.excludeSlashTmp, true); assert.equal(starts[0].params.cwd, f.cwd); assert.equal(starts[0].params.input[0].text, input.prompt);
+  assert.equal(starts[0].params.sandboxPolicy.networkAccess, false); assert.equal(starts[0].params.sandboxPolicy.type, 'readOnly'); assert.equal(starts[0].params.cwd, f.cwd); assert.equal(starts[0].params.input[0].text, input.prompt);
   assert.ok(trace.every(m => m.environment.WJ_ACCESS_TOKEN === null)); assert.equal(f.store.read().jobs.find(j => j.id === second).turnId, 'turn-2'); assert.ok(f.store.read().jobs[0].activities.some(a => a.type === 'commandExecution'));
 });
 test('steer requires current turn; interrupt is not treated as completed before remote confirmation', async t => {
@@ -86,7 +86,7 @@ test('unavailable isolation fails closed without launching the Codex adapter', a
   const isolated = new CodexExecutor(f.store, [process.execPath, script, 'normal'], [f.cwd], [bin]);
   try {
     process.env.PATH = `${bin}:${priorPath ?? ''}`;
-    await assert.rejects(isolated.register({ cwd: f.cwd, label: 'isolated', threadId: 'fixture-thread', allowWrite: true }), /rpc_disconnected/);
+    await assert.rejects(isolated.register({ cwd: f.cwd, label: 'isolated', threadId: 'fixture-thread', allowWrite: false }), /rpc_disconnected/);
     assert.equal(f.store.read().bindings.length, 0); assert.equal(f.store.read().jobs.length, 0);
     await assert.rejects(readFile(join(f.cwd, 'rpc-trace.jsonl')), { code: 'ENOENT' });
   } finally { process.env.PATH = priorPath; isolated.close(); await rm(bin, { recursive: true, force: true }); }

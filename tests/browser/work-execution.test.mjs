@@ -51,6 +51,19 @@ test('R6 browser: original remote receipt reconciliation reuses one job and keep
   const f = await executionFixture(t, { mode: 'disconnect' }); const id = f.proposeCode(); f.bridge.tick(); await until(() => f.app.store.read().jobs[0]?.status === 'reconciling'); f.bridge.tick();
   const { page, errors } = await open(t, f); await detail(page); assert.equal(await page.getByLabel('원래 Codex turn ID').inputValue(), f.app.store.read().jobs[0].turnId);
   await page.getByRole('button', { name: '원래 Codex 실행 대조', exact: true }).click(); await until(() => f.app.store.read().jobs[0].status === 'completed'); f.bridge.tick();
-  await page.getByRole('button', { name: '기록 새로고침', exact: true }).click(); await page.locator('#work-detail > details').getByText(/completed 문구만으로/).waitFor();
-  assert.equal(f.task(id).reports[0].checks[0].outcome, 'not_run'); assert.equal((await f.trace()).filter(v => v.method === 'turn/start').length, 1); assert.equal(f.app.store.read().jobs.length, 1); assert.deepEqual(errors, []);
+  await page.getByRole('button', { name: '기록 새로고침', exact: true }).click(); await page.locator('#work-detail').getByText('원문 수집이 불완전해 현재 업무 수락을 보류했습니다. 원래 실행과 근거는 보존됩니다.', { exact: true }).waitFor();
+  assert.equal(f.task(id).reports.length, 0); assert.equal(f.app.store.read().resident.jobLinks[0].result.report.checks[0].outcome, 'not_run'); assert.equal(f.task(id).currentReportId, null); assert.equal((await f.trace()).filter(v => v.method === 'turn/start').length, 1); assert.equal(f.app.store.read().jobs.length, 1); assert.deepEqual(errors, []);
+});
+
+test('R6 browser: protected work never offers expanding approval from the room detail', async t => {
+  const f = await executionFixture(t, { mode: 'approval' }); f.proposeCode(); f.bridge.tick();
+  await until(() => f.app.store.read().jobs[0]?.status === 'blocked_approval');
+  // Explicit stored fixture only: the room must apply the same UI boundary as execution view.
+  f.app.store.transact(s => { s.jobs[0].draft = { version: 1, status: 'running' }; });
+  const { page, errors } = await open(t, f); await detail(page);
+  assert.equal(await page.getByRole('button', { name: '이번 실행 요청 승인', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: '이번 실행 요청 취소', exact: true }).count(), 1);
+  await page.getByRole('button', { name: '이번 실행 요청 취소', exact: true }).click();
+  await until(() => f.app.store.read().jobs[0].status === 'interrupted');
+  assert.equal((await f.trace()).filter(v => v.result?.decision === 'accept').length, 0); assert.deepEqual(errors, []);
 });

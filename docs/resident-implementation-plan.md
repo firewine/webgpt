@@ -1,5 +1,8 @@
 # 상주 운영 단계별 변경·이관·수락·롤백
 
+> **2026-11-07 추천3 승인:** [보호 작업 사본·1파일 명시 반영/권한 수명·private 원문](./adr/0002-protected-execution.md)을 기존 R6/R8에 추가한다. 기본24시간·최대7일, legacy 재발급/등록, job별 권한 검사·비가림 owner 페이지 조회와 미확정 보존을 사용한다. 보호 검사/도구 지원 실패 시 기존 쓰기 차단을 유지하며 원래50 gate·단일 writer·예산/승인·dot/Muse는 유지한다. 실계정 실행·운영 적용·Git 자동화·여러 파일 반영은 제외한다. 실제 상태는 [SSOT](./development-plan.md)를 따른다.
+
+
 > **2026-11-01 공식 dot 연결 개정·개발 승인:** [D0~D5 승인 범위](./reviews/dot-official-mcp-events-impact-20261101.md)를 R1 additive 상태/이관→R2 provider·대조→R3 연결 UI→R4 native dot 분리→R5 업무·R6 Codex·R7 Wiki 권한 소비→R8 통합 회귀에 반영한다. 실제 순서는 [SSOT](./development-plan.md)를 따른다. Muse의 현재 browser binding/profile/thread·초안/receipt 가드는 유지한다. dot의 일반 ChatGPT `/c/...` 요구는 공식 연결로 대체하며 기존 browser 기록을 자동 승격하지 않는다. complete/transaction/단일 lease·예산/승인/미확정·50 gate는 유지한다. 추가 OAuth 등 확대는 별도 영향 보고·승인 대상이다. **11/02 D4까지 병합, D5 통합 수락 진행 중.** [D5 보완 manifest](./implementation/dot-acceptance-manifest.json)는 원래50개를 대체하지 않으며 실계정 수락은 미완료다.
 
 > **2026-11-01 주제별 채팅 통합 승인:** R3의 별도 토의 화면 기본 진입/복귀 결정을 주제별 채팅 shell로 대체한다. 기존 상세 제어는 drawer/dialog로 재사용하며 G0 뒤 동일 ID 원문/상세 보기로 복귀할 수 있다. R8에서 독립3+방 연결2 주제 표시, 전환20회 POST/외부 호출0, 4폭/2탭/SSE·공개 경계·승인/복구를 추가 회귀한다. 원래 gate의 숫자·안전 기준·실계정 미검증은 유지한다. [승인 범위·후속 영향·검증·복귀](./reviews/topic-chat-ui-impact-20261101.md). 실제 완료 여부는 [페이즈 SSOT](./development-plan.md)를 따른다.

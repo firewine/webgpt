@@ -82,6 +82,8 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
       upstream.setTimeout(15_000, () => upstream.destroy()); upstream.on('error', () => { if (!res.headersSent) json(res, 502, { error: { code: 'browser_display_unavailable' } }); else res.destroy(); });
       res.on('close', () => upstream.destroy()); upstream.end(); return;
     }
+    const executionRead = /^\/api\/jobs\/([\w-]+)\/(evidence|draft)$/.exec(path);
+    if (get && executionRead) { const jid = executionRead[1]!; json(res, 200, executionRead[2] === 'evidence' ? app.codex.evidencePage(jid, pageNumber(url, 'page', 0, 0, 10000)) : await app.codex.inspectDraft(jid)); return; }
     if (get && path === '/api/state') { json(res, 200, app.snapshot()); return; }
     if (get && path === '/api/dot/status') { json(res, 200, app.dotMcp.snapshot()); return; }
     const devicePath = /^\/api\/connections\/([\w-]+)\/device-signin(?:\/(cancel))?$/.exec(path);
@@ -217,6 +219,10 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     if (participantPath) { json(res, 200, { id: app.participant(input, participantPath[1]) }); return; }
     if (path === '/api/browser/control') { if (typeof input.paused !== 'boolean') throw new AppError('invalid_input'); app.browserControl(input.paused); json(res, 200, { ok: true }); return; }
     if (path === '/api/bindings') { json(res, 201, { id: await app.codex.register(input) }); return; }
+    const bindingRevoke = /^\/api\/bindings\/([\w-]+)\/revoke$/.exec(path);
+    if (bindingRevoke) { if (Object.keys(input).length) throw new AppError('invalid_input'); await app.codex.revokeBinding(bindingRevoke[1]!); json(res, 200, { ok: true }); return; }
+    const applyDraft = /^\/api\/jobs\/([\w-]+)\/apply$/.exec(path);
+    if (applyDraft) { if (Object.keys(input).some(key => key !== 'expectedDiffDigest')) throw new AppError('invalid_input'); json(res, 200, await app.codex.applyDraft(applyDraft[1]!, string(input.expectedDiffDigest, 64), command(req))); return; }
     if (path === '/api/jobs') { json(res, 201, { id: app.codex.submit({ bindingId: string(input.bindingId), prompt: string(input.prompt, 30_000), requestId: command(req) }) }); return; }
     const jobPath = /^\/api\/jobs\/([\w-]+)\/(cancel|reconcile|steer|approve)$/.exec(path);
     if (jobPath) {
@@ -230,8 +236,8 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
     if (path === '/api/grants') { json(res, 201, mcp.createGrant(input)); return; }
     if (path === '/api/grants/revoke') {
       app.store.transact((state, emit) => { const grant = state.grants.find(g => g.id === input.id); if (!grant) throw new AppError('grant_not_found', 404);
-        grant.revoked = true; emit({ type: 'mcp.revoked', discussionId: grant.discussionId, data: { grantId: grant.id } }); });
-      json(res, 200, { ok: true }); return;
+        grant.revoked = true; if (grant.authority && !grant.authority.revokedAt) grant.authority.revokedAt = new Date().toISOString(); emit({ type: 'mcp.revoked', discussionId: grant.discussionId, data: { grantId: grant.id } }); });
+      app.codex.authorityChanged(); json(res, 200, { ok: true }); return;
     }
     throw new AppError('not_found', 404);
   }

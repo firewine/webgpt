@@ -47,7 +47,9 @@ export interface WorkReviewV1 {
 export interface WorkExecutionEvidence {
   jobId: string; bindingId: string; threadId: string; turnId: string | null;
   status: string; observedAt: string; promptDigest: string;
-  commands: { activityId: string; command: string | null; status: string; exitCode: number | null; output: string | null; observedAt: string }[];
+  capture?: { artifactId: string; digest: string; complete: boolean; byteLength: number };
+  application?: { status: string; receipt?: { path: string; beforeDigest: string; afterDigest: string; appliedAt: string } };
+  commands: { activityId: string; command: string | null; status: string; exitCode: number | null; output: string | null; observedAt: string; truncated?: boolean }[];
   fileChanges: { activityId: string; status: string; text: string; observedAt: string }[];
 }
 export interface WorkJobLink {

@@ -107,7 +107,8 @@ test('R6: lost remote receipt stays on one job after 100 ticks and requires matc
   const original = jobFor(f); assert.equal(original.turnId, null); for (let i = 0; i < 100; i++) f.bridge.tick();
   await assert.rejects(f.codex.reconcile(original.id), /owner_review/); await assert.rejects(f.codex.reconcile(original.id, 'wrong'), /still_unconfirmed/);
   await f.codex.reconcile(original.id, 'turn-1'); f.bridge.tick(); assert.equal(jobFor(f).id, original.id); assert.equal((await f.trace()).filter(v => v.method === 'turn/start').length, 1);
-  assert.equal(f.task(id).reports[0].checks[0].outcome, 'not_run'); assert.notEqual(f.task(id).status, 'done');
+  assert.equal(f.task(id).reports.length, 0); assert.equal(f.app.store.read().resident.jobLinks[0].result.report.checks[0].outcome, 'not_run');
+  assert.equal(f.app.store.read().resident.jobLinks[0].result.scopeReason, 'execution_capture_incomplete'); assert.notEqual(f.task(id).status, 'done');
 });
 
 test('R6: flag off rejects a queued work dispatch while preserving original intent and result for recovery', async t => {

@@ -1,38 +1,51 @@
-# 추천3 — 실행 보호 착수와 기존 MCP 회수 오류 수정
+# 추천3 — 권한 수명·보호 사본·실행 원문과 명시 반영
 
-상태: **기존 회수 계약 오류 수정 / 새 권한 수명·보호 사본·원문 계약은 승인 대기.** 사용자의 “병합했어 3번 개발”로 착수했다. 기준은 PR #55 병합 main `f3384cc8d98f5f71c81bd94fdddba37ee40b83dc`, 별도 작업 브랜치 `codex/execution-protection-20261107`이다. 전체 추천3/R6 쓰기 수락을 완료로 표시하지 않는다.
+상태: **2026-11-07 권장안 승인, 기능 구현·자동 검사 완료 / 결합 OS 검증 보류. 실제 사용자 Codex 실행/운영 배포 NOT_RUN.** 착수 기준은 PR #55 병합 main `f3384cc8d98f5f71c81bd94fdddba37ee40b83dc`, 작업 브랜치 `codex/protected-execution-20261107`이다. 개발 중 PR #56 병합 main `6526279ae290f6743c2d6675c61f4c42e17a7d1b`을 확인하고, 첫 수정 `edb9b0a`와 동일한 source tree인 이 기준으로 옮겼다. 기존 MCP 회수 오류의 첫 수정/PR #56 뒤 사용자가 “보호 사본·명시 반영까지 개발 승인”을 허용했다. [후속 영향·추정](../reviews/execution-protection-impact-20261107.md), [ADR/계약·복귀](../adr/0002-protected-execution.md), [SSOT](../development-plan.md).
 
-## 기존 계약 안에서 수정한 오류
+## 구현한 흐름과 재사용
 
-`src/http/workspace.ts`의 `/mcp`는 요청 헤더에서 grant를 인증한 뒤 body를 기다린다. 이 사이 owner가 일반 discussion grant를 회수하면 `McpEndpoint.handle`은 예전 객체를 계속 사용했다. resident/dot 경로에는 별도 현재 권한 검사와 만료가 있으며 이번 수정은 그 계약을 바꾸지 않는다.
+기존 Providers·RPC·SQLite Core/Store transaction·CodexExecutor·WorkExecutionBridge·토론/큐/Wiki·owner 인증과 UI를 재사용한다. 새로운 실행 서비스·ORM·이벤트 bus/범용 워크플로 엔진을 만들지 않았다. 정책 함수/파일 adapter와 기존 명령 경계로 분리했다.
 
-`src/http/mcp.ts::McpEndpoint.checkGrant`로 현재 Store의 id/hash/토의/참여자/tools/회수 상태를 대조한다. 처리 진입과 결과 반환, 비동기 capability/cancel 뒤, 결과 기록 transaction 안에서 재검사한다. Store.transact는 같은 command의 이전 영수증을 callback 없이 돌려줄 수 있으므로 진입·재사용 전에도 권한을 검사한다. 권한이 사라진 요청의 공개 결과/부작용을 막고 기존 `mcp_authentication_required`/401 경계를 사용한다.
+| 부분 | 코드·동작 | 기존 계약/이관 |
+| --- | --- | --- |
+| 권한 수명 | `execution/authority.ts`·`execution-model.ts`, `model.ts`, `http/mcp.ts` — 일반 grant와 binding에 version/epoch/발급·만료/회수, 기본24시간·소유자1~168시간. job은 binding digest·필요한 grant/토의·문맥 세대를 고정 | 기존 resident/dot 계약 유지. Store version1·기존 DB/receipt 유지, 선택적 executionProtectionVersion1 marker. legacy는 보관하고 재발급/등록 전 새 실행 차단. 미래/손상/marker 유실은 차단 |
+| 현재 권한 검사 | `CodexExecutor.submit/start/decide/steer/completeFromTurn/validateResult/applyDraft`, `McpEndpoint.checkGrant` — body 대기·cached receipt·dispatch·비동기 반환·늦은 승인/결과·원본 반영 직전 검사 | 이미 관측한 종료/원문을 보존하고 현재 결과 수락과 구분. active 회수는 중단 요청이며 실제 종료/미확정은 원래 turn과 대조 |
+| 보호 사본 | `workspace-protection.ts::ProtectedWorkspaces` — 텍스트 사본·별도 baseline/HMAC manifest, 보호 이름/Git metadata/링크/위험 설정 차단, 최대1MiB/파일·32MiB/2,000항목 | 원래 cwd/thread/branch/HEAD 대조 유지. 실제 profile/namespace가 확인되지 않으면 쓰기 gate 유지. linked Git worktree·submodule·지원하지 않는 index/파일 형식은 차단 |
+| 실제 경계 | `isolation.ts::ExecutionIsolation` — installed named permissions schema/managed 허용과 local canary 검사, private PID/procfs·읽기 전용 host root·사본 overlay·앱/Chrome 가림 | trusted CLI 인증과 모델 명령의 read/write/network 권한 분리. 실제 사용자 session/model 없는 합성 검사이며 지원 실패를 full-access로 우회하지 않음. 0.165 기존 readOnly/RPC 계약은 유지 |
+| 원문/미리보기 | `evidence-store.ts`·`output-policy.ts`, executor의 capture/activity — private lossless NDJSON·원문 digest/byte/page/완전성과 가린/제한된 미리보기 분리 | 0700/0600, 최대16MiB/4,096기록. gap/restart/손상/한도는 incomplete. JSON/URL/Base64·chunk 경계 가림, 구조화 command/exit metadata 유지. source 수락 직전 원문 무결성도 재검사 |
+| 원본 명시 반영 | executor `inspectDraft/applyDraft`와 기존 owner HTTP/UI — 실제 diff 열기→같은 job/diff 확인→기존 UTF8 일반 텍스트1파일만 내용 변경 | 원격 completed와 pending/applying/applied/conflict/unconfirmed 분리. Store에 command 예약/intent 먼저 기록, descriptor write·검증 후 receipt. 같은 command의 다른 입력은 쓰기 전 차단. 생성/삭제/rename/chmod/binary/다중파일·Git 자동화 없음 |
+| 후속 수락 | `work-execution.ts`·`work-model.ts`·`engine.ts` — 미반영/원문 불완전·현재 권한 밖 결과는 업무 완료/현재 evidence로 승격하지 않음 | job/link의 원래 보고·명령/실패·미확정은 보존. 독립 검토와 기존 Wiki 공개 계약/예산·단일 dispatch 유지 |
 
-새 endpoint·grant/binding 필드·만료 기본값·DB/schema/이관·provider 인터페이스·역할·budget·제품 UI 변경0이다. 기존 Store transaction/명령 영수증·MCP adapter를 재사용하는 작은 guard이며 새 인증 시스템을 만들지 않는다. 과거 발급 token·실제 운영 DB를 변경한 것은 아니다.
+## owner 화면/HTTP
 
-공통 권한 대조 함수 하나를 기존 adapter 안에서 호출하는 방식으로 중복을 줄였다. 별도 인증 서비스나 추상 계층 없이 Store의 현재 상태를 사용하며, 외부 비동기 작업과 transaction/cached receipt 경계에서만 재검사한다.
+기존 `control.*`에서 만료 시간 선택, 회수·재등록, 원격 종료/사본 상태, 가린/생략 미리보기와 원문 완전성을 따로 표시한다. raw는 자동으로 열지 않고 한 페이지씩 표시하며 job/artifact/digest와 순서를 대조한다. 새로 고침으로 확인하지 않은 diff에 반영 버튼을 붙이지 않는다. textContent를 사용하고 작은 화면에서도 같은 owner 경계를 유지한다.
 
-## 재현과 검사
+- 기존 `/api/bindings`·`/api/grants`에 `expiresInHours` 추가. metadata는 서버가 발급한다. 같은 만료/회수/legacy cwd/thread 재등록은 유휴 대상만 다시 확인한다.
+- `POST /api/bindings/:id/revoke` — 기존 owner 인증/Host·Origin, 추가 범위 입력 없음.
+- `GET /api/jobs/:id/evidence?page=N` — owner 전용 원문, job ID 기반·임의 경로/thread 입력 없음. 일반 MCP grant는 owner 인증이 아니다.
+- `GET /api/jobs/:id/draft`, `POST /api/jobs/:id/apply {expectedDiffDigest}` — 새 owner 경로. 기존 command header로 동일 입력을 예약/기록하며 임의 파일·셸 입력 없음.
+- 일반 MCP/토론/방/Wiki에는 가린 자료와 참조·미확정 상태만 전달한다. raw/사본·credential은 snapshot/SSE/일반 도구 결과에 포함하지 않는다.
 
-`tests/mcp-authority-recheck.test.mjs`는 임시 DB/HTTP fixture만 사용한다. 실제 계정/모델·사용자 Codex 세션 호출0이다.
+보호 쓰기 작업의 추가 권한 ACCEPT와 steer는 차단한다. 거절/취소·정확한 원래 turn 대조는 유지한다. 모델이 요청한 권한 확대나 확인되지 않은 profile 지원을 owner 승인만으로 통과시키지 않는다.
 
-- 이미 인증한 객체를 owner가 폐기한 뒤 tools/list와8개 도구를 호출해 새 결과/조회/명령·취소0을 확인.
-- 동일 result_submit의 기존 영수증은 유효할 때만 재사용, 회수 후 재조회 거절·보고1개 유지.
-- 현재 grant의 hash/토의/참여자/tools가 바뀌면 예전 객체 사용 거절·새 결과0.
-- 결과 기록 transaction 직전 회수 경쟁에서 기록0.
-- 비동기 capability 조회 대기 중 회수하면 반환 자료를 노출하지 않음.
-- 실제 HTTP 요청 본문을 나눠 전송해 인증 뒤 대기를 확인하고, 별도 owner 회수 후 나머지 body를 보내면401·새 evidence/job0.
+## 검사와 실제 확인 범위
 
-`npm run check`의 strict TypeScript·빌드와 Node 검사 **655개 PASS, FAIL0·SKIP0**를 확인했다. 신규6개는 위 재현/경쟁 검사이며 전체649개 기존 검사도 함께 통과했다. UI/모델 응답을 실제 계정 수락으로 대신하지 않는다. 제품 UI 변경이 없어 브라우저 검사는 별도로 반복하지 않았다.
+- 기존 MCP 회수 오류 재현6개: 인증 뒤 body 대기, 전체8도구, cached receipt, 범위 변경, transaction 경쟁, 비동기 반환 가림. 첫 PR 기준 전체655개 PASS.
+- 보호 사본24개: 실제 임시 Git/파일, 비밀·link/hardlink/부모/원본/manifest 교체, diff·반영·축소/빈 파일, source branch/HEAD 변경, 부분 쓰기/재시작/replay와 한도. 사용자 저장소는 사용하지 않음.
+- 원문34개: 모든 splitpoint/표현, 구조화 값·페이지 exact 복원, private 권한·손상/부분/가짜 연속 기록/한도·재시작. 실계정 credential 읽기 없음.
+- UI7개: 만료/legacy/회수, explicit raw 페이지/범위·원본 확인, stale diff·토의 변경·일회 반영, 보호 승인 경계·1380/390px. 모의 HTTP만 사용.
+- 통합: 만료/회수 dispatch0, 원문 손상 수락0, 실제 단일파일 diff/반영·Store intent/receipt, 동일 command의 다른 저장소 동시 반영 차단, remote terminal 뒤 draft inspection만 복구, 적용 뒤 receipt 유실은 unconfirmed. 강제 종료 뒤 terminal snapshot으로 원문 gap을 덮지 않는다.
 
-## 추천3의 계약 변경 제안과 남은 작업
+최종 로컬 `npm run check`: strict TypeScript/빌드·Node **736건 중735 PASS, FAIL0, SKIP1**. 기존 전체 검사와 신규 권한/원문/사본/복구를 함께 실행했다. 브라우저 전체84건 중83 PASS 뒤1건의 중복 문구 선택자만 수정했고, 해당 파일4건 재검사는 모두 PASS다. 앱 소스 변경 없이 화면의 경고 문구와 보관 JSON을 구분해 선택했다. 설치 Codex0.166.0의 기존 요청 계약 검사도 PASS이며 로그인/thread/model turn은0이다.
 
-[후속 영향·변경량 검토](../reviews/execution-protection-impact-20261107.md)는 미승인 제안이다. 일반 권한/binding 만료·회수와 legacy 처리, private 출력/페이지 조회, 보호 사본·소유자 diff 확인/기존 텍스트1파일 반영은 공개·영속/실행 계약을 구체화해야 해 기존 사전 승인 규칙에 따라 질문했다. 기존 plan/SSOT의 수락·쓰기를 먼저 바꾸지 않는다.
+검증 실행 환경은 `/etc/os-release` 기준 Ubuntu26.04.1 LTS, Node24.18.0/npm11.16.0/bwrap0.11.1, Chromium156.0.8078.4/Chrome MCP1.12.0이다. 외부 namespace/사본 overlay 검사와 실제 named profile의 읽기·쓰기/secret/tmp/network canary는 각각 PASS했다. **두 경계를 결합한 runtime proof는 AppArmor `bwrap//&unpriv_bwrap (enforce)`의 중첩 namespace 제한으로 SKIP/BLOCKED**다. 정확한 namespace 거절·종료1·도구 시작 전일 때만 이 상태로 분류한다. canary 실패나 CLI panic을 SKIP으로 숨기지 않는 회귀도 통과했다. 사용자 namespace/UID mapping과 대안 검토에서 안전한 코드 우회를 확인하지 못했고 호스트 정책/권한을 변경하지 않았다. 결합 검사가 확인되지 않은 환경에서는 WRITE를 계속 차단한다. 개별 PASS를 전체 격리 PASS나 실제 Codex 쓰기 성공으로 표시하지 않는다.
 
-Node24.18.0/npm11.16.0/Codex0.166.0 설치 schema 검사는 PASS이며 실제 login/thread/model turn은0이다. bubblewrap0.11.1의 PID/network namespace·procfs/읽기 전용 mount 합성 검사는 성공했지만 실제 사용자 Codex 파일 변경은 NOT_RUN이다. 개별 파일 가림은 나중에 생성된 보호 파일을 숨기지 못하는 합성 결과를 남겼다. 이 때문에 기존 `work_write_safety_unverified` 차단은 그대로 유지한다.
+CI는 새 보호 계약용0.166을 먼저 설치해 검사하고 기존0.165 계약 검사도 별도로 유지한다. 실제 model 호출·사용자 thread 실행은 추가하지 않는다. 첫 CI에서 npm의 Linux native package가 launcher와 분리된 설치 형태를 확인해 경로 검사가 실패했다. 공식 launcher의 package resolution을 따라 해당 runtime package만 읽도록 보완했고, npm alias/identity 오류와 부모 의존성·비밀 경로 비허용을 추가 검사했다. 이 수정 뒤 전체736건 중735 PASS/SKIP1이며 최종 CI 결과는 PR 검사에 연결한다. 앞선 자동 검사는 실제 GPT/dot/Muse·API나 사용자 Codex turn/명령을 실행했다는 뜻이 아니다. 실계정/운영 수락은 NOT_RUN이며 기존50 gate/R8 전체를 완료로 표시하지 않는다.
 
-운영 서버·`.env`·대화 DB·계정/접속 키·Chrome profile·API 한도·사용자 untracked 파일은 변경하지 않았다. 실제 모델/사용자 Codex 호출·운영 적용·계약 변경 승인과 혼동하지 않는다. artifact/로그 보관 정리·archive/삭제·다중 실행·Git Writer·자동 병합은 추가하지 않았다.
+## 변경량·한계·운영 보존·복귀
 
-## 복귀
+제출 전 변경은 **40파일·추가3234/삭제117줄**로 승인 추정32~45파일·2,600~4,200줄 안이다(이 기록 보완의 소수 줄은 PR 최종 diff가 기준). 보호 실패/지원되지 않는 형태는 차단 사유로 남긴다. 같은 OS 사용자의 비협조적인 외부 writer에 대한 kernel atomic CAS는 제공하지 않는다. 원본의 마지막 비교와 held descriptor 쓰기는 app 단일 writer에서 await 없이 수행하며, 실행/반영 중 외부 편집·CLI 중단 조건을 유지한다. 감지된 경쟁/부분 쓰기·기록 실패는 미확정으로 남기고 되돌리기/재반영으로 숨기지 않는다.
 
-이번 작은 수정은 기존 필드/DB를 그대로 사용한다. G0의 진행/미확정 대조 후 이전 binary로 복귀할 수 있지만, 그 경우 기존 회수 경쟁 문제가 다시 생긴다는 한계를 남긴다. 원래 기록·명령 영수증·grant를 삭제하거나 새 발급으로 문제를 숨기지 않는다. 전체 추천3의 새 이관/복귀·쓰기 허용은 위 미승인 제안과 별도다.
+운영 `.env`·DB·계정/접속 키·Chrome profile·dot/Muse·API 한도·사용자 untracked 파일은 변경하지 않았다. 실제 계정/사용자 session 호출·배포·병합은 하지 않는다. archive/삭제/자동 만료·raw 정리·다중 실행·Git Writer/자동 병합은 이번 범위 밖이다.
+
+G0의 quiescent 조건과 applying intent/미확정/queued/active를 확인한 뒤 복귀한다. 새 state/event/receipt·raw·baseline/사본을 보존한다. 이전 binary는 새 보호/만료 경계가 없으므로 실행을 재개하지 않는다. 보호 사본의 pending을 원본 수정으로 오인하거나 DB/원문을 초기화하지 않는다.

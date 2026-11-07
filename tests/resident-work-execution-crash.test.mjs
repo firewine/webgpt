@@ -16,7 +16,7 @@ import { FakeResidentCompletion } from '../dist/server/workspace/resident-fake.j
 import { rpcScript } from './work-execution-fixture.mjs';
 import { until } from './workspace-helpers.mjs';
 
-for (const stage of ['before_intent', 'intent', 'submit', 'link', 'approval', 'completed']) test('R6-A actual SIGKILL at ' + stage + ': one original start, one report and independent review', { timeout: 20000 }, async t => {
+for (const stage of ['before_intent', 'intent', 'submit', 'link', 'approval', 'completed']) test('R6-A actual SIGKILL at ' + stage + ': one original start, preserved report and guarded review', { timeout: 20000 }, async t => {
   const child = spawn(process.execPath, ['tests/fixtures/work-execution-crash.mjs', stage], { stdio: ['ignore', 'pipe', 'pipe'] }); let stderr = '';
   child.stderr.on('data', b => { stderr += b; }); t.after(() => { if (child.exitCode === null && !child.killed) child.kill('SIGKILL'); });
   const info = await new Promise((resolve, reject) => { let output = ''; child.stdout.on('data', b => { output += b; if (output.includes('\n')) { try { resolve(JSON.parse(output.split('\n')[0])); } catch (e) { reject(e); } } }); child.on('exit', () => reject(new Error(stderr || 'Child exited before checkpoint'))); });
@@ -41,11 +41,18 @@ for (const stage of ['before_intent', 'intent', 'submit', 'link', 'approval', 'c
     remote.status = 'completed'; remote.items.push({ id: 'command-after-recovery', type: 'commandExecution', command: 'fixture-only observed command', exitCode: 0, status: 'completed', aggregatedOutput: 'fixture observation' }, { id: 'result', type: 'agentMessage', text: '복구 fixture의 같은 실행 결과' });
     await writeFile(remotePath, JSON.stringify(remote)); await codex.reconcile(originalJob.id);
   } else await until(() => { bridge.tick(); return store.read().jobs[0]?.status === 'completed'; });
-  bridge.tick(); assert.equal(store.read().resident.workItems[0].status, 'review');
+  bridge.tick(); assert.equal(store.read().resident.workItems[0].status, stage === 'approval' ? 'blocked' : 'review');
   await runner.tick(); const s = store.read(); const task = s.resident.workItems[0]; const link = s.resident.jobLinks[0];
-  assert.equal(task.status, 'done'); assert.equal(task.reports.length, 1); assert.equal(task.reviews.length, 1); assert.equal(link.attemptId, attempt.id); assert.equal(link.input.requestId, attempt.requestId);
+  if (stage === 'approval') {
+    // A terminal snapshot after a capture gap cannot establish the missing raw stream.
+    assert.equal(task.status, 'blocked'); assert.equal(s.jobs[0].capture.complete, false);
+    assert.equal(link.result.report.checks[0].outcome, 'unknown'); assert.ok(link.result.report.blockers.length > 0);
+    assert.equal(link.result.report.execution.capture.complete, false);
+  } else assert.equal(task.status, 'done');
+  const report = stage === 'approval' ? link.result.report : task.reports[0];
+  assert.equal(task.reports.length, stage === 'approval' ? 0 : 1); assert.equal(task.reviews.length, stage === 'approval' ? 0 : 1); assert.equal(link.attemptId, attempt.id); assert.equal(link.input.requestId, attempt.requestId);
   assert.equal(s.jobs.length, 1); if (originalJob) assert.equal(s.jobs[0].id, originalJob.id);
-  assert.equal(s.resident.messages.filter(m => m.sourceId === task.reports[0].id).length, 1);
+  assert.equal(s.resident.messages.filter(m => m.sourceId === report.id).length, 1);
   const trace = (await readFile(join(info.cwd, 'rpc-trace.jsonl'), 'utf8')).trim().split('\n').map(JSON.parse); assert.equal(trace.filter(v => v.method === 'turn/start').length, 1);
-  for (let i = 0; i < 20; i++) bridge.tick(); assert.equal(store.read().jobs.length, 1); assert.equal(store.read().resident.workItems[0].reports.length, 1);
+  for (let i = 0; i < 20; i++) bridge.tick(); assert.equal(store.read().jobs.length, 1); assert.equal(store.read().resident.workItems[0].reports.length, stage === 'approval' ? 0 : 1);
 });
