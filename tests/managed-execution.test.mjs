@@ -107,6 +107,13 @@ test('protected read forbids permission escalation and steering while preserving
   const trace = await f.trace(); assert.equal(trace.filter(m => m.method === 'turn/steer').length, 0); assert.equal(trace.filter(m => m.id === 'managed-approval' && m.result?.decision === 'accept').length, 0);
 });
 
+for (const damage of ['missing', 'tampered']) test(`checked read still rejects ${damage} sealed evidence at publication`, async t => {
+  const f = await fixture(t), jid = f.submit('checked-' + damage); await f.checked(jid);
+  const manifest = f.codex.workspaces.manifest(jid), path = join(dirname(manifest.copyRoot), 'manifest.json');
+  if (damage === 'missing') await rm(path);
+  else { const envelope = JSON.parse(await readFile(path, 'utf8')); envelope.body.manifest.head = '0'.repeat(40); await writeFile(path, JSON.stringify(envelope)); }
+  assert.equal(f.codex.validateResult(jid), 'execution_read_copy_integrity_changed');
+});
 for (const damage of ['missing', 'tampered', 'changed']) test(`protected read cannot publish a completed turn with ${damage} copy evidence`, async t => {
   const f = await fixture(t, 'hold'), jid = f.submit('damaged-' + damage); await until(() => f.job(jid)?.turnId);
   const manifest = f.codex.workspaces.manifest(jid), path = join(dirname(manifest.copyRoot), 'manifest.json');

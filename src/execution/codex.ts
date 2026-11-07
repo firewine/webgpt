@@ -484,6 +484,10 @@ export class CodexExecutor {
     try { assertJobAuthority(state, job); } catch (error) { return code(error); }
     if (!job.capture?.complete) return 'execution_capture_incomplete';
     if (job.readCopy && job.readCopy.status !== 'checked') return job.readCopy.reason ?? 'execution_read_copy_unverified';
+    if (job.readCopy) {
+      try { if (this.workspaces.manifest(job.id).digest !== job.readCopy.manifestDigest) return 'execution_read_copy_integrity_changed'; }
+      catch { return 'execution_read_copy_integrity_changed'; }
+    }
     try { const actual = this.evidence.describe(jobId);
       return actual.complete && actual.digest === job.capture.digest && actual.byteLength === job.capture.byteLength && actual.pageCount === job.capture.pageCount ? null : 'execution_capture_integrity_changed';
     } catch { return 'execution_capture_integrity_changed'; }
