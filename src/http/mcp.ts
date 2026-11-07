@@ -52,6 +52,7 @@ export class McpEndpoint {
         { code: error instanceof AppError && error.code === 'unknown_event_method' ? -32601 : -32602, message: error instanceof AppError ? error.code : 'Event request failed' } }; }
     }
     if (residentGrant(grant)) this.app.residentMcp.check(grant);
+    else this.checkGrant(grant);
     const message = object(raw); const requestId = message.id;
     if (message.jsonrpc !== '2.0' || typeof message.method !== 'string') throw new AppError('invalid_jsonrpc');
     if (requestId === undefined) { if (message.method === 'notifications/initialized') return null; throw new AppError('unknown_notification'); }
@@ -59,29 +60,39 @@ export class McpEndpoint {
     let result: unknown;
     if (message.method === 'initialize') result = { protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'webjjoku', version: '0.2.0' } };
     else if (message.method === 'ping') result = {};
-    else if (message.method === 'tools/list') result = { tools: grant.tools.map(name => ({ name, description: (residentGrant(grant) ? residentDescriptions[name] : descriptions[name]) ?? name,
-      inputSchema: (residentGrant(grant) ? residentSchemas[name] : schemas[name]) ?? { type: 'object', properties: {}, additionalProperties: false } })) };
+    else if (message.method === 'tools/list') {
+      if (!residentGrant(grant)) this.checkGrant(grant);
+      result = { tools: grant.tools.map(name => ({ name, description: (residentGrant(grant) ? residentDescriptions[name] : descriptions[name]) ?? name,
+        inputSchema: (residentGrant(grant) ? residentSchemas[name] : schemas[name]) ?? { type: 'object', properties: {}, additionalProperties: false } })) };
+    }
     else if (message.method === 'tools/call') {
       const params = object(message.params); const name = string(params.name);
       if (!grant.tools.includes(name)) return { jsonrpc: '2.0', id: requestId, error: { code: -32602, message: 'Tool not granted' } };
       try {
         const value = residentGrant(grant) ? this.app.residentMcp.call(name, object(params.arguments ?? {}), grant) : await this.call(name, object(params.arguments ?? {}), grant);
+        if (!residentGrant(grant)) this.checkGrant(grant);
         result = { content: [{ type: 'text', text: JSON.stringify(value) }], isError: !!(residentGrant(grant) && value && typeof value === 'object' && 'status' in value && value.status === 'conflict') };
       } catch (error) { result = { content: [{ type: 'text', text: JSON.stringify({ error: error instanceof AppError ? error.code : 'tool_failed' }) }], isError: true }; }
     } else return { jsonrpc: '2.0', id: requestId, error: { code: -32601, message: 'Method not supported' } };
     return { jsonrpc: '2.0', id: requestId, result };
   }
+  private checkGrant(grant: Grant, state: WorkspaceState = this.app.store.read()): void {
+    const current = state.grants.find(g => g.id === grant.id);
+    if (!current || current.revoked !== false || grant.revoked !== false || current.hash !== grant.hash || current.discussionId !== grant.discussionId
+      || current.participantId !== grant.participantId || current.tools.length !== grant.tools.length || current.tools.some((tool, index) => tool !== grant.tools[index]))
+      throw new AppError('mcp_authentication_required', 401);
+  }
   private async call(name: string, args: Record<string, unknown>, grant: Grant): Promise<unknown> {
-    const state = this.app.store.read(); const d = findDiscussion(state, grant.discussionId);
+    const state = this.app.store.read(); this.checkGrant(grant, state); const d = findDiscussion(state, grant.discussionId);
     if (name === 'capabilities_get') {
       const report = await this.app.capabilities(grant);
-      if (!this.app.store.read().grants.some(g => g.id === grant.id && !g.revoked && g.hash === grant.hash)) throw new AppError('mcp_authentication_required', 401);
+      this.checkGrant(grant);
       return report;
     }
     if (name === 'codex_status' || name === 'codex_result' || name === 'codex_cancel') {
       const job = state.jobs.find(j => j.id === args.jobId && j.discussionId === d.id && d.tasks.some(t => t.id === j.taskId && t.participantId === grant.participantId));
       if (!job) throw new AppError('job_not_in_scope', 403);
-      if (name === 'codex_cancel') { await this.app.codex.cancel(job.id); return { jobId: job.id, cancellationRequested: true }; }
+      if (name === 'codex_cancel') { await this.app.codex.cancel(job.id); this.checkGrant(grant); return { jobId: job.id, cancellationRequested: true }; }
       return job;
     }
     const task = d.tasks.find(t => (args.taskId ? t.id === args.taskId : ['pending', 'running'].includes(t.status)) && t.participantId === grant.participantId && t.revision === d.revision);
@@ -90,7 +101,9 @@ export class McpEndpoint {
     if (name === 'context_get') return { taskId: task.id, revision: d.revision, prompt: promptFor(d, task) };
     if (name === 'result_submit') {
       const text = string(args.text, 30_000); const requestId = string(args.requestId, 200);
-      return this.app.store.transact((s, emit) => { const current = findDiscussion(s, d.id);
+      // Store.transact may replay a receipt without invoking its callback.
+      this.checkGrant(grant);
+      return this.app.store.transact((s, emit) => { this.checkGrant(grant, s); const current = findDiscussion(s, d.id);
         if (current.revision !== d.revision) throw new AppError('revision_conflict', 409);
         const evidenceId = id('evidence'); current.evidence.push({ id: evidenceId, revision: d.revision, claimIds: task.claimIds, participantId: grant.participantId, taskId: task.id,
           kind: 'provider_report', source: `mcp:${grant.id}`, text, observedAt: now(), digest: digest(text), status: 'reported', reason: 'awaiting_verification' });
