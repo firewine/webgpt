@@ -6,6 +6,7 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { createServer } from 'node:net';
 import { createRequire } from 'node:module';
 import { promisify } from 'node:util';
+import { OUTER_BWRAP, outerIdentity } from './outer-bwrap.js';
 
 type Binding = { repoRoot: string; cwd: string };
 const execute = promisify(execFile);
@@ -73,7 +74,7 @@ export class ExecutionIsolation {
   private readonly privateDirectory: string;
   private readonly proofs = new Map<string, number>();
   private readonly ready = new Map<string, number>();
-  constructor(command: string[], protectedPaths: string[], privateDirectory: string) {
+  constructor(command: string[], protectedPaths: string[], privateDirectory: string, private readonly outerBwrap?: string) {
     this.command = [...command]; this.protectedPaths = [...protectedPaths]; this.privateDirectory = privateDirectory;
   }
   private context(binding: Binding, copyRoot?: string) {
@@ -90,7 +91,8 @@ export class ExecutionIsolation {
       if (inside(repo, copyRoot) || inside(copyRoot, repo) || inside(auth, copyRoot) || !masks.some(p => inside(p, copyRoot))) throw denied('private_copy_required');
       if (!inside(copyRoot, directory(join(copyRoot, relative(repo, cwd))))) throw denied('copy_cwd_escape');
     }
-    const cli = executable(this.command[0]!); const bwrap = executable('bwrap');
+    const cli = executable(this.command[0]!); const bwrap = this.outerBwrap ? '/usr/bin/bwrap' : executable('bwrap');
+    const outer = this.outerBwrap ? outerIdentity(this.outerBwrap) : null;
     // The npm launcher needs its own narrowly scoped runtime package inside the tool sandbox.
     const packageRoot = dirname(dirname(cli));
     const runtime = existsSync(join(packageRoot, 'package.json')) && JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')).name === '@openai/codex' ? packageRoot : dirname(cli);
@@ -101,7 +103,7 @@ export class ExecutionIsolation {
     }
     const host = ['user', 'mnt', 'pid', 'net'].map(n => readlinkSync(`/proc/self/ns/${n}`));
     const empty = join(this.privateDirectory, 'empty.config.toml');
-    const key = JSON.stringify([this.command, identity(cli), identity(bwrap), runtimes.map(identity), identity(process.execPath), existsSync(empty) ? identity(empty) : null, inode(auth), masks.map(inode), process.env.PATH, host, readFileSync('/proc/sys/kernel/random/boot_id', 'utf8')]);
+    const key = JSON.stringify([this.command, identity(cli), identity(bwrap), outer, runtimes.map(identity), identity(process.execPath), existsSync(empty) ? identity(empty) : null, inode(auth), masks.map(inode), process.env.PATH, host, readFileSync('/proc/sys/kernel/random/boot_id', 'utf8')]);
     return { repo, cwd, cli, bwrap, runtime, auth, masks, key };
   }
   private config(root: string, runtime: string, auth: string, masks = this.protectedPaths): string[] {
@@ -112,19 +114,24 @@ export class ExecutionIsolation {
     for (const p of runtimeRoots(runtime)) fs[p] = 'read';
     for (const p of masks) fs[p] = 'deny';
     const filesystem = Object.entries(fs).map(([p, access]) => `${JSON.stringify(p)}=${JSON.stringify(access)}`).join(',');
+    const path = this.outerBwrap ? `/usr/bin:/bin:${join(node, 'bin')}` : `${join(node, 'bin')}:/usr/bin:/bin`;
     return [`permissions={${this.profileId}={filesystem={${filesystem}},network={enabled=false}}}`,
       `default_permissions=${JSON.stringify(this.profileId)}`, 'approval_policy="never"', 'allow_login_shell=false',
-      `shell_environment_policy={inherit="none",include_only=[],exclude=["*"],set={PATH=${JSON.stringify(`${join(node, 'bin')}:/usr/bin:/bin`)}}}`,
+      `shell_environment_policy={inherit="none",include_only=[],exclude=["*"],set={PATH=${JSON.stringify(path)}}}`,
       'mcp_servers={}', 'plugins={}', 'hooks={}', 'notify=[]', 'apps={_default={enabled=false}}',
       'features.codex_hooks=false', 'features.hooks=false', 'features.apps=false', 'features.plugins=false', 'features.multi_agent=false',
       'features.js_repl=false', 'web_search="disabled"'].flatMap(c => ['-c', c]);
   }
   private wrap(repo: string, cwd: string, copy: string, auth: string, masks: string[], command: string[]): string[] {
     const empty = join(this.privateDirectory, 'empty.config.toml');
-    const argv = [executable('bwrap'), '--die-with-parent', '--new-session', '--unshare-pid', '--unshare-ipc', '--unshare-uts',
+    if (this.outerBwrap) outerIdentity(this.outerBwrap);
+    const argv = [this.outerBwrap ?? executable('bwrap'), '--die-with-parent', '--new-session', '--unshare-pid', '--unshare-ipc', '--unshare-uts',
       '--ro-bind', '/', '/', '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp', '--tmpfs', '/var/tmp', '--tmpfs', '/run',
       '--bind', auth, auth, '--clearenv'];
-    for (const [key, value] of Object.entries({ PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: homedir(), CODEX_HOME: auth, LANG: 'C.UTF-8' })) argv.push('--setenv', key, value);
+    // The outer executable is selected by absolute path; the inner CLI must find
+    // the reviewed stock bwrap, never a user PATH shim or this outer launcher.
+    const path = this.outerBwrap ? `/usr/bin:/bin:${dirname(process.execPath)}` : process.env.PATH ?? '/usr/bin:/bin';
+    for (const [key, value] of Object.entries({ PATH: path, HOME: homedir(), CODEX_HOME: auth, LANG: 'C.UTF-8' })) argv.push('--setenv', key, value);
     for (const p of masks) argv.push(...(statSync(p).isDirectory() ? ['--tmpfs', p] : ['--ro-bind', '/dev/null', p]));
     // Sources are resolved in the host namespace, even when the state parent is masked.
     argv.push('--bind', copy, repo);
@@ -220,7 +227,8 @@ export class ExecutionIsolation {
       // bwrap can create disposable scaffold files at denied paths. Check host canaries
       // afterward as well as read denials; a successful write must never reach the host.
       const forbidden = secrets.map(p => `if /bin/cat ${quote(p)} >/dev/null 2>&1; then exit 81; fi; (printf BAD >> ${quote(p)}) 2>/dev/null || :;`).join('\n');
-      const tool = `printf 'ISOLATION_TOOL_STARTED\\n'\nset -eu\n[ "$PWD" = ${quote(join(source, 'sub'))} ]\n[ "$(/bin/cat ../tracked)" = SANITIZED-COPY ]\nprintf COPY-EDIT > ../tracked\nprintf CREATED > new-file\n${forbidden}\nif /bin/ls /tmp >/dev/null 2>&1 || (printf BAD > /tmp/webjjoku-probe) 2>/dev/null; then exit 86; fi\n/bin/bash -c 'exit 0'\n${quote(process.execPath)} -e 'if (process.versions.node !== ${JSON.stringify(process.versions.node)}) process.exit(87)'\nif /bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/${port}' 2>/dev/null; then exit 84; fi\nprintf 'ISOLATION_READY\\n'\nread -r release\n[ ! -e ../late-secret ]\nprintf 'ISOLATION_OK\\n'`;
+      const hostGuards = this.outerBwrap ? `\nlabel=$(/bin/cat /proc/self/attr/current)\ncase "$label" in *webjjoku_outer_bwrap*) ;; *) exit 90;; esac\ncase "$label" in *unpriv_bwrap*) ;; *) exit 91;; esac\nif ${quote(OUTER_BWRAP)} --version >/dev/null 2>&1; then exit 88; fi\nif /usr/bin/unshare --user --map-root-user --mount /bin/true >/dev/null 2>&1; then exit 89; fi\n` : '';
+      const tool = `printf 'ISOLATION_TOOL_STARTED\\n'\nset -eu\n[ "$PWD" = ${quote(join(source, 'sub'))} ]\n[ "$(/bin/cat ../tracked)" = SANITIZED-COPY ]\nprintf COPY-EDIT > ../tracked\nprintf CREATED > new-file\n${forbidden}\nif /bin/ls /tmp >/dev/null 2>&1 || (printf BAD > /tmp/webjjoku-probe) 2>/dev/null; then exit 86; fi\n/bin/bash -c 'exit 0'\n${quote(process.execPath)} -e 'if (process.versions.node !== ${JSON.stringify(process.versions.node)}) process.exit(87)'\nif /bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/${port}' 2>/dev/null; then exit 84; fi\n${hostGuards}\nprintf 'ISOLATION_READY\\n'\nread -r release\n[ ! -e ../late-secret ]\nprintf 'ISOLATION_OK\\n'`;
       const inner = [cli, 'sandbox', '--include-managed-config', '-P', this.profileId, '-C', join(source, 'sub'), ...this.config(source, runtime, auth, [state, chrome, sibling]), '--', '/bin/sh', '-c', tool];
       const outer = `set -eu\n[ ! -e ${quote(join(source, '.env'))} ]\n[ "$(/bin/cat ${quote(join(auth, 'auth.json'))})" = FAKE-CANARY ]\nprintf LOG > ${quote(join(auth, 'server.log'))}\nif (printf BAD > ${quote(join(sibling, 'root-write'))}) 2>/dev/null; then exit 85; fi\nexec ${inner.map(quote).join(' ')}`;
       await this.runProbe(this.wrap(source, join(source, 'sub'), copy, auth, [state, chrome], ['/bin/sh', '-c', outer]), base, async () => {

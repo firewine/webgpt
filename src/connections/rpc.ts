@@ -11,7 +11,7 @@ export class RpcProcess {
   onNotification: (method: string, params: Record<string, unknown>) => void = () => {};
   onRequest: (id: RpcId, method: string, params: Record<string, unknown>) => void = id => this.respond(id, null, { code: -32601, message: 'Unsupported request' });
   onClose: () => void = () => {};
-  constructor(private readonly command: string[], private readonly cwd?: string, private readonly jsonrpc = true) {}
+  constructor(private readonly command: string[], private readonly cwd?: string, private readonly jsonrpc = true, private readonly environment?: NodeJS.ProcessEnv) {}
   start(): void {
     if (this.child) return;
     const executable = this.command[0]; if (!executable) throw new AppError('command_not_configured', 409);
@@ -19,6 +19,7 @@ export class RpcProcess {
     for (const key of ['PATH', 'HOME', 'USER', 'LOGNAME', 'DISPLAY', 'XAUTHORITY', 'LANG', 'LC_ALL', 'XDG_RUNTIME_DIR', 'XDG_CONFIG_HOME', 'CODEX_HOME']) {
       if (process.env[key] !== undefined) env[key] = process.env[key];
     }
+    if (this.environment) { for (const key of Object.keys(env)) delete env[key]; Object.assign(env, this.environment); }
     const child = spawn(executable, this.command.slice(1), { ...(this.cwd ? { cwd: this.cwd } : {}), env, shell: false, stdio: 'pipe' });
     this.child = child; this.buffer = ''; const decoder = new StringDecoder('utf8');
     child.stderr.resume(); // do not forward provider/terminal secrets to the application's logs.

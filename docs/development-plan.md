@@ -2,6 +2,8 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
+**2026-11-07 R6 AppArmor 전용 예외 승인·호스트 보호 PASS:** PR #57 병합 main `436fbc4` 뒤 사용자가 “예외 승인”으로 [전용 실행기/호스트 정책·R6 검증 영향안](./reviews/r6-apparmor-impact-20261107.md)을 허용했다. 전역 sysctl/stock bwrap 정책·운영 DB/방을 유지하며 root 소유 전용 외부 실행기/프로필을 설치했고, 실제 결합 보호1건 PASS/0 SKIP을 확인했다. 신뢰된 App Server 단계에 namespace capability 예외가 생기며 최종 모델 도구의 기존 capability/파일/네트워크 제한을 실제 검사했다. 원래8페이즈/50 gate·추가 보호 권한 ACCEPT 차단을 유지한다. R6 최대2job/30분 계획의 무호출 선행 검사에서 빈 thread의 cold read/resume 실패와 built-in readonly의 가짜 auth 파일 읽기 가능을 관측해 실제 모델 요청0을 유지했다. **R6-F 실세션 수락은 미완료**이며, 읽기 범위·세션 준비 보완은 영향/변경량 보고와 승인 후 진행한다. [실제 검사·미완료·복귀](./implementation/r6-apparmor-20261107.md).
+
 **상태 정리 시점: 2026-11-05, 코드 main `4ca2ffb5b24778f2d080b24033410d38e5513dd8` (PR #50 병합). 추천1 구현 기준: PR #51 병합 `e717340375165e8dbef65181159341fc9bded18e`.** 코드 구현·자동 검사와 실제 계정/기기 수락을 분리한다. 상태 정리는 기존 구현/관측 사실을 맞춘 것이며 페이즈 순서·기존 50 gate·API/권한/예산/복구 계약을 바꾸지 않는다. 추천1·2의 승인·구현 상태는 바로 아래 기록을 따르며 나머지 추천은 승인 전 제안이다.
 
 **2026-11-05 추천1 개발 승인:** 사용자가 “1번 개발 승인”으로 [주제 결론→Wiki→다음 발화 제안](./reviews/next-development-recommendation-20261105.md#3-우선순위1의-최소-변경안--승인)을 승인했다. R7/R8 보완으로 방에 명시 연결된 새 토론의 공개 completed/partial 결과를 기존 Wiki/Store/SSE에 한 번 기록하고 다음 입력에서 인용한다. 생성 시의 방 epoch·참여/문맥 범위와 게시 상태만 기존 JSON의 optional metadata로 고정해 off/권한 회수·옛 revision/generation의 무단 게시를 막는다. 새 SQL/인증/모델 호출·source kind·endpoint·과거 일괄 이관·자동 검증 승격은 추가하지 않는다. 원래8페이즈/50 gate와 R6 쓰기 차단을 유지하며 추천2~후속 개발·실계정 호출/배포는 별도다. 예상12~16파일·500~900줄, 구현/검사 결과는 [기록](./implementation/topic-wiki-20261105.md)을 따른다.

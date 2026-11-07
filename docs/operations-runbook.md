@@ -324,6 +324,29 @@ GPT의 `response_not_completed`는 정상 완료 응답을 받지 못했다는 �
 
 ## 7. 실환경 완료 판정
 
+### R6 전용 AppArmor 예외 — 명시 설치·검사·복구
+
+2026-11-07 사용자가 [영향안](./reviews/r6-apparmor-impact-20261107.md)의 전용 예외를 승인했다. stock bwrap의 자식 capability 거절 때문에 외부 사본 경계 안에서 Codex가 내부 격리를 준비하지 못하는 경우에만 사용한다. 신뢰된 App Server의 namespace capability 예외가 추가되며 최종 모델 도구의 capability 거절·파일/네트워크 제한은 실제로 재검증한다. 전역 sysctl·stock 프로필을 완화하거나 검사 실패를 무시하지 않는다.
+
+설치 도구는 root 소유 패키지/정책·고정 경로·보호된 부모·템플릿 digest를 확인하고 전용 파일2개만 추가한다. 기존 대상이 있으면 덮어쓰지 않는다. Ubuntu의 checksum 검증된 Rust coreutils 실행 파일 하드링크만 읽기 용도로 허용하며, 새 binary/정책 파일의 링크는 허용하지 않는다. 설치/제거에는 관리자 인증이 필요하다. 아래 경로는 현재 호스트의 실제 검토 경로이며 다른 호스트에서 추정해 재사용하지 않는다.
+
+```bash
+sudo /home/firewine/.nvm/versions/node/v24.18.0/bin/node /home/firewine/webgpt-worktrees/r6-apparmor/scripts/execution-isolation-host.mjs install
+```
+
+`install`을 `check`로 바꾸면 설치 파일과 enforce 상태를 대조한다. 이 PASS는 실행 보호 PASS가 아니다. 패키지가 업데이트돼 전용 binary와 바이트가 달라지거나 정책 revision/identity가 바뀌면 기존 proof를 재사용하지 않는다. `WJ_OUTER_BWRAP=/usr/local/libexec/webjjoku/bwrap`은 검토된 별도 검증 인스턴스에만 설정한다. 설치 디렉터리를 PATH에 추가하지 않으며, 내부 CLI는 시스템 bwrap을 선택해야 한다. 실제 서비스 설정은 PR 병합/배포 범위 확인 없이 변경하지 않는다.
+
+```bash
+npm run build
+WJ_TEST_OUTER_BWRAP=/usr/local/libexec/webjjoku/bwrap \
+  setpriv --no-new-privs node --test --test-reporter=spec \
+  --test-name-pattern='full runtime proof is mandatory' tests/execution-isolation.test.mjs
+```
+
+합성 검사는 실제 모델/사용자 thread/실제 credential을 사용하지 않는다. 최종 도구 label의 `unpriv_bwrap`·전용 launcher 재실행 거절·namespace 재획득 거절과 기존 source/state/auth/Chrome/proc/fd/tmp/network canary가 함께 통과해야 한다. SKIP은 보호 성공이 아니며 WRITE gate를 유지한다. 운영처럼 unconfined/NoNewPrivileges 조건에서 확인한다. 다른 개발 격리 label이 이미 붙어 있으면 전용 예외만으로 그 제한을 제거하지 않는다.
+
+복구는 새 job 준비를 중단하고 기존 running/approval/reconciling/applying/미확정을 원래 ID로 대조한 뒤 권한을 회수해 수행한다. `install`을 `remove`로 바꾸면 진행 중 전용 label/프로세스0을 확인하고 전용 프로필만 unload한 뒤 추가 파일을 제거한다. 다른 AppArmor 프로필/stock binary/전역 설정은 바꾸지 않는다. 패키지/설치 파일이 달라졌으면 제거도 중단하므로 원문·설치 결과를 보존하고 관리자 검토한다. 원래 설정에서 proof가 실패하면 쓰기는 다시 차단된다. `.env`·DB/원문/사본·key·Chrome은 삭제하거나 과거 backup으로 덮어쓰지 않는다.
+
 아래가 모두 실제 증거를 갖추기 전에는 MVP-1/2를 PASS로 바꾸지 않는다.
 
 - Ubuntu 버전·사용자·Node/Chrome/Codex/Tailscale 버전·경로와 private HTTPS 8443(선택 포트), 인증서·접근 제한·noVNC 입력.

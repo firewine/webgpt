@@ -3,9 +3,10 @@ import { ExecutionEvidenceStore } from './evidence-store.js';
 import { OutputPreview, redactOutput, safeOutput } from './output-policy.js';
 import { ProtectedWorkspaces } from './workspace-protection.js';
 import { ExecutionIsolation } from './isolation.js';
+import { isolationEnvironment, outerIdentity } from './outer-bwrap.js';
 import { realpath } from 'node:fs/promises';
-import { relative, isAbsolute, join } from 'node:path';
-import { hostname, userInfo } from 'node:os';
+import { relative, isAbsolute, join, dirname } from 'node:path';
+import { hostname, userInfo, homedir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { RpcProcess } from '../connections/rpc.js';
@@ -21,6 +22,7 @@ export class CodexExecutor {
   readonly evidence: ExecutionEvidenceStore;
   readonly workspaces: ProtectedWorkspaces;
   private readonly isolation: ExecutionIsolation;
+  private readonly outerBwrap: string | undefined;
   private readonly previews = new Map<string, OutputPreview>();
   private readonly applying = new Set<string>();
   private readonly draftsFinishing = new Set<string>();
@@ -38,13 +40,14 @@ export class CodexExecutor {
     if (!this.workScopeGuard) throw new AppError('work_execution_guard_required', 409);
     this.workScopeGuard(state, job, phase);
   }
-  constructor(private readonly store: Store, private readonly command: string[], private readonly roots: string[], private readonly protectedPaths: string[] = [], options: { secrets?: () => string[] } = {}) {
+  constructor(private readonly store: Store, private readonly command: string[], private readonly roots: string[], private readonly protectedPaths: string[] = [], options: { secrets?: () => string[]; outerBwrap?: string } = {}) {
     initializeExecutionProtection(this.store.read());
     if (this.store.read().executionProtectionVersion === undefined) this.store.transact(initializeExecutionProtection);
     this.secrets = options.secrets ?? (() => []);
     this.evidence = new ExecutionEvidenceStore(join(store.directory, 'execution-evidence'), this.secrets);
     this.workspaces = new ProtectedWorkspaces(join(store.directory, 'execution-drafts'));
-    this.isolation = new ExecutionIsolation(command, protectedPaths, join(store.directory, 'execution-probes'));
+    this.outerBwrap = options.outerBwrap;
+    this.isolation = new ExecutionIsolation(command, protectedPaths, join(store.directory, 'execution-probes'), options.outerBwrap);
     this.watchdog = setInterval(() => this.expire(), 1000); this.watchdog.unref();
   }
   recover(): void {
@@ -81,6 +84,7 @@ export class CodexExecutor {
       const manifest = await this.workspaces.prepare(registrationDraftId, binding);
       await this.verifyProtection(binding, manifest.copyRoot); binding.protection = { version: 1, status: 'ready', reason: null };
     }
+    else if (this.outerBwrap) await this.isolation.verify(binding);
     const rpc = await this.connect(binding, registrationDraftId);
     try {
       const result = object(await rpc.request('thread/read', { threadId: binding.threadId, includeTurns: false }));
@@ -141,6 +145,7 @@ export class CodexExecutor {
     assertJobAuthority(this.store.read(), job);
     const currentRepo = await gitIdentity(binding.cwd);
     if (currentRepo.repoRoot !== binding.repoRoot || currentRepo.branch !== binding.branch) throw new AppError('workspace_changed', 409);
+    if (this.outerBwrap && !binding.allowWrite) await this.isolation.verify(binding);
     if (binding.allowWrite) {
       this.store.transact(s => { s.jobs.find(j => j.id === job.id)!.draft = { version: 1, status: 'preparing' }; });
       const manifest = await this.workspaces.prepare(job.id, binding);
@@ -191,8 +196,10 @@ export class CodexExecutor {
   private async connectOnce(binding: ExecutionBinding, draftJobId?: string): Promise<RpcProcess> {
     // A private PID namespace and procfs prevent reaching masked host paths
     // through another host process’s /proc/<pid>/root or open descriptors.
-    const command = draftJobId ? this.isolation.commandFor(binding, this.workspaces.manifest(draftJobId).copyRoot) : this.protectedPaths.length ? ['bwrap', '--die-with-parent', '--new-session', '--unshare-pid', '--bind', '/', '/', '--proc', '/proc', ...this.protectedPaths.flatMap(path => ['--tmpfs', path]), '--', ...this.command] : this.command;
-    const rpc = new RpcProcess(command, binding.cwd, false);
+    if (this.outerBwrap) outerIdentity(this.outerBwrap);
+    const command = draftJobId ? this.isolation.commandFor(binding, this.workspaces.manifest(draftJobId).copyRoot) : this.protectedPaths.length ? [this.outerBwrap ?? 'bwrap', '--die-with-parent', '--new-session', '--unshare-pid', '--bind', '/', '/', '--proc', '/proc', ...this.protectedPaths.flatMap(path => ['--tmpfs', path]), '--', ...this.command] : this.command;
+    const environment = draftJobId ? isolationEnvironment() : this.outerBwrap ? { ...isolationEnvironment(), PATH: `/usr/bin:/bin:${dirname(process.execPath)}`, HOME: homedir(), CODEX_HOME: process.env.CODEX_HOME ?? join(homedir(), '.codex') } : undefined;
+    const rpc = new RpcProcess(command, binding.cwd, false, environment);
     rpc.onNotification = (method, params) => this.notification(binding.id, method, params);
     rpc.onRequest = (requestId, method, params) => this.approval(binding.id, rpc, requestId, method, params);
     rpc.onClose = () => {

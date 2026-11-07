@@ -5,7 +5,7 @@ export interface WorkspaceConfig {
   stateDir: string; origin: string; accessToken: string | undefined; turnTimeoutMs: number;
   chromeCommand: string[] | null; codexCommand: string[]; workspaceRoots: string[];
   noVncPort: number | null; sourceFetch: boolean; oauthPort: number;
-  chromeProfileDir: string; materialRoots: string[]; residentEnabled: boolean;
+  chromeProfileDir: string; materialRoots: string[]; residentEnabled: boolean; outerBwrap?: string;
 }
 export function loadWorkspaceConfig(env: NodeJS.ProcessEnv = process.env): WorkspaceConfig {
   const errors: string[] = [];
@@ -45,7 +45,9 @@ export function loadWorkspaceConfig(env: NodeJS.ProcessEnv = process.env): Works
   if (env.WJ_SOURCE_FETCH && !['true', 'false'].includes(env.WJ_SOURCE_FETCH)) errors.push('WJ_SOURCE_FETCH');
   const residentEnabled = env.WJ_RESIDENT_ENABLED ?? 'false';
   if (!['true', 'false'].includes(residentEnabled)) errors.push('WJ_RESIDENT_ENABLED');
+  const outerBwrap = env.WJ_OUTER_BWRAP;
+  if (outerBwrap !== undefined && outerBwrap !== '/usr/local/libexec/webjjoku/bwrap') errors.push('WJ_OUTER_BWRAP');
   if (errors.length) throw new ConfigError(errors);
   return { stateDir, origin, accessToken: env.WJ_ACCESS_TOKEN, turnTimeoutMs, chromeCommand: chrome.length ? chrome : null,
-    codexCommand, workspaceRoots, noVncPort, sourceFetch: env.WJ_SOURCE_FETCH === 'true', oauthPort, chromeProfileDir, materialRoots, residentEnabled: residentEnabled === 'true' };
+    codexCommand, workspaceRoots, noVncPort, sourceFetch: env.WJ_SOURCE_FETCH === 'true', oauthPort, chromeProfileDir, materialRoots, residentEnabled: residentEnabled === 'true', ...(outerBwrap ? { outerBwrap } : {}) };
 }

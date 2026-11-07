@@ -1,5 +1,7 @@
 # 웹쫀쿠 개발 실행 순서
 
+> **2026-11-07 R6 전용 예외 승인:** [AppArmor 영향·변경량](./reviews/r6-apparmor-impact-20261107.md)의 A 실행기 identity/선택 → B root 소유 전용 정책·합성 결합 proof → C 별도 환경의 실제 Codex 최대2job/30분 순서로 보완한다. 실제 증거 전 R6-F를 PASS로 바꾸지 않는다. 전역 제한·최종 모델 도구 경계·기존 운영 상태·원래 단계/gate를 유지한다.
+
 > **2026-11-07 추천3 승인:** [보호 작업 사본·1파일 명시 반영/권한 수명·private 원문](./adr/0002-protected-execution.md)을 기존 R6/R8에 추가한다. 기본24시간·최대7일, legacy 재발급/등록, job별 권한 검사·비가림 owner 페이지 조회와 미확정 보존을 사용한다. 보호 검사/도구 지원 실패 시 기존 쓰기 차단을 유지하며 원래50 gate·단일 writer·예산/승인·dot/Muse는 유지한다. 실계정 실행·운영 적용·Git 자동화·여러 파일 반영은 제외한다. 실제 상태는 [SSOT](./development-plan.md)를 따른다.
 
 

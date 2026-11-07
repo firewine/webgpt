@@ -7,8 +7,9 @@ import { join } from 'node:path';
 import { createServer } from 'node:net';
 import { promisify } from 'node:util';
 import { existsSync } from 'node:fs';
-// Standalone Node 24 tests: no shared executor build or model/session fixture.
-import { ExecutionIsolation } from '../src/execution/isolation.ts';
+// Synthetic only: no model or user-session fixture. Build before standalone use.
+import { ExecutionIsolation } from '../dist/server/execution/isolation.js';
+import { isolationEnvironment, outerIdentity } from '../dist/server/execution/outer-bwrap.js';
 const run = promisify(execFile);
 const sh = s => `'${s.replaceAll("'", "'\\''")}'`;
 const available = name => (process.env.PATH ?? '').split(':').filter(Boolean).some(p => existsSync(join(p, name)));
@@ -29,8 +30,18 @@ async function fixture(t, command = ['codex', 'app-server']) {
   const previous = process.env.CODEX_HOME; process.env.CODEX_HOME = auth;
   t.after(async () => { if (previous === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = previous; await rm(base, { recursive: true, force: true }); });
   return { base, source, state, copy, auth, chrome, binding: { repoRoot: source, cwd: join(source, 'sub') },
-    isolation: new ExecutionIsolation(command, [state, chrome], join(state, 'probes')) };
+    isolation: new ExecutionIsolation(command, [state, chrome], join(state, 'probes'), process.env.WJ_TEST_OUTER_BWRAP) };
 }
+test('outer helper rejects caller-selected paths and inherits no loader/preload environment', async t => {
+  const f = await fixture(t); const path = join(f.base, 'bwrap');
+  await symlink('/usr/bin/bwrap', path);
+  for (const p of [path, '/usr/bin/bwrap', '/tmp/bwrap', 'bwrap']) assert.throws(() => outerIdentity(p), /outer_fixed_path_required/);
+  const iso = new ExecutionIsolation(['codex', 'app-server'], [f.state], join(f.state, 'probes'), path);
+  await assert.rejects(iso.verify(f.binding, f.copy), /outer_fixed_path_required/);
+  assert.throws(() => iso.commandFor(f.binding, f.copy), /verify_copy_required/);
+  assert.deepEqual(isolationEnvironment(), { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' });
+  assert.ok(iso.config(f.source, '/usr/bin', f.auth).some(arg => arg.includes('PATH="/usr/bin:/bin:')));
+});
 test('requires canonical, separate private copies and refuses an unverified launch', async t => {
   const f = await fixture(t);
   assert.equal(f.isolation.profileId, 'webjjoku_copy');

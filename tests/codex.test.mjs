@@ -13,6 +13,16 @@ import { DispatchCoordinator } from '../dist/server/workspace/dispatch.js';
 import { budget, pacing } from './resident-fixture.mjs';
 import { storage, until, topic, response } from './workspace-helpers.mjs';
 const script = fileURLToPath(new URL('fixtures/codex-rpc.mjs', import.meta.url));
+test('protected RPC launch replaces inherited runtime configuration before executing the launcher', async t => {
+  const { RpcProcess } = await import('../dist/server/connections/rpc.js');
+  const { isolationEnvironment } = await import('../dist/server/execution/outer-bwrap.js');
+  const previous = process.env.XDG_CONFIG_HOME; process.env.XDG_CONFIG_HOME = '/private-caller-config';
+  t.after(() => { if (previous === undefined) delete process.env.XDG_CONFIG_HOME; else process.env.XDG_CONFIG_HOME = previous; });
+  const program = `process.stdin.once('data', bytes => { const request=JSON.parse(String(bytes)); process.stdout.write(JSON.stringify({id:request.id,result:{path:process.env.PATH,xdg:process.env.XDG_CONFIG_HOME??null,home:process.env.HOME??null}})+'\\n'); });`;
+  const rpc = new RpcProcess([process.execPath, '-e', program], undefined, false, isolationEnvironment());
+  t.after(() => rpc.close());
+  assert.deepEqual(await rpc.request('environment', {}, 2000), { path: '/usr/bin:/bin', xdg: null, home: null });
+});
 async function fixture(t, mode = 'normal') {
   let codex;
   // Node runs after hooks in registration order. Stop the watchdog before the
