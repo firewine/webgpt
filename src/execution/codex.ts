@@ -84,7 +84,9 @@ export class CodexExecutor {
       const manifest = await this.workspaces.prepare(registrationDraftId, binding);
       await this.verifyProtection(binding, manifest.copyRoot); binding.protection = { version: 1, status: 'ready', reason: null };
     }
-    else if (this.outerBwrap) await this.isolation.verify(binding);
+    // The combined canary proves the named write profile, not legacy broad read.
+    // Do not let the new host exception expose the trusted server's auth to tools.
+    else if (this.outerBwrap) throw new AppError('protected_readonly_profile_required', 409);
     const rpc = await this.connect(binding, registrationDraftId);
     try {
       const result = object(await rpc.request('thread/read', { threadId: binding.threadId, includeTurns: false }));
@@ -97,6 +99,7 @@ export class CodexExecutor {
   submit(input: { bindingId: string; prompt: string; requestId: string; discussionId?: string | null; taskId?: string | null; revision?: number | null; maxDurationMs?: number; grantId?: string }): string {
     const preflight = this.store.read(); const denied = bindingReason(preflight.bindings.find(b => b.id === input.bindingId));
     if (denied) throw new AppError(denied, 409);
+    if (this.outerBwrap && preflight.bindings.some(b => b.id === input.bindingId && !b.allowWrite)) throw new AppError('protected_readonly_profile_required', 409);
     if (input.grantId) { const grant = preflight.grants.find(g => g.id === input.grantId); if (!grant || grant.revoked || authorityReason(grant.authority)) throw new AppError('execution_grant_revoked_or_changed', 409); }
     const cached = this.store.readCommand<string>('codex:' + input.requestId, input);
     if (cached.found) { const previous = preflight.jobs.find(j => j.id === cached.result); if (!previous) throw new AppError('execution_job_missing', 409); assertJobAuthority(preflight, previous); this.kick(); return previous.id; }
@@ -145,7 +148,7 @@ export class CodexExecutor {
     assertJobAuthority(this.store.read(), job);
     const currentRepo = await gitIdentity(binding.cwd);
     if (currentRepo.repoRoot !== binding.repoRoot || currentRepo.branch !== binding.branch) throw new AppError('workspace_changed', 409);
-    if (this.outerBwrap && !binding.allowWrite) await this.isolation.verify(binding);
+    if (this.outerBwrap && !binding.allowWrite) throw new AppError('protected_readonly_profile_required', 409);
     if (binding.allowWrite) {
       this.store.transact(s => { s.jobs.find(j => j.id === job.id)!.draft = { version: 1, status: 'preparing' }; });
       const manifest = await this.workspaces.prepare(job.id, binding);

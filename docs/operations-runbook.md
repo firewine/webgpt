@@ -336,6 +336,8 @@ sudo /home/firewine/.nvm/versions/node/v24.18.0/bin/node /home/firewine/webgpt-w
 
 `install`을 `check`로 바꾸면 설치 파일과 enforce 상태를 대조한다. 이 PASS는 실행 보호 PASS가 아니다. 패키지가 업데이트돼 전용 binary와 바이트가 달라지거나 정책 revision/identity가 바뀌면 기존 proof를 재사용하지 않는다. `WJ_OUTER_BWRAP=/usr/local/libexec/webjjoku/bwrap`은 검토된 별도 검증 인스턴스에만 설정한다. 설치 디렉터리를 PATH에 추가하지 않으며, 내부 CLI는 시스템 bwrap을 선택해야 한다. 실제 서비스 설정은 PR 병합/배포 범위 확인 없이 변경하지 않는다.
 
+전용 모드의 기존 broad readonly는 인증 파일 차단이 검증되지 않아 `protected_readonly_profile_required`로 차단된다. 쓰기 profile의 proof PASS로 readonly의 보호를 대신하지 않는다. 실제 readonly 검증은 후속 최소 profile 보완 이후 수행하며, 단지 이 오류를 없애려고 전용 설정을 제거해 실계정을 재호출하지 않는다.
+
 ```bash
 npm run build
 WJ_TEST_OUTER_BWRAP=/usr/local/libexec/webjjoku/bwrap \
