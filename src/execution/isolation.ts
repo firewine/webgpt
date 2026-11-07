@@ -4,6 +4,7 @@ import { chmod, mkdir, mkdtemp, open, readFile, readdir, rm, writeFile } from 'n
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { createServer } from 'node:net';
+import { createRequire } from 'node:module';
 import { promisify } from 'node:util';
 
 type Binding = { repoRoot: string; cwd: string };
@@ -28,6 +29,26 @@ function executable(name: string): string {
   const path = isAbsolute(name) ? name : (process.env.PATH ?? '').split(':').filter(Boolean).map(p => join(p, name)).find(p => existsSync(p));
   if (!path) throw denied('executable_missing');
   return realpathSync(path);
+}
+function runtimeRoots(runtime: string): string[] {
+  const metadata = join(runtime, 'package.json');
+  const launcher = existsSync(metadata) ? JSON.parse(readFileSync(metadata, 'utf8')) as Record<string, unknown> : null;
+  if (launcher?.name !== '@openai/codex') return [runtime];
+  const platformPackage = process.arch === 'x64' ? '@openai/codex-linux-x64' : process.arch === 'arm64' ? '@openai/codex-linux-arm64' : null;
+  if (!platformPackage) throw denied('unsupported_native_platform');
+  let nativeMetadata: string;
+  try { nativeMetadata = createRequire(metadata).resolve(platformPackage + '/package.json'); }
+  catch {
+    if (existsSync(join(runtime, 'vendor'))) return [runtime];
+    throw denied('native_runtime_missing');
+  }
+  // Only resolution failure can use the launcher's legacy vendor fallback.
+  const native = JSON.parse(readFileSync(nativeMetadata, 'utf8')) as Record<string, unknown>;
+  // Current npm optional dependencies are aliases of the platform-tagged codex package.
+  const aliased = native.name === '@openai/codex' && native.version === `${launcher.version}-linux-${process.arch}` &&
+    Array.isArray(native.os) && native.os.includes('linux') && Array.isArray(native.cpu) && native.cpu.includes(process.arch);
+  if (native.name !== platformPackage && !aliased) throw denied('native_package_identity');
+  return [...new Set([runtime, directory(realpathSync(dirname(nativeMetadata)))])];
 }
 function identity(path: string): string {
   const s = statSync(path); return `${path}:${s.dev}:${s.ino}:${s.size}:${s.mtimeMs}:${s.ctimeMs}`;
@@ -73,11 +94,14 @@ export class ExecutionIsolation {
     // The npm launcher needs its own narrowly scoped runtime package inside the tool sandbox.
     const packageRoot = dirname(dirname(cli));
     const runtime = existsSync(join(packageRoot, 'package.json')) && JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')).name === '@openai/codex' ? packageRoot : dirname(cli);
-    if (runtime === '/' || runtime === homedir() || inside(repo, runtime) || inside(runtime, repo)) throw denied('unsafe_cli_runtime');
-    if (copyRoot && (inside(runtime, copyRoot) || inside(copyRoot, runtime))) throw denied('private_copy_required');
+    const runtimes = runtimeRoots(runtime);
+    for (const path of runtimes) {
+      if (path === '/' || path === homedir() || inside(repo, path) || inside(path, repo) || inside(auth, path) || inside(path, auth) || masks.some(mask => inside(mask, path) || inside(path, mask))) throw denied('unsafe_cli_runtime');
+      if (copyRoot && (inside(path, copyRoot) || inside(copyRoot, path))) throw denied('private_copy_required');
+    }
     const host = ['user', 'mnt', 'pid', 'net'].map(n => readlinkSync(`/proc/self/ns/${n}`));
     const empty = join(this.privateDirectory, 'empty.config.toml');
-    const key = JSON.stringify([this.command, identity(cli), identity(bwrap), identity(runtime), identity(process.execPath), existsSync(empty) ? identity(empty) : null, inode(auth), masks.map(inode), process.env.PATH, host, readFileSync('/proc/sys/kernel/random/boot_id', 'utf8')]);
+    const key = JSON.stringify([this.command, identity(cli), identity(bwrap), runtimes.map(identity), identity(process.execPath), existsSync(empty) ? identity(empty) : null, inode(auth), masks.map(inode), process.env.PATH, host, readFileSync('/proc/sys/kernel/random/boot_id', 'utf8')]);
     return { repo, cwd, cli, bwrap, runtime, auth, masks, key };
   }
   private config(root: string, runtime: string, auth: string, masks = this.protectedPaths): string[] {
@@ -85,6 +109,7 @@ export class ExecutionIsolation {
     const node = dirname(dirname(realpathSync(process.execPath)));
     if (node === '/' || node === homedir()) throw denied('unsafe_node_runtime');
     const fs: Record<string, string> = { ':root': 'deny', ':minimal': 'read', ':tmpdir': 'deny', ':slash_tmp': 'deny', [runtime]: 'read', [node]: 'read', [auth]: 'deny', [root]: 'write' };
+    for (const p of runtimeRoots(runtime)) fs[p] = 'read';
     for (const p of masks) fs[p] = 'deny';
     const filesystem = Object.entries(fs).map(([p, access]) => `${JSON.stringify(p)}=${JSON.stringify(access)}`).join(',');
     return [`permissions={${this.profileId}={filesystem={${filesystem}},network={enabled=false}}}`,

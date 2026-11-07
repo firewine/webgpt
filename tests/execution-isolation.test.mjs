@@ -128,3 +128,24 @@ test('full runtime proof is mandatory; no successful version/schema-only fallbac
   await f.isolation.verify(f.binding, f.copy);
   assert.equal(await readFile(join(f.copy, 'continued'), 'utf8'), 'CONTINUE');
 });
+
+test('npm native Codex package is readable without granting its parent dependencies or unrelated secrets', async t => {
+  const f = await fixture(t); const packages = join(f.base, 'packages', '@openai');
+  const runtime = join(packages, 'codex'); const nativeName = process.arch === 'arm64' ? 'codex-linux-arm64' : 'codex-linux-x64'; const native = join(packages, nativeName);
+  await mkdir(runtime, { recursive: true }); await mkdir(native, { recursive: true });
+  await writeFile(join(runtime, 'package.json'), JSON.stringify({ name: '@openai/codex', version: 'fixture' }));
+  await writeFile(join(native, 'package.json'), JSON.stringify({ name: '@openai/' + nativeName, version: 'fixture' }));
+  // npm resolution walks node_modules, even when the wrapper and native package are siblings.
+  const modules = join(f.base, 'packages', 'node_modules', '@openai'); await mkdir(modules, { recursive: true });
+  await symlink(native, join(modules, nativeName));
+  const args = f.isolation.config(f.source, runtime, f.auth); const permissions = args.find(a => a.startsWith('permissions='));
+  assert.ok(permissions.includes(JSON.stringify(native) + '="read"'));
+  assert.ok(permissions.includes(JSON.stringify(runtime) + '="read"'));
+  assert.ok(!permissions.includes(JSON.stringify(packages) + '="read"'));
+  assert.ok(permissions.includes(JSON.stringify(f.auth) + '="deny"'));
+  assert.ok(permissions.includes(JSON.stringify(f.state) + '="deny"'));
+  await writeFile(join(native, 'package.json'), JSON.stringify({ name: '@openai/codex', version: 'fixture-linux-' + process.arch, os: ['linux'], cpu: [process.arch] }));
+  assert.ok(f.isolation.config(f.source, runtime, f.auth).some(a => a.includes(JSON.stringify(native) + '="read"')));
+  await mkdir(join(runtime, 'vendor')); await writeFile(join(native, 'package.json'), JSON.stringify({ name: 'wrong-package' }));
+  assert.throws(() => f.isolation.config(f.source, runtime, f.auth), /native_package_identity/);
+});

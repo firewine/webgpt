@@ -52,7 +52,7 @@
 | 접속 기준 | Tailscale이 설치·연결되고 접근이 허용된 기기의 웹 브라우저; 태블릿은 예시 |
 | 개발 순서 | R1 additive 데이터 → R2 공통 dispatch/상주·topic → R3 기존 control 개조 → R4 연결 UX → R5 큐 → R6 기존 실행/보고 → R7 Wiki/MCP → R8 수락 |
 
-**2026-11-07 추천3 구현·자동 검사 / 실환경 쓰기 보류:** PR #55 병합 `f3384cc` 기준의 기존 MCP 회수 오류 수정 PR #56의 병합 `6526279`를 확인했다. 사용자가 [권장 영향안](./reviews/execution-protection-impact-20261107.md)의 “보호 사본·명시 반영까지 개발 승인”을 허용했다. 일반 grant/Codex binding 기본24시간·최대7일, legacy 재발급/등록, private 원문·owner 분할 조회, 비밀/링크를 제외한 보호 사본 실행과 실제 diff 확인 후 기존 텍스트1파일 명시 반영을 기존 R6/R8에 추가한다. 기존 토론/큐/Wiki·단일 실행·승인·미확정/예산 경계는 유지한다. 보호 검사 실패/미지원 시 쓰기를 차단하며 실계정 실행·운영 적용·Git 자동 commit/push/merge·여러 파일 반영은 제외한다. 로컬735건 중734 PASS/실패0/결합 namespace1 SKIP이다. 검증 환경 AppArmor 제한 때문에 전체 쓰기 보호는 미검증이며 gate를 유지한다. 실제 사용자 Codex 작업/운영 적용을 수행하지 않아 전체 추천3/R6 실수락 완료는 아니다. [수정·검사·미검증](./implementation/execution-protection-20261107.md).
+**2026-11-07 추천3 구현·자동 검사 / 실환경 쓰기 보류:** PR #55 병합 `f3384cc` 기준의 기존 MCP 회수 오류 수정 PR #56의 병합 `6526279`를 확인했다. 사용자가 [권장 영향안](./reviews/execution-protection-impact-20261107.md)의 “보호 사본·명시 반영까지 개발 승인”을 허용했다. 일반 grant/Codex binding 기본24시간·최대7일, legacy 재발급/등록, private 원문·owner 분할 조회, 비밀/링크를 제외한 보호 사본 실행과 실제 diff 확인 후 기존 텍스트1파일 명시 반영을 기존 R6/R8에 추가한다. 기존 토론/큐/Wiki·단일 실행·승인·미확정/예산 경계는 유지한다. 보호 검사 실패/미지원 시 쓰기를 차단하며 실계정 실행·운영 적용·Git 자동 commit/push/merge·여러 파일 반영은 제외한다. 로컬736건 중735 PASS/실패0/결합 namespace1 SKIP이다. 검증 환경 AppArmor 제한 때문에 전체 쓰기 보호는 미검증이며 gate를 유지한다. 실제 사용자 Codex 작업/운영 적용을 수행하지 않아 전체 추천3/R6 실수락 완료는 아니다. [수정·검사·미검증](./implementation/execution-protection-20261107.md).
 
 ## 1. 제품과 문서의 범위
 

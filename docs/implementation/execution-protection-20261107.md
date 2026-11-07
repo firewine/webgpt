@@ -36,15 +36,15 @@
 - UI7개: 만료/legacy/회수, explicit raw 페이지/범위·원본 확인, stale diff·토의 변경·일회 반영, 보호 승인 경계·1380/390px. 모의 HTTP만 사용.
 - 통합: 만료/회수 dispatch0, 원문 손상 수락0, 실제 단일파일 diff/반영·Store intent/receipt, 동일 command의 다른 저장소 동시 반영 차단, remote terminal 뒤 draft inspection만 복구, 적용 뒤 receipt 유실은 unconfirmed. 강제 종료 뒤 terminal snapshot으로 원문 gap을 덮지 않는다.
 
-최종 로컬 `npm run check`: strict TypeScript/빌드·Node **735건 중734 PASS, FAIL0, SKIP1**. 기존 전체 검사와 신규 권한/원문/사본/복구를 함께 실행했다. 브라우저 전체84건 중83 PASS 뒤1건의 중복 문구 선택자만 수정했고, 해당 파일4건 재검사는 모두 PASS다. 앱 소스 변경 없이 화면의 경고 문구와 보관 JSON을 구분해 선택했다. 설치 Codex0.166.0의 기존 요청 계약 검사도 PASS이며 로그인/thread/model turn은0이다.
+최종 로컬 `npm run check`: strict TypeScript/빌드·Node **736건 중735 PASS, FAIL0, SKIP1**. 기존 전체 검사와 신규 권한/원문/사본/복구를 함께 실행했다. 브라우저 전체84건 중83 PASS 뒤1건의 중복 문구 선택자만 수정했고, 해당 파일4건 재검사는 모두 PASS다. 앱 소스 변경 없이 화면의 경고 문구와 보관 JSON을 구분해 선택했다. 설치 Codex0.166.0의 기존 요청 계약 검사도 PASS이며 로그인/thread/model turn은0이다.
 
 검증 실행 환경은 `/etc/os-release` 기준 Ubuntu26.04.1 LTS, Node24.18.0/npm11.16.0/bwrap0.11.1, Chromium156.0.8078.4/Chrome MCP1.12.0이다. 외부 namespace/사본 overlay 검사와 실제 named profile의 읽기·쓰기/secret/tmp/network canary는 각각 PASS했다. **두 경계를 결합한 runtime proof는 AppArmor `bwrap//&unpriv_bwrap (enforce)`의 중첩 namespace 제한으로 SKIP/BLOCKED**다. 정확한 namespace 거절·종료1·도구 시작 전일 때만 이 상태로 분류한다. canary 실패나 CLI panic을 SKIP으로 숨기지 않는 회귀도 통과했다. 사용자 namespace/UID mapping과 대안 검토에서 안전한 코드 우회를 확인하지 못했고 호스트 정책/권한을 변경하지 않았다. 결합 검사가 확인되지 않은 환경에서는 WRITE를 계속 차단한다. 개별 PASS를 전체 격리 PASS나 실제 Codex 쓰기 성공으로 표시하지 않는다.
 
-CI는 새 보호 계약용0.166을 먼저 설치해 검사하고 기존0.165 계약 검사도 별도로 유지한다. 실제 model 호출·사용자 thread 실행은 추가하지 않는다. 최종 CI 결과는 PR 검사에 연결한다. 앞선 자동 검사는 실제 GPT/dot/Muse·API나 사용자 Codex turn/명령을 실행했다는 뜻이 아니다. 실계정/운영 수락은 NOT_RUN이며 기존50 gate/R8 전체를 완료로 표시하지 않는다.
+CI는 새 보호 계약용0.166을 먼저 설치해 검사하고 기존0.165 계약 검사도 별도로 유지한다. 실제 model 호출·사용자 thread 실행은 추가하지 않는다. 첫 CI에서 npm의 Linux native package가 launcher와 분리된 설치 형태를 확인해 경로 검사가 실패했다. 공식 launcher의 package resolution을 따라 해당 runtime package만 읽도록 보완했고, npm alias/identity 오류와 부모 의존성·비밀 경로 비허용을 추가 검사했다. 이 수정 뒤 전체736건 중735 PASS/SKIP1이며 최종 CI 결과는 PR 검사에 연결한다. 앞선 자동 검사는 실제 GPT/dot/Muse·API나 사용자 Codex turn/명령을 실행했다는 뜻이 아니다. 실계정/운영 수락은 NOT_RUN이며 기존50 gate/R8 전체를 완료로 표시하지 않는다.
 
 ## 변경량·한계·운영 보존·복귀
 
-제출 전 변경은 **40파일·추가3188/삭제117줄**로 승인 추정32~45파일·2,600~4,200줄 안이다(이 기록 보완의 소수 줄은 PR 최종 diff가 기준). 보호 실패/지원되지 않는 형태는 차단 사유로 남긴다. 같은 OS 사용자의 비협조적인 외부 writer에 대한 kernel atomic CAS는 제공하지 않는다. 원본의 마지막 비교와 held descriptor 쓰기는 app 단일 writer에서 await 없이 수행하며, 실행/반영 중 외부 편집·CLI 중단 조건을 유지한다. 감지된 경쟁/부분 쓰기·기록 실패는 미확정으로 남기고 되돌리기/재반영으로 숨기지 않는다.
+제출 전 변경은 **40파일·추가3234/삭제117줄**로 승인 추정32~45파일·2,600~4,200줄 안이다(이 기록 보완의 소수 줄은 PR 최종 diff가 기준). 보호 실패/지원되지 않는 형태는 차단 사유로 남긴다. 같은 OS 사용자의 비협조적인 외부 writer에 대한 kernel atomic CAS는 제공하지 않는다. 원본의 마지막 비교와 held descriptor 쓰기는 app 단일 writer에서 await 없이 수행하며, 실행/반영 중 외부 편집·CLI 중단 조건을 유지한다. 감지된 경쟁/부분 쓰기·기록 실패는 미확정으로 남기고 되돌리기/재반영으로 숨기지 않는다.
 
 운영 `.env`·DB·계정/접속 키·Chrome profile·dot/Muse·API 한도·사용자 untracked 파일은 변경하지 않았다. 실제 계정/사용자 session 호출·배포·병합은 하지 않는다. archive/삭제/자동 만료·raw 정리·다중 실행·Git Writer/자동 병합은 이번 범위 밖이다.
 
