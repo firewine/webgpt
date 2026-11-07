@@ -204,6 +204,60 @@ test('execution owner UI: truncated display is separate from complete capture; p
   await f.card().getByRole('button', { name: '취소', exact: true }).click(); assert.deepEqual(f.posts('/api/jobs/job-a/approve').map(r => r.body.decision), ['decline', 'cancel']);
 });
 
+test('execution owner UI: readCopy approvals warn and only decline/cancel, including after a stale ACCEPT click', { timeout: 30000 }, async t => {
+  const f = await open(t, { configure(s) {
+    for (const id of ['readonly', 'legacy-readonly']) {
+      const b = binding(id); b.allowWrite = false; if (id === 'readonly') b.readProtection = 1; s.bindings.push(b);
+      const j = job(b, id + '-job'); delete j.draft; j.status = 'blocked_approval';
+      if (id === 'readonly') j.readCopy = { version: 1, status: 'running', manifestDigest: digest('f'), reason: null };
+      j.approvals.push({ id: 'approval-' + id, rpcId: 2, method: 'fixture/approval', params: {}, status: 'pending' }); s.jobs.push(j);
+    }
+  } }), { page } = f;
+  const protectedCard = f.card('readonly-job'), legacyCard = f.card('legacy-readonly-job');
+  assert.match(await protectedCard.locator('.execution-warning').textContent(), /경로·범위를 검증하는 실행 승인은 아직 지원하지/);
+  assert.equal(await protectedCard.getByRole('button', { name: '이번 요청 승인', exact: true }).count(), 0);
+  assert.equal(await legacyCard.getByRole('button', { name: '이번 요청 승인', exact: true }).isEnabled(), true);
+  assert.equal(await legacyCard.locator('.execution-warning').count(), 0);
+  f.handlers.set('/api/jobs/readonly-job/approve', route => route.fulfill({ json: {} }));
+  for (const name of ['거절', '취소']) {
+    const response = page.waitForResponse(res => new URL(res.url()).pathname === '/api/jobs/readonly-job/approve');
+    await protectedCard.getByRole('button', { name, exact: true }).click(); await response;
+  }
+  assert.deepEqual(f.posts('/api/jobs/readonly-job/approve').map(r => r.body), [
+    { approvalId: 'approval-readonly', decision: 'decline' }, { approvalId: 'approval-readonly', decision: 'cancel' },
+  ]);
+  f.handlers.set('/api/jobs/legacy-readonly-job/approve', route => route.fulfill({ json: {} }));
+  const response = page.waitForResponse(res => new URL(res.url()).pathname === '/api/jobs/legacy-readonly-job/approve');
+  await legacyCard.getByRole('button', { name: '이번 요청 승인', exact: true }).click(); await response; await f.refresh();
+  assert.deepEqual(f.posts('/api/jobs/legacy-readonly-job/approve')[0].body, { approvalId: 'approval-legacy-readonly', decision: 'accept' });
+  const staleAccept = await legacyCard.getByRole('button', { name: '이번 요청 승인', exact: true }).elementHandle();
+  await f.refresh(s => { s.jobs.find(j => j.id === 'legacy-readonly-job').readCopy = { ...s.jobs.find(j => j.id === 'readonly-job').readCopy }; });
+  assert.equal(await legacyCard.getByRole('button', { name: '이번 요청 승인', exact: true }).count(), 0);
+  await staleAccept.evaluate(button => button.click());
+  await page.locator('#notice').filter({ hasText: /경로·범위를 검증하는 실행 승인은 아직 지원하지/ }).waitFor();
+  assert.equal(f.posts('/api/jobs/legacy-readonly-job/approve').length, 1);
+});
+
+test('execution owner UI: running draft/readCopy jobs hide steering while legacy readonly keeps it', { timeout: 30000 }, async t => {
+  const f = await open(t, { configure(s) {
+    s.jobs[0].status = 'running'; s.jobs[0].finishedAt = null; s.jobs[0].draft.status = 'running';
+    for (const id of ['readonly', 'legacy-readonly']) {
+      const b = binding(id); b.allowWrite = false; if (id === 'readonly') b.readProtection = 1; s.bindings.push(b);
+      const j = job(b, id + '-job'); delete j.draft; j.status = 'running'; j.finishedAt = null;
+      if (id === 'readonly') j.readCopy = { version: 1, status: 'running', manifestDigest: digest('f'), reason: null }; s.jobs.push(j);
+    }
+  } }), { page } = f;
+  for (const id of ['job-a', 'readonly-job']) assert.equal(await f.card(id).getByRole('button', { name: '진행 중 지시 보완', exact: true }).count(), 0);
+  for (const id of ['job-a', 'readonly-job', 'legacy-readonly-job']) assert.equal(await f.card(id).getByRole('button', { name: '중단 요청', exact: true }).isEnabled(), true);
+  f.handlers.set('/api/jobs/legacy-readonly-job/steer', route => route.fulfill({ json: {} }));
+  await f.card('legacy-readonly-job').getByRole('button', { name: '진행 중 지시 보완', exact: true }).click();
+  await page.locator('#action-form [name=text]').fill('기존 읽기 전용 지시 보완'); await page.locator('#action-form button[type=submit]').click();
+  await page.locator('#action-dialog').waitFor({ state: 'hidden' });
+  assert.deepEqual(f.posts('/api/jobs/legacy-readonly-job/steer')[0].body, { expectedTurnId: 'turn-legacy-readonly-job', text: '기존 읽기 전용 지시 보완' });
+  assert.ok(f.posts('/api/jobs/legacy-readonly-job/steer')[0].commandId);
+  assert.deepEqual(f.requests.filter(r => r.path.endsWith('/steer')).map(r => r.path), ['/api/jobs/legacy-readonly-job/steer']);
+});
+
 test('execution owner UI: incomplete capture, unsupported file changes and unavailable authority block apply while recovery stays available', { timeout: 30000 }, async t => {
   const f = await open(t, { configure(s) { s.jobs[0].capture.complete = false; s.jobs[0].capture.reason = 'fixture_capture_gap'; } });
   await f.card().getByRole('button', { name: '보호 사본 diff 확인' }).click(); await f.card().locator('.execution-diff').waitFor();

@@ -379,7 +379,9 @@ export class CodexExecutor {
     if (!job) throw new AppError('job_not_reconciling', 409);
     const targetTurnId = job.turnId ?? (observedTurnId ? string(observedTurnId, 200) : null);
     if (!targetTurnId) throw new AppError('unconfirmed_turn_requires_owner_review', 409);
-    const binding = state.bindings.find(b => b.id === job.bindingId)!; const rpc = await this.connect(binding, job.draft ? job.id : undefined);
+    const binding = state.bindings.find(b => b.id === job.bindingId)!;
+    if (job.draft || job.readCopy) await this.verifyProtection(binding, this.workspaces.manifest(job.id).copyRoot);
+    const rpc = await this.connect(binding, job.draft || job.readCopy ? job.id : undefined);
     const read = object(await rpc.request('thread/read', { threadId: binding.threadId, includeTurns: false }));
     await this.validateThread(binding, object(read.thread), false);
     let cursor: string | null = null; let turn: Record<string, unknown> | undefined;

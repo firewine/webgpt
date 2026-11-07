@@ -330,7 +330,7 @@ export class RoomView {
     for (const a of job?.approvals.filter(a => a.status === 'pending' && job.status === 'blocked_approval') ?? []) {
       const pending = el('section'); pending.append(el('h4', '실행 승인 요청'), el('pre', JSON.stringify(a.params, null, 2)));
       if (job?.draft) pending.append(el('p', '보호 사본 작업의 추가 권한 승인은 지원하지 않습니다. 거절·취소 후 원래 실행을 대조하세요.', 'topic-caveat'));
-      for (const [decision, text] of (job?.draft ? [['decline', '이번 실행 요청 거절'], ['cancel', '이번 실행 요청 취소']] : [['accept', '이번 실행 요청 승인'], ['decline', '이번 실행 요청 거절'], ['cancel', '이번 실행 요청 취소']])) pending.append(this.btn(text!, () => act('approve', { approvalId: a.id, decision })));
+      for (const [decision, text] of (job?.draft || job?.readCopy ? [['decline', '이번 실행 요청 거절'], ['cancel', '이번 실행 요청 취소']] : [['accept', '이번 실행 요청 승인'], ['decline', '이번 실행 요청 거절'], ['cancel', '이번 실행 요청 취소']])) pending.append(this.btn(text!, () => act('approve', { approvalId: a.id, decision })));
       card.append(pending);
     }
     if (job && ['queued', 'running', 'blocked_approval'].includes(job.status)) card.append(this.btn('이 실행만 중단 요청', () => act('cancel', {})));

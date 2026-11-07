@@ -55,11 +55,11 @@ test('R6 browser: original remote receipt reconciliation reuses one job and keep
   assert.equal(f.task(id).reports.length, 0); assert.equal(f.app.store.read().resident.jobLinks[0].result.report.checks[0].outcome, 'not_run'); assert.equal(f.task(id).currentReportId, null); assert.equal((await f.trace()).filter(v => v.method === 'turn/start').length, 1); assert.equal(f.app.store.read().jobs.length, 1); assert.deepEqual(errors, []);
 });
 
-test('R6 browser: protected work never offers expanding approval from the room detail', async t => {
+for (const protection of ['draft', 'readCopy']) test(`R6 browser: ${protection} work never offers expanding approval from the room detail`, async t => {
   const f = await executionFixture(t, { mode: 'approval' }); f.proposeCode(); f.bridge.tick();
   await until(() => f.app.store.read().jobs[0]?.status === 'blocked_approval');
   // Explicit stored fixture only: the room must apply the same UI boundary as execution view.
-  f.app.store.transact(s => { s.jobs[0].draft = { version: 1, status: 'running' }; });
+  f.app.store.transact(s => { s.jobs[0][protection] = { version: 1, status: 'running' }; });
   const { page, errors } = await open(t, f); await detail(page);
   assert.equal(await page.getByRole('button', { name: '이번 실행 요청 승인', exact: true }).count(), 0);
   assert.equal(await page.getByRole('button', { name: '이번 실행 요청 취소', exact: true }).count(), 1);

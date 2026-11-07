@@ -708,15 +708,15 @@ function renderJobs(): void {
       renderExecutionEvidence(job, card); renderDraft(job, card);
       const controls = node('div', '', 'toolbar');
       if (['queued', 'running', 'blocked_approval'].includes(job.status)) controls.append(button('중단 요청', async () => { await api(`/api/jobs/${job.id}/cancel`, {}); await refresh(); }));
-      if (job.status === 'running' && !jobAuthorityReason(job)) controls.append(button('진행 중 지시 보완', () => modal('현재 실행에 지시 추가', [{ name: 'text', label: '추가 지시', multiline: true }], async values => { const reason = jobAuthorityReason(state?.jobs.find(j => j.id === job.id) ?? job); if (reason) throw new Error(reason); await api(`/api/jobs/${job.id}/steer`, { expectedTurnId: job.turnId, ...values }); await refresh(); })));
+      if (job.status === 'running' && !job.draft && !job.readCopy && !jobAuthorityReason(job)) controls.append(button('진행 중 지시 보완', () => modal('현재 실행에 지시 추가', [{ name: 'text', label: '추가 지시', multiline: true }], async values => { const reason = jobAuthorityReason(state?.jobs.find(j => j.id === job.id) ?? job); if (reason) throw new Error(reason); await api(`/api/jobs/${job.id}/steer`, { expectedTurnId: job.turnId, ...values }); await refresh(); })));
       if (job.status === 'reconciling') controls.append(button('실제 turn 결과 대조', async () => { if (!job.turnId) modal('수신되지 않은 Codex turn 대조', [{ name: 'turnId', label: '실제 세션에서 확인한 turn ID' }], async data => { await api(`/api/jobs/${job.id}/reconcile`, data); await refresh(); }, '원격 기록의 입력·시각·세션·완료 상태를 함께 검사합니다. 새 실행을 시작하지 않습니다.'); else { await api(`/api/jobs/${job.id}/reconcile`, {}); await refresh(); } })); card.append(controls);
       for (const approval of job.approvals.filter(a => a.status === 'pending')) {
         const section = node('section', '', 'panel'); section.append(node('h3', '실행 승인 요청'), node('pre', JSON.stringify(approval.params, null, 2)));
-        if (job.draft) section.append(node('p', executionReason('protected_approval_requires_scoped_support'), 'small execution-warning'));
-        const row = node('div', '', 'toolbar'), decisions = [...(job.draft ? [] : [['accept', '이번 요청 승인']]), ['decline', '거절'], ['cancel', '취소']];
+        if (job.draft || job.readCopy) section.append(node('p', executionReason('protected_approval_requires_scoped_support'), 'small execution-warning'));
+        const row = node('div', '', 'toolbar'), decisions = [...(job.draft || job.readCopy ? [] : [['accept', '이번 요청 승인']]), ['decline', '거절'], ['cancel', '취소']];
         for (const [decision, label] of decisions) {
           const action = button(label!, async () => {
-            if (decision === 'accept') { const latest = state?.jobs.find(j => j.id === job.id) ?? job; if (latest.draft) throw new Error('protected_approval_requires_scoped_support'); const reason = jobAuthorityReason(latest); if (reason) throw new Error(reason); }
+            if (decision === 'accept') { const latest = state?.jobs.find(j => j.id === job.id) ?? job; if (latest.draft || latest.readCopy) throw new Error('protected_approval_requires_scoped_support'); const reason = jobAuthorityReason(latest); if (reason) throw new Error(reason); }
             await api(`/api/jobs/${job.id}/approve`, { approvalId: approval.id, decision }); await refresh();
           }); action.disabled = decision === 'accept' && !!jobAuthorityReason(job); row.append(action);
         }

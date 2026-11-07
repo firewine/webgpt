@@ -88,6 +88,25 @@ test('creator disconnect before its initial request blocks the binding without a
   const trace = await f.trace(); assert.equal(trace.filter(m => m.method === 'thread/start').length, 1); assert.equal(trace.filter(m => m.method === 'turn/start').length, 0);
 });
 
+test('read reconciliation re-proves its original copy and never falls back to an unprotected connection', async t => {
+  const f = await fixture(t, 'hold'), jid = f.submit('reconcile-read'); await until(() => f.job(jid)?.turnId);
+  const copy = f.codex.workspaces.manifest(jid).copyRoot, traceBefore = (await f.trace()).length;
+  f.codex.close(); f.codex = f.create(); f.codex.recover();
+  assert.equal(f.job(jid).status, 'reconciling');
+  f.codex.isolation.verify = async () => { throw new Error('synthetic_proof_denied'); };
+  await assert.rejects(f.codex.reconcile(jid), /protected_execution_unavailable/);
+  assert.equal((await f.trace()).length, traceBefore); assert.equal(f.copies.length, 1);
+  const metadata = join(f.stateDir, 'thread.json'), remote = JSON.parse(await readFile(metadata, 'utf8'));
+  remote.turn.status = 'interrupted'; await writeFile(metadata, JSON.stringify(remote));
+  let verified = 0;
+  f.codex.isolation.verify = async (binding, copyRoot) => { verified++; assert.equal(binding.readProtection, 1); assert.equal(copyRoot, copy); };
+  await f.codex.reconcile(jid); await until(() => f.job(jid).readCopy.status === 'blocked');
+  assert.equal(verified, 1); assert.equal(f.copies.at(-1), copy);
+  assert.equal(f.job(jid).status, 'interrupted'); assert.notEqual(f.codex.validateResult(jid), null);
+  const trace = await f.trace(); assert.equal(trace.filter(m => m.method === 'thread/start').length, 1);
+  assert.equal(trace.filter(m => m.method === 'turn/start').length, 1); assert.equal(trace.filter(m => m.method === 'thread/resume').length, 0);
+});
+
 test('cold restart marks an initial durable session lost rather than starting or resuming it', async t => {
   const f = await fixture(t); f.codex.close(); f.store.close(); f.store = new Store(join(f.directory, 'app'));
   assert.equal(f.binding().managedSession.state, 'initial'); f.codex = f.create(); f.codex.recover();
