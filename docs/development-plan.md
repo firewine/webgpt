@@ -2,6 +2,8 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
+**2026-11-08 R6 명령1회 승인 병합본 운영 적용·실계정 중단:** PR #60 merge `f911c59`를 운영에 빌드·적용했고 기존 설정/비밀번호·계정·대화·방과 정상 서비스를 보존했다. 적용본 native 보호6 PASS/0 SKIP 뒤 실제 read job1개는 명령 확인 대기 중300초에 interrupted로 종료됐다. ACCEPT/실제 명령·쓰기·반영0, 기존 원문/사본·중단 기록을 보존하고 검증 방off/권한 회수/임시 인증 제거를 확인했다. **R6-F 전체 BLOCKED**이며 추가2job/30분·정확한 읽기 명령 확인은 별도 승인 대기다. 계획/호스트 변경과 자동 재시도0. [실측·복구·남은 수락](./implementation/r6-scoped-live-20261108.md).
+
 **2026-11-07 R6 보호 범위 고정 명령1회 승인 — 구현·합성 검사:** 사용자가 [후속 영향안](./reviews/r6-scoped-command-approval-impact-20261107.md)을 승인했다. PR #58/#59가 병합된 main `6351fb0`에서 A 실제 CLI+가짜 Responses의 승인 후 보호 증명 → B 원래 명령/cwd/profile·권한/세대 digest/선택·전송 intent → C 기존 승인 API/두 확인 화면 → D 중복·미확정/복구 검사를 구현했다. 실제 Codex0.166.0 합성 호스트 검사6 PASS/0 SKIP이며 **실행 시 A가 통과한 환경에서만 명령1회 승인을 허용**한다. 증명 실패·runtime 변경·추가 권한은 차단한다. 추가 호스트 설정/OAuth/실계정 호출·배포는0이고, 기존 read/write 사본·Store·예산·단일 실행·원문/명시1파일 반영·독립 검토·원래50 gate를 유지한다. [구현·검사·제한](./implementation/r6-scoped-command-approval-20261107.md)을 따르며 실제 R6 전체 수락은 여전히 BLOCKED다.
 
 **2026-11-07 R6 읽기 보호·새 세션 보완/실계정 부분 실측:** 승인한 최소 읽기 profile·동일 연결 최초 dispatch·유실 차단·원문/봉인 재검사와 새 세션 선택 화면을 구현한 PR #59가 병합됐다. 전용 호스트 보호2건 PASS/0 SKIP, CI 통과 소스 `8fc2d1b`에서 실제 thread/start1→같은 연결 turn/start1/resume0을 확인했다. 실제1job은 `cat validation.txt`의 native 명령 승인에서 당시 보호 ACCEPT 차단에 걸려 중단했다. 파일 읽기/변경·성공 보고0, 원문/원본·기존 운영 데이터/인증은 보존했다. **R6-F 전체는 BLOCKED**다. [실측과 복귀](./implementation/r6-readonly-session-20261107.md)는 보존하며, 후속 명령1회 승인은 위 최신 승인·구현 기록을 따른다. 추가 실계정 호출 창과 기존50 gate는 바꾸지 않는다.
