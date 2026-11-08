@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "gate": "R6-F",
+  "realStatus": "PASS",
+  "dateKst": "2026-11-08",
+  "baseCommit": "f911c593466cdfffbc159c92d83586e08d05257a",
+  "environment": {
+    "node": "24.18.0",
+    "codex": "0.166.0",
+    "outer": "previously approved dedicated bubblewrap",
+    "noNewPrivileges": true
+  },
+  "scope": "Actual subscription account, private validation repository, registered read followed by same-thread protected rework, explicit one-file application, independent owner acceptance",
+  "startedAt": "2026-11-08T04:00:12.842Z",
+  "finishedAt": "2026-11-08T04:17:17.783Z",
+  "elapsedMs": 1024941,
+  "limits": {
+    "modelJobs": 2,
+    "windowMs": 1800000,
+    "perJobMs": 300000
+  },
+  "observed": {
+    "modelJobs": 2,
+    "uniqueRequests": 2,
+    "commands": [
+      {
+        "purpose": "read",
+        "count": 1,
+        "exitCodes": [
+          0
+        ],
+        "output": "R6_BASELINE\n",
+        "captureComplete": true
+      },
+      {
+        "purpose": "write",
+        "count": 1,
+        "exitCodes": [
+          0
+        ],
+        "output": "R6_VERIFIED\n",
+        "captureComplete": true
+      }
+    ],
+    "sameThread": true,
+    "sameBinding": true,
+    "previousReportIncluded": true,
+    "feedbackIncluded": true,
+    "commandApprovalSelections": 2,
+    "commandApprovalDeliveries": 2,
+    "reports": 2,
+    "reviews": [
+      "rework",
+      "accept"
+    ],
+    "applicationIntents": 1,
+    "applications": 1,
+    "applicationReceipt": {
+      "path": "validation.txt",
+      "beforeDigest": "ae166c700f84409e54a50ad3d5a409789b4eb63246a5447139c083cc58d2883c",
+      "afterDigest": "f99f5d7754bc758bf2eeb2d7eb1b0a2bd94160227f97c7d8044a006538ed9adb",
+      "appliedAt": "2026-11-08T04:13:30.054Z"
+    },
+    "finalFile": "R6_VERIFIED\n",
+    "taskStatus": "done",
+    "independentOwner": true,
+    "otherProviderCalls": 0
+  },
+  "cleanup": {
+    "roomOff": true,
+    "authorityRevoked": true,
+    "temporaryAuthRemoved": true,
+    "runtimeLockRemoved": true,
+    "originalAuthUntouchedAtStop": true,
+    "operatingPreserved": {
+      "env": true,
+      "ownerAccess": true,
+      "password": true,
+      "apiDaily": true,
+      "connections": true,
+      "participants": true,
+      "discussions": true,
+      "bindingCount": 0,
+      "jobCount": 0,
+      "roomOff": true,
+      "browserPaused": true
+    }
+  },
+  "previousAttempt": {
+    "actualJobs": 1,
+    "status": "interrupted at command approval deadline",
+    "commandExecutions": 0,
+    "recordPreserved": true
+  },
+  "limitsOfEvidence": [
+    "Private validation repository; production workspace allowlist and registered jobs unchanged",
+    "Historical 2026-10-31 fixture manifest remains unchanged",
+    "Real desktop/touch approval UI, mixed multi-participant acceptance and long-term operation are separate",
+    "Model report was produced before original application; actual application is established by its receipt"
+  ]
+}
