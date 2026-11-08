@@ -9,12 +9,14 @@ export type Phase = 'independent' | 'cross_review' | 'verification' | 'revision'
 export type RunStatus = 'running' | 'paused' | 'blocked' | 'completed' | 'partial' | 'cancelled';
 export interface ModelChoice { id: string; label: string; reasoningEfforts?: ReasoningEffort[]; reasoningSource?: 'catalog' | 'provider_docs'; outputTokenLimit?: number }
 export interface DeviceSignin { connectionId: string; attemptId: string; status: NonNullable<Connection['deviceSignin']>['status']; expiresAt: number; verificationUrl?: string; userCode?: string; error?: string }
+export interface BrowserAccountIdentity { source: 'chatgpt-session'; userId: string; email: string }
 export interface BrowserBinding {
   pageId: number; url: string; accountLabel: string; agentLabel: string;
   identitySelector: string; identityText: string; inputSelector: string; sendSelector: string;
   userSelector: string; assistantSelector: string; busySelector: string; readySelector: string;
   thread?: { selector: string; attribute: string; value: string; jsonKey?: string };
   sendAppearsAfterInput?: boolean;
+  accountIdentity?: BrowserAccountIdentity;
   discovery?: { presetVersion: string; observedAt: string; evidenceDigest: string; profile: string; target?: 'dot' };
 }
 export interface Connection {

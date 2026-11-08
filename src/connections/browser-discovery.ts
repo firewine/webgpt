@@ -2,10 +2,12 @@ import { readFileSync } from 'node:fs';
 import type { BrowserBinding } from '../workspace/model.js';
 import { AppError, digest, id, integer, object, string } from '../workspace/util.js';
 import { BrowserBridge, browserPages, toolObject, validateBinding } from './browser.js';
+import { accountIdentityScript, sameAccountIdentity, validateAccountIdentity } from './browser-account.js';
 import type { DiscoveryPage, DiscoveryResult } from './browser-discovery-model.js';
 
 export interface BrowserPreset {
   id: string; version: number; label: string; service: 'chatgpt' | 'muse'; verification: 'UNVERIFIED';
+  accountIdentity?: 'chatgpt-session';
   identity: string[]; agent: string[]; input: string[]; send: string[]; ready: string[];
   user: string; assistant: string; busy: string; sendAppearsAfterInput: boolean;
   thread: { selector: string; attribute: string; jsonKey?: string } | null;
@@ -14,8 +16,9 @@ interface Candidate { result: DiscoveryResult; binding: BrowserBinding; connecti
 
 export function validatePreset(value: unknown): BrowserPreset {
   const p = object(value);
-  if (Object.keys(p).some(k => !['id', 'version', 'label', 'service', 'verification', 'identity', 'agent', 'input', 'send', 'ready', 'user', 'assistant', 'busy', 'sendAppearsAfterInput', 'thread'].includes(k))) throw new AppError('browser_preset_invalid');
+  if (Object.keys(p).some(k => !['id', 'version', 'label', 'service', 'verification', 'identity', 'agent', 'input', 'send', 'ready', 'user', 'assistant', 'busy', 'sendAppearsAfterInput', 'thread', 'accountIdentity'].includes(k))) throw new AppError('browser_preset_invalid');
   if (!/^[a-z][a-z0-9-]{0,79}$/.test(string(p.id, 80)) || !Number.isSafeInteger(p.version) || Number(p.version) < 1 || !['chatgpt', 'muse'].includes(String(p.service)) || p.verification !== 'UNVERIFIED' || typeof p.sendAppearsAfterInput !== 'boolean') throw new AppError('browser_preset_invalid');
+  if (p.accountIdentity !== undefined && (p.accountIdentity !== 'chatgpt-session' || p.service !== 'chatgpt')) throw new AppError('browser_preset_invalid');
   string(p.label, 100);
   for (const k of ['identity', 'agent', 'input', 'send', 'ready']) {
     if (!Array.isArray(p[k]) || p[k].length < 1 || p[k].length > 10) throw new AppError('browser_preset_invalid');
@@ -44,17 +47,21 @@ export async function discoveryPages(bridge: Pick<BrowserBridge, 'tool'>): Promi
 }
 
 // All executable code below is fixed. Presets and previously verified selectors
-// enter only through JSON data. No cookies/storage, network, input, clicks or DOM
-// mutations are used; message contents and existing draft text are not returned.
+// enter only through JSON data. Optional ChatGPT metadata uses the fixed read-only
+// helper; no cookies/storage, input, clicks or DOM mutations are used, and message
+// contents, credentials and existing draft text are not returned.
 export function discoveryScript(preset: BrowserPreset, existing?: BrowserBinding, expectedUrl?: string): string {
   const p = existing ? { ...preset, identity: [existing.identitySelector], input: [existing.inputSelector], send: [existing.sendSelector], ready: [existing.readySelector], user: existing.userSelector, assistant: existing.assistantSelector, busy: existing.busySelector, thread: existing.thread ?? null, allowUrlThread: !existing.thread, sendAppearsAfterInput: !!existing.sendAppearsAfterInput } : { ...preset, allowUrlThread: preset.service === 'chatgpt' };
-  return `() => {const p=${JSON.stringify(p)};const u=new URL(location.href);u.hash='';
+  const useAccount = !!existing?.accountIdentity || !existing && preset.accountIdentity === 'chatgpt-session';
+  return `${useAccount ? 'async ' : ''}() => {const p=${JSON.stringify({ ...p, requireAccount: !!existing?.accountIdentity })};const u=new URL(location.href);u.hash='';
     if(u.href!==${JSON.stringify(expectedUrl ?? existing?.url ?? '')})return {url:u.href};
+    ${useAccount ? accountIdentityScript() : ''}
     const visible=e=>!!e&&e.getClientRects().length>0;
     const candidates=list=>{const found=new Map();for(const selector of list){const all=[...document.querySelectorAll(selector)];for(const e of all.filter(visible)){if(!found.has(e))found.set(e,{selector,count:all.length,node:e});}}return [...found.values()];};
     const value=e=>e?('value' in e?e.value:e.textContent)||'':'';
     const text=e=>(e?.textContent||'').trim();
     try {
+      const observeDom=()=>{
       const identity=candidates(p.identity),input=candidates(p.input),send=candidates(p.send),ready=candidates(p.ready),agent=candidates(p.agent);
       const single=list=>list.length===1&&list[0].count===1;
       let threadValue=null,threadAmbiguous=false;
@@ -64,9 +71,21 @@ export function discoveryScript(preset: BrowserPreset, existing?: BrowserBinding
       const identityText=single(identity)?text(identity[0].node):null;
       const draftPresent=input.some(e=>!!value(e.node));const busy=[...document.querySelectorAll(p.busy)].some(visible);
       const ambiguous=identity.length>1||input.length>1||send.length>1||ready.length>1||identity.some(e=>e.count!==1)||input.some(e=>e.count!==1)||send.some(e=>e.count!==1)||ready.some(e=>e.count!==1);
-      const supported=single(identity)&&single(input)&&single(ready)&&(single(send)||p.sendAppearsAfterInput&&send.length===0)&&!!identityText&&identityText.length<=500&&!!threadValue&&!threadAmbiguous&&document.querySelectorAll(p.user).length>0&&document.querySelectorAll(p.assistant).length>0;
-      return {url:u.href,ambiguous,supported,threadAmbiguous,threadValue,identityText,agentLabel:agent.length===1?text(agent[0].node).slice(0,100):null,draftPresent,busy,
-        selectors:supported?{identitySelector:identity[0].selector,inputSelector:input[0].selector,sendSelector:send[0]?.selector||p.send.join(','),readySelector:ready[0].selector}:null};
+      const supportedDom=single(identity)&&single(input)&&single(ready)&&(single(send)||p.sendAppearsAfterInput&&send.length===0)&&!!threadValue&&!threadAmbiguous&&document.querySelectorAll(p.user).length>0&&document.querySelectorAll(p.assistant).length>0;
+      const supported=supportedDom&&!!identityText&&identityText.length<=500;
+      const selectors=supportedDom?{identitySelector:identity[0].selector,inputSelector:input[0].selector,sendSelector:send[0]?.selector||p.send.join(','),readySelector:ready[0].selector}:null;
+      return {supportedDom,selectors,nodes:[...identity,...input,...send,...ready,...agent].map(e=>e.node),view:{url:u.href,ambiguous,supported,threadAmbiguous,threadValue,identityText,agentLabel:agent.length===1?text(agent[0].node).slice(0,100):null,draftPresent,busy,selectors:supported?selectors:null}};
+      };
+      const before=observeDom();
+      ${useAccount ? `if(!before.supportedDom||!p.requireAccount&&before.view.identityText)return before.view;
+      const accountIdentity=await readAccount();
+      const current=new URL(location.href);current.hash='';if(current.href!==u.href)return {url:current.href};
+      const after=observeDom();
+      if(before.supportedDom!==after.supportedDom||JSON.stringify(before.view)!==JSON.stringify(after.view)||before.nodes.length!==after.nodes.length||before.nodes.some((node,i)=>node!==after.nodes[i]))return {url:u.href,changed:true};
+      after.view.identityText=accountIdentity?.email??null;
+      after.view.supported=after.supportedDom&&!!after.view.identityText&&after.view.identityText.length<=500;
+      after.view.selectors=after.view.supported?after.selectors:null;
+      return {...after.view,...(accountIdentity?{accountIdentity}:{})};` : 'return before.view;'}
     }catch{return {invalid:true};}
   }`;
 }
@@ -81,13 +100,18 @@ export async function discoverBinding(bridge: Pick<BrowserBridge, 'tool' | 'prob
   if (!existing && typeof view.agentLabel === 'string' && view.agentLabel.trim()) result.agentLabel = view.agentLabel;
   if (typeof view.threadValue === 'string') result.threadValue = view.threadValue;
   if (view.url !== page.url) { result.status = 'blocked'; result.reason = 'browser_target_mismatch'; return { result, binding: null }; }
+  if (view.changed === true) { result.status = 'blocked'; result.reason = 'browser_discovery_changed'; return { result, binding: null }; }
   if (view.ambiguous === true || view.threadAmbiguous === true) { result.status = 'blocked'; result.reason = 'browser_discovery_ambiguous'; return { result, binding: null }; }
+  if (view.accountIdentity !== undefined && (existing ? !existing.accountIdentity : preset.accountIdentity !== 'chatgpt-session')) throw new AppError('browser_account_identity_invalid');
+  const accountIdentity = view.accountIdentity === undefined ? undefined : validateAccountIdentity(view.accountIdentity, page.url);
+  if (accountIdentity && result.identityText !== accountIdentity.email || existing?.accountIdentity && !sameAccountIdentity(existing.accountIdentity, accountIdentity)) { result.status = 'blocked'; result.reason = 'browser_target_mismatch'; return { result, binding: null }; }
   if (view.supported !== true || !result.identityText) return { result, binding: null };
   if (result.draftPresent || result.busy) { result.status = 'blocked'; result.reason = result.draftPresent ? 'browser_discovery_draft_present' : 'browser_not_ready'; return { result, binding: null }; }
   const selectors = object(view.selectors);
   const b: BrowserBinding = { pageId: page.pageId, url: page.url, accountLabel: existing?.accountLabel ?? result.identityText.slice(0, 100), agentLabel: existing?.agentLabel ?? result.agentLabel ?? '기존 대화',
     identitySelector: string(selectors.identitySelector, 500), identityText: result.identityText, inputSelector: string(selectors.inputSelector, 500), sendSelector: string(selectors.sendSelector, 500), readySelector: string(selectors.readySelector, 500),
     userSelector: existing?.userSelector ?? preset.user, assistantSelector: existing?.assistantSelector ?? preset.assistant, busySelector: existing?.busySelector ?? preset.busy, sendAppearsAfterInput: existing ? !!existing.sendAppearsAfterInput : preset.sendAppearsAfterInput };
+  if (accountIdentity) b.accountIdentity = accountIdentity;
   if (existing?.thread || preset.thread) { const thread = existing?.thread ?? preset.thread!; b.thread = { ...thread, value: string(view.threadValue, 500) }; }
   if (existing && (existing.url !== b.url || existing.identityText !== b.identityText || existing.thread?.value !== b.thread?.value)) { result.status = 'blocked'; result.reason = 'browser_target_mismatch'; return { result, binding: null }; }
   validateBinding(b);

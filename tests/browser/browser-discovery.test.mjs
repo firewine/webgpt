@@ -20,6 +20,179 @@ function attach(app, page, service) {
   return { setPageId: id => { pageId = id; }, setProfile: p => { isolatedContext = p; } };
 }
 
+const accountRequest = { pageId: 7, profile: 'default', presetId: 'chatgpt-v1' };
+const fixtureIdentity = { source: 'chatgpt-session', userId: 'fixture-user-a', email: 'fixture-a@example.test' };
+const tokenSentinel = 'FIXTURE-SENTINEL-DO-NOT-EXPORT';
+async function accountFixture(browser, app, mode = 'normal') {
+  const page = await fixturePage(browser, 'chatgpt'); const audit = { calls: [], results: [], observations: [] };
+  await page.route('**/api/auth/session', async route => {
+    audit.calls.push({ url: route.request().url(), method: route.request().method() });
+    if (mode === 'network-error') return route.abort('failed');
+    if (mode === 'redirect') return route.fulfill({ status: 302, headers: { location: 'https://example.test/session-redirect' } });
+    const user = await page.evaluate(() => window.fixtureUser);
+    if (mode === 'missing-id') delete user.id;
+    if (mode === 'missing-email') delete user.email;
+    return route.fulfill({ contentType: mode === 'non-json' ? 'text/html' : 'application/json',
+      body: JSON.stringify({ ...(mode === 'missing-user' ? {} : { user }), accessToken: tokenSentinel }) });
+  });
+  if (mode === 'wrong-origin') await page.goto('https://example.test/c/discovery-fixture');
+  await page.locator('[data-testid=accounts-profile-button]').evaluate(e => {
+    const button = document.createElement('button'); button.dataset.testid = 'accounts-profile-button'; button.setAttribute('aria-label', 'Open profile menu');
+    button.innerHTML = '<svg width="24" height="24" aria-hidden="true"><circle cx="12" cy="12" r="10" /></svg>'; e.replaceWith(button);
+  });
+  await page.evaluate(identity => {
+    window.fixtureUser = { id: identity.userId, email: identity.email }; window.fixtureAccountRequests = [];
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (url, options) => {
+      window.fixtureAccountRequests.push({ url: String(url), method: options.method, credentials: options.credentials, redirect: options.redirect, cache: options.cache });
+      return originalFetch(url, options);
+    };
+    const input = document.querySelector('#prompt-textarea'), send = document.querySelector('[data-testid=send-button]');
+    input.addEventListener('input', () => { send.disabled = false; if (window.fixtureSwitchAt === 'input') window.fixtureUser.id = 'fixture-user-b'; });
+    send.onclick = () => {
+      window.fixtureSends++; const user = document.createElement('div'); user.dataset.messageAuthorRole = 'user'; user.textContent = input.value;
+      const answer = document.createElement('div'); answer.dataset.messageAuthorRole = 'assistant'; answer.textContent = 'Account fixture response';
+      document.querySelector('form').before(user, answer); input.value = ''; send.disabled = true;
+      if (window.fixtureSwitchAt === 'send') window.fixtureUser.id = 'fixture-user-b';
+    };
+  }, fixtureIdentity);
+  attach(app, page, 'chatgpt'); const tool = app.browser.tool;
+  app.browser.tool = async (name, args) => {
+    const result = await tool(name, args); audit.results.push(result);
+    if (name === 'evaluate_script') audit.observations.push({ value: result.structuredContent.result, reads: audit.calls.length });
+    return result;
+  };
+  return { page, audit };
+}
+function accountCompletion(connectionId) {
+  const evidence = { dispatches: 0, receipts: [], deltas: [] };
+  return { evidence, input: { requestId: 'account-fixture-turn', participant: { connectionId }, prompt: 'Synthetic account fixture prompt', history: [], signal: AbortSignal.timeout(8000),
+    hooks: { dispatched() { evidence.dispatches++; }, receipt(value) { evidence.receipts.push(value); }, delta(value) { evidence.deltas.push(value); } } } };
+}
+
+test('R8 account: icon-only discovery and confirmation save only the session identity without DOM changes', { timeout: 20000 }, async t => {
+  const browser = await launch(t); const f = await workspace(t); const { page, audit } = await accountFixture(browser, f.app);
+  assert.equal(await page.locator('[data-testid=accounts-profile-button]').textContent(), ''); const before = await page.locator('body').innerHTML();
+  const found = await f.app.discoverBrowser(accountRequest); assert.equal(found.status, 'ready', JSON.stringify(found)); assert.equal(found.presetVersion, 'chatgpt-v1/5');
+  assert.equal(found.identityText, fixtureIdentity.email); assert.equal(f.app.store.read().connections.length, 0);
+  const id = await f.app.confirmBrowser({ discoveryId: found.id, confirmed: true, label: 'Icon account fixture' }, 'account-fixture-save');
+  const saved = f.app.store.read().connections; assert.equal(saved.length, 1); assert.equal(saved[0].id, id); assert.equal(saved[0].status, 'connected');
+  assert.deepEqual(saved[0].browser.accountIdentity, fixtureIdentity); assert.equal(saved[0].browser.discovery.presetVersion, 'chatgpt-v1/5');
+  assert.equal(await page.locator('body').innerHTML(), before); assert.equal(await page.evaluate(() => window.fixtureSends), 0);
+  assert.ok(audit.calls.length >= 2); assert.ok(audit.calls.every(call => call.url === 'https://chatgpt.com/api/auth/session' && call.method === 'GET'));
+  const requests = await page.evaluate(() => window.fixtureAccountRequests); assert.equal(requests.length, audit.calls.length);
+  assert.ok(requests.every(r => r.credentials === 'same-origin' && r.redirect === 'error' && r.cache === 'no-store'));
+  assert.ok(!JSON.stringify({ store: f.app.store.read(), found, results: audit.results }).includes(tokenSentinel));
+});
+
+test('R8 account: deferred session discovery rejects draft, busy and selector changes without touching the owner DOM', { timeout: 30000 }, async t => {
+  const browser = await launch(t); const f = await workspace(t);
+  for (const mode of ['draft', 'busy', 'selector']) await t.test(mode, async () => {
+    const { page, audit } = await accountFixture(browser, f.app);
+    const started = Promise.withResolvers(), released = Promise.withResolvers(); let hold = true;
+    await page.route('**/api/auth/session', async route => {
+      if (hold) { hold = false; started.resolve(); await released.promise; }
+      await route.fallback();
+    });
+    const pending = f.app.discoverBrowser(accountRequest);
+    try {
+      await Promise.race([started.promise, pending.then(() => { throw new Error('Discovery finished before the session response was deferred'); })]);
+      assert.equal(audit.observations.length, 0);
+      await page.evaluate(mode => {
+        const input = document.querySelector('#prompt-textarea');
+        if (mode === 'draft') input.value = 'KEEP OWNER DRAFT while session is pending';
+        if (mode === 'busy') document.querySelector('[data-testid=stop-button]').hidden = false;
+        if (mode === 'selector') input.after(input.cloneNode(true));
+        window.fixtureMutations = 0;
+        new MutationObserver(records => { window.fixtureMutations += records.length; }).observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
+      }, mode);
+      const before = await page.evaluate(() => ({ html: document.body.innerHTML, drafts: [...document.querySelectorAll('textarea')].map(e => e.value) }));
+      released.resolve(); const found = await pending;
+      assert.notEqual(found.status, 'ready', JSON.stringify(found)); assert.equal(found.id, null); assert.equal(f.app.store.read().connections.length, 0);
+      // Later probes must not hide stale evidence returned by the first discovery script.
+      const first = audit.observations[0]?.value; assert.ok(first, 'Expected an actual Chromium discovery observation');
+      assert.ok(first.supported !== true || first.ambiguous === true || first.draftPresent === true || first.busy === true, 'The first observation must reject the state changed during the session read');
+      assert.deepEqual(await page.evaluate(() => ({ html: document.body.innerHTML, drafts: [...document.querySelectorAll('textarea')].map(e => e.value) })), before);
+      assert.equal(await page.evaluate(() => window.fixtureMutations), 0); assert.equal(await page.evaluate(() => window.fixtureSends), 0);
+      assert.ok(!JSON.stringify({ found, store: f.app.store.read(), results: audit.results }).includes(tokenSentinel));
+    } finally {
+      released.resolve(); await pending.catch(() => {}); await page.unrouteAll({ behavior: 'wait' }); await page.close();
+    }
+  });
+});
+
+test('R8 account: wrong origin, missing identity, redirects, network errors and non-JSON sessions fail closed', { timeout: 30000 }, async t => {
+  const browser = await launch(t); const f = await workspace(t);
+  for (const mode of ['wrong-origin', 'missing-user', 'missing-id', 'missing-email', 'redirect', 'network-error', 'non-json']) await t.test(mode, async () => {
+    const { page, audit } = await accountFixture(browser, f.app, mode); const before = await page.locator('body').innerHTML();
+    if (mode === 'wrong-origin') {
+      await assert.rejects(f.app.discoverBrowser(accountRequest), /browser_discovery_(page_missing|origin_mismatch)/); assert.equal(audit.calls.length, 0);
+    } else {
+      const found = await f.app.discoverBrowser(accountRequest); assert.notEqual(found.status, 'ready', JSON.stringify(found)); assert.equal(found.id, null);
+      assert.ok(audit.calls.length > 0); assert.ok(!JSON.stringify(found).includes(tokenSentinel));
+    }
+    assert.equal(f.app.store.read().connections.length, 0); assert.equal(await page.evaluate(() => window.fixtureSends), 0);
+    assert.equal(await page.locator('body').innerHTML(), before); assert.ok(!JSON.stringify(audit.results).includes(tokenSentinel)); await page.close();
+  });
+});
+
+test('R8 account: changing either user ID or email before confirmation prevents saving', { timeout: 20000 }, async t => {
+  const browser = await launch(t); const f = await workspace(t); const { page, audit } = await accountFixture(browser, f.app);
+  for (const field of ['id', 'email']) {
+    await page.evaluate(identity => { window.fixtureUser = { id: identity.userId, email: identity.email }; }, fixtureIdentity);
+    const found = await f.app.discoverBrowser(accountRequest); assert.equal(found.status, 'ready', JSON.stringify(found)); const reads = audit.calls.length;
+    await page.evaluate(field => { window.fixtureUser[field] = field === 'id' ? 'fixture-user-b' : 'fixture-b@example.test'; }, field);
+    await assert.rejects(f.app.confirmBrowser({ discoveryId: found.id, confirmed: true, label: 'Must not save' }, 'switched-' + field), /browser_/);
+    assert.ok(audit.calls.length > reads); assert.equal(f.app.store.read().connections.length, 0); assert.equal(await page.evaluate(() => window.fixtureSends), 0);
+  }
+  assert.ok(!JSON.stringify({ store: f.app.store.read(), results: audit.results }).includes(tokenSentinel));
+});
+
+test('R8 account: actual completion clicks once, records one receipt and never reads the session while polling', { timeout: 20000 }, async t => {
+  const browser = await launch(t); const f = await workspace(t); const { page, audit } = await accountFixture(browser, f.app);
+  const found = await f.app.discoverBrowser(accountRequest); assert.equal(found.status, 'ready', JSON.stringify(found));
+  const id = await f.app.confirmBrowser({ discoveryId: found.id, confirmed: true, label: 'Completion fixture' }, 'complete-save');
+  audit.calls.length = 0; audit.results.length = 0; audit.observations.length = 0;
+  const { input, evidence } = accountCompletion(id); const result = await f.app.browser.complete(input); const receipt = page.url() + '#' + input.requestId;
+  assert.equal(result.text, 'Account fixture response'); assert.equal(result.receipt, receipt); assert.deepEqual(evidence.receipts, [receipt]);
+  assert.deepEqual(evidence.deltas, [result.text]); assert.equal(evidence.dispatches, 1); assert.equal(await page.evaluate(() => window.fixtureSends), 1);
+  assert.equal(await page.locator('[data-message-author-role=user]').last().textContent(), `[웹쫀쿠:${input.requestId}]\n${input.prompt}`);
+  assert.equal(audit.calls.length, 4); const matched = audit.observations.filter(o => o.value.matched === true);
+  assert.ok(matched.length >= 4); assert.ok(matched.slice(0, -1).every(o => o.reads === 3 && o.value.accountChecked === false));
+  assert.equal(matched.at(-1).reads, 4); assert.equal(matched.at(-1).value.accountChecked, true);
+  assert.ok(!JSON.stringify({ store: f.app.store.read(), results: audit.results, result, evidence }).includes(tokenSentinel));
+});
+
+test('R8 account: an input event switches accounts before click, leaving a known unsent request', { timeout: 20000 }, async t => {
+  const browser = await launch(t); const f = await workspace(t); const { page, audit } = await accountFixture(browser, f.app);
+  const found = await f.app.discoverBrowser(accountRequest); assert.equal(found.status, 'ready', JSON.stringify(found));
+  const id = await f.app.confirmBrowser({ discoveryId: found.id, confirmed: true, label: 'Before-click fixture' }, 'before-click-save');
+  await page.evaluate(() => { window.fixtureSwitchAt = 'input'; }); audit.calls.length = 0;
+  const { input, evidence } = accountCompletion(id);
+  await assert.rejects(f.app.browser.complete(input), e => e.code === 'browser_account_not_confirmed' && e.status === 409 && e.uncertain === false);
+  assert.equal(evidence.dispatches, 1); assert.equal(await page.evaluate(() => window.fixtureSends), 0); assert.deepEqual(evidence.receipts, []); assert.deepEqual(evidence.deltas, []);
+  assert.equal(await page.locator('#prompt-textarea').inputValue(), `[웹쫀쿠:${input.requestId}]\n${input.prompt}`); assert.equal(audit.calls.length, 3);
+  assert.deepEqual(audit.results.at(-1).structuredContent.result, { sent: false, accountNotConfirmed: true });
+  assert.deepEqual(f.app.store.read().connections[0].browser.accountIdentity, fixtureIdentity);
+  assert.ok(!JSON.stringify({ store: f.app.store.read(), results: audit.results, evidence }).includes(tokenSentinel));
+});
+
+test('R8 account: switching after send keeps the receipt uncertain and applies no response', { timeout: 20000 }, async t => {
+  const browser = await launch(t); const f = await workspace(t); const { page, audit } = await accountFixture(browser, f.app);
+  const found = await f.app.discoverBrowser(accountRequest); assert.equal(found.status, 'ready', JSON.stringify(found));
+  const id = await f.app.confirmBrowser({ discoveryId: found.id, confirmed: true, label: 'After-send fixture' }, 'after-send-save');
+  await page.evaluate(() => { window.fixtureSwitchAt = 'send'; }); audit.calls.length = 0; audit.observations.length = 0;
+  const { input, evidence } = accountCompletion(id);
+  await assert.rejects(f.app.browser.complete(input), e => e.code === 'browser_target_changed' && e.status === 409 && e.uncertain === true);
+  assert.equal(evidence.dispatches, 1); assert.equal(await page.evaluate(() => window.fixtureSends), 1);
+  assert.deepEqual(evidence.receipts, [page.url() + '#' + input.requestId]); assert.deepEqual(evidence.deltas, []); assert.equal(audit.calls.length, 4);
+  const matched = audit.observations.filter(o => o.value.matched === true); assert.ok(matched.length >= 4);
+  assert.ok(matched.slice(0, -1).every(o => o.reads === 3 && o.value.accountChecked === false && o.value.identity === true));
+  assert.equal(matched.at(-1).reads, 4); assert.equal(matched.at(-1).value.accountChecked, true); assert.equal(matched.at(-1).value.identity, false);
+  assert.deepEqual(f.app.store.read().connections[0].browser.accountIdentity, fixtureIdentity);
+  assert.ok(!JSON.stringify({ store: f.app.store.read(), results: audit.results, evidence }).includes(tokenSentinel));
+});
+
 test('modern ChatGPT discovery scopes Korean/English controls and receipts to the active page', { timeout: 20000 }, async t => {
   const browser = await launch(t); const f = await workspace(t);
   for (const { english, sendLabel } of [{ english: false, sendLabel: '메시지 보내기' }, { english: true, sendLabel: 'Send message' }, { english: false, sendLabel: '보내기' }]) {
@@ -35,7 +208,7 @@ test('modern ChatGPT discovery scopes Korean/English controls and receipts to th
       window.fixtureSends = 0; document.querySelectorAll('button').forEach(b => { b.onclick = () => window.fixtureSends++; });
     });
     const before = await page.locator('body').innerHTML(); const service = new BrowserDiscovery(f.app.browser); const request = { pageId: 7, profile: 'default', presetId: 'chatgpt-v1' };
-    const found = await service.discover(request); assert.equal(found.status, 'ready', JSON.stringify(found)); assert.equal(found.presetVersion, 'chatgpt-v1/4'); assert.equal(found.busy, false);
+    const found = await service.discover(request); assert.equal(found.status, 'ready', JSON.stringify(found)); assert.equal(found.presetVersion, 'chatgpt-v1/5'); assert.equal(found.busy, false);
     const { binding } = await service.resolve({ discoveryId: found.id, confirmed: true });
     for (const key of ['identitySelector', 'inputSelector', 'sendSelector', 'readySelector']) assert.equal(await page.locator(binding[key]).count(), 1);
     const view = await f.app.browser.inspect(binding, '[웹쫀쿠:active-fixture]'); assert.equal(view.matchCount, 1); assert.equal(view.answer, 'Active response'); assert.equal(view.busy, false);

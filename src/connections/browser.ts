@@ -4,6 +4,7 @@ import type { BrowserBinding } from '../workspace/model.js';
 import type { Completion, CompletionInput } from './providers.js';
 import { RpcProcess } from './rpc.js';
 import { AppError, object, string } from '../workspace/util.js';
+import { accountIdentityScript, accountMatchScript, validateAccountIdentity } from './browser-account.js';
 
 export class BrowserBridge {
   private rpc: RpcProcess | null = null;
@@ -48,12 +49,13 @@ export class BrowserBridge {
     if (!this.isolatedLogin) throw new AppError('isolated_login_unavailable', 409);
     await this.tool('new_page', { url: target.href, isolatedContext: 'webjjoku-oauth-' + connectionId });
   }
-  async inspect(binding: BrowserBinding, marker = ''): Promise<Record<string, unknown>> {
+  async inspect(binding: BrowserBinding, marker = '', verifyAccount = true): Promise<Record<string, unknown>> {
+    if (binding.accountIdentity !== undefined) validateAccountIdentity(binding.accountIdentity, binding.url);
     if (binding.discovery) {
       const page = browserPages(await this.tool('list_pages', {})).find(p => p.id === binding.pageId);
       if (!page || cleanUrl(page.url) !== cleanUrl(binding.url) || (page.isolatedContext === undefined ? 'default' : 'isolated:' + page.isolatedContext) !== binding.discovery.profile) throw new AppError('browser_target_mismatch', 409);
     }
-    const result = await this.tool('evaluate_script', { pageId: binding.pageId, function: observationScript(binding, marker), waitForStableDom: false, dialogAction: 'dismiss' });
+    const result = await this.tool('evaluate_script', { pageId: binding.pageId, function: observationScript(binding, marker, verifyAccount), waitForStableDom: false, dialogAction: 'dismiss' });
     return toolObject(result);
   }
   async probe(binding: BrowserBinding): Promise<void> {
@@ -78,20 +80,32 @@ export class BrowserBridge {
       // task that inputs/clicks. Model content is a JSON-encoded string only.
       const sent = toolObject(await this.tool('evaluate_script', { pageId: b.pageId,
         function: sendScript(b, `${marker}\n${input.prompt}`), waitForStableDom: false, dialogAction: 'dismiss' }));
-      if (sent.sent !== true) throw new AppError('browser_send_unconfirmed', 502, true);
+      if (sent.sent !== true) {
+        if (sent.accountNotConfirmed === true) throw new AppError('browser_account_not_confirmed', 409);
+        throw new AppError('browser_send_unconfirmed', 502, true);
+      }
     }
     let receipt: string | null = null; let last = ''; let stable = 0;
     while (!input.signal.aborted) {
-      const view = await this.inspect(b, marker);
+      const view = await this.inspect(b, marker, false);
       if (view.identity !== true || view.thread !== true || view.url !== cleanUrl(b.url)) throw new AppError('browser_target_changed', 409, true);
       if (view.matched === true && !receipt) { receipt = `${cleanUrl(b.url)}#${input.requestId}`; input.hooks.receipt(receipt); }
       const text = typeof view.answer === 'string' ? view.answer : '';
       if (text.length > 100_000) throw new AppError('response_too_large', 502, true);
       if (text && text !== last) {
-        if (text.startsWith(last)) input.hooks.delta(text.slice(last.length));
+        if (!b.accountIdentity && text.startsWith(last)) input.hooks.delta(text.slice(last.length));
         last = text; stable = 0;
       } else if (text) stable++;
-      if (receipt && text && view.ready === true && view.busy === false && stable >= 2) return { text, receipt, usage: null };
+      if (receipt && text && view.ready === true && view.busy === false && stable >= 2) {
+        if (b.accountIdentity) {
+          const final = await this.inspect(b, marker);
+          if (final.identity !== true || final.thread !== true || final.url !== cleanUrl(b.url)) throw new AppError('browser_target_changed', 409, true);
+          if (final.matchCount !== 1) throw new AppError('browser_receipt_ambiguous', 409, true);
+          if (final.answer !== text || final.ready !== true || final.busy !== false) continue;
+          input.hooks.delta(text);
+        }
+        return { text, receipt, usage: null };
+      }
       await delay(500, undefined, { signal: input.signal });
     }
     throw new AppError('browser_response_unconfirmed', 502, true);
@@ -108,6 +122,7 @@ export function validateBinding(b: BrowserBinding): void {
     if (b.thread.jsonKey !== undefined) string(b.thread.jsonKey, 100);
   }
   if (b.sendAppearsAfterInput !== undefined && typeof b.sendAppearsAfterInput !== 'boolean') throw new AppError('invalid_input');
+  if (b.accountIdentity !== undefined) validateAccountIdentity(b.accountIdentity, b.url);
 }
 function cleanUrl(value: string): string { const url = new URL(value); url.hash = ''; return url.href; }
 function toolText(result: Record<string, unknown>): string { return (Array.isArray(result.content) ? result.content : []).map(object).filter(c => c.type === 'text').map(c => String(c.text)).join('\n'); }
@@ -146,8 +161,10 @@ export function toolObject(result: Record<string, unknown>): Record<string, unkn
   const text = toolText(result); const block = /```(?:json)?\s*\n([\s\S]*?)\n```/.exec(text);
   try { return object(JSON.parse(block?.[1] ?? text) as unknown); } catch { throw new AppError('browser_observation_invalid', 502, true); }
 }
-export function observationScript(b: BrowserBinding, marker: string): string {
-  return `() => { const b=${JSON.stringify(b)}, marker=${JSON.stringify(marker)};
+export function observationScript(b: BrowserBinding, marker: string, verifyAccount = true): string {
+  if (b.accountIdentity !== undefined) validateAccountIdentity(b.accountIdentity, b.url);
+  return `${b.accountIdentity ? 'async ' : ''}() => { const b=${JSON.stringify(b)}, marker=${JSON.stringify(marker)};
+    ${b.accountIdentity && verifyAccount ? accountIdentityScript() + accountMatchScript() : 'const accountVerified=true;'}
     ${threadGuardScript()}
     const visible=e=>!!e&&e.getClientRects().length>0;
     const input=document.querySelector(b.inputSelector), send=document.querySelector(b.sendSelector);
@@ -160,7 +177,8 @@ export function observationScript(b: BrowserBinding, marker: string): string {
     const answers=user?[...document.querySelectorAll(b.assistantSelector)].filter(e=>(user.compareDocumentPosition(e)&Node.DOCUMENT_POSITION_FOLLOWING)!==0&&(!nextUser||(e.compareDocumentPosition(nextUser)&Node.DOCUMENT_POSITION_FOLLOWING)!==0)):[];
     const u=new URL(location.href);u.hash='';
     const unique=!b.discovery||[b.identitySelector,b.inputSelector,b.readySelector].every(s=>document.querySelectorAll(s).length===1)&&document.querySelectorAll(b.sendSelector).length<=1;
-    return {url:u.href,identity:unique&&!!identity&&(identity.textContent||'').includes(b.identityText),thread:threadMatches(),
+    return {url:u.href,identity:unique&&!!identity&&(b.accountIdentity?accountVerified:(identity.textContent||'').includes(b.identityText)),thread:threadMatches(),
+      ${b.accountIdentity ? `accountChecked:${verifyAccount},` : ''}
       inputFound:visible(input),sendFound:visible(send),draft:input?('value' in input?input.value:input.textContent):'',
       ready:visible(document.querySelector(b.readySelector)),busy:[...document.querySelectorAll(b.busySelector)].some(visible),
       matched:!!user,matchCount:match.length,answer:answers.map(messageText).join('\\n\\n').slice(0,100001)}; }`;
@@ -170,18 +188,21 @@ function threadGuardScript(): string {
     return nodes.length>0&&nodes.every(e=>{let value=e.getAttribute(b.thread.attribute);if(b.thread.jsonKey){try{value=JSON.parse(value||'null')?.[b.thread.jsonKey];}catch{return false;}}return value===b.thread.value;});};`;
 }
 export function sendScript(b: BrowserBinding, prompt: string): string {
+  if (b.accountIdentity !== undefined) validateAccountIdentity(b.accountIdentity, b.url);
   return `async () => {const b=${JSON.stringify(b)}, text=${JSON.stringify(prompt)};
+    ${b.accountIdentity ? accountIdentityScript() : ''}
     ${threadGuardScript()}
     const proseMirror=e=>new URL(b.url).hostname==='chatgpt.com'&&e.classList.contains('ProseMirror');
     const editorText=e=>{if('value' in e)return e.value;
       if(proseMirror(e)&&[...e.childNodes].every(n=>n.nodeType===Node.ELEMENT_NODE&&['P','DIV'].includes(n.nodeName)))return [...e.children].map(p=>{const c=p.cloneNode(true);c.querySelectorAll('br:not(.ProseMirror-trailingBreak)').forEach(br=>br.replaceWith('\\n'));c.querySelectorAll('br.ProseMirror-trailingBreak').forEach(br=>br.remove());return c.textContent||'';}).join('\\n');
       return e.textContent||'';};
+    ${b.accountIdentity ? `{${accountMatchScript()}if(!accountVerified)return {sent:false,accountNotConfirmed:true};}` : ''}
     const u=new URL(location.href);u.hash='';if(u.href!==${JSON.stringify(cleanUrl(b.url))})return {sent:false};
     const identity=document.querySelector(b.identitySelector),input=document.querySelector(b.inputSelector);
     let button=document.querySelector(b.sendSelector);
     const visible=e=>!!e&&e.getClientRects().length>0;
     const unique=()=>!b.discovery||[b.identitySelector,b.inputSelector,b.readySelector].every(s=>document.querySelectorAll(s).length===1)&&document.querySelectorAll(b.sendSelector).length<=1;
-    if(!unique()||!identity||!(identity.textContent||'').includes(b.identityText)||!threadMatches()||!visible(input)||(!visible(button)&&!b.sendAppearsAfterInput)||[...document.querySelectorAll(b.busySelector)].some(visible)||!visible(document.querySelector(b.readySelector)))return {sent:false};
+    if(!unique()||!identity||!b.accountIdentity&&!(identity.textContent||'').includes(b.identityText)||!threadMatches()||!visible(input)||(!visible(button)&&!b.sendAppearsAfterInput)||[...document.querySelectorAll(b.busySelector)].some(visible)||!visible(document.querySelector(b.readySelector)))return {sent:false};
     if(editorText(input).trim())return {sent:false};
     if(input instanceof HTMLTextAreaElement||input instanceof HTMLInputElement){
       const proto=input instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
@@ -192,7 +213,8 @@ export function sendScript(b: BrowserBinding, prompt: string): string {
     }else return {sent:false};
     input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:text}));
     await new Promise(resolve=>setTimeout(resolve,150));
+    ${b.accountIdentity ? `{${accountMatchScript()}if(!accountVerified)return {sent:false,accountNotConfirmed:true};}` : ''}
     button=document.querySelector(b.sendSelector);
     const current=new URL(location.href);current.hash='';
-    if(!unique()||current.href!==u.href||!(document.querySelector(b.identitySelector)?.textContent||'').includes(b.identityText)||!threadMatches()||!input.isConnected||!visible(button)||!button.isConnected||editorText(input)!==text||button.disabled||button.getAttribute('aria-disabled')==='true'||!visible(document.querySelector(b.readySelector))||[...document.querySelectorAll(b.busySelector)].some(visible))return {sent:false};button.click();return {sent:true};}`;
+    if(!unique()||current.href!==u.href||!b.accountIdentity&&!(document.querySelector(b.identitySelector)?.textContent||'').includes(b.identityText)||b.accountIdentity&&(document.querySelector(b.inputSelector)!==input||document.querySelector(b.identitySelector)!==identity)||!threadMatches()||!input.isConnected||!visible(button)||!button.isConnected||editorText(input)!==text||button.disabled||button.getAttribute('aria-disabled')==='true'||!visible(document.querySelector(b.readySelector))||[...document.querySelectorAll(b.busySelector)].some(visible))return {sent:false};button.click();return {sent:true};}`;
 }

@@ -2,6 +2,8 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
+**2026-11-08 웹 GPT 아이콘형 프로필 계정 확인 보완 — 구현·모의 검사 PASS:** 사용자가 [추가 영향안](./reviews/r8-web-account-identity-impact-20261108.md)의 계획 개정·개발/모의 검사를 승인했다. 기존 DOM 계정 확인은 기본값으로 두고 계정 문구가 없는 새 ChatGPT 연결에만 같은 페이지의 사용자 ID·이메일을 읽기 전용으로 대조하는 optional metadata를 구현했다. 고정 origin/경로·형식/기한·전송 전/최종 계정 검사를 사용하고 token/cookie를 앱에 가져오지 않는다. Providers.complete·Store/기존 기록·Muse·native dot·R6 보호/명령/반영·예산·원래 gate를 유지한다. 최신 main 정리 후 Node852 PASS/6 SKIP, 동일 브라우저 소스의 실제 Chromium/MCP fixture116 PASS/0 SKIP. [구현·검사·복귀](./implementation/web-gpt-account-identity-20261108.md). 내부 웹 경로의 공식 지원/장기 안정성은 UNVERIFIED이며 변경/조회 실패 시 차단한다. R4/R8의 작은 adapter 보완이며 서버 적용·추가 실계정 호출은 NOT_RUN이다. 두 웹 계정의 실제 Extra High·준비1회 이후의 전체 혼합 수락은 별도다.
+
 **2026-11-08 R8 준비 부분 실측·새 연결 탐지 BLOCKED:** 서로 다른 실제 웹 GPT2계정과 두 창의 Extra High·빈 입력을 확인했다. 새 계정의 준비 요청1회/답변1회는 완료됐으나 아이콘형 프로필 버튼의 계정 문구가 비어 있어 기존 discovery가 연결을 거절했다. 이 상태를 우회하지 않았으며 혼합 토의/새 API/Codex job은0이다. 정상 service·원래 방off/Muse 잠금·DB/비밀번호/API 한도와 실제 준비 대화를 보존했다. **R8-D 전체는 미완료**이며 계정 확인 출처의 추가 보완은 별도 영향 보고/승인 대상으로 남긴다. [실측·검사·복구](./implementation/r8-mixed-live-20261108.md).
 
 **2026-11-08 R8 혼합 실검증 보완 승인:** 사용자가 [영향·변경량](./reviews/r8-mixed-execution-impact-20261108.md)의 검증기 기본 Codex 차단 유지·한 방/검증 저장소/세션만 명시 허용하는 보완을 승인했다. 기존 backend/권한·보호 사본·명령 확인·한 파일 원본 반영을 재사용하며 최대30분·모델30회(API 최대6회 및 기존 일일 잔여 이내)·Codex 읽기1/쓰기1job으로 검증한다. 서비스 전용 임시 설정1개를 사용하고 복구하며 기존 `.env`/호스트 보호 정책을 바꾸지 않는다. 서로 다른 실제 웹 GPT2계정·DeepSeek High·native dot·기존 Muse를 사용하며 OAuth/기기 코드로 대체하지 않는다. 명령과 실제 diff 반영은 각각 소유자 확인을 유지한다. **실계정 R8-D 결과는 NOT_RUN**이며 앞선 R6-F PASS·원래50 gate·R8-A 무개입 전체 흐름/기기·장기 운영의 미확인은 유지한다.

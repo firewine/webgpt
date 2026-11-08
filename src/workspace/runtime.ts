@@ -13,6 +13,7 @@ import { Providers } from '../connections/providers.js';
 import { deepSeekService } from '../connections/deepseek-services.js';
 import { ModelCatalogError } from '../connections/model-catalog-error.js';
 import { BrowserBridge, validateBinding } from '../connections/browser.js';
+import { sameAccountIdentity, validateAccountIdentity } from '../connections/browser-account.js';
 import { BrowserDiscovery } from '../connections/browser-discovery.js';
 import { DiscussionEngine, findDiscussion } from './engine.js';
 import { CodexExecutor } from '../execution/codex.js';
@@ -189,6 +190,10 @@ export class Workspace {
     const binding: BrowserBinding = { pageId: Number(raw.pageId), url: string(raw.url, 2000), accountLabel: string(raw.accountLabel, 100), agentLabel: string(raw.agentLabel, 100),
       identitySelector: string(raw.identitySelector, 500), identityText: string(raw.identityText, 500), inputSelector: string(raw.inputSelector, 500), sendSelector: string(raw.sendSelector, 500),
       userSelector: string(raw.userSelector, 500), assistantSelector: string(raw.assistantSelector, 500), busySelector: string(raw.busySelector, 500), readySelector: string(raw.readySelector, 500) };
+    const account = raw.accountIdentity === undefined ? existing?.browser?.accountIdentity : raw.accountIdentity;
+    if (account !== undefined) binding.accountIdentity = validateAccountIdentity(account, binding.url);
+    if (existing?.browser && (existing.browser.accountIdentity || binding.accountIdentity) &&
+        !sameAccountIdentity(existing.browser.accountIdentity, binding.accountIdentity)) throw new AppError('browser_identity_change_not_allowed', 409);
     if (raw.thread !== undefined) {
       const thread = object(raw.thread);
       binding.thread = { selector: string(thread.selector, 500), attribute: string(thread.attribute, 100), value: string(thread.value, 500),
