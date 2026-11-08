@@ -5,6 +5,8 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { AppError } from '../workspace/util.js';
 
+export const NATIVE_METADATA_DIRECTORIES = ['.agents', '.aws', '.codex', '.git'] as const;
+
 export type WorkspaceProtectionBinding = { repoRoot: string; cwd: string; branch: string; head: string };
 export type ProtectedFileBaseline = { path: string; digest: string; size: number; mode: number; dev: string; ino: string };
 export type ProtectedManifest = {
@@ -27,7 +29,7 @@ const hash = (value: string | Uint8Array): string => createHash('sha256').update
 function fail(reason: string): never { throw new AppError('protected_workspace_' + reason, 409); }
 const inside = (root: string, path: string): boolean => { const r = relative(root, path); return r === '' || r !== '..' && !r.startsWith('../') && !isAbsolute(r); };
 const overlap = (a: string, b: string): boolean => inside(a, b) || inside(b, a);
-const protectedName = (name: string): boolean => /^(?:\.env.*|\.git.*|\.ssh|\.codex|\.gnupg|\.aws|\.azure|\.gcp|\.config|\.docker|\.kube|\.direnv|\.envrc|\.vscode|\.idea|node_modules|\.npmrc|\.yarnrc.*|\.pypirc|\.netrc|\.bashrc|\.zshrc|\.profile|credentials?(?:[._-].*)?|secrets?(?:[._-].*)?|vault|access[-_]token.*|master[-_]key.*|id_(?:rsa|dsa|ecdsa|ed25519)(?:\..*)?|.*\.(?:pem|key|p12|pfx|keystore)|.*(?:credentials|service[-_]account)\.(?:json|ya?ml))$/i.test(name);
+const protectedName = (name: string): boolean => NATIVE_METADATA_DIRECTORIES.some(target => target === name) || /^(?:\.env.*|\.git.*|\.ssh|\.codex|\.gnupg|\.aws|\.azure|\.gcp|\.config|\.docker|\.kube|\.direnv|\.envrc|\.vscode|\.idea|node_modules|\.npmrc|\.yarnrc.*|\.pypirc|\.netrc|\.bashrc|\.zshrc|\.profile|credentials?(?:[._-].*)?|secrets?(?:[._-].*)?|vault|access[-_]token.*|master[-_]key.*|id_(?:rsa|dsa|ecdsa|ed25519)(?:\..*)?|.*\.(?:pem|key|p12|pfx|keystore)|.*(?:credentials|service[-_]account)\.(?:json|ya?ml))$/i.test(name);
 function relativePath(path: string, allowEmpty = false): void {
   if (typeof path !== 'string' || path.length > 1024 || path.split('/').length > LIMIT.depth || (!path && !allowEmpty) || isAbsolute(path) || /[\x00-\x1f\x7f\\]/.test(path) || path.split('/').some(p => p === '.' || p === '..' || !p && !!path)) fail('path_invalid');
 }
@@ -268,6 +270,10 @@ export class ProtectedWorkspaces {
         if (directories.size + files.length > LIMIT.entries) fail('copy_budget_exceeded');
       };
       addDirectory(relative(binding.repoRoot, binding.cwd));
+      // Native bwrap needs these mount targets. Prepare private empty targets
+      // before sealing, so its scaffold mkdir cannot add public-mode directories
+      // to the captured tree. Their source contents are never copied.
+      for (const parent of ['', relative(binding.repoRoot, binding.cwd)]) for (const name of NATIVE_METADATA_DIRECTORIES) addDirectory(parent ? parent + '/' + name : name);
       for (const path of repo.paths) {
         if (path.split('/').some(protectedName)) continue;
         allowedPath(path); const file = readAt(source, path, LIMIT.file, binding.repoRoot, anchors, true);
@@ -314,6 +320,7 @@ export class ProtectedWorkspaces {
       baseline = childDirectory(job, 'baseline');
       privateDirectory(tree); privateDirectory(baseline);
       const actual = new Map<string, ReadFile>(); const directories: string[] = []; const directoryStamps = new Map<string, Stamp>(); let entries = 0; let total = 0;
+      const nativeTargets = new Set(['', relative(m.sourceRoot, m.sourceCwd)].flatMap(parent => NATIVE_METADATA_DIRECTORIES.map(name => parent ? parent + '/' + name : name)));
       const walk = (dir: number, path: string, depth: number): void => {
         if (depth > LIMIT.depth) fail('copy_budget_exceeded');
         privateDirectory(dir); const before = stamp(fstatSync(dir, { bigint: true })); directories.push(path); directoryStamps.set(path, before);
@@ -321,7 +328,10 @@ export class ProtectedWorkspaces {
         const listing = readdirSync(at(dir), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
         for (const entry of listing) {
           if (++entries > LIMIT.entries) fail('copy_budget_exceeded');
-          const next = path ? path + '/' + entry.name : entry.name; allowedPath(next);
+          const next = path ? path + '/' + entry.name : entry.name;
+          // Only known empty targets recorded in this sealed baseline qualify.
+          // New contents, missing targets and mode changes keep failing closed.
+          if (!(entry.isDirectory() && nativeTargets.has(next) && body.directories.includes(next))) allowedPath(next);
           if (entry.isDirectory()) { const child = childDirectory(dir, entry.name); try { walk(child, next, depth + 1); } finally { closeSync(child); } }
           else {
             if (!entry.isFile()) fail('copy_link_or_special_file');

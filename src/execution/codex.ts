@@ -15,6 +15,7 @@ import type { Store } from '../workspace/store.js';
 import type { CodexJob, ExecutionBinding, WorkspaceState } from '../workspace/model.js';
 import { AppError, code, digest, id, integer, now, object, string } from '../workspace/util.js';
 import type { WorkScopePhase } from '../workspace/work-execution.js';
+import { createScopedApproval, scopedApprovalDigest, validateScopedApproval } from './approval-policy.js';
 const execute = promisify(execFile);
 const ACTIVE = ['running', 'blocked_approval', 'reconciling'];
 
@@ -24,6 +25,9 @@ export class CodexExecutor {
   private readonly isolation: ExecutionIsolation;
   private readonly outerBwrap: string | undefined;
   private readonly protectRead: boolean;
+  private readonly scopedApprovals: boolean;
+  private readonly approvalRuntime = new WeakMap<RpcProcess, string>();
+  private readonly approvalRequests = new Map<string, { rpc: RpcProcess; digest: string; requestDigest: string }>();
   private readonly managedOwners = new Map<string, { rpc: RpcProcess; jobId: string }>();
   private readonly previews = new Map<string, OutputPreview>();
   private readonly applying = new Set<string>();
@@ -42,7 +46,7 @@ export class CodexExecutor {
     if (!this.workScopeGuard) throw new AppError('work_execution_guard_required', 409);
     this.workScopeGuard(state, job, phase);
   }
-  constructor(private readonly store: Store, private readonly command: string[], private readonly roots: string[], private readonly protectedPaths: string[] = [], options: { secrets?: () => string[]; outerBwrap?: string; protectRead?: boolean } = {}) {
+  constructor(private readonly store: Store, private readonly command: string[], private readonly roots: string[], private readonly protectedPaths: string[] = [], options: { secrets?: () => string[]; outerBwrap?: string; protectRead?: boolean; scopedApprovals?: boolean } = {}) {
     initializeExecutionProtection(this.store.read());
     if (this.store.read().executionProtectionVersion === undefined) this.store.transact(initializeExecutionProtection);
     this.secrets = options.secrets ?? (() => []);
@@ -50,6 +54,7 @@ export class CodexExecutor {
     this.workspaces = new ProtectedWorkspaces(join(store.directory, 'execution-drafts'));
     this.outerBwrap = options.outerBwrap;
     this.protectRead = options.protectRead === true || !!options.outerBwrap;
+    this.scopedApprovals = options.scopedApprovals === true;
     this.isolation = new ExecutionIsolation(command, protectedPaths, join(store.directory, 'execution-probes'), options.outerBwrap);
     this.watchdog = setInterval(() => this.expire(), 1000); this.watchdog.unref();
   }
@@ -62,6 +67,10 @@ export class CodexExecutor {
       emit({ type: 'codex.reconciling', discussionId: job.discussionId, data: { jobId: job.id } });
     }
       for (const job of state.jobs) if (job.draft?.status === 'applying') { job.draft.status = 'unconfirmed'; job.draft.reason = 'restart_requires_application_review'; }
+      for (const job of state.jobs) for (const a of job.approvals ?? []) if (a.scope && a.status === 'pending') {
+        a.scope.state = 'unconfirmed'; a.scope.reason = 'scoped_approval_reconciliation_required';
+        if (a.scope.choice) a.scope.choice.delivery = 'unconfirmed';
+      }
     });
     for (const job of this.store.read().jobs) if (['completed', 'failed', 'interrupted'].includes(job.status) && (job.draft?.status === 'running' || job.readCopy?.status === 'running')) {
       if (job.turnId) void this.finishDraftForTurn(job.bindingId, job.turnId);
@@ -235,9 +244,12 @@ export class CodexExecutor {
     const command = draftJobId ? this.isolation.commandFor(binding, this.workspaces.manifest(draftJobId).copyRoot) : this.protectedPaths.length ? [this.outerBwrap ?? 'bwrap', '--die-with-parent', '--new-session', '--unshare-pid', '--bind', '/', '/', '--proc', '/proc', ...this.protectedPaths.flatMap(path => ['--tmpfs', path]), '--', ...this.command] : this.command;
     const environment = draftJobId ? isolationEnvironment() : this.outerBwrap ? { ...isolationEnvironment(), PATH: `/usr/bin:/bin:${dirname(process.execPath)}`, HOME: homedir(), CODEX_HOME: process.env.CODEX_HOME ?? join(homedir(), '.codex') } : undefined;
     const rpc = new RpcProcess(command, binding.cwd, false, environment);
+    const copyRoot = draftJobId ? this.workspaces.manifest(draftJobId).copyRoot : null;
+    const runtimeIdentity = this.scopedApprovals && copyRoot ? this.isolation.approvalIdentity(binding, copyRoot) : null;
     rpc.onNotification = (method, params) => this.notification(binding.id, method, params);
     rpc.onRequest = (requestId, method, params) => this.approval(binding.id, rpc, requestId, method, params);
     rpc.onClose = () => {
+      for (const [key, request] of this.approvalRequests) if (request.rpc === rpc) this.approvalRequests.delete(key);
       if (this.processes.get(binding.id) !== rpc) return;
       this.processes.delete(binding.id);
       if (this.managedOwners.get(binding.id)?.rpc === rpc) this.managedOwners.delete(binding.id);
@@ -246,6 +258,10 @@ export class CodexExecutor {
         const b = s.bindings.find(b => b.id === binding.id);
         if (b?.managedSession?.state === 'initial' && b.authority?.epoch === binding.authority?.epoch) { b.managedSession.state = 'lost'; b.status = 'blocked'; }
         for (const job of s.jobs) if (job.bindingId === binding.id && ['running', 'blocked_approval'].includes(job.status)) {
+        for (const a of job.approvals) if (a.status === 'pending' && a.scope && a.scope.state !== 'blocked') {
+          a.scope.state = 'unconfirmed'; a.scope.reason = 'scoped_approval_reconciliation_required';
+          if (a.scope.choice) a.scope.choice.delivery = 'unconfirmed';
+        }
         this.captureIncomplete(job, 'transport_capture_gap'); job.status = 'reconciling'; job.error = 'codex_disconnected';
         emit({ type: 'codex.reconciling', discussionId: job.discussionId, data: { jobId: job.id } });
       } }); this.onProgress();
@@ -254,6 +270,10 @@ export class CodexExecutor {
       rpc.notify('initialized');
       if (draftJobId) { const profiles = object(await rpc.request('permissionProfile/list', { cwd: binding.cwd }));
         if (!Array.isArray(profiles.data) || !profiles.data.some(p => p && typeof p === 'object' && p.id === this.isolation.profileFor(binding) && p.allowed === true)) throw new AppError('protected_profile_not_allowed', 409); }
+      if (runtimeIdentity && copyRoot) {
+        if (runtimeIdentity !== this.isolation.approvalIdentity(binding, copyRoot)) throw new AppError('scoped_approval_runtime_changed', 409);
+        this.approvalRuntime.set(rpc, runtimeIdentity);
+      }
       this.processes.set(binding.id, rpc); return rpc;
     } catch (error) { rpc.close(); throw error; }
   }
@@ -328,30 +348,151 @@ export class CodexExecutor {
   }
   private approval(bindingId: string, rpc: RpcProcess, requestId: RpcId, method: string, params: Record<string, unknown>): void {
     if (!['item/commandExecution/requestApproval', 'item/fileChange/requestApproval'].includes(method)) { rpc.respond(requestId, null, { code: -32601, message: 'Owner intervention required; unsupported request' }); return; }
-    let accepted = false;
+    let accepted = false; let prepare: { jobId: string; approvalId: string; digest: string } | null = null;
     this.store.transact((s, emit) => {
       const job = s.jobs.find(j => j.bindingId === bindingId && j.threadId === params.threadId && j.turnId === params.turnId && ACTIVE.includes(j.status));
       if (!job) return;
       try { assertJobAuthority(s, job); } catch { return; }
+      if (this.scopedApprovals && (job.draft || job.readCopy) && job.approvals.some(a => a.id === String(requestId))) {
+        for (const a of job.approvals.filter(a => a.id === String(requestId) && a.scope && a.status === 'pending')) {
+          const uncertain = a.scope!.choice && ['sending', 'unconfirmed'].includes(a.scope!.choice.delivery);
+          a.scope!.state = uncertain ? 'unconfirmed' : 'blocked'; a.scope!.reason = 'scoped_approval_request_reused';
+          if (a.scope!.choice) a.scope!.choice!.delivery = uncertain ? 'unconfirmed' : 'cancelled';
+        }
+        this.captureIncomplete(job, 'approval_id_reused'); job.status = 'reconciling'; job.error = 'scoped_approval_request_reused';
+        emit({ type: 'codex.reconciling', discussionId: job.discussionId, data: { jobId: job.id, reason: job.error } });
+        return;
+      }
       this.captureEvent(job, 'approval', { requestId, method, params });
       accepted = true; job.status = 'blocked_approval';
-      job.approvals.push({ id: String(requestId), rpcId: requestId, method, params: safeOutput(params, this.secrets()) as Record<string, unknown>, status: 'pending' });
+      const approval: CodexJob['approvals'][number] = { id: String(requestId), rpcId: requestId, method, params: safeOutput(params, this.secrets()) as Record<string, unknown>, status: 'pending' };
+      if (this.scopedApprovals && (job.draft || job.readCopy)) {
+        const binding = s.bindings.find(b => b.id === bindingId)!;
+        let contextDigest = digest('unverified:' + job.id), denied: string | null = null;
+        try { contextDigest = this.approvalContext(s, job, rpc); } catch (error) { denied = code(error); }
+        const display = typeof params.command === 'string' ? safeOutput(params.command, this.secrets()) : '';
+        approval.scope = createScopedApproval({ jobId: job.id, threadId: job.threadId, turnId: job.turnId!, rpcId: requestId, method, params,
+          contextDigest, displayCommand: typeof display === 'string' ? display : '', cwd: binding.cwd, profileId: this.isolation.profileFor(binding) as 'webjjoku_read' | 'webjjoku_copy' });
+        if (denied) { approval.scope.state = 'blocked'; approval.scope.reason = denied; }
+        if (approval.scope.state === 'checking') {
+          this.approvalRequests.set(job.id + ':' + approval.id, { rpc, digest: approval.scope.digest, requestDigest: approval.scope.requestDigest });
+          prepare = { jobId: job.id, approvalId: approval.id, digest: approval.scope.digest };
+        }
+      }
+      job.approvals.push(approval);
       emit({ type: 'codex.approval_required', discussionId: job.discussionId, data: { jobId: job.id, approvalId: String(requestId) } });
     });
     if (!accepted) rpc.respond(requestId, { decision: 'cancel' }); this.onProgress();
+    if (prepare) void this.prepareApproval(prepare, rpc);
   }
-  decide(jobId: string, approvalId: string, decision: string): void {
+  private approvalContext(s: WorkspaceState, job: CodexJob, rpc: RpcProcess): string {
+    assertJobAuthority(s, job); this.checkWorkScope(s, job, 'approval');
+    if (job.status !== 'blocked_approval' || !job.turnId || job.deadlineAt && Date.parse(job.deadlineAt) <= Date.now()) throw new AppError('scoped_approval_expired', 409);
+    const binding = s.bindings.find(b => b.id === job.bindingId)!;
+    const manifest = this.workspaces.manifest(job.id), runtime = this.approvalRuntime.get(rpc);
+    if (this.processes.get(binding.id) !== rpc || !runtime || runtime !== this.isolation.approvalIdentity(binding, manifest.copyRoot)) throw new AppError('scoped_approval_runtime_changed', 409);
+    if (manifest.digest !== (job.draft?.manifestDigest ?? job.readCopy?.manifestDigest)) throw new AppError('scoped_approval_scope_changed', 409);
+    const capture = this.evidence.describe(job.id);
+    if (!job.capture || capture.complete || capture.reason && capture.reason !== 'capture-in-progress' ||
+        capture.digest !== job.capture.digest || capture.byteLength !== job.capture.byteLength || capture.pageCount !== job.capture.pageCount) throw new AppError('execution_capture_integrity_changed', 409);
+    const work = s.resident?.jobLinks.find(l => l.input.requestId === job.requestId);
+    return digest(JSON.stringify({ jobId: job.id, threadId: job.threadId, turnId: job.turnId, authority: job.authority, binding: bindingDigest(binding),
+      manifest: manifest.digest, runtime, deadlineAt: job.deadlineAt, work: work ? { intent: work.intentDigest, scope: work.scope } : null }));
+  }
+  private async prepareApproval(input: { jobId: string; approvalId: string; digest: string }, rpc: RpcProcess): Promise<void> {
+    try {
+      const state = this.store.read(), job = state.jobs.find(j => j.id === input.jobId)!;
+      this.approvalContext(state, job, rpc);
+      const binding = state.bindings.find(b => b.id === job.bindingId)!;
+      await this.isolation.verifyApproval(binding, this.workspaces.manifest(job.id).copyRoot);
+      await this.approvalRepository(binding, job.id);
+      this.store.transact((s, emit) => {
+        const current = s.jobs.find(j => j.id === input.jobId)!, a = current.approvals.find(a => a.id === input.approvalId)!;
+        if (a.status !== 'pending' || a.scope?.digest !== input.digest || a.scope.state !== 'checking') return;
+        if (this.approvalContext(s, current, rpc) !== a.scope.contextDigest) throw new AppError('scoped_approval_scope_changed', 409);
+        a.scope.state = 'ready'; a.scope.reason = null;
+        emit({ type: 'codex.approval_scope_ready', discussionId: current.discussionId, data: { jobId: current.id, approvalId: a.id } });
+      });
+    } catch (error) {
+      if (this.closed) return;
+      this.store.transact((s, emit) => {
+        const current = s.jobs.find(j => j.id === input.jobId), a = current?.approvals.find(a => a.id === input.approvalId);
+        if (a?.status !== 'pending' || a.scope?.digest !== input.digest || a.scope.state !== 'checking') return;
+        a.scope.state = 'blocked'; a.scope.reason = error instanceof AppError ? error.code : 'protected_approval_proof_failed';
+        emit({ type: 'codex.approval_scope_blocked', discussionId: current!.discussionId, data: { jobId: current!.id, approvalId: a.id, reason: a.scope.reason } });
+      });
+    }
+    this.onProgress();
+  }
+  private async approvalRepository(binding: ExecutionBinding, jobId: string): Promise<void> {
+    const repository = await gitIdentity(binding.cwd), manifest = this.workspaces.manifest(jobId);
+    if (repository.repoRoot !== binding.repoRoot || repository.branch !== binding.branch || repository.head !== manifest.head) throw new AppError('workspace_changed', 409);
+  }
+  decide(jobId: string, approvalId: string, decision: string, confirmation?: { expectedScopeDigest?: unknown; ownerConfirmed?: unknown; commandId?: string }): void | Promise<void> {
     if (!['accept', 'decline', 'cancel'].includes(decision)) throw new AppError('invalid_decision');
     const job = this.store.read().jobs.find(j => j.id === jobId); const approval = job?.approvals.find(a => a.id === approvalId && a.status === 'pending');
     const rpc = job ? this.processes.get(job.bindingId) : null;
     if (!job || !approval || !rpc || job.status !== 'blocked_approval') throw new AppError('approval_not_pending', 409);
     if (decision === 'accept') { assertJobAuthority(this.store.read(), job); this.checkWorkScope(this.store.read(), job, 'approval');
-      if (job.draft || job.readCopy) throw new AppError('protected_approval_requires_scoped_support', 409); }
+      if (job.draft || job.readCopy) {
+        if (!this.scopedApprovals || !approval.scope || approval.scope.state !== 'ready') throw new AppError('protected_approval_requires_scoped_support', 409);
+        if (confirmation?.ownerConfirmed !== true || typeof confirmation.commandId !== 'string' || !confirmation.commandId.trim() || confirmation.commandId.length > 200) throw new AppError('protected_approval_confirmation_required', 409);
+        if (confirmation.expectedScopeDigest !== approval.scope.digest) throw new AppError('scoped_approval_scope_changed', 409);
+        return this.acceptScoped(jobId, approvalId, rpc, confirmation as { expectedScopeDigest: string; ownerConfirmed: true; commandId: string });
+      } }
     rpc.respond(approval.rpcId, { decision });
     this.store.transact((s, emit) => { const current = s.jobs.find(j => j.id === jobId)!;
       current.approvals.find(a => a.id === approvalId)!.status = 'resolved';
+      const scoped = current.approvals.find(a => a.id === approvalId)!.scope;
+      if (scoped) { scoped.state = 'blocked'; scoped.reason = 'scoped_approval_owner_declined'; if (scoped.choice) scoped.choice.delivery = 'cancelled'; }
       if (!current.approvals.some(a => a.status === 'pending')) current.status = 'running';
       emit({ type: 'codex.approval_decided', discussionId: current.discussionId, data: { jobId, approvalId, decision } }); });
+    this.approvalRequests.delete(jobId + ':' + approvalId);
+  }
+  private async acceptScoped(jobId: string, approvalId: string, rpc: RpcProcess, confirmation: { expectedScopeDigest: string; ownerConfirmed: true; commandId: string }): Promise<void> {
+    const check = (s: WorkspaceState, selected: boolean) => {
+      const job = s.jobs.find(j => j.id === jobId), approval = job?.approvals.find(a => a.id === approvalId), scope = approval?.scope;
+      if (!job || approval?.status !== 'pending' || !scope || scope.state !== (selected ? 'selected' : 'ready')) throw new AppError('approval_not_pending', 409);
+      validateScopedApproval(scope);
+      const original = this.approvalRequests.get(jobId + ':' + approvalId);
+      if (!original || original.rpc !== rpc || original.digest !== confirmation.expectedScopeDigest || scope.digest !== original.digest ||
+          scope.requestDigest !== original.requestDigest || scopedApprovalDigest(scope) !== scope.digest || this.approvalContext(s, job, rpc) !== scope.contextDigest ||
+          selected && scope.choice?.commandId !== confirmation.commandId) throw new AppError('scoped_approval_scope_changed', 409);
+      return { job, approval, scope };
+    };
+    this.store.transact((s, emit) => { const { job, scope } = check(s, false); scope.state = 'selected';
+      scope.choice = { commandId: confirmation.commandId, selectedAt: now(), delivery: 'prepared' };
+      emit({ type: 'codex.approval_selected', discussionId: job.discussionId, data: { jobId, approvalId, scopeDigest: scope.digest } });
+      return { jobId, approvalId, scopeDigest: scope.digest };
+    }, { id: 'codex:approval:' + confirmation.commandId, input: { jobId, approvalId, scopeDigest: confirmation.expectedScopeDigest, decision: 'accept' } });
+    try {
+      const state = this.store.read(), { job } = check(state, true), binding = state.bindings.find(b => b.id === job.bindingId)!;
+      await this.isolation.verifyApproval(binding, this.workspaces.manifest(jobId).copyRoot);
+      await this.approvalRepository(binding, jobId);
+      this.store.transact((s, emit) => { const { job, scope } = check(s, true); scope.state = 'unconfirmed'; scope.reason = 'scoped_approval_reconciliation_required'; scope.choice!.delivery = 'sending';
+        emit({ type: 'codex.approval_sending', discussionId: job.discussionId, data: { jobId, approvalId, scopeDigest: scope.digest } }); });
+      const approval = this.store.read().jobs.find(j => j.id === jobId)!.approvals.find(a => a.id === approvalId)!;
+      rpc.respond(approval.rpcId, { decision: 'accept' });
+      this.store.transact((s, emit) => {
+        const current = s.jobs.find(j => j.id === jobId)!, a = current.approvals.find(a => a.id === approvalId)!;
+        a.status = 'resolved'; a.scope!.state = 'sent'; a.scope!.reason = null; a.scope!.choice!.delivery = 'sent';
+        if (!current.approvals.some(a => a.status === 'pending')) current.status = 'running';
+        emit({ type: 'codex.approval_decided', discussionId: current.discussionId, data: { jobId, approvalId, decision: 'accept', scopeDigest: a.scope!.digest } });
+      });
+      this.approvalRequests.delete(jobId + ':' + approvalId);
+    } catch (error) {
+      if (this.closed) throw new AppError('scoped_approval_reconciliation_required', 409);
+      this.store.transact((s, emit) => {
+        const current = s.jobs.find(j => j.id === jobId), a = current?.approvals.find(a => a.id === approvalId);
+        if (a?.status !== 'pending' || a.scope?.choice?.commandId !== confirmation.commandId) return;
+        const sending = a.scope.choice.delivery === 'sending';
+        a.scope.state = sending ? 'unconfirmed' : 'blocked'; a.scope.reason = sending ? 'scoped_approval_reconciliation_required' : error instanceof AppError ? error.code : 'protected_approval_proof_failed';
+        if (sending) { a.scope.choice.delivery = 'unconfirmed'; current!.status = 'reconciling'; this.captureIncomplete(current!, 'approval_delivery_unconfirmed'); }
+        emit({ type: 'codex.approval_scope_blocked', discussionId: current!.discussionId, data: { jobId, approvalId, reason: a.scope.reason } });
+      });
+      throw error;
+    }
+    this.onProgress();
   }
   async steer(jobId: string, expectedTurnId: string, text: string): Promise<void> {
     const job = this.store.read().jobs.find(j => j.id === jobId);

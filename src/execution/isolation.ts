@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
-import { existsSync, readFileSync, readlinkSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readlinkSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { chmod, mkdir, mkdtemp, open, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -7,6 +7,9 @@ import { createServer } from 'node:net';
 import { createRequire } from 'node:module';
 import { promisify } from 'node:util';
 import { OUTER_BWRAP, outerIdentity } from './outer-bwrap.js';
+import { approvalProviderConfig, proveApprovedCommand } from './approval-probe.js';
+import { digest } from '../workspace/util.js';
+import { NATIVE_METADATA_DIRECTORIES } from './workspace-protection.js';
 
 type Binding = { repoRoot: string; cwd: string; allowWrite?: boolean };
 const execute = promisify(execFile);
@@ -54,6 +57,21 @@ function runtimeRoots(runtime: string): string[] {
 function identity(path: string): string {
   const s = statSync(path); return `${path}:${s.dev}:${s.ino}:${s.size}:${s.mtimeMs}:${s.ctimeMs}`;
 }
+function runtimeIdentity(runtime: string, cli: string): string[] {
+  const metadata = join(runtime, 'package.json');
+  if (!existsSync(metadata) || JSON.parse(readFileSync(metadata, 'utf8')).name !== '@openai/codex') return [identity(cli)];
+  const files = new Set<string>();
+  for (const root of runtimeRoots(runtime)) {
+    const entries = readdirSync(root, { recursive: true, withFileTypes: true });
+    if (entries.length > 512) throw denied('runtime_inventory_limit');
+    for (const entry of entries) if (entry.isFile() || entry.isSymbolicLink()) {
+      const path = realpathSync(join(entry.parentPath, entry.name));
+      if (!inside(root, path) || !statSync(path).isFile()) throw denied('runtime_inventory_escape');
+      files.add(path);
+    }
+  }
+  return [...files].sort().map(identity);
+}
 function inode(path: string): string {
   const s = statSync(path); return `${path}:${s.dev}:${s.ino}:${s.mode}`;
 }
@@ -75,6 +93,7 @@ export class ExecutionIsolation {
   private readonly protectedPaths: string[];
   private readonly privateDirectory: string;
   private readonly proofs = new Map<string, number>();
+  private readonly approvalProofs = new Map<string, number>();
   private readonly ready = new Map<string, number>();
   constructor(command: string[], protectedPaths: string[], privateDirectory: string, private readonly outerBwrap?: string) {
     this.command = [...command]; this.protectedPaths = [...protectedPaths]; this.privateDirectory = privateDirectory;
@@ -108,7 +127,7 @@ export class ExecutionIsolation {
     }
     const host = ['user', 'mnt', 'pid', 'net'].map(n => readlinkSync(`/proc/self/ns/${n}`));
     const empty = join(this.privateDirectory, 'empty.config.toml');
-    const key = JSON.stringify([this.command, identity(cli), identity(bwrap), outer, runtimes.map(identity), identity(process.execPath), existsSync(empty) ? identity(empty) : null, inode(auth), masks.map(inode), process.env.PATH, host, readFileSync('/proc/sys/kernel/random/boot_id', 'utf8')]);
+    const key = JSON.stringify([this.command, identity(cli), identity(bwrap), outer, runtimes.map(identity), runtimeIdentity(runtime, cli), identity(process.execPath), existsSync(empty) ? identity(empty) : null, inode(auth), masks.map(inode), process.env.PATH, host, readFileSync('/proc/sys/kernel/random/boot_id', 'utf8')]);
     return { repo, cwd, cli, bwrap, runtime, auth, masks, key };
   }
   private config(root: string, runtime: string, auth: string, masks = this.protectedPaths, readOnly = false): string[] {
@@ -117,6 +136,7 @@ export class ExecutionIsolation {
     if (node === '/' || node === homedir()) throw denied('unsafe_node_runtime');
     const fs: Record<string, string> = { ':root': 'deny', ':minimal': 'read', ':tmpdir': 'deny', ':slash_tmp': 'deny', [runtime]: 'read', [node]: 'read', [auth]: 'deny', [root]: readOnly ? 'read' : 'write' };
     for (const p of runtimeRoots(runtime)) fs[p] = 'read';
+    for (const name of NATIVE_METADATA_DIRECTORIES) fs[join(root, name)] = 'deny';
     for (const p of masks) fs[p] = 'deny';
     const filesystem = Object.entries(fs).map(([p, access]) => `${JSON.stringify(p)}=${JSON.stringify(access)}`).join(',');
     const path = this.outerBwrap ? `/usr/bin:/bin:${join(node, 'bin')}` : `${join(node, 'bin')}:/usr/bin:/bin`;
@@ -194,16 +214,25 @@ export class ExecutionIsolation {
       throw denied(stage);
     }
   }
+  async verifyApproval(binding: Binding, copyRoot: string): Promise<void> {
+    await this.verify(binding, copyRoot);
+    const c = this.context(binding, copyRoot);
+    if ((this.approvalProofs.get(c.key) ?? 0) < Date.now()) {
+      await this.probe(c.cli, c.runtime, true);
+      this.approvalProofs.set(this.context(binding, copyRoot).key, Date.now() + lifetime);
+    }
+  }
   private bindingKey(binding: Binding, copy: string): string {
     return JSON.stringify([this.context(binding, copy).key, this.profileFor(binding), binding.repoRoot, binding.cwd, inode(binding.repoRoot), inode(binding.cwd), inode(copy)]);
   }
+  approvalIdentity(binding: Binding, copyRoot: string): string { return digest('approved-profile-v1:' + this.bindingKey(binding, copyRoot)); }
   commandFor(binding: Binding, copyRoot: string): string[] {
     if (!this.ready.size) throw denied('verify_copy_required');
     const c = this.context(binding, copyRoot);
     if ((this.ready.get(this.bindingKey(binding, copyRoot)) ?? 0) < Date.now()) throw denied('verify_copy_required');
     return this.wrap(c.repo, c.cwd, copyRoot, c.auth, c.masks, [c.cli, ...this.command.slice(1), ...this.config(c.repo, c.runtime, c.auth, c.masks, binding.allowWrite === false)], binding.allowWrite === false);
   }
-  private async probe(cli: string, runtime: string): Promise<void> {
+  private async probe(cli: string, runtime: string, approvals = false): Promise<void> {
     const base = await mkdtemp(join(this.privateDirectory, 'isolation-')); await chmod(base, 0o700);
     const source = join(base, 'source'), state = join(base, 'state'), copy = join(state, 'job', 'copy');
     const auth = join(base, 'home', '.codex'), chrome = join(base, 'chrome'), sibling = join(base, 'sibling');
@@ -214,6 +243,7 @@ export class ExecutionIsolation {
     let canary: Awaited<ReturnType<typeof open>> | undefined;
     try {
       for (const dir of [join(source, 'sub'), join(copy, 'sub'), auth, chrome, sibling]) await mkdir(dir, { recursive: true });
+      for (const name of NATIVE_METADATA_DIRECTORIES) await mkdir(join(copy, name), { mode: 0o700 });
       for (const path of [join(source, '.env'), join(source, 'tracked'), join(state, 'secret'), join(auth, 'auth.json'), join(chrome, 'secret'), join(sibling, 'secret')]) await writeFile(path, 'FAKE-CANARY');
       await writeFile(join(auth, 'config.toml'), 'default_permissions=":danger-full-access"\n');
       await writeFile(join(copy, 'tracked'), 'SANITIZED-COPY');
@@ -257,8 +287,30 @@ export class ExecutionIsolation {
       const readTool = `printf 'ISOLATION_TOOL_STARTED\\n'\nset -eu\n[ "$(/bin/cat ../tracked)" = COPY-EDIT ]\nif (printf BAD > ../tracked) 2>/dev/null || (printf BAD > ../read-created) 2>/dev/null; then exit 92; fi\n${forbidden}\n${hostGuards}\nif /bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/${port}' 2>/dev/null; then exit 84; fi\nprintf 'ISOLATION_READY\\n'\nread -r release\nprintf 'ISOLATION_OK\\n'`;
       const readInner = [cli, 'sandbox', '--include-managed-config', '-P', this.readProfileId, '-C', join(source, 'sub'), ...this.config(source, runtime, auth, [state, chrome, sibling], true), '--', '/bin/sh', '-c', readTool];
       await this.runProbe(this.wrap(source, join(source, 'sub'), copy, auth, [state, chrome], readInner, true), base, async () => {});
+      if (approvals) {
+        const fakeAuth = JSON.stringify({ auth_mode: 'apikey', OPENAI_API_KEY: 'FAKE-SYNTHETIC-CANARY' });
+        await writeFile(join(auth, 'auth.json'), fakeAuth);
+        try {
+          for (const requestEscalation of [false, true]) {
+            await writeFile(join(copy, 'tracked'), 'COPY-EDIT');
+            for (const readOnly of [false, true]) {
+            await rm(join(copy, '.env'), { force: true });
+            const access = readOnly
+              ? `if (printf BAD > ../tracked) 2>/dev/null || (printf BAD > new-approved) 2>/dev/null; then exit 92; fi`
+              : `printf APPROVED-COPY > ../tracked\nprintf APPROVED-NEW > new-approved`;
+            const script = `printf 'ISOLATION_APPROVED_STARTED\\n'\nset -eu\n[ "$PWD" = ${quote(join(source, 'sub'))} ]\n[ "$(/bin/cat ../tracked)" = ${readOnly ? 'APPROVED-COPY' : 'COPY-EDIT'} ]\n[ ! -e ../late-secret ]\n${access}\n${forbidden}\nif /bin/ls /tmp >/dev/null 2>&1 || (printf BAD > /tmp/webjjoku-approved-probe) 2>/dev/null; then exit 86; fi\n/bin/bash -c 'exit 0'\n${quote(process.execPath)} -e 'if (process.versions.node !== ${JSON.stringify(process.versions.node)}) process.exit(87)'\nif /bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/${port}' 2>/dev/null; then exit 84; fi\n${hostGuards}\nprintf 'ISOLATION_APPROVED_OK\\n'`;
+            const result = await proveApprovedCommand({ command: script, cwd: join(source, 'sub'), profile: readOnly ? this.readProfileId : this.profileId, requestEscalation,
+              launch: url => this.wrap(source, join(source, 'sub'), copy, auth, [state, chrome], [cli, 'app-server', ...this.config(source, runtime, auth, [state, chrome, sibling], readOnly), ...approvalProviderConfig(url)], readOnly) });
+            if (result.approvals !== 1 || !result.output.endsWith('ISOLATION_APPROVED_OK\n') ||
+                await readFile(join(auth, 'auth.json'), 'utf8') !== fakeAuth ||
+                await readFile(join(copy, 'tracked'), 'utf8') !== 'APPROVED-COPY' ||
+                await readFile(join(copy, 'sub', 'new-approved'), 'utf8') !== 'APPROVED-NEW') throw denied('approved_canary_mismatch');
+            }
+          }
+        } finally { await writeFile(join(auth, 'auth.json'), 'FAKE-CANARY'); }
+      }
       if (connections || await readFile(join(source, 'tracked'), 'utf8') !== 'FAKE-CANARY' ||
-          await readFile(join(copy, 'tracked'), 'utf8') !== 'COPY-EDIT' || await readFile(join(copy, 'sub', 'new-file'), 'utf8') !== 'CREATED' ||
+          await readFile(join(copy, 'tracked'), 'utf8') !== (approvals ? 'APPROVED-COPY' : 'COPY-EDIT') || await readFile(join(copy, 'sub', 'new-file'), 'utf8') !== 'CREATED' ||
           await readFile(join(auth, 'server.log'), 'utf8') !== 'LOG') throw denied('canary_mismatch');
       for (const path of secrets.slice(0, 5)) if (await readFile(path, 'utf8') !== 'FAKE-CANARY') throw denied('canary_modified');
     } finally {

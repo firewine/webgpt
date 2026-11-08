@@ -58,6 +58,6 @@ readonly의 명시 재조회도 원래 보호 사본을 재검사하고 같은 �
 | 파일/운영 보존 | 별도 원본은 `R6_BASELINE` 그대로. 검증 권한 회수·전용 auth 사본 삭제·원래 auth byte 변화0. 운영 DB의 binding/job0, 방off/Chrome잠금과 HTTP health200 유지 |
 | 남은 수락 | 실제 명령 승인/종료·read 보고/재작업·write 사본·소유자 반영/독립 리뷰는 NOT_RUN. R6-F 전체는 BLOCKED. 기존50 gate를 완료로 바꾸지 않음 |
 
-현재 요청/원문/사본·중단 기록은 별도 검증 state에 보존했고 자동 재전송하지 않는다. 명령1회 승인 지원은 [별도 영향안](../reviews/r6-scoped-command-approval-impact-20261107.md)의 **미승인 제안**이다. plain ACCEPT 이후 실제 CLI가 어떤 보호 범위를 쓰는지는 UNVERIFIED이므로, 후속안은 무호출 증명을 선행하며 실패하면 현재 차단을 유지한다. 이번 검증을 반복하거나 추가 호출 창을 자동 연장하지 않는다.
+현재 요청/원문/사본·중단 기록은 별도 검증 state에 보존했고 자동 재전송하지 않는다. 이 실측 당시 명령1회 승인은 미승인 제안이었으며 승인 이후 보호도 UNVERIFIED였다. 이후 사용자가 [별도 영향안](../reviews/r6-scoped-command-approval-impact-20261107.md)을 승인해 [명령1회 승인 구현·합성 증명](./r6-scoped-command-approval-20261107.md)을 보완했다. 이 과거 실측을 파일 읽기/수정 성공으로 바꾸거나 추가 호출 창을 자동 연장하지 않는다.
 
 초기 managed 세션을 잃으면 원래 요청을 보존하고 명시 재등록을 요구한다. 새 dispatch를 막고 실제 active/미확정·queued·적용 intent를 원래 ID로 대조한 뒤 복귀한다. 새 JSON/receipt·원문/사본을 삭제하지 않는다. 이전 실행기로 내려갔을 때 새 보호 상태를 legacy 실행 성공으로 승격하지 않는다. 원래 R6-F/50 gate를 완화하지 않으며 관측되지 않은 추가 명령 승인·전체 혼합 운영은 미완료로 남긴다.

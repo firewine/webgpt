@@ -230,7 +230,10 @@ export async function createWorkspaceServer(app: Workspace, log: Logger) {
       if (jobPath[2] === 'cancel') await app.codex.cancel(jid);
       else if (jobPath[2] === 'reconcile') await app.codex.reconcile(jid, input.turnId ? string(input.turnId, 200) : undefined);
       else if (jobPath[2] === 'steer') await app.codex.steer(jid, string(input.expectedTurnId), string(input.text, 10_000));
-      else app.codex.decide(jid, string(input.approvalId), string(input.decision));
+      else {
+        if (Object.keys(input).some(key => !['approvalId', 'decision', 'expectedScopeDigest', 'ownerConfirmed'].includes(key))) throw new AppError('invalid_input');
+        await app.codex.decide(jid, string(input.approvalId), string(input.decision), { expectedScopeDigest: input.expectedScopeDigest, ownerConfirmed: input.ownerConfirmed, ...(req.headers['idempotency-key'] === undefined ? {} : { commandId: command(req) }) });
+      }
       json(res, 200, { ok: true }); return;
     }
     if (path === '/api/grants') { json(res, 201, mcp.createGrant(input)); return; }
