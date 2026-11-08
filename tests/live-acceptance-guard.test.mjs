@@ -108,3 +108,33 @@ test('live guard uses the deployed participant snapshot defaults for API output 
   assert.equal(f.reserve({ ...snapshotMember(f.api), maxOutputTokens: 8192 }), 'acceptance_participant_not_allowed');
   guard.close();
 });
+
+test('web conversation bootstrap consumes the same durable request and time allowance', () => {
+  const f = fixture({ setup: { requests: 1, startedAt: '2026-11-02T00:00:00Z' }, maxRequests: 2 });
+  assert.equal(f.guard.observe(f.state).requests, 1);
+  assert.equal(f.reserve(), null); f.settle();
+  assert.equal(f.guard.observe(f.state).requests, 2);
+  assert.equal(f.reserve(), 'acceptance_request_limit');
+  f.guard.close();
+  const resumed = acceptanceGuard(f.app, f.policy, { clock: f.clock, intervalMs: 0 });
+  assert.equal(f.reserve(), 'acceptance_request_limit'); resumed.close();
+  const beforeCall = fixture({ setup: { requests: 1, startedAt: '2026-11-02T00:00:00Z' } });
+  beforeCall.advance(1500000);
+  assert.equal(beforeCall.reserve(), 'acceptance_time_limit');
+  assert.equal(beforeCall.calls(), 0); beforeCall.guard.close();
+});
+
+test('explicit stop fences new requests before hooks are removed and keeps original receipts', async () => {
+  const f = fixture(); assert.equal(f.reserve(), null); f.settle();
+  const before = structuredClone(f.state.resident.dispatchLeases);
+  await f.guard.stop();
+  assert.equal(f.reserve(), 'acceptance_stopped');
+  assert.deepEqual(f.state.resident.dispatchLeases, before);
+  assert.equal(f.calls(), 1); f.guard.close();
+});
+
+test('live bootstrap policy rejects invalid or future start times and larger setup allowances', () => {
+  for (const setup of [{ requests: 2, startedAt: '2026-11-02T00:00:00Z' },
+    { requests: 1, startedAt: 'invalid' }, { requests: 1, startedAt: '2026-11-03T00:00:00Z' }])
+    assert.throws(() => fixture({ setup }), /invalid_acceptance_setup/);
+});
