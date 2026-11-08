@@ -2,6 +2,8 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
+**2026-11-08 PR #63 운영 적용·실제 계정 확인 PASS / 혼합 토의 NOT_RUN:** 병합 main `8b66354`를 빌드·운영 적용했고 실제 두 웹 계정의 구분/Extra High·원래 준비 대화 보존과 아이콘형 계정 탐지/연결 저장을 확인했다. 기존 Business/Muse 탐지 ready, 실제 실행 보호 합성16 PASS/0 SKIP 및 같은 NoNewPrivileges 조건16 PASS/0 SKIP. 검증용 인증 사본 경로 오류의 준비 실패는 보존했고, 수정 준비에서는 보호 읽기 세션 등록까지만 성공했다. 유효 native 감시 없이20:57:44 KST 준비 기한이 끝나 dot 권한/터널·임시 drop-in을 정리하고 정상 service/원래 설정·방off/Muse 잠금을 복구했다. 새 모델 예약/API/job0, 전체 R8-D/D5-F는 미수락이다. 후속 dot 초기 조회429는 사용자 보고이며 시각/원인 UNVERIFIED, 같은 요청의 자동 반복이나 한도/보호 완화0. [실측·복구·남은 대조](./implementation/r8-mixed-account-live-20261108.md).
+
 **2026-11-08 웹 GPT 아이콘형 프로필 계정 확인 보완 — 구현·모의 검사 PASS:** 사용자가 [추가 영향안](./reviews/r8-web-account-identity-impact-20261108.md)의 계획 개정·개발/모의 검사를 승인했다. 기존 DOM 계정 확인은 기본값으로 두고 계정 문구가 없는 새 ChatGPT 연결에만 같은 페이지의 사용자 ID·이메일을 읽기 전용으로 대조하는 optional metadata를 구현했다. 고정 origin/경로·형식/기한·전송 전/최종 계정 검사를 사용하고 token/cookie를 앱에 가져오지 않는다. Providers.complete·Store/기존 기록·Muse·native dot·R6 보호/명령/반영·예산·원래 gate를 유지한다. 최신 main 정리 후 Node852 PASS/6 SKIP, 동일 브라우저 소스의 실제 Chromium/MCP fixture116 PASS/0 SKIP. [구현·검사·복귀](./implementation/web-gpt-account-identity-20261108.md). 내부 웹 경로의 공식 지원/장기 안정성은 UNVERIFIED이며 변경/조회 실패 시 차단한다. R4/R8의 작은 adapter 보완이며 서버 적용·추가 실계정 호출은 NOT_RUN이다. 두 웹 계정의 실제 Extra High·준비1회 이후의 전체 혼합 수락은 별도다.
 
 **2026-11-08 R8 준비 부분 실측·새 연결 탐지 BLOCKED:** 서로 다른 실제 웹 GPT2계정과 두 창의 Extra High·빈 입력을 확인했다. 새 계정의 준비 요청1회/답변1회는 완료됐으나 아이콘형 프로필 버튼의 계정 문구가 비어 있어 기존 discovery가 연결을 거절했다. 이 상태를 우회하지 않았으며 혼합 토의/새 API/Codex job은0이다. 정상 service·원래 방off/Muse 잠금·DB/비밀번호/API 한도와 실제 준비 대화를 보존했다. **R8-D 전체는 미완료**이며 계정 확인 출처의 추가 보완은 별도 영향 보고/승인 대상으로 남긴다. [실측·검사·복구](./implementation/r8-mixed-live-20261108.md).
