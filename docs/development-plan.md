@@ -2,9 +2,11 @@
 
 ## 개발 페이즈 SSOT — 구현 순서·상태의 단일 기준
 
-**2026-11-08 R6 명령1회 승인 병합본 운영 적용·실계정 중단:** PR #60 merge `f911c59`를 운영에 빌드·적용했고 기존 설정/비밀번호·계정·대화·방과 정상 서비스를 보존했다. 적용본 native 보호6 PASS/0 SKIP 뒤 실제 read job1개는 명령 확인 대기 중300초에 interrupted로 종료됐다. ACCEPT/실제 명령·쓰기·반영0, 기존 원문/사본·중단 기록을 보존하고 검증 방off/권한 회수/임시 인증 제거를 확인했다. **R6-F 전체 BLOCKED**이며 추가2job/30분·정확한 읽기 명령 확인은 별도 승인 대기다. 계획/호스트 변경과 자동 재시도0. [실측·복구·남은 수락](./implementation/r6-scoped-live-20261108.md).
+**2026-11-08 R6-F 별도 저장소 실계정 수락 PASS:** 운영 적용 main `f911c59`에서 추가 승인한 실제2job/30분 범위의 읽기→소유자 재작업→같은 세션 보호 쓰기→원본1파일 명시 반영→소유자 독립 수락을17분5초에 완료했다. 실제 명령2개/각 exit0·완전 capture2개·보고2개·rework1/accept1·원본 반영 receipt1개와 task done을 확인했다. 최초 A-run 중단1job과 원문/사본은 보존하며 성공 건수에 포함하지 않는다. 검증 권한/임시 인증을 정리하고 운영 데이터/정상 서비스를 보존했다. 계획·호스트/제품 코드 변경0. [실측·한계](./implementation/r6-scoped-live-20261108.md)·[날짜별 real 수락 증거](./implementation/assets/r6-live-20261108/acceptance.json). R8 전체 혼합/장기 운영·실기기 GUI는 별도다.
 
-**2026-11-07 R6 보호 범위 고정 명령1회 승인 — 구현·합성 검사:** 사용자가 [후속 영향안](./reviews/r6-scoped-command-approval-impact-20261107.md)을 승인했다. PR #58/#59가 병합된 main `6351fb0`에서 A 실제 CLI+가짜 Responses의 승인 후 보호 증명 → B 원래 명령/cwd/profile·권한/세대 digest/선택·전송 intent → C 기존 승인 API/두 확인 화면 → D 중복·미확정/복구 검사를 구현했다. 실제 Codex0.166.0 합성 호스트 검사6 PASS/0 SKIP이며 **실행 시 A가 통과한 환경에서만 명령1회 승인을 허용**한다. 증명 실패·runtime 변경·추가 권한은 차단한다. 추가 호스트 설정/OAuth/실계정 호출·배포는0이고, 기존 read/write 사본·Store·예산·단일 실행·원문/명시1파일 반영·독립 검토·원래50 gate를 유지한다. [구현·검사·제한](./implementation/r6-scoped-command-approval-20261107.md)을 따르며 실제 R6 전체 수락은 여전히 BLOCKED다.
+**2026-11-08 A-run 운영 적용·명령 확인 기한 중단 — 이력:** PR #60 merge `f911c59`를 운영에 빌드·적용했고 기존 설정/비밀번호·계정·대화·방과 정상 서비스를 보존했다. 적용본 native 보호6 PASS/0 SKIP 뒤 실제 read job1개는 명령 확인 대기 중300초에 interrupted로 종료됐다. ACCEPT/실제 명령·쓰기·반영0, 기존 원문/사본·중단 기록을 보존하고 검증 방off/권한 회수/임시 인증 제거를 확인했다. **당시 R6-F는 BLOCKED**였으며 이후 추가 승인과 B-run 수락은 위 최신 결과를 따른다. 계획/호스트 변경과 자동 재시도0. [실측·복구·남은 수락](./implementation/r6-scoped-live-20261108.md).
+
+**2026-11-07 R6 보호 범위 고정 명령1회 승인 — 구현·합성 검사:** 사용자가 [후속 영향안](./reviews/r6-scoped-command-approval-impact-20261107.md)을 승인했다. PR #58/#59가 병합된 main `6351fb0`에서 A 실제 CLI+가짜 Responses의 승인 후 보호 증명 → B 원래 명령/cwd/profile·권한/세대 digest/선택·전송 intent → C 기존 승인 API/두 확인 화면 → D 중복·미확정/복구 검사를 구현했다. 실제 Codex0.166.0 합성 호스트 검사6 PASS/0 SKIP이며 **실행 시 A가 통과한 환경에서만 명령1회 승인을 허용**한다. 증명 실패·runtime 변경·추가 권한은 차단한다. 추가 호스트 설정/OAuth/실계정 호출·배포는0이고, 기존 read/write 사본·Store·예산·단일 실행·원문/명시1파일 반영·독립 검토·원래50 gate를 유지한다. [구현·검사·제한](./implementation/r6-scoped-command-approval-20261107.md)을 따르며 당시 실계정 수락은 BLOCKED였으며 후속 판정은 위2026-11-08 실제 수락을 따른다.
 
 **2026-11-07 R6 읽기 보호·새 세션 보완/실계정 부분 실측:** 승인한 최소 읽기 profile·동일 연결 최초 dispatch·유실 차단·원문/봉인 재검사와 새 세션 선택 화면을 구현한 PR #59가 병합됐다. 전용 호스트 보호2건 PASS/0 SKIP, CI 통과 소스 `8fc2d1b`에서 실제 thread/start1→같은 연결 turn/start1/resume0을 확인했다. 실제1job은 `cat validation.txt`의 native 명령 승인에서 당시 보호 ACCEPT 차단에 걸려 중단했다. 파일 읽기/변경·성공 보고0, 원문/원본·기존 운영 데이터/인증은 보존했다. **R6-F 전체는 BLOCKED**다. [실측과 복귀](./implementation/r6-readonly-session-20261107.md)는 보존하며, 후속 명령1회 승인은 위 최신 승인·구현 기록을 따른다. 추가 실계정 호출 창과 기존50 gate는 바꾸지 않는다.
 
@@ -27,20 +29,20 @@
 | 3 / R3 단톡방 GUI | 흑백·고정 주제·주제별 채팅·답장/멘션·작업실 패널 구현·브라우저 검사 PASS | 실제 HTTPS/새로고침/SSE·390px 확인. 실기기 IME/터치·기기 전환 수락은 UNVERIFIED. [GUI](./implementation/phase3-chatroom-gui-20261030.md)·[주제 통합](./reviews/topic-chat-ui-impact-20261101.md) |
 | 4 / R4 연결 편의성 | 웹 GPT·OAuth/기기 코드·DeepSeek·Anthropic API·Muse browser·공식 dot 구현 | 웹 GPT Extra High 1회/후속 맥락·JSON·receipt, dot/Muse 실제 초안/검토 일부 PASS. Anthropic API 실계정·모든 연결의 갱신/격리·전체 혼합 수락은 미완료. [웹 GPT](./implementation/web-gpt-selection-20261105.md)·[dot 실제 기록](./implementation/dot-mcp-v2-live-d5-20261104.md) |
 | 5 / R5 역할·열린 작업큐 | 제안·픽업·의존성·보고/독립 리뷰·재작업 구현·검토 예시 수정 병합/운영 적용·fixture PASS | 실제 AI 제안→자동 수행/다른 참여자 수락→Wiki/후속 인용 PASS(복구 후). 원래 첫 시작의 무개입 수락은 미완료. [R5 증거](./implementation/phase5-open-work-queue-20261030.md)·[추천2 재검증](./implementation/work-wiki-revalidation-20261105.md) |
-| 6 / R6 실제 업무 수행 | Codex 연결/scope·권한 수명·원문·보호 사본/1파일 명시 반영·최소 읽기/새 세션 구현. 명령1회 승인·전송 기록/두 확인 화면 구현, 실제 CLI 합성 승인 후 보호6 PASS/0 SKIP | 실제 최초1회 동일 세션 전달 PASS, 당시 명령 승인 단계 차단 후 interrupted 확인. 이번 보완의 실제 사용자 읽기/쓰기·반영 NOT_RUN/R6-F 전체 BLOCKED. [기존 R6](./implementation/phase6-work-execution-20261030.md)·[이전 실측](./implementation/r6-readonly-session-20261107.md)·[명령 승인 보완](./implementation/r6-scoped-command-approval-20261107.md) |
+| 6 / R6 실제 업무 수행 | Codex 연결/scope·권한 수명·원문·보호 사본/1파일 명시 반영·최소 읽기/새 세션·명령1회 승인/두 화면 구현. 실제 CLI 합성 승인 후 보호6 PASS/0 SKIP | **R6-F 별도 검증 저장소의 실계정 수락 PASS:** 읽기→소유자 재작업→같은 세션 보호 쓰기→실제1파일 diff/소유자 반영→독립 수락. 실제2job·명령2개/exit0·반영1개·task done. 실기기 GUI·전체 혼합/장기 운영은 별도. [기존 R6](./implementation/phase6-work-execution-20261030.md)·[최신 실제 수락](./implementation/r6-scoped-live-20261108.md) |
 | 7 / R7 공유 Wiki | 저장·편집·버전/CAS·출처/인용·MCP·**업무 보고 자동 게시**와 새 방 연결 주제 결론 자동 기록 구현·fixture PASS | 실제 주제 결론→다음2발화 인용 PASS. 업무 보고→reported Wiki1버전/알림1개→독립 검토 수락 뒤 ambient 인용 PASS(복구 후). [기존 R7](./implementation/phase7-shared-wiki-20261031.md)·[추천1 실측](./implementation/topic-wiki-live-20261105.md)·[추천2 재검증](./implementation/work-wiki-revalidation-20261105.md) |
-| 8 / R8 통합 실운영 검증 | 자동 통합/장애/부하 fixture PASS. 기존 50 gate와 D5 보완 검사는 별도 추적 | **전체 수락 미완료.** 별도2인 주제의 결론/방 복귀/Wiki와 복구 후 업무 순환 PASS. 원래5인 혼합은 완료15개·실패 기록 보존/사용자 승인 취소. 원래 첫 입력부터 무개입 업무 순환·전체 혼합 최종 수락·실제 Codex·기기/장기 운영을 남김. [R8 기준](./implementation/resident-acceptance.md)·[D5 과거 현황](./implementation/dot-acceptance-manifest.json) |
+| 8 / R8 통합 실운영 검증 | 자동 통합/장애/부하 fixture PASS. 기존 50 gate와 D5 보완 검사는 별도 추적 | **전체 수락 미완료.** 별도2인 주제의 결론/방 복귀/Wiki와 복구 후 업무 순환 PASS. 원래5인 혼합은 완료15개·실패 기록 보존/사용자 승인 취소. 원래 첫 입력부터 무개입 업무 순환·전체 혼합 최종 수락/Codex 환류·기기/장기 운영을 남김. [R8 기준](./implementation/resident-acceptance.md)·[D5 과거 현황](./implementation/dot-acceptance-manifest.json) |
 
 현재 남은 작업은 다음처럼 구분한다.
 
-- **추가 개발 필요/부분 구현:** R6 최소 읽기·새 세션 보완은 PR #59로 병합됐고, 후속 명령1회 승인·원래 요청/전송 intent·두 화면 보완은 구현·합성 검사 후 PR 검토 대상이다. 실제 사용자 읽기→재작업→명시 반영/독립 수락은 남아 있다. WWG-R5 묶음 실행 경과·WWG-R6 원문 보관 수명 확장도 남아 있다. 일반 grant/binding 수명·private 원문 페이지·사본/명시 반영은 PR #57에서 구현했고, AppArmor 결합 보호도 실제 PASS했다. 실세션 전체 수락은 별도다.
-- **기존 구현의 실환경 검증 필요:** R5 원래 첫 시작부터 오류 복구 개입 없는 업무 순환, R8 전체 혼합 최종 수락, R6-F·R3-E와 장기 운영. 주제 결론의2인 수락과 복구 후 업무→보고/리뷰→Wiki→다음 인용은 확인됐으며 이 부분을 모두 새 backend 개발로 취급하지 않는다.
+- **추가 개발 필요/부분 구현:** R6 최소 읽기/새 세션·명령1회 승인 보완은 PR #59/#60으로 병합됐고 별도 검증 저장소의 R6-F 실제 읽기→재작업→명시 반영/독립 수락까지 PASS했다. WWG-R5 묶음 실행 경과·WWG-R6 원문 보관 수명 확장은 남아 있다. 일반 grant/binding 수명·private 원문 페이지·사본/명시 반영과 실제 보호는 이미 구현·검사한 범위다. 새 운영 작업 경로/권한과 추가 범위는 별도 확인한다.
+- **기존 구현의 실환경 검증 필요:** R5 원래 첫 시작부터 오류 복구 개입 없는 업무 순환, R8 전체 혼합 최종 수락/Codex 환류, R3-E와 장기 운영. 주제 결론의2인 수락·복구 후 업무/Wiki 순환·R6-F 별도 실제 수락은 확인했으며 이 부분을 모두 새 backend 개발로 취급하지 않는다.
 - **후속 선택/보류:** WJ-016 Git Writer, WJ-017 추가 provider/병렬 용량·정식 팀 확장, WJ-018 다중 프로젝트/추가 OS. Muse 공식 Connector·Anthropic 구독 OAuth는 보류하며 자동 병합은 사용자 정책상 비활성이다.
 - **추천1 운영·실계정 수락 완료:** [다음 개발 제안과 후속 영향](./reviews/next-development-recommendation-20261105.md)의 주제 결론→Wiki 자동 기록을 R7/R8에서 보완하고 위 범위로 실제 수락했다. 검사·운영 증거는 별도 기록하며 나머지 추천은 제안이다. 새 페이즈를 만들지 않는다.
 
 실제 웹 GPT는 PR #50 병합본을 운영에 빌드·적용한 뒤 1회 요청으로 확인했다. 기존 15개 답변·설정은 보존하고 원래 토의는 재개하지 않았다. 상세 판정과 원문을 공개하지 않는 증거는 [운영 적용 후 최종 검증](./implementation/web-gpt-selection-20261105.md#pr-50-병합본-운영-적용최종-검증--2026-11-05)을 따른다. 이 문서 정리 자체는 추가 모델 호출·배포 승인이 아니다.
 
-원래 [50개 수락표](./implementation/resident-acceptance-manifest.json)의 2026-10-31 fixture PASS46·UNVERIFIED3·NOT_RUN1 판정과 문구는 보존한다. 이후 부분 실측은 최신 구현 기록·D5 manifest로 보완하며 합격률로 환산하지 않는다. 과거 승인/예상량/검증 창은 [날짜별 이력](./development-status-history-20261105.md)에 원문 그대로 보존했다.
+원래 [50개 수락표](./implementation/resident-acceptance-manifest.json)의 2026-10-31 fixture PASS46·UNVERIFIED3·NOT_RUN1 판정과 문구는 과거 기록으로 보존한다. 이후 실측은 최신 구현 기록·D5 manifest와 [2026-11-08 R6-F real 수락](./implementation/assets/r6-live-20261108/acceptance.json)으로 보완하며 합격률로 환산하지 않는다. 과거 승인/예상량/검증 창은 [날짜별 이력](./development-status-history-20261105.md)에 원문 그대로 보존했다.
 
 페이즈마다 작업 브랜치·검토 가능한 PR, 사용자 병합을 유지한다. 제품 범위·계약·순서·수락/롤백 변경은 [사전 승인 절차](./development-guidelines.md#5-계획-변경-사전-승인과-후속-페이즈-영향-검토)에 따라 현재 및 후속 영향·변경량을 먼저 보고한다. 사실에 근거한 상태/검사 증거 정리는 새 기능 승인으로 해석하지 않는다. 디자인 패턴은 [개발 지침](./development-guidelines.md)을 따른다.
 
@@ -48,9 +50,9 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 상태 | R1~R7 기반 구현·R6 쓰기 차단/추가 보호 필요·R8 부분 실측. 현재 상태는 맨 위 SSOT, 다음 기능은 승인 전 제안 |
+| 상태 | R1~R7 기반 구현·R6-F 별도 저장소 실계정 수락 PASS·R8 부분 실측. 현재 상태는 맨 위 SSOT, 다음 기능은 승인 전 제안 |
 | 최초 작성일 | 2026-08-15 |
-| 개정일 | 2026-11-05 (KST), 상태 정리·기존 승인/수락 유지 |
+| 개정일 | 2026-11-08 (KST), R6 실측 상태 정리·기존 범위/50 gate 유지 |
 | 저장소 | [firewine/webgpt](https://github.com/firewine/webgpt) |
 | 전체 제품 설계 | [webjjoku_living_design.md](./webjjoku_living_design.md) |
 | 구현 작업·선행 조건 | [implementation-sequence.md](./implementation-sequence.md) |
