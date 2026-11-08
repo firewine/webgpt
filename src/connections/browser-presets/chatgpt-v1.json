@@ -1,8 +1,9 @@
 {
   "id": "chatgpt-v1",
-  "version": 4,
+  "version": 5,
   "label": "ChatGPT 기존 대화",
   "service": "chatgpt",
+  "accountIdentity": "chatgpt-session",
   "identity": [
     "[data-testid=\"accounts-profile-button\"]:not([data-app-shell-active-page=\"false\"] *)",
     "[data-testid=\"profile-button\"]:not([data-app-shell-active-page=\"false\"] *)",
