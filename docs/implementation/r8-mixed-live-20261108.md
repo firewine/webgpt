@@ -1,6 +1,6 @@
 # R8 혼합 실계정 검증 — 2026-11-08
 
-상태: **검증기 보완/합성 검사 PASS, 실제 혼합 토론 NOT_RUN.** [승인 범위·변경량·복구](../reviews/r8-mixed-execution-impact-20261108.md)를 따르며, 기준 main은 PR #61 병합 `084d5587d1b101f772369f837d857d374fef8a2b`다. 원래 R8 gate를 완화하지 않는다.
+상태: **검증기 보완/합성 검사 PASS·실제 준비1요청 완료·새 계정 연결 탐지 BLOCKED. 혼합 토의/API/Codex job0.** [승인 범위·변경량·복구](../reviews/r8-mixed-execution-impact-20261108.md)를 따르며, 기준 main은 PR #61 병합 `084d5587d1b101f772369f837d857d374fef8a2b`다. 원래 R8 gate를 완화하지 않는다.
 
 ## 운영 상태와 선행 준비
 
@@ -28,13 +28,18 @@ Codex submit/dispatch·명령 확인·원본 반영은 기존 경로를 사용�
 | `npm run check` 및 최종 `node --test tests/*.test.mjs` | strict TypeScript/빌드 PASS. 선행 Node 834 PASS/실패0/SKIP6, 최종 모듈/검사 포함 Node **847 PASS/실패0/SKIP6**. 같은 제품 source이며 최종 script 변경 후 전체 Node를 다시 확인했다. |
 | `node --test tests/live-acceptance-{codex,guard,server}.test.mjs` | PASS29/실패0/SKIP0. 기본 Codex 거절·40/8 상한·시간/drain·실제 인증 HTTP409·잘못된 root/쓰기 선등록 거절·기동 실패·종료까지 hook 유지·웹 대화 준비 요청 차감·등록/정책 봉인·재시작2job 상한·동기 pause·기한 직전 최종 쓰기 차단. |
 | `WJ_TEST_OUTER_BWRAP=/usr/local/libexec/webjjoku/bwrap node --test tests/execution-isolation.test.mjs tests/native-approval.test.mjs` | PASS16/실패0/SKIP0. 실제 CLI·외부 실행기·named profile·명령 승인·보호 사본/반영, 가짜 모델 응답/가짜 auth. 실계정 추론 증거가 아니다. |
-| 실제 5인 혼합 토의·Codex2job·원본 반영/독립 검토 | NOT_RUN |
+| 실제 두 웹 계정 로그인/Extra High | PASS。서로 다른 계정·두 입력창 빈 상태 확인. 앞선 Medium/사용 제한 해석을 Extra High 불가의 근거로 유지하지 않는다. |
+| 두 번째 웹 GPT 준비 대화 | PASS。새 대화의 사용자 메시지1/답변1·원래 thread 보존. 보고되지 않은 token/비용은 만들지 않는다. |
+| 새 계정 연결 discovery | BLOCKED。사용자/응답·입력/준비 영역과 thread는 확인됐으나 프로필 버튼 textContent0·계정 고유 속성 없음. 메뉴의 실제 계정 이름은 닫으면 제거된다. |
+| 실제 5인 혼합 토의·Codex2job·원본 반영/독립 검토 | NOT_RUN。새 API0/Codex job0·읽기 명령 사전 승인은 미사용이다. |
 
 private 로그: `webjjoku-r8-check-20261108.log`, `webjjoku-r8-native-20261108.log`. 합성 검사의 성공을 실제 계정·원래 thread·혼합 토론 완료로 세지 않는다.
 
 ## 실제 실행에서 남은 조건
 
-웹 GPT 2계정의 서로 다른 identity는 확인됐다. 두 번째의 새 검증 대화/연결·실제 웹 사고 설정과 native dot 감시 준비는 남아 있다. 모든 연결이 준비된 뒤에만 임시 service 설정1개를 적용하고 검증 시계를 시작한다. 새 대화 준비에 모델 메시지가 필요하면 승인한 요청/시간 안에 포함하며 기존 방을 자동으로 켜지 않는다.
+웹 GPT 2계정의 서로 다른 identity·두 Extra High·새 준비 대화는 확인됐다. 이 준비 요청1회부터 승인 창을 계산했지만 discovery 실패로 방 on·임시 service 설정 설치·Codex 등록·dot 권한/터널 재기동 이전에 중단했다. 임시 인증 사본과 이 실행용 profile 사본만 정리했고 정상 service·`.env`/DB/비밀번호/API 정책·기존 연결·방off/browser 잠금이 보존됐음을 확인했다. 초기화나 과거 DB 덮어쓰기는0이다. Codex thread/job 생성이 없으며·추가 구현이 필요해 새 검증을 자동 시작하지 않는다.
+
+기존 DOM 계정 검사를 제거하거나 공통 아이콘/대화 제목을 계정 이름으로 삼지 않는다. 추가 계정 확인 보완은 별도 승인 대상이다. 완료한 준비 답변을 재전송하지 않고 같은 대화를 재사용하며·후속 모델 호출/서버 적용은 새 구체 범위를 확인한다. 원래 30분 창과 실제 준비1회/API0/Codex0 기록을 새 창의 성공으로 합치지 않는다.
 
 실제 읽기 명령·쓰기 명령·실제 원본 diff는 준비된 내용과 정확히 맞을 때 각각 소유자의 확인을 받는다. 최대30회 예약/API6회/2job/30분의 범위와 기존 API 잔여 중 작은 한도를 적용한다. 기한/오류/미확정 시 원래 ID·capture/receipt를 보존하고 중단한다.
 
