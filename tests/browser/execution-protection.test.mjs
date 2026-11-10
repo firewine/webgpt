@@ -276,7 +276,9 @@ test('execution owner UI: truncated display is separate from complete capture; p
   assert.equal(await f.card().getByRole('button', { name: '이번 요청 승인', exact: true }).count(), 0); assert.match(await f.card().textContent(), /경로·범위를 검증하는 실행 승인은 아직 지원하지/);
   assert.equal(await f.card('readonly-job').getByRole('button', { name: '이번 요청 승인', exact: true }).isEnabled(), true);
   f.handlers.set('/api/jobs/job-a/approve', route => route.fulfill({ json: {} })); await f.card().getByRole('button', { name: '거절', exact: true }).click();
-  await f.card().getByRole('button', { name: '취소', exact: true }).click(); assert.deepEqual(f.posts('/api/jobs/job-a/approve').map(r => r.body.decision), ['decline', 'cancel']);
+  const cancelled = f.page.waitForResponse(res => new URL(res.url()).pathname === '/api/jobs/job-a/approve' && res.request().method() === 'POST' && res.request().postDataJSON()?.decision === 'cancel');
+  await f.card().getByRole('button', { name: '취소', exact: true }).click(); await cancelled;
+  assert.deepEqual(f.posts('/api/jobs/job-a/approve').map(r => r.body.decision), ['decline', 'cancel']);
 });
 
 test('execution owner UI: readCopy approvals warn and only decline/cancel, including after a stale ACCEPT click', { timeout: 30000 }, async t => {

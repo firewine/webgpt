@@ -15,7 +15,7 @@
 `dot_turn_get({requestId, attemptId, attemptToken, inputPage: 0})`의 `request.input`은 `encoding: "json"`, `pageIndex`, `pageCount`, `nextPage`, `text`를 담는다. 원문 조각은 순서대로 합치면 `{prompt, history}` JSON이 되며 서버 입력과 내용이 같다. 개별 조각만으로 JSON.parse를 시도하지 않는다.
 
 1. 각 응답에서 같은 `requestId`·`inputDigest`·`pageCount`인지 확인한다. 첫 페이지0부터 `nextPage`만 순서대로 사용하고, `nextPage:null`과 마지막 인덱스까지 확인한다. 실제 get의 반환값으로만 다음 인자를 정한다.
-2. **도구 응답 envelope 전체를 한 번에 출력하지 않는다.** `structuredContent`를 선택하거나 text content의 JSON을 파싱한 한 표현만 사용한다. 페이지 하나씩 읽고 다음 도구 호출로 넘어간다. 모든 페이지를 한 실행에서 모아 한꺼번에 `text(...)`로 출력하면 다시 잘릴 수 있다.
+2. **도구 응답 envelope 전체를 한 번에 출력하지 않는다.** 각 호출마다 `structuredContent`가 null/undefined가 아닐 때만 그 값을 사용하고, 없으면 text content의 JSON을 파싱한다. 메타데이터/claim 응답에 있던 필드가 페이지 응답에도 있다고 가정하지 않는다. v2 페이지는 `content`만 있고 `structuredContent`는 없다. 페이지 하나씩 읽고 다음 도구 호출로 넘어간다. 모든 페이지를 한 실행에서 모아 한꺼번에 `text(...)`로 출력하면 다시 잘릴 수 있다.
 3. 원문/이전 맥락·할당 주장·반론·미확인·답변 계약을 전부 읽는다. `Warning: truncated output`, 누락/다른 digest/권한 오류이면 새 claim/submit 없이 중단하고 원래 요청을 대조한다. 읽지 못한 부분을 추정하거나 요약으로 대체하지 않는다.
 4. 동일 페이지의 읽기 재확인은 같은 request/attempt/page를 사용하며 새 모델 요청이 아니다. 모든 페이지를 읽었다는 사실만으로 주장이 사실로 검증됐다고 표시하지 않는다. 실제 검토 후 기존 JSON 답변을 한 번 제출한다.
 
@@ -23,12 +23,18 @@
 
 ```js
 // result = 위 dot_turn_get 한 번의 결과. attemptToken은 출력하지 않는다.
-const value = result.structuredContent ?? JSON.parse(
-  result.content.find(item => item.type === "text").text
-);
+if (result?.isError) throw new Error("mcp_tool_error");
+let value = result?.structuredContent;
+if (value == null) {
+  const json = result?.content?.find(item => item.type === "text" && typeof item.text === "string")?.text;
+  if (typeof json !== "string") throw new Error("mcp_text_json_missing");
+  value = JSON.parse(json);
+}
 text({ requestId: value.request.requestId,
   inputDigest: value.request.inputDigest, input: value.request.input });
 ```
+
+`value.request.input`을 읽기 전에 그 호출의 결과부터 위 절차로 해석한다. `Object.keys(result.structuredContent)`처럼 존재 검사 없이 필드를 읽으면 v2의 첫 페이지에서 실패한다. 해석 오류면 다음 페이지/답변 생성/submit 없이 중단하고 단계·오류·시각만 보고한다.
 
 `inputPage`를 생략한 기존 전체 조회는 호환성용으로 남지만 새 감시에서는 페이지 조회를 사용한다. 배포 후 도구 새로 고침에서 `inputPage`가 보이는지 먼저 확인한다. 정확한 플랫폼 출력 한도나 이 지침 적용만으로 실제 왕복이 성공했다고 가정하지 않는다.
 

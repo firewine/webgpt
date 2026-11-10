@@ -99,7 +99,7 @@ node scripts/dot-mcp-ops.mjs package /실제/state/dot-production/plugin-v1 plug
 
 긴 입력 대응 버전을 배포한 뒤에는 **도구 새로 고침**에서 `dot_turn_get.inputPage`가 선택적 정수로 보이는지 확인한다. 기존 감시 지시를 갱신하며 새 감시를 중복 생성하지 않는다. `inputPage:0`부터 `request.input.nextPage`를 따라 마지막 `null`까지 각 페이지를 별도로 읽는다. 모든 페이지의 `requestId/inputDigest/pageCount` 동일성과 누락0을 확인해야 한다. 각 `text`는 같은 `{prompt,history}` JSON의 원문 조각이며, 한 페이지가 독립 JSON 객체인 것은 아니다.
 
-MCP 결과 전체나 합친 전체 원문을 다시 한꺼번에 출력하지 않는다. 한 응답에서 structuredContent 또는 content JSON 중 한 표현만 읽는다. 자세한 예시는 [최초 감시 지침](../plugins/webjjoku-dot/README.md#긴-원문-읽기)을 따른다. 페이지 조회는 읽기 전용이며 새 claim/turn/이벤트·API 사용 예약을 만들지 않는다. 페이지 중간에 권한/세대 변경이나 출력 절단을 만나면 중단/대조하고 일부 입력으로 답변하지 않는다.
+MCP 결과 전체나 합친 전체 원문을 다시 한꺼번에 출력하지 않는다. **매 호출**의 `structuredContent`가 null/undefined가 아닐 때만 읽고, 없으면 text `content`의 JSON을 파싱한다. v2 페이지는 `content`만 반환하므로 메타데이터/claim의 표현 선택을 다음 호출에 고정하지 않는다. 존재 검사 전 `Object.keys(result.structuredContent)`를 호출하지 않는다. 자세한 예시는 [최초 감시 지침](../plugins/webjjoku-dot/README.md#긴-원문-읽기)을 따른다. 페이지 조회는 읽기 전용이며 새 claim/turn/이벤트·API 사용 예약을 만들지 않는다. 페이지 중간에 권한/세대 변경·출력 절단·응답 해석 오류를 만나면 다음 페이지/답변 생성/submit 없이 중단/대조하고 일부 입력으로 답변하지 않는다.
 
 선택 인자를 생략한 전체 조회는 이전 클라이언트와 호환된다. 페이지는 기존 request/attempt 권한 안에서만 읽을 수 있고, 미확정/재시작 held 요청을 새 조회로 재개할 수 없다. 원래300초 timeout·180,000자 입력 한도는 그대로다. fixture의 페이지 무손실 검사를 실제 dot의 플랫폼 지연/출력 한도 통과로 세지 않는다.
 
