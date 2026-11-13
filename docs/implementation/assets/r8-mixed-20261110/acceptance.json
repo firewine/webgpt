@@ -1,0 +1,85 @@
+{
+  "dateKst": "2026-11-10",
+  "observedAt": "2026-11-10T13:45:06.683Z",
+  "source": "5d5c824d107beadf3aba441f28e477fa9a133cb7",
+  "status": "BLOCKED",
+  "overallAccepted": false,
+  "firstReservationAt": "2026-11-10T13:22:14.468Z",
+  "stoppedAt": "2026-11-10T13:33:47.793Z",
+  "limits": {
+    "maxMs": 1800000,
+    "maxReservations": 30,
+    "maxDeepseek": 6,
+    "maxCodexJobs": 2,
+    "turnTimeoutMs": 300000,
+    "apiDaily": {
+      "maxRequests": 8,
+      "maxTokens": 200000
+    }
+  },
+  "actual": {
+    "reservations": 6,
+    "completedReplies": 5,
+    "independent": [
+      {
+        "participant": "native_dot",
+        "status": "completed",
+        "receiptPresent": true
+      },
+      {
+        "participant": "web_gpt_business",
+        "status": "completed",
+        "receiptPresent": true
+      },
+      {
+        "participant": "web_gpt_second",
+        "status": "completed",
+        "receiptPresent": true
+      },
+      {
+        "participant": "deepseek_high",
+        "status": "completed",
+        "receiptPresent": true
+      },
+      {
+        "participant": "muse_original_thread",
+        "status": "completed",
+        "receiptPresent": true
+      }
+    ],
+    "crossReview": {
+      "status": "unconfirmed",
+      "completed": 0,
+      "error": "dot_reply_unconfirmed",
+      "nativeProcessingOutcome": "PENDING_OWNER_REPORT"
+    },
+    "apiRequests": 1,
+    "reportedApiTokens": 23695,
+    "codexRegistrations": 1,
+    "codexJobs": 0,
+    "commandsExecuted": 0,
+    "originalApplications": 0
+  },
+  "preservation": {
+    "completedRepliesRetained": true,
+    "failedRequestAndClaimRetained": true,
+    "roomOff": true,
+    "browserPaused": true,
+    "configAndAuthRestored": true,
+    "temporaryDropRemoved": true,
+    "blankBindingRevoked": true,
+    "blankManagedSession": "lost",
+    "roomConfigurationRestoration": "DEFERRED_UNCONFIRMED_REQUEST"
+  },
+  "notRun": [
+    "cross_review_completion",
+    "codex_read",
+    "protected_write",
+    "original_apply",
+    "five_participant_revision",
+    "synthesis",
+    "summary_review",
+    "topic_wiki",
+    "followup_citation"
+  ]
+}
