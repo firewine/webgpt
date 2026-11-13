@@ -29,5 +29,7 @@ export async function residentFixture(t, options = {}) {
   };
   if (options.configure !== false) configure();
   return { directory, store, resident, dispatch, engine, runner, provider, roomId, control, configure,
-    room: () => store.read().resident.rooms[0], calls: () => calls, clock: () => time, advance: (ms = 100) => { time += ms; } };
+    // Store control timestamps use wall time; never leave the injected runner
+    // clock behind a slow setup/on transition on a loaded CI worker.
+    room: () => store.read().resident.rooms[0], calls: () => calls, clock: () => time, advance: (ms = 100) => { time = Math.max(time, Date.now()) + ms; } };
 }
