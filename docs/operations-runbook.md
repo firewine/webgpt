@@ -308,6 +308,17 @@ HTTP `/mcp`를 직접 사용할 수 있는 클라이언트는 Bearer 인증을 �
 
 터널 프로세스는 해당 서버의 서비스 관리 아래 유지한다. 먼저 구성과 계정 왕복을 확인한 다음 보호된 environment 파일을 읽는 user unit으로 등록한다. 이 저장소가 실제 사용자의 터널·키·plugin을 이미 생성한 것은 아니다.
 
+### dot 전달 단계 진단
+
+운영 적용·실계정 검사 범위가 별도 승인된 경우에만 전용 전달기의 private 환경 파일에 `WJ_MCP_TRACE=summary`를 추가한다. 기본은 꺼짐이며, `true` 등 다른 값도 기록을 켜지 않는다. 해당 bridge의 **stderr**에서 JSON `mcp.call_observation`을 확인한다. stdout은 MCP 응답 전용이므로 `2>&1`로 합쳐 프로토콜 입력으로 사용하지 않는다. 실제 unit/로그 파일은 운영 중인 터널 설정으로 확인하고 추정하지 않는다.
+
+- `phase:start`는 요청이 이 전달기에 도착한 기록이다. `kind:page/claim/submit/metadata`, 해시 참조 `requestRef`, 요청 페이지와 바이트 수를 남긴다. 원래 ID·대화·키·토큰·임의 오류 문장은 남기지 않는다.
+- `phase:end`의 `durationMs`는 로컬 전달 시간이다. `pageIndex/pageCount`는 반환 자료의 메타데이터이며, HTTP401/429, `rpc_error`와 허용 오류 코드, `timeout`, `invalid_json`, `request_too_large`를 구분한다. `responseBytes`는 성공적으로 구성한 JSON 응답의 UTF-8 바이트 수(줄바꿈 제외)다. 확인하지 못한 필드는 null이다.
+- v1 `structuredContent` 또는 v2 `content[].text`를 호출마다 해석한다. 페이지 반환 성공은 dot의 원문 소비·분석 완료가 아니다. `ok`도 답변 수락/공개를 의미하지 않으므로 실제 reply/receipt와 대조한다. 원문 digest 대조는 기존 권한 안에서 별도로 수행한다.
+- 기록 실패·stderr 단절·적체에서는 진단 기록을 중단하고 기존 응답 흐름을 유지한다. POSIX stderr 파이프에는 별도 비동기 쓰기 대기열을 만들지 않아, 로그를 읽지 않아도 전달기가 종료될 수 있다. 짧은 쓰기로 마지막 로그 줄이 잘릴 수도 있으므로 불완전한 줄과 로그 부재를 미실행으로 판정하지 않는다. start만 있으면 로컬 응답 미확인, 전체 페이지 뒤 submit 기록이 없으면 외부 처리 단계 미확인으로 남긴다. 과거 실패를 이 새 로그로 소급 확정하지 않는다.
+
+검증 종료 시 `WJ_MCP_TRACE`를 제거해 끈다. 이 기능은 DB/도구 입력/300초/예산·재시도 정책을 바꾸지 않는다. 기존 미확정은 원래 실행의 중단 여부·서버 receipt 대조 후 소유자 복구 절차를 따른다. [2026-11-13 진단·한계·검사](./implementation/dot-cross-review-diagnosis-20261113.md)를 참고한다.
+
 기존 토의 MCP에서 codex_send grant가 있으면 검증 발언 중 구체적인 prompt를 제출한다. 접수 후 Core가 실제 job 완료를 관측하고 같은 과제를 다시 검토하게 한다. 공식 dot grant의 세 도구에 codex_send 권한은 포함하지 않는다. D2~D3가 구현한 Events는 유효한 dot grant에만 광고하며, 실제 사용자 구독/왕복 성공은 별도 증거로 판단한다. **Muse 공식 Connector는 미구현**이다. 이벤트와 browser 경로로 같은 turn을 이중 시작하지 않는다.
 
 ## 6. 백업과 복구

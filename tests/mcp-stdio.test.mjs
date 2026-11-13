@@ -22,7 +22,7 @@ function sizedRequest(bytes, id, character = '가') {
 }
 
 // Only an ephemeral loopback mock and a private, synthetic grant; no workspace server.
-async function runBridge(t, lines, { keepStdinOpen = false } = {}) {
+async function runBridge(t, lines, { keepStdinOpen = false, trace, respond, preload, readStderr = true } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'wj-mcp-stdio-'));
   const token = 'fixture_stdio_grant_never_used_outside_tests';
   const grant = join(directory, 'grant');
@@ -36,34 +36,44 @@ async function runBridge(t, lines, { keepStdinOpen = false } = {}) {
     if (message.method === 'fixture/http-failure') { res.writeHead(503); res.end('private upstream detail'); return; }
     if (message.method === 'fixture/invalid-json') { res.end('private invalid JSON'); return; }
     if (message.id === undefined) { res.writeHead(202); res.end(); return; }
+    if (respond) { respond(message, res); return; }
     res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(pong(message.id)));
   });
   t.after(async () => {
     if (child && child.exitCode === null && child.signalCode === null) child.kill();
+    child?.stderr.resume();
     if (closed) await closed;
     await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });
     await rm(directory, { recursive: true, force: true });
   });
   await writeFile(grant, token, { mode: 0o600 });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
-  child = spawn(process.execPath, [fileURLToPath(new URL('../scripts/mcp-stdio.mjs', import.meta.url))], {
-    env: { WJ_PORT: String(server.address().port), WJ_MCP_GRANT_FILE: grant }, stdio: ['pipe', 'pipe', 'pipe'],
+  const args = [];
+  if (preload) { const path = join(directory, 'preload.mjs'); await writeFile(path, preload); args.push('--import', path); }
+  child = spawn(process.execPath, [...args, fileURLToPath(new URL('../scripts/mcp-stdio.mjs', import.meta.url))], {
+    env: { WJ_PORT: String(server.address().port), WJ_MCP_GRANT_FILE: grant, ...(trace === undefined ? {} : { WJ_MCP_TRACE: trace }) }, stdio: ['pipe', 'pipe', 'pipe'],
   });
   closed = once(child, 'close');
+  const exited = readStderr ? null : once(child, 'exit', { signal: AbortSignal.timeout(8000) });
   let stdout = '', stderr = '';
   child.stdout.on('data', chunk => { stdout += chunk; });
-  child.stderr.on('data', chunk => { stderr += chunk; });
+  const collectStderr = chunk => { stderr += chunk; };
+  if (readStderr) child.stderr.on('data', collectStderr);
+  else child.stderr.once('data', chunk => { collectStderr(chunk); child.stderr.pause(); });
   child.stdin.on('error', () => {}); // A deliberate bridge close may interrupt the test writer.
   child.stdin.write(lines.join('\n') + '\n');
   if (!keepStdinOpen) child.stdin.end();
+  if (!readStderr) { try { await exited; } finally {
+    child.stderr.removeAllListeners('data'); child.stderr.on('data', collectStderr); child.stderr.resume();
+  } }
   const [code, signal] = await closed;
-  assert.equal(signal, null); assert.equal(stderr, '');
+  assert.equal(signal, null); if (trace !== 'summary') assert.equal(stderr, '');
   for (const request of requests) {
     assert.equal(request.path, '/mcp'); assert.equal(request.method, 'POST');
     assert.equal(request.authorization, 'Bearer ' + token);
     assert.ok(Buffer.byteLength(request.body) <= 256_000, 'oversized input must never be forwarded');
   }
-  return { code, stdout, replies: stdout.trim() ? stdout.trim().split('\n').map(line => JSON.parse(line)) : [], requests };
+  return { code, stdout, stderr, replies: stdout.trim() ? stdout.trim().split('\n').map(line => JSON.parse(line)) : [], requests };
 }
 
 test('stdio: multibyte reply gets its own error ID and the next ping still works', { timeout: 10_000 }, async t => {
@@ -147,3 +157,60 @@ for (const kind of ['request', 'notification', 'malformed']) {
     assert.equal(result.code, 1); assert.equal(result.stdout, ''); assert.deepEqual(result.requests, []);
   });
 }
+
+test('stdio: optional observations preserve byte-identical RPC output and forwarded requests for success and failures', { timeout: 10_000 }, async t => {
+  const privateText = 'fixture-secret-token-original-email@example.invalid';
+  const call = (id, name, extra = {}) => JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name,
+    arguments: { requestId: 'turn-' + privateText, attemptToken: privateText, commandId: privateText, text: privateText, ...extra } } });
+  const lines = [call(1, 'dot_turn_get'), ...[0, 1, 2].map((inputPage, i) => call(i + 2, 'dot_turn_get', { inputPage })),
+    call(5, 'dot_turn_claim'), call(6, 'dot_turn_submit'), call(7, 'dot_turn_get'), call(8, 'dot_turn_get'),
+    sizedRequest(256_001, 9), '{bad-json', JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
+    JSON.stringify({ jsonrpc: '2.0', id: 10, method: 'fixture/disconnect' }), JSON.stringify({ jsonrpc: '2.0', id: 11, method: 'fixture/invalid-json' })];
+  const respond = (message, res) => {
+    if ([7, 8].includes(message.id)) { res.writeHead(message.id === 7 ? 401 : 429); res.end(privateText); return; }
+    const inputPage = message.params.arguments.inputPage;
+    const value = { request: { requestId: 'turn-' + privateText, input: { pageIndex: inputPage, pageCount: 3, text: privateText } } };
+    res.end(JSON.stringify(message.id === 6 ? { jsonrpc: '2.0', id: 6, error: { code: -32602, message: 'dot_request_stale', data: privateText } }
+      : { jsonrpc: '2.0', id: message.id, result: { content: [{ type: 'text', text: JSON.stringify(value) }] } }));
+  };
+  const off = await runBridge(t, lines, { respond }), on = await runBridge(t, lines, { respond, trace: 'summary' });
+  assert.equal(on.code, off.code); assert.equal(on.stdout, off.stdout); assert.deepEqual(on.requests, off.requests);
+  const records = on.stderr.trim().split('\n').map(JSON.parse), ends = records.filter(v => v.phase === 'end');
+  assert.equal(records.length, lines.length * 2);
+  assert.deepEqual(ends.slice(1, 4).map(v => [v.inputPage, v.pageIndex, v.pageCount]), [[0, 0, 3], [1, 1, 3], [2, 2, 3]]);
+  assert.equal(ends[5].outcome, 'rpc_error'); assert.equal(ends[5].errorKind, 'dot_request_stale');
+  assert.deepEqual(ends.slice(6, 8).map(v => v.httpStatus), [401, 429]);
+  assert.deepEqual(ends.slice(8).map(v => v.outcome), ['request_too_large', 'parse_error', 'notification', 'transport_error', 'invalid_json']);
+  assert.ok(!on.stderr.includes(privateText)); assert.ok(!on.stderr.includes('fixture_stdio_grant'));
+});
+
+test('stdio: timeout is classified without waiting or retrying, and broken stderr cannot change RPC output', { timeout: 10_000 }, async t => {
+  const result = await runBridge(t, [ping(1)], { trace: 'summary', preload: "globalThis.fetch = async () => { throw new DOMException('private timeout detail', 'TimeoutError'); };" });
+  assert.deepEqual(result.replies, [failure(1)]); assert.equal(result.requests.length, 0);
+  assert.equal(JSON.parse(result.stderr.trim().split('\n').at(-1)).outcome, 'timeout');
+  assert.doesNotMatch(result.stderr, /private timeout detail/);
+  // fetch's body reader can report AbortError while the original deadline's
+  // reason is TimeoutError; do not misclassify that as malformed JSON.
+  const bodyTimeout = await runBridge(t, [ping(4)], { trace: 'summary', preload: `
+    AbortSignal.timeout = () => AbortSignal.abort(new DOMException('private deadline', 'TimeoutError'));
+    globalThis.fetch = async () => ({ status: 200, ok: true, json: async () => { throw new DOMException('private body detail', 'AbortError'); } });` });
+  assert.deepEqual(bodyTimeout.replies, [failure(4)]); assert.equal(bodyTimeout.requests.length, 0);
+  const timed = JSON.parse(bodyTimeout.stderr.trim().split('\n').at(-1));
+  assert.equal(timed.outcome, 'timeout'); assert.equal(timed.httpStatus, 200);
+  assert.doesNotMatch(bodyTimeout.stderr, /private deadline|private body detail/);
+  const broken = await runBridge(t, [ping(2)], { trace: 'summary', preload: "import { closeSync } from 'node:fs'; closeSync(2);" });
+  assert.deepEqual(broken.replies, [pong(2)]); assert.equal(broken.requests.length, 1); assert.equal(broken.stderr, '');
+  const unknown = await runBridge(t, [ping(3)], { trace: 'true' }); assert.equal(unknown.stderr, '');
+});
+
+test('stdio: a stalled diagnostic reader cannot keep the process alive after all RPC replies finish', { timeout: 10_000 }, async t => {
+  // Read the first chunk to confirm tracing, then pause the reader until exit.
+  // Reading nothing would let Node's exit cleanup discard all buffered evidence.
+  const lines = Array.from({ length: 3000 }, (_, id) => ping(id));
+  const preload = `globalThis.fetch = async (_url, { body }) => ({ status: 200, ok: true,
+    json: async () => ({ jsonrpc: '2.0', id: JSON.parse(body).id, result: {} }) });`;
+  const off = await runBridge(t, lines, { preload, readStderr: false });
+  const on = await runBridge(t, lines, { preload, readStderr: false, trace: 'summary' });
+  assert.equal(on.code, 0); assert.equal(on.stdout, off.stdout); assert.equal(on.replies.length, lines.length);
+  assert.equal(on.requests.length, 0); assert.ok(on.stderr.includes('mcp.call_observation'));
+});

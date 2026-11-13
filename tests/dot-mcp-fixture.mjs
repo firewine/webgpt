@@ -62,12 +62,15 @@ export async function dotFixture(t, options = {}) {
 
 // A real native mailbox/lease stopped after input was read, never a not-sent fixture.
 export async function stoppedDotTopicFixture(t, options = {}) {
-  const f = await dotFixture(t, { timeoutMs: 400, ...options });
+  const f = await dotFixture(t, options);
   for (const participantId of ['fake-a', 'fake-b']) f.control({ action: 'set_member', participantId, enabled: true });
   f.app.resident.postMessage(f.roomId, { text: '보존할 원문🙂 '.repeat(300) }, key());
-  const original = f.app.providers.complete.bind(f.app.providers);
+  const original = f.app.providers.complete.bind(f.app.providers); let stop;
   f.app.providers.complete = async input => {
-    if (input.participant.kind === 'dot-mcp') return original(input);
+    if (input.participant.kind === 'dot-mcp') {
+      stop = new AbortController();
+      return original({ ...input, signal: AbortSignal.any([input.signal, stop.signal]) });
+    }
     input.hooks.dispatched(); const answer = JSON.parse(response(input.prompt, input.participant)); answer.verifications = [];
     return { text: JSON.stringify(answer), receipt: key(), usage: null };
   };
@@ -77,6 +80,9 @@ export async function stoppedDotTopicFixture(t, options = {}) {
     f.stoppedRequestId = requestId; f.stoppedAttempt = f.claim(requestId);
     const page = f.call('dot_turn_get', { requestId, ...f.stoppedAttempt, inputPage: 0 }).request.input;
     if (page.nextPage !== 1) throw new Error('multi_page_fixture_required');
+    // Trigger the real adapter's uncertain-stop path only after claim + page
+    // succeeded, rather than racing a 400ms timer against initial draft delivery.
+    stop.abort();
   };
   f.discussionId = f.app.residentRunner.focus(f.roomId, { ...topic, participantIds: ['fake-a', 'fake-b', f.participantId],
     limits: { maxRequests: 60, maxRounds: 2, maxVerificationTasks: 0 } }, key());
