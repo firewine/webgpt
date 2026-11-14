@@ -81,7 +81,8 @@ const errors: Record<string, string> = { dot_version_conflict: '다른 화면에
   browser_selectors_invalid: '실제 입력란과 전송 버튼 선택자를 확인해 주세요.', browser_not_ready: 'Chrome 대화가 응답 가능한 상태인지 확인해 주세요.',
   reconciliation_required: '미확인 응답이나 실행 결과를 먼저 대조해 주세요.', workspace_not_allowed: '서버에서 허용한 작업 경로 안의 디렉터리를 등록해 주세요.',
   dot_stop_confirmation_required: '원래 dot 실행이 중단됐고 답변을 제출하지 않았는지 확인해 주세요.', dot_retry_requires_native_topic: '공식 dot의 주제 토의에서만 중단 확인 후 재시도를 준비할 수 있습니다.', dot_retry_reply_exists: '이미 받은 답변이 있습니다. 원래 결과를 먼저 대조해 주세요.', dot_retry_scope_changed: '과제나 문맥 상태가 바뀌었습니다. 원래 요청과 현재 토의를 대조해 주세요.', dot_retry_input_changed: '원래 입력이나 자료 접근 범위가 바뀌어 같은 과제를 재시도할 수 없습니다.',
-  dot_failed_submit_stop_confirmation_required: '제출 오류 뒤 원래 dot 실행이 멈췄고 추가 제출이 없는지 확인해 주세요.', dot_retry_prior_grant_not_revoked: '원래 dot 연결 권한을 먼저 회수한 뒤 제출 오류를 대조해 주세요.',
+  dot_failed_submit_stop_confirmation_required: '제출 오류 뒤 원래 dot 실행이 멈췄고 추가 제출이 없는지 확인해 주세요.', dot_retry_prior_grant_not_revoked: '원래 dot 연결 권한을 먼저 회수한 뒤 재시도를 준비해 주세요.',
+  dot_unverified_execution_acceptance_required: '원격 실행 종료·제출 이력 미확인과 옛 실행자의 새 요청 접근 위험을 수락해야 합니다.', dot_monitor_disabled_confirmation_required: '현재 dot 감시가 비활성인지 확인해 주세요.', dot_retry_prior_subscription_active: '원래 dot 권한의 감시 등록이 아직 유효합니다. 권한 회수 상태를 다시 확인해 주세요.',
   session_target_mismatch: 'Codex 세션의 작업 경로·호스트·사용자가 일치하지 않습니다.', feature_branch_required: '파일 수정은 작업 브랜치에서만 허용됩니다.',
   existing_browser_context_preserved: '기존 dot·Muse 대화의 문맥은 자동 교체하지 않습니다.', revision_conflict: '다른 변경이 반영됐습니다. 새 상태에서 다시 시도해 주세요.',
   context_limit_requires_handoff: '문맥이 길어졌습니다. 원본과 복구에서 체크포인트를 적용해 주세요.', source_fetch_disabled: '서버에서 공개 출처 조회가 꺼져 있습니다.',
@@ -373,7 +374,24 @@ function renderRecords(target: HTMLElement, d: Discussion): void {
         { name: 'note', label: '확인한 실행 시각·제출 오류·중단 근거', multiline: true },
       ], async data => { await control({ action: 'reconcile', turnId: t.id, resolution: 'retry_after_failed_submit', stoppedAfterFailedSubmit: data.stoppedAfterFailedSubmit === 'on', note: data.note }); announce('제출 오류를 기록하고 재시도를 준비했습니다. dot 연결·방 설정을 확인하고 이어가기를 누르세요.'); },
       '제출이 오류로 끝나고 원래 dot 실행이 멈춘 경우에 사용합니다. 기존 dot 연결의 권한을 먼저 회수하세요. 확인된 답변이나 영수증이 있으면 원래 결과를 대조해야 합니다. 원래 실패와 완료된 답변은 보존하며, 이어가기를 눌러야 새 요청을 보냅니다.', '재시도 준비')));
+    if (d.members.find(p => p.id === t.participantId)?.kind === 'dot-mcp' && ['paused', 'blocked'].includes(d.status)) row.append(button('종료 미확인·권한 회수 후 재시도 준비', () => modal('dot 종료 미확인 재시도 준비', [
+      { name: 'acceptUnverifiedExecution', label: '원격 실행 종료·제출 이력 미확인과 옛 실행자가 새 요청에 접근할 위험을 이해하고 수락합니다.', checkbox: true },
+      { name: 'monitorDisabled', label: '현재 dot 감시가 비활성임을 확인했습니다.', checkbox: true },
+      { name: 'note', label: '권한 회수·감시 비활성 확인 근거와 미확인 이력 (1~1,000자)', multiline: true, maxLength: 1000 },
+    ], async data => {
+      if (data.acceptUnverifiedExecution !== 'on') throw new Error('dot_unverified_execution_acceptance_required');
+      if (data.monitorDisabled !== 'on') throw new Error('dot_monitor_disabled_confirmation_required');
+      const note = data.note?.trim() ?? ''; if (!note || note.length > 1000) throw new Error('확인 근거를 1~1,000자로 입력해 주세요.');
+      await control({ action: 'reconcile', turnId: t.id, resolution: 'retry_after_authority_revoked', acceptUnverifiedExecution: true, monitorDisabled: true, note });
+      announce('종료·제출 이력 미확인을 기록하고 재시도를 준비했습니다. dot 연결·방 설정을 확인한 뒤 별도로 이어가기를 누르세요.');
+    }, '원격 실행의 종료와 제출 이력은 확인되지 않았습니다. 먼저 원래 dot 연결 권한을 회수하세요. 권한 회수는 옛 요청의 결과 반영을 차단하지만, 잠들어 있던 옛 실행자가 갱신된 전달기를 통해 새 요청을 조회·점유하는 것까지 막는다고 보장하지 않습니다. 감시 비활성은 원격 종료의 증거가 아닙니다. 완료된 답변과 원래 기록은 보존하며 토의는 확인 필요·일시정지 상태를 유지합니다. 지금 새 요청을 보내지 않으며, 별도로 이어가기를 눌러야 실행합니다.', '재시도 준비')));
     card.append(row); target.append(card); }
+  for (const t of d.turns.filter(t => t.error === 'owner_confirmed_retry_after_authority_revoked')) {
+    const card = node('section', '', 'panel'); card.dataset.recoveryTurnId = t.id;
+    card.append(node('h2', `권한 회수 후 앱 대조 종료 · ${labelFor(t.participantId)}`), node('p', '원격 종료·제출 이력 미확인', 'uncertainty'),
+      node('p', '앱에서 옛 요청의 대조를 마쳤습니다. 원격 dot 실행의 종료나 미제출을 확인한 기록이 아닙니다. 원래 기록의 종료 시각은 앱의 기존 처리 시각이며 원격 종료 시각이 아닙니다.', 'small'),
+      details('대조한 원래 요청과 앱 처리 기록', JSON.stringify(t, null, 2), t.id)); target.append(card);
+  }
   const handoff = node('section', '', 'panel'); handoff.append(node('h2', '문맥과 참여자 관리'), node('p', '문맥 전환은 기존 원문·근거·미해결 과제를 보존합니다. 주제 revision과 별도로 기록합니다.', 'small muted'));
   for (const p of d.members) { const row = node('div', '', 'toolbar'); row.append(node('span', p.label)); if (p.kind !== 'browser') row.append(button('체크포인트 적용', () => control({ action: 'handoff', participantId: p.id, expectedGeneration: d.contexts.find(c => c.participantId === p.id)!.generation })));
     if (!d.excludedIds.includes(p.id) && ['running', 'paused', 'blocked'].includes(d.status)) row.append(button('참여 제외', () => modal('참여자 제외', [], () => control({ action: 'exclude', participantId: p.id }), `${p.label}의 기존 결과는 남기고, 이후 과제에서 제외합니다.`))); handoff.append(row); } target.append(handoff);
@@ -755,13 +773,14 @@ function renderJobs(): void {
       if (job.error) card.append(node('p', executionReason(job.error), 'small muted')); target.append(card); }
   });
 }
-type Field = { name: string; label: string; multiline?: boolean; required?: boolean; secret?: boolean; email?: boolean; checkbox?: boolean; number?: { min: number; max: number }; options?: { value: string; label: string }[]; value?: string };
+type Field = { name: string; label: string; multiline?: boolean; required?: boolean; secret?: boolean; email?: boolean; checkbox?: boolean; maxLength?: number; number?: { min: number; max: number }; options?: { value: string; label: string }[]; value?: string };
 let modalAction: ((values: Record<string, string>) => Promise<unknown>) | null = null;
 function modal(title: string, fields: Field[], action: (values: Record<string, string>) => Promise<unknown>, note?: string, submitLabel = '적용'): void {
   $<HTMLButtonElement>('#action-form button[type=submit]').textContent = submitLabel;
   $('#action-title').textContent = title; const target = $('#action-fields'); target.replaceChildren(); if (note) target.append(node('p', note, 'small muted'));
   for (const field of fields) { const label = node('label', field.label); const input = field.options ? node('select') : field.multiline ? node('textarea') : node('input'); input.name = field.name; input.required = field.required !== false; if (input instanceof HTMLTextAreaElement) input.rows = 6; else if (input instanceof HTMLInputElement && field.secret) { input.type = 'password'; input.autocomplete = 'off'; }
     if (input instanceof HTMLInputElement && field.checkbox) input.type = 'checkbox';
+    if (field.maxLength !== undefined && (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)) input.maxLength = field.maxLength;
     if (input instanceof HTMLInputElement && field.number) { input.type = 'number'; input.min = String(field.number.min); input.max = String(field.number.max); input.step = '1'; }
     if (input instanceof HTMLSelectElement && field.options) selectOptions(input, field.options.map(o => ({ id: o.value, label: o.label }))); if (field.value !== undefined) input.value = field.value; label.append(input); target.append(label); }
   for (const field of fields.filter(f => f.email)) (target.querySelector(`[name="${field.name}"]`) as HTMLInputElement).type = 'email';

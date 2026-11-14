@@ -30,6 +30,7 @@ test('D4 native stopped retry requires explicit evidence and confirmation and le
   await p.getByRole('button',{name:'원본과 복구',exact:true}).click();
   assert.equal(await p.getByRole('button',{name:'중단 확인 후 재시도 준비',exact:true}).count(),1);
   assert.equal(await p.getByRole('button',{name:'제출 오류 후 재시도 준비',exact:true}).count(),1);
+  assert.equal(await p.getByRole('button',{name:'종료 미확인·권한 회수 후 재시도 준비',exact:true}).count(),1);
   for(const name of ['완료 응답 반영','전송되지 않음 확인','이 응답 건너뛰기']) assert.equal(await p.getByRole('button',{name,exact:true}).count(),3);
   // Return the two completed peers to their actual fixture state before recovery.
   f.app.store.transact(s=>{for(const turn of s.discussions[0].turns) if(prior.some(v=>v.id===turn.id)) turn.status='completed';});
@@ -79,6 +80,70 @@ test('D4 submit-error recovery records a distinct confirmation and prepares no n
   assert.equal(after.turns.find(v=>v.id===old.id).error,'owner_confirmed_retry_after_failed_submit');
   assert.equal(after.tasks.find(v=>v.id===old.taskId).status,'pending');assert.equal(after.turns.length,d.turns.length);
   assert.deepEqual(after.turns.filter(v=>prior.some(a=>a.id===v.id)),prior);assert.equal(f.calls(),0);assert.deepEqual(f.errors,[]);
+});
+for (const status of ['blocked','paused']) test(`D4 authority-revoked recovery requires both confirmations, preserves unverified history and stays ${status}`, {timeout:30000}, async t => {
+  const source=await stoppedDotTopicFixture(t);
+  source.control({action:'off'});
+  source.app.dotMcp.revoke(source.connectionId,source.state().dotMcp.bindings[0].version,'ui-unverified-revoke');
+  const seed=source.state(),d=seed.discussions[0],old=d.turns.find(v=>v.id===source.stoppedRequestId);
+  d.status=status;
+  const original=seed.dotMcp.requests.items.find(r=>r.id===old.id),prior=structuredClone(d.turns.filter(v=>v.status==='completed'));
+  assert.equal(prior.length,5);assert.equal(seed.dotMcp.grants.find(g=>g.id===original.grantId).status,'revoked');
+  assert.equal(seed.dotMcp.events.subscriptions.some(s=>s.grantId===original.grantId&&s.status==='active'),false);
+  const f=await setup(t),p=f.page;p.setDefaultTimeout(5000);
+  f.app.store.transact(s=>{const password=s.ownerPassword,sessions=s.sessions;Object.assign(s,structuredClone(seed));s.ownerPassword=password;s.sessions=sessions;});
+  const openRecords=async()=>{
+    await p.reload();await p.locator('[data-view=room]').click();await p.locator('#history button').first().click();await p.locator('#topic-details-open').click();
+    await p.getByRole('button',{name:'원본과 복구',exact:true}).click();
+  };
+  await openRecords();
+  const retry=p.getByRole('button',{name:'종료 미확인·권한 회수 후 재시도 준비',exact:true});await retry.click();
+  const dialog=p.locator('#action-dialog'),accept=dialog.locator('[name=acceptUnverifiedExecution]'),monitor=dialog.locator('[name=monitorDisabled]'),note=dialog.locator('[name=note]');
+  const prepare=dialog.getByRole('button',{name:'재시도 준비',exact:true});
+  const evidence='원격 종료·제출 이력은 미확인. 원래 권한 회수와 현재 감시 비활성을 확인했고 갱신된 전달기로 옛 실행자가 새 요청에 접근할 위험을 수락함.';
+  assert.equal(await accept.isChecked(),false);assert.equal(await monitor.isChecked(),false);
+  assert.equal(await dialog.locator('[name=stoppedWithoutSubmit], [name=stoppedAfterFailedSubmit]').count(),0);
+  assert.equal(await note.getAttribute('maxlength'),'1000');
+  const warning=await dialog.innerText();assert.match(warning,/원격 실행의 종료와 제출 이력은 확인되지 않았습니다/);
+  assert.match(warning,/권한 회수는 옛 요청의 결과 반영을 차단/);
+  assert.match(warning,/옛 실행자가 갱신된 전달기를 통해 새 요청을 조회·점유/);
+  assert.match(warning,/보장하지 않습니다/);assert.match(warning,/별도로 이어가기를 눌러야 실행/);
+  const cursor=f.app.store.cursor();let controls=0;
+  p.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/control'))controls++;});
+  await note.fill(evidence);await prepare.click();assert.equal(controls,0);
+  await accept.check();await prepare.click();assert.equal(controls,0);
+  await accept.uncheck();await monitor.check();await prepare.click();assert.equal(controls,0);
+  await accept.check();await note.fill('');await prepare.click();assert.equal(controls,0);
+  await note.fill('   ');await prepare.click();await p.locator('#notice.error').filter({hasText:'확인 근거를 1~1,000자로 입력해 주세요.'}).waitFor();assert.equal(controls,0);
+  // Programmatic input bypasses maxlength; the submit handler must still refuse it.
+  await note.evaluate(el=>{el.value='x'.repeat(1001);});await prepare.click();assert.equal(controls,0);
+  assert.deepEqual(f.app.store.read().discussions[0],d);assert.equal(f.app.store.cursor(),cursor);assert.equal(f.calls(),0);
+  await p.locator('#action-cancel').click();await retry.click();
+  assert.equal(await accept.isChecked(),false);assert.equal(await monitor.isChecked(),false);assert.equal(await note.inputValue(),'');
+  await accept.check();await monitor.check();await note.fill(evidence);
+  const request=p.waitForRequest(r=>r.method()==='POST'&&r.url().endsWith('/control'));
+  await prepare.click();const body=(await request).postDataJSON();
+  assert.equal(body.resolution,'retry_after_authority_revoked');assert.equal(body.acceptUnverifiedExecution,true);assert.equal(body.monitorDisabled,true);assert.equal(body.note,evidence);
+  for(const name of ['stoppedWithoutSubmit','stoppedAfterFailedSubmit','submitAttempted']) assert.equal(Object.hasOwn(body,name),false);
+  await dialog.waitFor({state:'hidden'});
+  const record=p.locator(`[data-recovery-turn-id="${old.id}"]`);
+  await record.getByText('원격 종료·제출 이력 미확인',{exact:true}).waitFor();assert.match(await record.innerText(),/원격 종료 시각이 아닙니다/);
+  assert.equal(await retry.count(),0);await p.locator('#topic-details-close').click();assert.equal(await p.locator('#topic-resume').isEnabled(),true);
+  // The warning is a durable record, including after the announcement disappears on reload.
+  await openRecords();await record.getByText('원격 종료·제출 이력 미확인',{exact:true}).waitFor();
+  assert.match(await record.innerText(),/앱에서 옛 요청의 대조를 마쳤습니다/);
+  const state=f.app.store.read(),after=state.discussions[0];assert.equal(controls,1);assert.equal(after.status,status);
+  assert.deepEqual(after.turns.find(v=>v.id===old.id),{...old,status:'failed',error:'owner_confirmed_retry_after_authority_revoked'});
+  assert.equal(after.tasks.find(v=>v.id===old.taskId).status,'pending');assert.equal(after.turns.length,d.turns.length);
+  assert.deepEqual(after.turns.filter(v=>prior.some(a=>a.id===v.id)),prior);assert.deepEqual(after.used,d.used);assert.deepEqual(state.apiUsage,seed.apiUsage);
+  assert.equal(state.dotMcp.requests.items.length,seed.dotMcp.requests.items.length);
+  assert.deepEqual(state.dotMcp.requests.items.find(r=>r.id===old.id),{...original,status:'consumed'});
+  assert.deepEqual(state.dotMcp.grants,seed.dotMcp.grants);assert.deepEqual(state.dotMcp.events.subscriptions,seed.dotMcp.events.subscriptions);
+  assert.equal(state.resident.rooms[0].desiredOn,false);
+  const audits=f.app.store.events(0,10000).filter(e=>e.type==='discussion.retry_prepared');assert.equal(audits.length,1);
+  assert.equal(audits[0].data.externalExecution,'unverified');assert.equal(audits[0].data.submissionHistory,'unverified');
+  for(const name of ['stoppedWithoutSubmit','stoppedAfterFailedSubmit','submitAttempted']) assert.equal(Object.hasOwn(audits[0].data,name),false);
+  assert.equal(f.calls(),0);assert.deepEqual(f.errors,[]);
 });
 test('D4 390/768/1440px owner setup preserves Muse; twenty reloads/views dispatch nothing and never label browser dot as native', {timeout:60000}, async t => {
   const f = await setup(t), p=f.page;

@@ -10,17 +10,22 @@ import { readDotState } from '../dist/server/workspace/dot-mcp.js';
 import { dotParticipantWait } from '../dist/server/workspace/dot-mcp-policy.js';
 import { config, key } from './dot-mcp-fixture.mjs';
 
-for (const boundary of ['retry_prepared', 'retry_input_page', 'failed_submit_retry_prepared']) test('D3 actual SIGKILL after owner ' + boundary + ' preserves both attempts without automatic dispatch', async t => {
+for (const boundary of ['retry_prepared', 'retry_input_page', 'failed_submit_retry_prepared', 'unverified_retry_prepared', 'unverified_retry_input_page']) test('D3 actual SIGKILL after owner ' + boundary + ' preserves both attempts without automatic dispatch', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'wj-dot-retry-crash-'));
   let app; t.after(async () => { await app?.close(); await rm(directory, { recursive: true, force: true }); });
   const script = `import { stoppedDotTopicFixture } from './tests/dot-mcp-fixture.mjs';
     const f = await stoppedDotTopicFixture({after(){}}, {directory:process.env.FIXTURE_DIRECTORY});
     const kill = () => process.kill(process.pid,'SIGKILL');
-    const failedSubmit=process.env.FIXTURE_BOUNDARY === 'failed_submit_retry_prepared';
-    if(failedSubmit){f.control({action:'off'});f.app.dotMcp.revoke(f.connectionId,f.state().dotMcp.bindings[0].version,'revoke-before-failed-retry');
-      f.retryBody={action:'reconcile',resolution:'retry_after_failed_submit',expectedRevision:1,turnId:f.stoppedRequestId,stoppedAfterFailedSubmit:true,note:'Fixture actor stopped after submit error; no receipt.'};}
-    if(process.env.FIXTURE_BOUNDARY !== 'retry_input_page') f.app.store.subscribe(e => {if(e.type === 'discussion.retry_prepared') kill();});
+    const failedSubmit=process.env.FIXTURE_BOUNDARY === 'failed_submit_retry_prepared', unverified=process.env.FIXTURE_BOUNDARY.startsWith('unverified_'), inputPage=process.env.FIXTURE_BOUNDARY.endsWith('input_page');
+    if(failedSubmit||unverified){f.control({action:'off'});f.app.dotMcp.revoke(f.connectionId,f.state().dotMcp.bindings[0].version,'revoke-before-failed-retry');
+      f.retryBody=unverified?{action:'reconcile',resolution:'retry_after_authority_revoked',expectedRevision:1,turnId:f.stoppedRequestId,acceptUnverifiedExecution:true,monitorDisabled:true,note:'External execution and submission history unverified.'}:
+        {action:'reconcile',resolution:'retry_after_failed_submit',expectedRevision:1,turnId:f.stoppedRequestId,stoppedAfterFailedSubmit:true,note:'Fixture actor stopped after submit error; no receipt.'};}
+    if(!inputPage) f.app.store.subscribe(e => {if(e.type === 'discussion.retry_prepared') kill();});
     f.app.engine.control(f.discussionId,f.retryBody,'retry-after-stop-crash');
+    if(unverified&&inputPage){f.control({action:'on'});
+      const access=f.app.dotMcp.confirm({connectionId:f.connectionId,expectedVersion:f.state().dotMcp.bindings[0].version,ownerConfirmed:true,tools:f.grant.tools,expiresAt:new Date(Date.now()+60000).toISOString()},'renew-for-page-crash');
+      const grant=f.app.dotMcp.authenticate(access.token);f.call=(name,args)=>f.app.dotAdapter.call(name,args,grant);
+      await f.app.mcpEvents.handle('events/subscribe',f.params,grant);}
     f.onEvent = async requestId => {
       if(requestId === f.stoppedRequestId) throw Error('old_request_replayed');
       const page = f.call('dot_turn_get',{requestId,...f.claim(requestId),inputPage:0}).request.input;
@@ -35,24 +40,28 @@ for (const boundary of ['retry_prepared', 'retry_input_page', 'failed_submit_ret
   assert.equal(exit,null,output); assert.equal(signal,'SIGKILL'); assert.doesNotMatch(output,/Bearer|attemptToken|whsec_/);
   let calls=0;
   app = new Workspace(config(directory),1,{residentAutoSchedule:false,webhookTransport:{post:async()=>{calls++;throw Error('recovery cannot send');}}}); app.start();
-  const failedSubmit=boundary==='failed_submit_retry_prepared';
-  const before=app.store.read(), d=before.discussions[0], old=d.turns.find(v=>v.error===(failedSubmit?'owner_confirmed_retry_after_failed_submit':'owner_confirmed_retry_after_stop'));
+  const failedSubmit=boundary==='failed_submit_retry_prepared', unverified=boundary.startsWith('unverified_'), inputPage=boundary.endsWith('input_page');
+  const before=app.store.read(), d=before.discussions[0], old=d.turns.find(v=>v.error===(unverified?'owner_confirmed_retry_after_authority_revoked':failedSubmit?'owner_confirmed_retry_after_failed_submit':'owner_confirmed_retry_after_stop'));
   assert.ok(old); assert.equal(d.status,'blocked'); assert.equal(d.turns.filter(v=>v.status==='completed').length,5);
   assert.equal(before.dotMcp.requests.items.find(r=>r.id===old.id).status,'consumed');
   const task=d.tasks.find(v=>v.id===old.taskId);
-  assert.equal(task.status,boundary==='retry_input_page'?'unconfirmed':'pending');
-  assert.equal(before.dotMcp.requests.items.length,boundary==='retry_input_page'?3:2);
-  if(boundary==='retry_input_page') {
+  assert.equal(task.status,inputPage?'unconfirmed':'pending');
+  assert.equal(before.dotMcp.requests.items.length,inputPage?3:2);
+  if(inputPage) {
     const r=before.dotMcp.requests.items.at(-1), g=before.dotMcp.grants.find(g=>g.id===r.grantId);
     assert.equal(r.status,'held'); assert.notEqual(r.id,old.id);
     assert.throws(()=>app.dotAdapter.call('dot_turn_get',{requestId:r.id,attemptId:r.claim.id,attemptToken:app.vault.get(r.claim.id).token,inputPage:1},g),/request_stale/);
   }
-  const body=failedSubmit?{action:'reconcile',resolution:'retry_after_failed_submit',expectedRevision:1,turnId:old.id,stoppedAfterFailedSubmit:true,note:'Fixture actor stopped after submit error; no receipt.'}:
+  const body=unverified?{action:'reconcile',resolution:'retry_after_authority_revoked',expectedRevision:1,turnId:old.id,acceptUnverifiedExecution:true,monitorDisabled:true,note:'External execution and submission history unverified.'}:
+    failedSubmit?{action:'reconcile',resolution:'retry_after_failed_submit',expectedRevision:1,turnId:old.id,stoppedAfterFailedSubmit:true,note:'Fixture actor stopped after submit error; no receipt.'}:
     {action:'reconcile',resolution:'retry_after_stop',expectedRevision:1,turnId:old.id,stoppedWithoutSubmit:true,note:'Fixture actor stopped after input read; no submit invoked.'};
   for(let i=0;i<20;i++) { app.engine.control(d.id,body,'retry-after-stop-crash'); await app.residentRunner.tick(); await app.mcpEvents.pump(); }
   const after=app.store.read(); assert.equal(calls,0); assert.deepEqual(after.discussions,before.discussions);
   assert.deepEqual(after.dotMcp.requests,before.dotMcp.requests); assert.deepEqual(after.resident.messages,before.resident.messages);
   assert.equal(app.store.events(0,10000).filter(e=>e.type==='discussion.retry_prepared').length,1);
+  if(unverified){const audit=app.store.events(0,10000).find(e=>e.type==='discussion.retry_prepared').data;
+    assert.equal(audit.externalExecution,'unverified');assert.equal(audit.submissionHistory,'unverified');
+    assert.equal(Object.hasOwn(audit,'stoppedWithoutSubmit'),false);assert.equal(Object.hasOwn(audit,'submitAttempted'),false);}
 });
 
 for (const boundary of ['prepared', 'dispatched', 'sending', 'claim_prepared', 'claim_file', 'input_page', 'mailbox']) test('D3 actual SIGKILL at ' + boundary + ' never creates a turn, resends or publishes on restart', async t => {
