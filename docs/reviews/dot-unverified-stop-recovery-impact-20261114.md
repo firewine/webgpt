@@ -1,6 +1,6 @@
 # dot 종료 상태 미확인 요청의 복구 — 영향 검토
 
-상태: **PROPOSED / 사용자 승인 전, 구현·실계정 재호출 NOT_RUN.** 기준 main `f95e47cdd6cf223eb21e2f6849fce9e18ab3eac8`(PR #66). 11월14일 사용자는 병합본 서버 적용·선택형 진단·dot 교차검토 재검증을 승인했다. 그 승인을 아래 **새 복구 판정**의 승인으로 확대하지 않는다.
+상태: **APPROVED — 2026-11-14 사용자 ‘계획 개정·보완 개발 승인. 종료 상태는 미확인으로 남기고 기존 답변 5개와 300초 제한은 유지’**. 조사 코드 기준 main `f95e47cdd6cf223eb21e2f6849fce9e18ab3eac8`(PR #66). 구현 기준은 문서 PR #67 병합본 `d822f69`이며 제품 코드 차이0이다. 앞선 PR #66 배포 승인과 구분해 아래 새 복구 판정·검증 준비기의 계획 개정/개발/모의 검사를 승인받았다. 새 기능 배포·실계정 재호출은 아직 NOT_RUN이다.
 
 ## 확인된 문제
 
@@ -22,11 +22,11 @@
 |---|---|
 | 외부 실행 종료와 제출 이력이 확인될 때까지 대기 | 제품 변경0. 가장 보수적이지만 현재 원격 관리 화면이 필요한 기록을 제공하지 않아 같은 질문을 반복해도 해소되지 않는다. |
 | 기존 확인 필드에 true를 넣거나 미전송/skip으로 처리 | 기각. 확인하지 못한 사실을 기록하거나 기존 과제를 잃는다. |
-| **옛 권한 회수 + 종료 미확인 명시 수락으로 별도 재시도 준비** | 권장·승인 대기. 원격 실행 종료를 주장하지 않고 옛 결과의 반영을 차단한 상태에서 동일 과제의 새 시도를 소유자가 명시적으로 선택한다. |
+| **옛 권한 회수 + 종료 미확인 명시 수락으로 별도 재시도 준비** | 승인·채택. 원격 실행 종료를 주장하지 않고 옛 결과의 반영을 차단한 상태에서 동일 과제의 새 시도를 소유자가 명시적으로 선택한다. |
 
 ## 제안 계약과 최소 변경
 
-아래 이름은 **제안**이며 현재 구현된 API가 아니다.
+아래는 승인된 변경 계약이다. 실제 구현/검사·미검증 상태는 [구현 기록](../implementation/dot-unverified-stop-recovery-20261114.md)에서 구분한다.
 
 1. 기존 owner `reconcile`에 별도 `retry_after_authority_revoked` 분기를 둔다. `acceptUnverifiedExecution:true`, 현재 감시 비활성 확인, 근거 메모를 필수로 받는다. 기존 두 복구 분기의 확인 의미는 그대로 유지한다.
 2. 기존 공통 검사(같은 과제·라운드·revision·identity·context generation·입력 digest·Wiki 권한·최신 시도·단일 슬롯·reply/text/receipt 없음)를 재사용한다. **옛 grant가 명시 revoked이며 그 grant의 유효 구독이 없음**을 같은 transaction에서 검사한다. 단순 시간 만료로 대체하지 않는다. 중간에 답변/receipt가 생기면 변경0으로 거절한다.
@@ -42,7 +42,7 @@
 
 현재 `scripts/live-acceptance-guard.mjs::acceptanceGuard`는 예약 수·방·참여자를 제한하지만 특정 과제 ID를 받지 않는다. 이전 R8 private 준비기는 모델30회·5참여자·Codex2작업을 허용하므로 그대로 실행하지 않는다.
 
-- **제안 private 준비기**는 앱 시작·방on·resume 전에 설치하고 기존 방/토의/revision/원래 cross_review 과제/라운드·dot identity/입력 digest와 새 dispatch request를 고정한다. 기존 acceptanceGuard의 durable `maxRequests:1`과 dot1명 허용을 결합한다. 최초 baseline은 재시작에도 바꾸지 않고 실패/미전송 예약도1회를 소비한다. non-topic·다른 과제·다른 참여자·format retry·Codex 등록/제출은 모두 차단한다. API 참여자0으로 새 API 호출0을 보장하며 기존 양수 API counter 설정을 사용 허용으로 해석하지 않는다.
+- **승인된 검증 준비기**는 앱 시작·방on·resume 전에 설치하고 기존 방/토의/revision/원래 cross_review 과제/라운드·dot identity/입력 digest와 새 dispatch request를 고정한다. 범위 검사는 검토·회귀 검사 가능한 `scripts/live-acceptance-dot-once.mjs::dotOnceGuard`에 두고, 계정/배포 경로가 포함된 준비·복구 파일만 private로 둔다. 기존 acceptanceGuard의 durable `maxRequests:1`과 dot1명 허용을 결합한다. 최초 baseline은 재시작에도 바꾸지 않고 실패/미전송 예약도1회를 소비한다. non-topic·다른 과제·다른 참여자·format retry·Codex 등록/제출은 모두 차단한다. API 참여자0으로 새 API 호출0을 보장하며 기존 양수 API counter 설정을 사용 허용으로 해석하지 않는다.
 - 실제 `turn.finished`(파싱/Store 반영 후)를 동기 관측해 다음 발언 전에 guard.stop을 적용한다. `dot.reply_received`나 receipt hook에서 먼저 room off를 하면 세대가 바뀌어 수락 전 답변을 잃을 수 있으므로 사용하지 않는다. 종료 때도 app.close 이후에 guard를 해제한다.
 - 준비 단계는 자동 만료·정상 서비스 복구를 둔다. 첫 예약 이후 최대30분, 각 turn300초·기존 예산은 유지하며 실제로는 유일한 시도의 완료/오류 즉시 중단한다. 실패했을 때 두 번째 모델 요청을 예약하지 않는다.
 - 호스트 영향은 **기존 검증 방식의 사용자 서비스 임시 ExecStart override 1개**와 private 전달기 환경의 `WJ_MCP_TRACE=summary`다. 기존 `.env`·원본 unit·AppArmor·방화벽·Tailscale·포트·Chrome/Muse profile은 변경하지 않는다. 현재 workspaceRoots는 빈 배열이므로 새 실행 경로/인증 사본이 필요 없다. 끝나면 자기 소유 override/trace/임시 grant/전달기만 정리한다.
@@ -70,4 +70,4 @@
 5. 승인된 실제1회에서는 trace의 페이지 index/count·시각·submit 도착/응답 분류와 실제 Store reply/receipt를 대조한다. 로그 부재·페이지 반환을 원격 미실행/분석 완료로 해석하지 않는다. 완료5개 digest 동일·비대상 요청0·호스트 복구를 별도로 기록한다.
 6. 롤백은 새 준비 기능 사용 중지와 이전 빌드 복구다. 이미 기록한 미확인 audit/새 답변은 DB 백업으로 되돌리지 않는다. 토의 blocked/paused·방off에서 원래 기록을 계속 대조한다. 임시 override/env만 제거하며 원본 unit과 계정/대화/Chrome 데이터를 보존한다.
 
-승인 요청은 **별도 복구 경로의 계획 개정·개발·모의 검사와 위 최소 검증 준비기**다. 이번 PR #66 배포는 완료됐지만 새 기능의 병합은 사용자 담당이며, 새 버전 배포/실계정 실행은 병합 시 별도 확인한다. 승인 전에는 원래 미확정을 유지하고 새 모델 요청을 보내지 않는다.
+승인 범위는 **별도 복구 경로의 계획 개정·개발·모의 검사와 위 최소 검증 준비기**다. PR #66 배포는 완료됐지만 새 기능의 병합은 사용자 담당이며, 새 버전 배포/실계정 실행은 병합 시 별도 확인한다. 개발 중 운영의 원래 미확정을 유지하고 새 모델 요청을 보내지 않는다.

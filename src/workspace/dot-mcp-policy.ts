@@ -85,6 +85,14 @@ export function assertDotRetryAfterFailedSubmit(s: WorkspaceState, d: Discussion
   const request = s.dotMcp!.requests!.items.find(r => r.id === turn.id)!;
   if (!s.dotMcp!.grants.some(g => g.id === request.grantId && g.status === 'revoked')) throw new AppError('dot_retry_prior_grant_not_revoked', 409);
 }
+// These checks fence the old request's authority, not the external actor.
+// The owner separately accepts that termination/submission history is unknown.
+export function assertDotRetryAfterAuthorityRevoked(s: WorkspaceState, d: Discussion, turn: DiscussionTurn): void {
+  assertDotRetryAfterFailedSubmit(s, d, turn);
+  const request = s.dotMcp!.requests!.items.find(r => r.id === turn.id)!;
+  if (s.dotMcp!.events?.subscriptions.some(sub => sub.grantId === request.grantId && sub.status === 'active'))
+    throw new AppError('dot_retry_prior_subscription_active', 409);
+}
 export function dotCanApply(s: WorkspaceState, requestId: string): boolean {
   const r = s.dotMcp?.requests?.items.find(r => r.id === requestId); if (!r) return false;
   const g = s.dotMcp!.grants.find(g => g.id === r.grantId);

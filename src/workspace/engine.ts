@@ -1,5 +1,5 @@
 import { assertJobAuthority, bindingReason } from '../execution/authority.js';
-import { assertDotRetryAfterFailedSubmit, assertDotRetryAfterStop, dotCanApply, dotParticipantWait, reconcileDotReply } from './dot-mcp-policy.js';
+import { assertDotRetryAfterAuthorityRevoked, assertDotRetryAfterFailedSubmit, assertDotRetryAfterStop, dotCanApply, dotParticipantWait, reconcileDotReply } from './dot-mcp-policy.js';
 import type { Providers } from '../connections/providers.js';
 import { fetchSource } from '../connections/sources.js';
 import type { Store } from './store.js';
@@ -176,6 +176,18 @@ export class DiscussionEngine {
             revision: d.revision, previousError: turn.error, resolution, stoppedWithoutSubmit: !failedSubmit,
             submitAttempted: failedSubmit, serverReceiptAbsent: true, note } });
           turn.status = 'failed'; turn.error = failedSubmit ? 'owner_confirmed_retry_after_failed_submit' : 'owner_confirmed_retry_after_stop'; turn.finishedAt = now();
+          task.status = 'pending'; task.reason = turn.error;
+        } else if (resolution === 'retry_after_authority_revoked') {
+          if (body.acceptUnverifiedExecution !== true) throw new AppError('dot_unverified_execution_acceptance_required', 409);
+          if (body.monitorDisabled !== true) throw new AppError('dot_monitor_disabled_confirmation_required', 409);
+          const note = string(body.note, 1000);
+          assertDotRetryAfterAuthorityRevoked(state, d, turn);
+          emit({ type: 'discussion.retry_prepared', discussionId: d.id, data: { turnId: turn.id, taskId: task.id,
+            revision: d.revision, previousError: turn.error, resolution, externalExecution: 'unverified', submissionHistory: 'unverified',
+            priorGrantRevoked: true, monitorDisabled: true, acceptUnverifiedExecution: true, serverReceiptAbsent: true, note } });
+          // Administrative settlement only. Keep the original local timeout time;
+          // do not invent a remote stop time, a submit outcome or a receipt.
+          turn.status = 'failed'; turn.error = 'owner_confirmed_retry_after_authority_revoked';
           task.status = 'pending'; task.reason = turn.error;
         } else if (resolution === 'not_sent' || resolution === 'skip') {
           turn.status = 'failed'; turn.error = `owner_confirmed_${resolution}`; turn.finishedAt = now();
